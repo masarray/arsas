@@ -41,6 +41,16 @@ internal sealed class Iec61850ReportContinuityState
     public long EntryIdOmittedFrames { get; set; }
     public long EntryIdAdvertisedEmptyFrames { get; set; }
     public string LastOptFldsHex { get; set; } = string.Empty;
+    public bool? RptEnaWriteAccepted { get; set; }
+    public bool? GiWriteAccepted { get; set; }
+    public DateTimeOffset? ActivationReturnedAtUtc { get; set; }
+    public long GiReasonFrames { get; set; }
+    public long IntegrityReasonFrames { get; set; }
+    public long ReasonUnavailableFrames { get; set; }
+    public ulong? LastAnomalyPriorSqNum { get; set; }
+    public ulong? LastAnomalyCurrentSqNum { get; set; }
+    public bool? LastAnomalyGiReason { get; set; }
+    public DateTimeOffset? LastAnomalyReceivedAtUtc { get; set; }
 }
 
 /// <summary>
@@ -74,6 +84,16 @@ public sealed record Iec61850ReportContinuityStreamSnapshot
     // counter alone never attributes the cause to wire loss or decoder failure.
     public long EntryIdEmptyOrUnprojected { get; init; }
     public string LastOptFldsHex { get; init; } = string.Empty;
+    public bool? RptEnaWriteAccepted { get; init; }
+    public bool? GiWriteAccepted { get; init; }
+    public DateTimeOffset? ActivationReturnedAtUtc { get; init; }
+    public long GiReasonFrames { get; init; }
+    public long IntegrityReasonFrames { get; init; }
+    public long ReasonUnavailableFrames { get; init; }
+    public ulong? LastAnomalyPriorSqNum { get; init; }
+    public ulong? LastAnomalyCurrentSqNum { get; init; }
+    public bool? LastAnomalyGiReason { get; init; }
+    public DateTimeOffset? LastAnomalyReceivedAtUtc { get; init; }
 }
 
 public sealed record Iec61850ReportContinuitySnapshot
@@ -121,6 +141,14 @@ internal static class Iec61850ReportContinuityInspector
             state.SegmentedFrames++;
         if (!string.IsNullOrEmpty(frame.EntryIdHex) && state.EntryIdPresentFrames < long.MaxValue)
             state.EntryIdPresentFrames++;
+        if (frame.GeneralInterrogationReasonSeen == true && state.GiReasonFrames < long.MaxValue)
+            state.GiReasonFrames++;
+        if (frame.IntegrityReasonSeen == true && state.IntegrityReasonFrames < long.MaxValue)
+            state.IntegrityReasonFrames++;
+        if (!frame.GeneralInterrogationReasonSeen.HasValue &&
+            !frame.IntegrityReasonSeen.HasValue &&
+            state.ReasonUnavailableFrames < long.MaxValue)
+            state.ReasonUnavailableFrames++;
 
         List<string>? findings = null;
         void Warn(string message)
@@ -138,6 +166,15 @@ internal static class Iec61850ReportContinuityInspector
         string EntryContext() => buffered
             ? $"; BRCB EntryID previousPresent={priorEntryIdPresent}, currentPresent={entryIdPresent}, changed={entryIdChanged}"
             : string.Empty;
+        // This context is observational: a successful GI=true write or GI
+        // inclusion reason may correlate with SqNum reset but can never
+        // certify replay correctness / absence of lost buffered entries.
+        string CausalContext() =>
+            $"; activation RptEna={WriteVerdict(state.RptEnaWriteAccepted)}, " +
+            $"GIwrite={WriteVerdict(state.GiWriteAccepted)}, " +
+            $"GIreason={WriteVerdict(frame.GeneralInterrogationReasonSeen)}, " +
+            $"startReturnUtc={state.ActivationReturnedAtUtc?.ToString("O") ?? "unknown"}, " +
+            $"frameReceivedUtc={frame.ReceivedAt:O}; GI correlation is not proof of a harmless reset";
 
         // Raw OptFlds is authoritative decoder evidence. Unknown stays UNKNOWN;
         // a missing value cannot be interpreted as an omitted wire field.
@@ -239,7 +276,10 @@ internal static class Iec61850ReportContinuityInspector
                              "prior segment evidence is absent" + EntryContext());
                     var discontinuity = DescribeSequenceAnomaly(state.LastSequenceNumber, current);
                     if (discontinuity is not null)
-                        Warn(discontinuity + EntryContext());
+                    {
+                        CaptureAnomaly(state, frame);
+                        Warn(discontinuity + EntryContext() + CausalContext());
+                    }
                 }
 
                 if (!frame.MoreSegmentsFollow.HasValue)
@@ -266,7 +306,10 @@ internal static class Iec61850ReportContinuityInspector
                 state.LastSubSequenceNumber = null;
                 var discontinuity = DescribeSequenceAnomaly(state.LastSequenceNumber, current);
                 if (discontinuity is not null)
-                    Warn(discontinuity + EntryContext());
+                {
+                    CaptureAnomaly(state, frame);
+                    Warn(discontinuity + EntryContext() + CausalContext());
+                }
                 state.LastSequenceNumber = current;
             }
         }
@@ -318,7 +361,17 @@ internal static class Iec61850ReportContinuityInspector
                 EntryIdAdvertised = state.EntryIdAdvertisedFrames,
                 EntryIdOmitted = state.EntryIdOmittedFrames,
                 EntryIdEmptyOrUnprojected = state.EntryIdAdvertisedEmptyFrames,
-                LastOptFldsHex = state.LastOptFldsHex
+                LastOptFldsHex = state.LastOptFldsHex,
+                RptEnaWriteAccepted = state.RptEnaWriteAccepted,
+                GiWriteAccepted = state.GiWriteAccepted,
+                ActivationReturnedAtUtc = state.ActivationReturnedAtUtc,
+                GiReasonFrames = state.GiReasonFrames,
+                IntegrityReasonFrames = state.IntegrityReasonFrames,
+                ReasonUnavailableFrames = state.ReasonUnavailableFrames,
+                LastAnomalyPriorSqNum = state.LastAnomalyPriorSqNum,
+                LastAnomalyCurrentSqNum = state.LastAnomalyCurrentSqNum,
+                LastAnomalyGiReason = state.LastAnomalyGiReason,
+                LastAnomalyReceivedAtUtc = state.LastAnomalyReceivedAtUtc
             }).ToArray();
         return new Iec61850ReportContinuitySnapshot
         {
@@ -333,6 +386,18 @@ internal static class Iec61850ReportContinuityInspector
             OptFldsUnknown = ordered.Sum(state => state.OptFldsUnknownFrames),
             Streams = shown
         };
+    }
+
+    private static string WriteVerdict(bool? value)
+        => value is true ? "accepted/yes" : value is false ? "rejected/no" : "UNKNOWN";
+
+    private static void CaptureAnomaly(
+        Iec61850ReportContinuityState state, NativeReportFrameMetadata frame)
+    {
+        state.LastAnomalyPriorSqNum = state.LastSequenceNumber;
+        state.LastAnomalyCurrentSqNum = frame.SequenceNumber;
+        state.LastAnomalyGiReason = frame.GeneralInterrogationReasonSeen;
+        state.LastAnomalyReceivedAtUtc = frame.ReceivedAt == default ? null : frame.ReceivedAt;
     }
 
     private static bool IsBoundedHex(string? value)

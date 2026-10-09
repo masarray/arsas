@@ -317,10 +317,29 @@ internal static class DiagnosticReportBuilder
                 $"requestedButUndecoded={stream.SqNumAdvertisedMissing}; " +
                 $"EntryID requested={stream.EntryIdAdvertised}, omitted={stream.EntryIdOmitted}, " +
                 $"emptyOrUnprojected={stream.EntryIdEmptyOrUnprojected}");
+            // Do not inflate diagnostics for unrelated/no-evidence streams.
+            // Keep the snapshot bounded even if many RptIDs are observed.
+            // Start-return timestamp is not a precise MMS send timestamp.
+            if (stream.RptEnaWriteAccepted.HasValue || stream.GiWriteAccepted.HasValue ||
+                stream.ActivationReturnedAtUtc.HasValue || stream.GiReasonFrames > 0 ||
+                stream.IntegrityReasonFrames > 0 || stream.ReasonUnavailableFrames > 0 ||
+                stream.LastAnomalyCurrentSqNum.HasValue)
+                builder.AppendLine($"    RCB lifecycle : RptEnaWrite={Verdict(stream.RptEnaWriteAccepted)}, " +
+                $"GIWrite={Verdict(stream.GiWriteAccepted)}, " +
+                $"startReturnUtc={stream.ActivationReturnedAtUtc?.ToString("O") ?? "-"}, " +
+                $"GIreasonFrames={stream.GiReasonFrames}, integrityReasonFrames={stream.IntegrityReasonFrames}, " +
+                $"reasonUnavailableFrames={stream.ReasonUnavailableFrames}, " +
+                $"lastAnomalySqNum={(stream.LastAnomalyPriorSqNum.HasValue ? stream.LastAnomalyPriorSqNum.ToString() : "-")}→" +
+                $"{(stream.LastAnomalyCurrentSqNum.HasValue ? stream.LastAnomalyCurrentSqNum.ToString() : "-")}, " +
+                $"lastAnomalyGIreason={Verdict(stream.LastAnomalyGiReason)}, " +
+                $"lastAnomalyUtc={stream.LastAnomalyReceivedAtUtc?.ToString("O") ?? "-"}");
         }
         if (snapshot.StreamCount > snapshot.Streams.Count)
             builder.AppendLine($"  stream list     : TRUNCATED • shown={snapshot.Streams.Count}, total={snapshot.StreamCount}");
     }
+
+    private static string Verdict(bool? value) =>
+        value is true ? "YES" : value is false ? "NO" : "UNKNOWN";
 
     internal static void AppendStaticIngressParity(
         StringBuilder builder,

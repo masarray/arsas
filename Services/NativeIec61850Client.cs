@@ -489,6 +489,18 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             // nullable SqNum/EntryID or re-parsing MMS in the Studio consumer.
             var optFlds = header.OptionalFields;
             var hasDecodedOptFlds = !string.IsNullOrWhiteSpace(optFlds.RawHex);
+            // ReasonForInclusion belongs to the engine's decoded report
+            // members. Empty reason arrays cannot certify absence of GI:
+            // preserve unknown instead of synthesizing a 'false' verdict.
+            var hasReasonEvidence = hasDecodedOptFlds &&
+                optFlds.HasReasonForInclusion &&
+                report.Values.Any(value => value.ReasonForInclusion.Count > 0);
+            var isGiReport = hasReasonEvidence &&
+                report.Values.Any(value => value.ReasonForInclusion.Contains(
+                    "general-interrogation", StringComparer.OrdinalIgnoreCase));
+            var isIntegrityReport = hasReasonEvidence &&
+                report.Values.Any(value => value.ReasonForInclusion.Contains(
+                    "integrity", StringComparer.OrdinalIgnoreCase));
             frames.Add(new NativeReportFrameMetadata
             {
                 ReportControlReference = session.ReportControl.Reference,
@@ -501,6 +513,9 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 OptFldsEntryId = hasDecodedOptFlds ? optFlds.HasEntryId : null,
                 OptFldsBufferOverflow = hasDecodedOptFlds ? optFlds.HasBufferOverflow : null,
                 OptFldsConfRev = hasDecodedOptFlds ? optFlds.HasConfRevision : null,
+                OptFldsReasonForInclusion = hasDecodedOptFlds ? optFlds.HasReasonForInclusion : null,
+                GeneralInterrogationReasonSeen = hasReasonEvidence ? isGiReport : null,
+                IntegrityReasonSeen = hasReasonEvidence ? isIntegrityReport : null,
                 SubSequenceNumber = header.SubSequenceNumber,
                 MoreSegmentsFollow = header.MoreSegmentsFollow,
                 BufferOverflow = header.BufferOverflow,
