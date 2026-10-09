@@ -79,6 +79,17 @@ public sealed class F650CanonicalCommandFailureTests
     }
 
     [Fact]
+    public void FailedCommand_HasVisibleOperatorWarning_OnlyOnFailure()
+    {
+        var main = Read("MainWindow.xaml.cs");
+        Assert.Contains("if (!result.IsSuccess)", main, StringComparison.Ordinal);
+        Assert.Contains("IED Command Failed —", main, StringComparison.Ordinal);
+        Assert.Contains("MessageBoxImage.Warning", main, StringComparison.Ordinal);
+        Assert.Contains("explanation.Confidence", main, StringComparison.Ordinal);
+        Assert.Contains("The exact MMS response and AddCause", main, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ProducersAndDispatcher_EnforceCanonicalIdentity()
     {
         var projection = Read("Services/Iec61850StaticControlStatusProjectionService.cs");

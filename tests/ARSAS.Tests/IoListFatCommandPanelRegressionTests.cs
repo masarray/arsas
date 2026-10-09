@@ -76,12 +76,16 @@ public sealed class IoListFatCommandPanelRegressionTests
         var bridge = File.ReadAllText(FindRepoFile("MainWindow.IoFatCommandBridge.cs"));
         var panel = File.ReadAllText(FindRepoFile("IoListTestingWindow.CommandPanel.cs"));
         var monitorModels = File.ReadAllText(FindRepoFile("Models/MonitorModels.cs"));
+        var identity = File.ReadAllText(FindRepoFile("Services/Iec61850ControlIdentity.cs"));
 
         Assert.Contains("live ctlModel", bridge, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("StatusOnly stays read-only", bridge, StringComparison.Ordinal);
         Assert.Contains("device.CommandSignals", bridge, StringComparison.Ordinal);
-        Assert.Contains("ControlSupportsOperate", monitorModels, StringComparison.Ordinal);
-        Assert.Contains("IsGenericControl", monitorModels, StringComparison.Ordinal);
+        Assert.Contains("DistinctOperable(Signals)", monitorModels, StringComparison.Ordinal);
+        // Fail-closed gate migrated into the shared canonical command projection;
+        // all entry points still exclude unknown/read-only and generic controls.
+        Assert.Contains("ControlModelResolved && s.ControlSupportsOperate", identity, StringComparison.Ordinal);
+        Assert.Contains("!s.IsGenericControl", identity, StringComparison.Ordinal);
         Assert.Contains("Status-only controls remain read-only", panel, StringComparison.Ordinal);
         Assert.Contains("unsupported generic types stay fail-closed", panel, StringComparison.Ordinal);
     }

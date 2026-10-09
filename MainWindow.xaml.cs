@@ -1542,6 +1542,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             clickStopwatch.Stop();
             AddLog(result.IsSuccess ? "INFO" : "WARN", device.Name,
                 $"Control UI timing: {signal.ObjectReference}; sequence={claim.Sequence}; click-to-result={clickStopwatch.Elapsed.TotalMilliseconds:0.###} ms; engine-total={result.TotalElapsedText}; serviceAccepted={result.ServiceAccepted}; stage={result.Stage}.");
+
+            // A rejected physical control needs a prominent operator-visible
+            // explanation; the status bar and Diagnostics alone are insufficient.
+            // Never present a generic MMS access-denied as proven Local/Remote.
+            if (!result.IsSuccess)
+            {
+                var explanation = Iec61850ControlFailureReason.Explain(result);
+                MarkDiagnosticAlert();
+                MessageBox.Show(this,
+                    $"{explanation.Summary}\n\nEvidence: {explanation.Evidence}\n" +
+                    $"Certainty: {explanation.Confidence}\n\nCheck: {explanation.Checks}\n\n" +
+                    "The exact MMS response and AddCause (if supplied) remain in Diagnostics.",
+                    result.CompletionState.Equals("NotSent", StringComparison.OrdinalIgnoreCase)
+                        ? $"Command Not Sent — {signal.ObjectReference}"
+                        : $"IED Command Failed — {signal.ObjectReference}",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
         catch (OperationCanceledException)
         {
