@@ -32,6 +32,15 @@ internal sealed class Iec61850ReportContinuityState
     public long ConfRevChanges { get; set; }
     public long EntryIdPresentFrames { get; set; }
     public ulong? FirstSequenceNumber { get; set; }
+    public long OptFldsDecodedFrames { get; set; }
+    public long OptFldsUnknownFrames { get; set; }
+    public long SqNumAdvertisedFrames { get; set; }
+    public long SqNumOmittedFrames { get; set; }
+    public long SqNumAdvertisedMissingFrames { get; set; }
+    public long EntryIdAdvertisedFrames { get; set; }
+    public long EntryIdOmittedFrames { get; set; }
+    public long EntryIdAdvertisedEmptyFrames { get; set; }
+    public string LastOptFldsHex { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -54,6 +63,17 @@ public sealed record Iec61850ReportContinuityStreamSnapshot
     public long EntryIdPresent { get; init; }
     public ulong? FirstSqNum { get; init; }
     public ulong? LastSqNum { get; init; }
+    public long OptFldsDecoded { get; init; }
+    public long OptFldsUnknown { get; init; }
+    public long SqNumAdvertised { get; init; }
+    public long SqNumOmitted { get; init; }
+    public long SqNumAdvertisedMissing { get; init; }
+    public long EntryIdAdvertised { get; init; }
+    public long EntryIdOmitted { get; init; }
+    // An empty decoded EntryID could also represent an empty OCTET STRING; this
+    // counter alone never attributes the cause to wire loss or decoder failure.
+    public long EntryIdEmptyOrUnprojected { get; init; }
+    public string LastOptFldsHex { get; init; } = string.Empty;
 }
 
 public sealed record Iec61850ReportContinuitySnapshot
@@ -65,6 +85,8 @@ public sealed record Iec61850ReportContinuitySnapshot
     public long Sequenced { get; init; }
     public long Findings { get; init; }
     public long Overflows { get; init; }
+    public long OptFldsDecoded { get; init; }
+    public long OptFldsUnknown { get; init; }
     public IReadOnlyList<Iec61850ReportContinuityStreamSnapshot> Streams { get; init; } =
         Array.Empty<Iec61850ReportContinuityStreamSnapshot>();
 }
@@ -116,6 +138,55 @@ internal static class Iec61850ReportContinuityInspector
         string EntryContext() => buffered
             ? $"; BRCB EntryID previousPresent={priorEntryIdPresent}, currentPresent={entryIdPresent}, changed={entryIdChanged}"
             : string.Empty;
+
+        // Raw OptFlds is authoritative decoder evidence. Unknown stays UNKNOWN;
+        // a missing value cannot be interpreted as an omitted wire field.
+        var hasOptFlds = frame.OptFldsSequenceNumber.HasValue &&
+                         frame.OptFldsEntryId.HasValue &&
+                         IsBoundedHex(frame.OptFldsRawHex);
+        if (hasOptFlds)
+        {
+            if (state.OptFldsDecodedFrames < long.MaxValue) state.OptFldsDecodedFrames++;
+            state.LastOptFldsHex = frame.OptFldsRawHex;
+            if (frame.OptFldsSequenceNumber == true)
+            {
+                if (state.SqNumAdvertisedFrames < long.MaxValue) state.SqNumAdvertisedFrames++;
+                if (!frame.SequenceNumber.HasValue)
+                {
+                    if (state.SqNumAdvertisedMissingFrames < long.MaxValue)
+                        state.SqNumAdvertisedMissingFrames++;
+                    Warn("Report OptFlds advertises SqNum, but ARIEC decoded no SqNum; inspect decoder and on-wire field completeness");
+                }
+            }
+            else
+            {
+                if (state.SqNumOmittedFrames < long.MaxValue) state.SqNumOmittedFrames++;
+                if (frame.SequenceNumber.HasValue)
+                    Warn("Report OptFlds omits SqNum, but decoded frame supplied SqNum; metadata provenance is inconsistent");
+            }
+
+            if (frame.OptFldsEntryId == true)
+            {
+                if (state.EntryIdAdvertisedFrames < long.MaxValue) state.EntryIdAdvertisedFrames++;
+                if (!entryIdPresent && state.EntryIdAdvertisedEmptyFrames < long.MaxValue)
+                    state.EntryIdAdvertisedEmptyFrames++;
+            }
+            else
+            {
+                if (state.EntryIdOmittedFrames < long.MaxValue) state.EntryIdOmittedFrames++;
+                if (entryIdPresent)
+                    Warn("Report OptFlds omits EntryID, but decoded frame supplied EntryID; metadata provenance is inconsistent");
+            }
+
+            if (frame.OptFldsBufferOverflow == false && frame.BufferOverflow.HasValue)
+                Warn("Report OptFlds omits BufOvfl, but decoded frame supplied it; metadata provenance is inconsistent");
+            if (frame.OptFldsConfRev == false && frame.ConfRev.HasValue)
+                Warn("Report OptFlds omits ConfRev, but decoded frame supplied it; metadata provenance is inconsistent");
+        }
+        else if (state.OptFldsUnknownFrames < long.MaxValue)
+        {
+            state.OptFldsUnknownFrames++;
+        }
 
         if (frame.BufferOverflow == true)
         {
@@ -238,7 +309,16 @@ internal static class Iec61850ReportContinuityInspector
                 ConfRevChanges = state.ConfRevChanges,
                 EntryIdPresent = state.EntryIdPresentFrames,
                 FirstSqNum = state.FirstSequenceNumber,
-                LastSqNum = state.LastSequenceNumber
+                LastSqNum = state.LastSequenceNumber,
+                OptFldsDecoded = state.OptFldsDecodedFrames,
+                OptFldsUnknown = state.OptFldsUnknownFrames,
+                SqNumAdvertised = state.SqNumAdvertisedFrames,
+                SqNumOmitted = state.SqNumOmittedFrames,
+                SqNumAdvertisedMissing = state.SqNumAdvertisedMissingFrames,
+                EntryIdAdvertised = state.EntryIdAdvertisedFrames,
+                EntryIdOmitted = state.EntryIdOmittedFrames,
+                EntryIdEmptyOrUnprojected = state.EntryIdAdvertisedEmptyFrames,
+                LastOptFldsHex = state.LastOptFldsHex
             }).ToArray();
         return new Iec61850ReportContinuitySnapshot
         {
@@ -249,8 +329,24 @@ internal static class Iec61850ReportContinuityInspector
             Sequenced = ordered.Sum(state => state.SequencedFrames),
             Findings = ordered.Sum(state => state.AnomalyFindings),
             Overflows = ordered.Sum(state => state.BufferOverflows),
+            OptFldsDecoded = ordered.Sum(state => state.OptFldsDecodedFrames),
+            OptFldsUnknown = ordered.Sum(state => state.OptFldsUnknownFrames),
             Streams = shown
         };
+    }
+
+    private static bool IsBoundedHex(string? value)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length > 16 || (value.Length & 1) != 0)
+            return false;
+        foreach (var character in value)
+        {
+            if (!((character >= '0' && character <= '9') ||
+                  (character >= 'a' && character <= 'f') ||
+                  (character >= 'A' && character <= 'F')))
+                return false;
+        }
+        return true;
     }
 
     private static string? DescribeSequenceAnomaly(ulong? previous, ulong current)
