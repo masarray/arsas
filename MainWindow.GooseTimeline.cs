@@ -66,6 +66,10 @@ public partial class MainWindow
             new RoutedEventHandler(OnRefreshGooseModelsRequested));
         EventManager.RegisterClassHandler(
             typeof(MainWindow),
+            GooseSubscriberLiteView.AdapterConfirmedEvent,
+            new RoutedEventHandler(OnGooseAdapterConfirmed));
+        EventManager.RegisterClassHandler(
+            typeof(MainWindow),
             GooseSubscriberLiteView.StartRequestedEvent,
             new RoutedEventHandler(OnStartGooseRequested));
         EventManager.RegisterClassHandler(
@@ -122,6 +126,14 @@ public partial class MainWindow
         if (sender is not MainWindow window)
             return;
         window.RefreshGooseModels_Click(window, args);
+        args.Handled = true;
+    }
+
+    private static void OnGooseAdapterConfirmed(object sender, RoutedEventArgs args)
+    {
+        if (sender is not MainWindow window)
+            return;
+        window.ConfirmIedGooseAdapterSelection();
         args.Handled = true;
     }
 

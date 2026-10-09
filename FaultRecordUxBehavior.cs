@@ -211,10 +211,10 @@ internal static class FaultRecordUxBehavior
 
         ApplyState(
             gooseButton,
-            hasGoose ? CapabilityState.Available : CapabilityState.Unavailable,
+            hasGoose ? CapabilityState.Available : CapabilityState.ProbeReady,
             hasGoose
-                ? $"Open GOOSE Subscriber for {device.Name}"
-                : $"{device.Name} has no configured or discovered GOOSE control block");
+                ? $"Monitor IEC 61850 GOOSE frames for {device.Name}"
+                : $"Monitor raw GOOSE frames for {device.Name} (no GoCB model configured)");
         ApplyState(
             smvButton,
             hasSmv ? CapabilityState.Available : CapabilityState.Unavailable,

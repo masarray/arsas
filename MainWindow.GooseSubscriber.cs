@@ -46,25 +46,7 @@ public partial class MainWindow
             if (!Set(ref _selectedGooseAdapter, value)) return;
             Raise(nameof(CanStartGooseSubscriber));
             Raise(nameof(SelectedGooseAdapterDetail));
-            if (value is not null && _pendingIedGooseAutoStart is not null &&
-                MainTabs.SelectedIndex == GooseSubscriberTabIndex &&
-                !IsGooseCapturing && !GooseActionBusy)
-            {
-                // Consume the one-shot intent before dispatching: repeated selection
-                // notifications can never start two capture sessions.
-                _pendingIedGooseAutoStart = null;
-                var chosen = value;
-                Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
-                {
-                    if (!Dispatcher.HasShutdownStarted &&
-                        MainTabs.SelectedIndex == GooseSubscriberTabIndex &&
-                        ReferenceEquals(SelectedGooseAdapter, chosen) &&
-                        !IsGooseCapturing && !GooseActionBusy)
-                    {
-                        StartGooseSubscriber_Click(this, new RoutedEventArgs());
-                    }
-                }));
-            }
+
         }
     }
 
@@ -172,6 +154,21 @@ public partial class MainWindow
 
     private void RefreshGooseModels_Click(object sender, RoutedEventArgs e)
         => RefreshGooseBindingPreview();
+
+    /// <summary>
+    /// The IED-card intent is consumed only by an operator adapter choice.
+    /// Refresh or a programmatic ComboBox binding cannot auto-start capture.
+    /// </summary>
+    internal void ConfirmIedGooseAdapterSelection()
+    {
+        if (_pendingIedGooseAutoStart is null || SelectedGooseAdapter is null ||
+            MainTabs.SelectedIndex != GooseSubscriberTabIndex ||
+            IsGooseCapturing || GooseActionBusy)
+            return;
+        _pendingIedGooseAutoStart = null;
+        ResetGooseTimelineUi();
+        StartGooseSubscriber_Click(this, new RoutedEventArgs());
+    }
 
     private async void StartGooseSubscriber_Click(object sender, RoutedEventArgs e)
     {

@@ -51,6 +51,8 @@
 
                     <ComboBox Grid.Column="2" ItemsSource="{Binding GooseAdapters}"
                               SelectedItem="{Binding SelectedGooseAdapter, Mode=TwoWay}"
+                               DropDownClosed="AdapterComboBox_DropDownClosed"
+                               KeyUp="AdapterComboBox_KeyUp"
                               DisplayMemberPath="DisplayText" TextSearch.TextPath="DisplayText"
                               Style="{StaticResource ModernComboBox}" Height="34" Padding="10,4"
                               IsHitTestVisible="{Binding CanRefreshGooseConfiguration}"

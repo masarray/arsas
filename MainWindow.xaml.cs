@@ -798,6 +798,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!ReferenceEquals(e.Source, MainTabs))
             return;
 
+        // Leaving the picker cancels the one-shot adapter-start intent.
+        if (MainTabs.SelectedIndex != GooseSubscriberTabIndex)
+            _pendingIedGooseAutoStart = null;
+
         if (MainTabs.SelectedIndex == 2)
         {
             foreach (var device in Devices)

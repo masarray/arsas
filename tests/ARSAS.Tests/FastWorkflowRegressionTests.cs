@@ -17,7 +17,13 @@ public sealed class FastWorkflowRegressionTests
         Assert.Contains("OpenIedGooseSubscriber(device)", quick, StringComparison.Ordinal);
         Assert.Contains("SelectedGooseAdapter = null;", quick, StringComparison.Ordinal);
         Assert.Contains("_pendingIedGooseAutoStart = device;", quick, StringComparison.Ordinal);
+        var liteView = File.ReadAllText(FindRepoFile("Views/GooseSubscriberLiteView.xaml"));
+        var viewCode = File.ReadAllText(FindRepoFile("Views/GooseSubscriberLiteView.xaml.cs"));
         Assert.Contains("StartGooseSubscriber_Click(this, new RoutedEventArgs())", subscriber, StringComparison.Ordinal);
+        Assert.Contains("ConfirmIedGooseAdapterSelection()", subscriber, StringComparison.Ordinal);
+        Assert.Contains("AdapterConfirmedEvent", viewCode, StringComparison.Ordinal);
+        Assert.Contains("DropDownClosed=\"AdapterComboBox_DropDownClosed\"", liteView, StringComparison.Ordinal);
+        Assert.Contains("OnGooseAdapterConfirmed", File.ReadAllText(FindRepoFile("MainWindow.GooseTimeline.cs")), StringComparison.Ordinal);
         Assert.Contains("_pendingIedGooseAutoStart = null;", subscriber, StringComparison.Ordinal);
         Assert.Contains("!IsGooseCapturing && !GooseActionBusy", subscriber, StringComparison.Ordinal);
         Assert.Contains("Click=\"StartGooseSubscriber_Click\"", mainView, StringComparison.Ordinal);
