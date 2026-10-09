@@ -738,44 +738,14 @@
                                         <TextBlock Text="IED Command Panel" FontSize="13.6" FontWeight="SemiBold" Foreground="{StaticResource Ink}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Expander.Header>
-                                <Border Style="{StaticResource WorkspaceCard}" Background="{StaticResource CommandPanelSurface}" Padding="16" BorderBrush="#BFD0E5">
+                                <Border Style="{StaticResource WorkspaceCard}" Background="{StaticResource CommandPanelSurface}" Padding="6" BorderBrush="#BFD0E5">
                                     <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
 
-                                        <Border Background="{StaticResource CommandHeaderSurface}" BorderBrush="#CDDCEE" BorderThickness="1"
-                                                CornerRadius="13" Padding="13,10" Margin="0,0,0,12">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel VerticalAlignment="Center">
-                                                    <TextBlock Text="Fast IEC 61850 Control" FontSize="14.2" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
-                                                    <TextBlock Text="Operate only the validated control objects selected for this IED."
-                                                               FontSize="11.2" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
-                                                </StackPanel>
-                                                <WrapPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
-                                                    <Button Click="RefreshCommandValues_Click" Style="{StaticResource SoftButton}" Padding="11,6" Margin="0,0,8,0">
-                                                        <StackPanel Orientation="Horizontal">
-                                                            <Viewbox Width="14" Height="14" Margin="0,0,6,0"><Path Data="{StaticResource LucideRefreshCw}" Style="{StaticResource LucideIcon}"/></Viewbox>
-                                                            <TextBlock Text="Refresh values"/>
-                                                        </StackPanel>
-                                                    </Button>
-                                                    <Button Tag="{Binding SelectedDevice}" Click="IedConfigureSignals_Click"
-                                                            Style="{StaticResource SoftButton}" Padding="11,6" IsEnabled="{Binding SelectedDevice.CanEditSignals}">
-                                                        <StackPanel Orientation="Horizontal">
-                                                            <Viewbox Width="14" Height="14" Margin="0,0,6,0"><Path Data="{StaticResource LucidePencilLine}" Style="{StaticResource LucideIcon}"/></Viewbox>
-                                                            <TextBlock Text="Edit signals"/>
-                                                        </StackPanel>
-                                                    </Button>
-                                                </WrapPanel>
-                                            </Grid>
-                                        </Border>
-
-                                        <Grid Grid.Row="1">
+                                        <Grid Grid.Row="0">
                                             <DataGrid ItemsSource="{Binding SelectedDevice.CommandSignals}" IsReadOnly="False" CanUserAddRows="False" CanUserDeleteRows="False"
                                                       Style="{StaticResource CommandDataGrid}" RowStyle="{StaticResource CommandDataGridRow}"
                                                       CellStyle="{StaticResource CommandDataGridCell}" ColumnHeaderStyle="{StaticResource CommandDataGridHeader}"

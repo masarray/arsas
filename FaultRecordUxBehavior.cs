@@ -211,10 +211,10 @@ internal static class FaultRecordUxBehavior
 
         ApplyState(
             gooseButton,
-            hasGoose ? CapabilityState.Available : CapabilityState.Unavailable,
+            hasGoose ? CapabilityState.Available : CapabilityState.ProbeReady,
             hasGoose
-                ? $"Open GOOSE Subscriber for {device.Name}"
-                : $"{device.Name} has no configured or discovered GOOSE control block");
+                ? $"Monitor IEC 61850 GOOSE frames for {device.Name}"
+                : $"Monitor raw GOOSE frames for {device.Name} (no GoCB model configured)");
         ApplyState(
             smvButton,
             hasSmv ? CapabilityState.Available : CapabilityState.Unavailable,
@@ -268,9 +268,9 @@ internal static class FaultRecordUxBehavior
 
     private static void OpenGooseWorkspace(MainWindow mainWindow, Iec61850MonitorDevice device)
     {
-        mainWindow.SelectedDevice = device;
-        if (mainWindow.FindName("MainTabs") is TabControl tabs)
-            tabs.SelectedIndex = 3;
+        // The visible GOOSE capability pill is the operator's CTA. Route through
+        // the same adapter-pick workflow as any other GOOSE shortcut.
+        mainWindow.OpenIedGooseSubscriber(device);
         mainWindow.Activate();
     }
 

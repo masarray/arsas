@@ -21,6 +21,8 @@ public partial class MainWindow
     private readonly Dictionary<string, GooseStreamRow> _gooseStreamIndex = new(StringComparer.OrdinalIgnoreCase);
     private GooseBindingCatalog _gooseBindingCatalog = GooseBindingCatalog.Empty;
     private GooseAdapterOption? _selectedGooseAdapter;
+    // Armed only by an IED-card CTA. Direct GOOSE tab navigation remains manual.
+    private Iec61850MonitorDevice? _pendingIedGooseAutoStart;
     private GooseStreamRow? _selectedGooseStream;
     private bool _isGooseCapturing;
     private bool _gooseActionBusy;
@@ -44,6 +46,7 @@ public partial class MainWindow
             if (!Set(ref _selectedGooseAdapter, value)) return;
             Raise(nameof(CanStartGooseSubscriber));
             Raise(nameof(SelectedGooseAdapterDetail));
+
         }
     }
 
@@ -152,8 +155,24 @@ public partial class MainWindow
     private void RefreshGooseModels_Click(object sender, RoutedEventArgs e)
         => RefreshGooseBindingPreview();
 
+    /// <summary>
+    /// The IED-card intent is consumed only by an operator adapter choice.
+    /// Refresh or a programmatic ComboBox binding cannot auto-start capture.
+    /// </summary>
+    internal void ConfirmIedGooseAdapterSelection()
+    {
+        if (_pendingIedGooseAutoStart is null || SelectedGooseAdapter is null ||
+            MainTabs.SelectedIndex != GooseSubscriberTabIndex ||
+            IsGooseCapturing || GooseActionBusy)
+            return;
+        _pendingIedGooseAutoStart = null;
+        ResetGooseTimelineUi();
+        StartGooseSubscriber_Click(this, new RoutedEventArgs());
+    }
+
     private async void StartGooseSubscriber_Click(object sender, RoutedEventArgs e)
     {
+        _pendingIedGooseAutoStart = null;
         if (SelectedGooseAdapter is null || GooseActionBusy || IsGooseCapturing)
             return;
 
@@ -251,11 +270,15 @@ public partial class MainWindow
             var previousName = SelectedGooseAdapter?.Name;
             var adapters = _gooseSubscriberRuntime.ListAdapters();
             GooseAdapters.ReplaceAll(adapters);
+            var usableAdapters = adapters.Where(adapter => !LooksLikeLoopback(adapter)).ToArray();
+            // Never silently choose the first of several network interfaces: an
+            // unrelated LAN/Wi-Fi adapter can miss all IEC 61850 GOOSE frames.
             SelectedGooseAdapter = adapters.FirstOrDefault(adapter =>
-                adapter.Name.Equals(previousName, StringComparison.OrdinalIgnoreCase)) ?? adapters.FirstOrDefault();
+                adapter.Name.Equals(previousName, StringComparison.OrdinalIgnoreCase))
+                ?? (usableAdapters.Length == 1 ? usableAdapters[0] : null);
             GooseStatusText = adapters.Count == 0
-                ? "No Npcap/WinPcap adapters were found. Install Npcap and restart ArIED."
-                : $"{adapters.Count:N0} capture adapter(s) available. Select the approved station/LAN interface.";
+                ? "No Npcap/WinPcap adapters found. Install Npcap, then refresh adapters."
+                : $"{adapters.Count:N0} capture adapter(s) available. Choose the station Ethernet adapter and press Start.";
         }
         catch (Exception ex)
         {

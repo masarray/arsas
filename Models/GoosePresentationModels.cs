@@ -78,7 +78,7 @@ public sealed class GooseEventRow : ObservableObject
 
     public bool ExpireHighlight(DateTimeOffset nowUtc)
     {
-        if (!IsRecent || nowUtc - Timestamp < TimeSpan.FromSeconds(5))
+        if (!IsRecent || nowUtc - Timestamp < TimeSpan.FromSeconds(3))
             return false;
         IsRecent = false;
         return true;
