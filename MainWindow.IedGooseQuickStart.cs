@@ -93,53 +93,45 @@ public partial class MainWindow
 
     private void IedGooseQuickStart_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button { CommandParameter: Iec61850MonitorDevice device })
-            return;
+        if (sender is Button { CommandParameter: Iec61850MonitorDevice device })
+            OpenIedGooseSubscriber(device);
+    }
 
+    /// <summary>
+    /// Shared entry point for the visible IED-card GOOSE capability pill and
+    /// the legacy icon. The UI must show GOOSE before touching optional Npcap.
+    /// The operator's next adapter selection starts capture exactly once.
+    /// Direct navigation to the GOOSE tab preserves its manual Start workflow.
+    /// </summary>
+    internal void OpenIedGooseSubscriber(Iec61850MonitorDevice device)
+    {
         SelectedDevice = device;
-        // Workspace indices: Explorer=0, Live=1, Events=2, Alarm=3, GOOSE=4.
-        // This CTA is navigation + adapter recommendation, never a hidden Start.
+        _pendingIedGooseAutoStart = null;
         MainTabs.SelectedIndex = GooseSubscriberTabIndex;
         UpdateNavigationVisuals(GooseSubscriberTabIndex, animate: true);
         ActivateGooseSubscriberWorkspace();
-
-        // First render the GOOSE tab; Npcap enumeration is optional and can fail.
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
         {
             if (Dispatcher.HasShutdownStarted || MainTabs.SelectedIndex != GooseSubscriberTabIndex)
                 return;
-
-            if (GooseAdapters.Count == 0)
-                RefreshGooseAdapters();
-
-            // Do not stop/rebind an ongoing capture when the operator clicks a
-            // different IED card. The active capture adapter remains authoritative.
             if (IsGooseCapturing || GooseActionBusy)
             {
                 GooseStatusText = IsGooseCapturing
-                    ? $"GOOSE capture already running on {SelectedGooseAdapter?.DisplayText ?? "the active adapter"}. Stop before changing adapters. Captured publishers remain visible."
-                    : "GOOSE capture is busy. Wait until it finishes before changing adapters.";
+                    ? "GOOSE monitoring is already running. Stop it before changing network adapters."
+                    : "GOOSE capture is busy. Wait for the current operation.";
                 return;
             }
+            if (GooseAdapters.Count == 0)
+                RefreshGooseAdapters();
 
-            // Unicast MMS routing is only a suggestion for multicast L2 GOOSE.
-            // It cannot prove station-LAN, switch mirror or VLAN placement.
-            var adapter = ResolveGooseAdapterForIed(device, out var routeDetail);
-            SelectedGooseAdapter = adapter;
-            if (adapter is null)
-            {
-                GooseStatusText = GooseAdapters.Count == 0
-                    ? "No capture adapters available. Install or enable Npcap, then refresh the adapter list."
-                    : $"Choose the station Ethernet adapter for {device.Name}, then press Start. MMS IP routing alone cannot determine the GOOSE LAN.";
-                SetStatus($"GOOSE: select a capture adapter for {device.Name}.");
-                AddLog("INFO", "GOOSE", $"Manual adapter selection requested for {device.Name}: {routeDetail}");
-                return;
-            }
-
-            GooseStatusText =
-                $"Suggested adapter: {adapter.DisplayText} for {device.Name}. Confirm station-LAN/VLAN and press Start to monitor GOOSE frames.";
-            SetStatus($"GOOSE: confirm adapter and press Start for {device.Name}.");
-            AddLog("INFO", "GOOSE", $"Capture adapter suggested, not started: {routeDetail}");
+            // Never assume the unicast MMS route is the GOOSE L2 network. The
+            // Npcap adapter must be explicitly selected before capture begins.
+            SelectedGooseAdapter = null;
+            _pendingIedGooseAutoStart = device;
+            GooseStatusText = GooseAdapters.Count == 0
+                ? "No Ethernet capture adapter found. Check Npcap and refresh the adapter list."
+                : $"Select the station network adapter for {device.Name}. GOOSE capture starts automatically after selection.";
+            SetStatus($"GOOSE: select network adapter for {device.Name}.");
         }));
     }
 

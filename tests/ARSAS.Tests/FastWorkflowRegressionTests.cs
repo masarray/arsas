@@ -3,26 +3,28 @@ namespace ARSAS.Tests;
 public sealed class FastWorkflowRegressionTests
 {
     [Fact]
-    public void IedCardGooseCta_OpensSubscriberAndWaitsForOperatorStart()
+    public void VisibleGooseCapabilityPill_OpensCorrectTabAndArmsOneShotAdapterAutoStart()
     {
-        var source = File.ReadAllText(FindRepoFile("MainWindow.IedGooseQuickStart.cs"));
+        var card = File.ReadAllText(FindRepoFile("FaultRecordUxBehavior.cs"));
+        var quick = File.ReadAllText(FindRepoFile("MainWindow.IedGooseQuickStart.cs"));
         var subscriber = File.ReadAllText(FindRepoFile("MainWindow.GooseSubscriber.cs"));
-        var view = File.ReadAllText(FindRepoFile("Views/GooseSubscriberView.xaml"));
+        var mainView = File.ReadAllText(FindRepoFile("MainWindow.xaml"));
 
-        Assert.Contains("GooseSubscriberTabIndex = 4", source, StringComparison.Ordinal);
-        Assert.Contains("MainTabs.SelectedIndex = GooseSubscriberTabIndex", source, StringComparison.Ordinal);
-        Assert.Contains("UpdateNavigationVisuals(GooseSubscriberTabIndex", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("MainTabs.SelectedIndex = 3", source, StringComparison.Ordinal);
-        Assert.Contains("ResolveLocalIpv4ForTarget", source, StringComparison.Ordinal);
-        Assert.Contains("CaptureAdapterMatchesNetworkInterface", source, StringComparison.Ordinal);
-        Assert.Contains("SelectedGooseAdapter = adapter", source, StringComparison.Ordinal);
-        Assert.Contains("if (IsGooseCapturing || GooseActionBusy)", source, StringComparison.Ordinal);
-        Assert.Contains("press Start", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("_gooseSubscriberRuntime.StartAsync", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("StopGooseSubscriberAsync()", source, StringComparison.Ordinal);
-        Assert.Contains("usableAdapters.Length == 1 ? usableAdapters[0] : null", subscriber, StringComparison.Ordinal);
-        Assert.Contains("Click=\"StartCapture_Click\"", view, StringComparison.Ordinal);
-        Assert.Contains("SelectedItem=\"{Binding SelectedGooseAdapter, Mode=TwoWay}\"", view, StringComparison.Ordinal);
+        Assert.Contains("mainWindow.OpenIedGooseSubscriber(device)", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("tabs.SelectedIndex = 3", card, StringComparison.Ordinal);
+        Assert.Contains("GooseSubscriberTabIndex = 4", quick, StringComparison.Ordinal);
+        Assert.Contains("MainTabs.SelectedIndex = GooseSubscriberTabIndex", quick, StringComparison.Ordinal);
+        Assert.Contains("OpenIedGooseSubscriber(device)", quick, StringComparison.Ordinal);
+        Assert.Contains("SelectedGooseAdapter = null;", quick, StringComparison.Ordinal);
+        Assert.Contains("_pendingIedGooseAutoStart = device;", quick, StringComparison.Ordinal);
+        Assert.Contains("StartGooseSubscriber_Click(this, new RoutedEventArgs())", subscriber, StringComparison.Ordinal);
+        Assert.Contains("_pendingIedGooseAutoStart = null;", subscriber, StringComparison.Ordinal);
+        Assert.Contains("!IsGooseCapturing && !GooseActionBusy", subscriber, StringComparison.Ordinal);
+        Assert.Contains("Click=\"StartGooseSubscriber_Click\"", mainView, StringComparison.Ordinal);
+        Assert.DoesNotContain("Fast IEC 61850 Control", mainView, StringComparison.Ordinal);
+        Assert.DoesNotContain("Operate only the validated control objects selected for this IED.", mainView, StringComparison.Ordinal);
+        Assert.DoesNotContain("Click=\"RefreshCommandValues_Click\"", mainView, StringComparison.Ordinal);
+        Assert.Contains("SelectedDevice.CommandSignals", mainView, StringComparison.Ordinal);
     }
 
     [Fact]

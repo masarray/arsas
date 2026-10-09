@@ -21,6 +21,8 @@ public partial class MainWindow
     private readonly Dictionary<string, GooseStreamRow> _gooseStreamIndex = new(StringComparer.OrdinalIgnoreCase);
     private GooseBindingCatalog _gooseBindingCatalog = GooseBindingCatalog.Empty;
     private GooseAdapterOption? _selectedGooseAdapter;
+    // Armed only by an IED-card CTA. Direct GOOSE tab navigation remains manual.
+    private Iec61850MonitorDevice? _pendingIedGooseAutoStart;
     private GooseStreamRow? _selectedGooseStream;
     private bool _isGooseCapturing;
     private bool _gooseActionBusy;
@@ -44,6 +46,25 @@ public partial class MainWindow
             if (!Set(ref _selectedGooseAdapter, value)) return;
             Raise(nameof(CanStartGooseSubscriber));
             Raise(nameof(SelectedGooseAdapterDetail));
+            if (value is not null && _pendingIedGooseAutoStart is not null &&
+                MainTabs.SelectedIndex == GooseSubscriberTabIndex &&
+                !IsGooseCapturing && !GooseActionBusy)
+            {
+                // Consume the one-shot intent before dispatching: repeated selection
+                // notifications can never start two capture sessions.
+                _pendingIedGooseAutoStart = null;
+                var chosen = value;
+                Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+                {
+                    if (!Dispatcher.HasShutdownStarted &&
+                        MainTabs.SelectedIndex == GooseSubscriberTabIndex &&
+                        ReferenceEquals(SelectedGooseAdapter, chosen) &&
+                        !IsGooseCapturing && !GooseActionBusy)
+                    {
+                        StartGooseSubscriber_Click(this, new RoutedEventArgs());
+                    }
+                }));
+            }
         }
     }
 
@@ -154,6 +175,7 @@ public partial class MainWindow
 
     private async void StartGooseSubscriber_Click(object sender, RoutedEventArgs e)
     {
+        _pendingIedGooseAutoStart = null;
         if (SelectedGooseAdapter is null || GooseActionBusy || IsGooseCapturing)
             return;
 
