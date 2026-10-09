@@ -289,9 +289,11 @@ internal static class DiagnosticReportBuilder
         builder.AppendLine($"Report continuity : {verdict} • frames={snapshot.Frames}, " +
             $"sequenced={snapshot.Sequenced}, processUpdates={snapshot.ProcessUpdatesSeen}, " +
             $"streams={snapshot.StreamCount}, findings={snapshot.Findings}, " +
-            $"BufOvfl={snapshot.Overflows}, untracked={snapshot.UntrackedStreamCount}");
-        builder.AppendLine("  Qualification   : association-local decoded metadata only; no alerts " +
-            "does not prove SOE/event continuity, GI causality or reconnect/replay completeness.");
+            $"BufOvfl={snapshot.Overflows}, untracked={snapshot.UntrackedStreamCount}, " +
+            $"OptFldsDecoded={snapshot.OptFldsDecoded}, OptFldsUnknown={snapshot.OptFldsUnknown}");
+        builder.AppendLine("  Qualification   : ARIEC decoder-sourced wire OptFlds evidence; " +
+            "OptFldsUnknown is not proof of absent wire fields. No alerts does not prove SOE/event continuity, " +
+            "GI causality or reconnect/replay completeness.");
 
         foreach (var (stream, index) in snapshot.Streams.Select((stream, index) => (stream, index)))
         {
@@ -309,6 +311,12 @@ internal static class DiagnosticReportBuilder
                 $"BufOvfl={stream.Overflow}, ConfRevChanges={stream.ConfRevChanges}, " +
                 $"EntryIDPresent={stream.EntryIdPresent}, firstSqNum={stream.FirstSqNum?.ToString() ?? "-"}, " +
                 $"lastSqNum={stream.LastSqNum?.ToString() ?? "-"}");
+            builder.AppendLine($"    OptFlds       : decoded={stream.OptFldsDecoded}/{stream.Frames}, " +
+                $"unknown={stream.OptFldsUnknown}, lastMask={Safe(stream.LastOptFldsHex)}, " +
+                $"SqNum requested={stream.SqNumAdvertised}, omitted={stream.SqNumOmitted}, " +
+                $"requestedButUndecoded={stream.SqNumAdvertisedMissing}; " +
+                $"EntryID requested={stream.EntryIdAdvertised}, omitted={stream.EntryIdOmitted}, " +
+                $"emptyOrUnprojected={stream.EntryIdEmptyOrUnprojected}");
         }
         if (snapshot.StreamCount > snapshot.Streams.Count)
             builder.AppendLine($"  stream list     : TRUNCATED • shown={snapshot.Streams.Count}, total={snapshot.StreamCount}");

@@ -47,6 +47,14 @@ public sealed class NativeReportFrameMetadata
     public string ReportId { get; init; } = string.Empty;
     public string DataSetReference { get; init; } = string.Empty;
     public ulong? SequenceNumber { get; init; }
+    // Wire OptFlds decoded by ARIEC MmsReportFrameMapper; null means provenance
+    // unavailable, false means the corresponding bit was explicitly *not* set.
+    // The bounded raw hex represents only the option-bit mask, never process data.
+    public string OptFldsRawHex { get; init; } = string.Empty;
+    public bool? OptFldsSequenceNumber { get; init; }
+    public bool? OptFldsEntryId { get; init; }
+    public bool? OptFldsBufferOverflow { get; init; }
+    public bool? OptFldsConfRev { get; init; }
     public ulong? SubSequenceNumber { get; init; }
     public bool? MoreSegmentsFollow { get; init; }
     public bool? BufferOverflow { get; init; }

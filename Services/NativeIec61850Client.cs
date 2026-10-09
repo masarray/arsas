@@ -484,12 +484,23 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         foreach (var report in slice.Reports)
         {
             var header = report.Header;
+            // ARIEC already decodes the actual InformationReport OptFlds BIT STRING.
+            // Preserve its evidence rather than guessing option presence from a
+            // nullable SqNum/EntryID or re-parsing MMS in the Studio consumer.
+            var optFlds = header.OptionalFields;
+            var hasDecodedOptFlds = !string.IsNullOrWhiteSpace(optFlds.RawHex);
             frames.Add(new NativeReportFrameMetadata
             {
                 ReportControlReference = session.ReportControl.Reference,
                 ReportId = header.ReportId,
                 DataSetReference = header.DataSetReference,
                 SequenceNumber = header.SequenceNumber,
+                OptFldsRawHex = hasDecodedOptFlds
+                    ? optFlds.RawHex[..Math.Min(optFlds.RawHex.Length, 16)] : string.Empty,
+                OptFldsSequenceNumber = hasDecodedOptFlds ? optFlds.HasSequenceNumber : null,
+                OptFldsEntryId = hasDecodedOptFlds ? optFlds.HasEntryId : null,
+                OptFldsBufferOverflow = hasDecodedOptFlds ? optFlds.HasBufferOverflow : null,
+                OptFldsConfRev = hasDecodedOptFlds ? optFlds.HasConfRevision : null,
                 SubSequenceNumber = header.SubSequenceNumber,
                 MoreSegmentsFollow = header.MoreSegmentsFollow,
                 BufferOverflow = header.BufferOverflow,
