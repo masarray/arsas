@@ -596,6 +596,15 @@ public sealed class Iec61850MonitorDevice : ObservableObject
             .Where(signal => signal.IsSelected && signal.IsValidControlObject)
             .Where(signal => signal.ControlModelResolved && signal.ControlSupportsOperate)
             .Where(signal => !signal.IsGenericControl)
+            // One control object can belong to multiple IEC 61850 DataSets.
+            // Keep the source rows intact for reporting, one action per target.
+            .GroupBy(signal => (signal.ObjectReference ?? string.Empty).Trim(),
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group => group
+                .OrderByDescending(signal => !string.IsNullOrWhiteSpace(signal.ControlStatusReference))
+                .ThenBy(signal => signal.DataSetReference, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(signal => signal.DisplayReference, StringComparer.OrdinalIgnoreCase)
+                .First())
             .OrderBy(signal => signal.SortPriority)
             .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
             .ThenBy(signal => signal.Name, StringComparer.OrdinalIgnoreCase)
