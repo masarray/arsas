@@ -62,8 +62,15 @@ public sealed class SmartInteroperabilityTrialGuardRegressionTests
         Assert.Equal(153, serverAt.GetProperty("sourcePullRequest").GetInt32());
         Assert.Equal(trial.GetProperty("exactCommit").GetString(),
             serverAt.GetProperty("baseEngineCommit").GetString());
+        var closure = root.GetProperty("datasetFirstDiscoveryTrial");
+        Assert.Equal("code-trial-not-physical", closure.GetProperty("status").GetString());
+        Assert.Equal(157, closure.GetProperty("enginePullRequest").GetInt32());
+        Assert.Equal(serverAt.GetProperty("exactCommit").GetString(),
+            closure.GetProperty("baseEngineCommit").GetString());
         Assert.Equal(root.GetProperty("commit").GetString(),
-            serverAt.GetProperty("exactCommit").GetString());
+            closure.GetProperty("exactCommit").GetString());
+        Assert.True(closure.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(closure.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
         Assert.True(serverAt.GetProperty("physicalQualificationRequired").GetBoolean());
         Assert.True(serverAt.GetProperty("noAutomaticMmsFailover").GetBoolean());
 

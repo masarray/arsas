@@ -407,12 +407,21 @@ public sealed class CanonicalLiveSclExportRegressionTests
         using var document = System.Text.Json.JsonDocument.Parse(lockFile);
         var root = document.RootElement;
 
-        // The current source is the explicit P6.2 code-only trial. P6.1 remains
-        // immutable ancestry, not a field-proven replacement or a new main pin.
-        Assert.Equal(
-            "352c81e6a798635c6addcee0683235ca87ad416d",
+        // P7.6G is a code-only experimental child of the immutable P6.2
+        // engine trial. Historical source and physical acceptance stay unchanged.
+        var closure = root.GetProperty("datasetFirstDiscoveryTrial");
+        Assert.Equal("code-trial-not-physical", closure.GetProperty("status").GetString());
+        Assert.Equal(157, closure.GetProperty("enginePullRequest").GetInt32());
+        Assert.Equal(497, closure.GetProperty("consumerPullRequest").GetInt32());
+        Assert.Equal(495, closure.GetProperty("issue").GetInt32());
+        Assert.Equal("352c81e6a798635c6addcee0683235ca87ad416d",
+            closure.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal(closure.GetProperty("exactCommit").GetString(),
             root.GetProperty("commit").GetString());
-        Assert.Equal(153, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(157, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.True(closure.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(closure.GetProperty("fullNameListFallbackForbidden").GetBoolean());
+        Assert.True(closure.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
 
         Assert.Equal(
             "648124097621046f5f127ceb1cf853fea54db730",
@@ -448,7 +457,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Equal(153, serverAt.GetProperty("sourcePullRequest").GetInt32());
         Assert.Equal(trial.GetProperty("exactCommit").GetString(),
             serverAt.GetProperty("baseEngineCommit").GetString());
-        Assert.Equal(root.GetProperty("commit").GetString(),
+        Assert.Equal(closure.GetProperty("baseEngineCommit").GetString(),
             serverAt.GetProperty("exactCommit").GetString());
         Assert.True(serverAt.GetProperty("physicalQualificationRequired").GetBoolean());
         Assert.True(serverAt.GetProperty("noAutomaticMmsFailover").GetBoolean());

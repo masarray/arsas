@@ -191,9 +191,17 @@ public sealed partial class NativeIec61850Client
                 52d, 5, 10));
 
             var typeWatch = Stopwatch.StartNew();
-            var variableTypes = await LiveIedVariableTypeProbeExecutor
+            var initialTypes = await LiveIedVariableTypeProbeExecutor
                 .ProbeSmartAsync(_session, discovery.IedDirectory, smartOptions, CancellationToken.None)
                 .ConfigureAwait(false);
+            // The configured DataSet directories provide live wire authority for
+            // ST/MX LN roots beyond the frozen GetNameList pagination budget.
+            // No new socket, brute-force GetNameList, or process-value Reads.
+            var closureTypes = await _session.ProbeDataSetMemberTypesSmartAsync(
+                discovery, initialTypes, smartOptions, CancellationToken.None)
+                .ConfigureAwait(false);
+            IReadOnlyList<ArMms.MmsVariableAccessAttributesResult> variableTypes =
+                initialTypes.Concat(closureTypes).ToArray();
             typeWatch.Stop();
 
             // A stale owner may finish an already-issued GVA batch, but it cannot build
