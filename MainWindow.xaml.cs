@@ -35,6 +35,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly Dictionary<string, List<SignalDefinition>> _controlFeedbackIndex = new(StringComparer.OrdinalIgnoreCase);
     private readonly DispatcherTimer _uiFlushTimer;
     private readonly DispatcherTimer _progressAnimationTimer;
+    // Shared, resettable timer: concurrent commands replace the same toast
+    // without spawning timers/tasks for every fast-control outcome.
+    private readonly DispatcherTimer _controlShoutTimer = new(DispatcherPriority.Normal)
+    {
+        Interval = TimeSpan.FromSeconds(5)
+    };
     private Iec61850MonitorDevice? _selectedDevice;
     private string _newDeviceIp = "192.168.1.10";
     private string _newDevicePort = "102";
@@ -115,6 +121,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         InitializeComponent();
         DataContext = this;
+        _controlShoutTimer.Tick += (_, _) =>
+        {
+            _controlShoutTimer.Stop();
+            ControlShoutCard.Visibility = Visibility.Collapsed;
+        };
 
         _uiFlushTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
@@ -1538,6 +1549,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 signal.ControlCurrentValue = result.FeedbackValue;
 
             signal.ControlLastResult = BuildQuickControlResult(result);
+            if (!result.IsSuccess)
+            {
+                var shout = BuildControlShout(result);
+                ShowControlShout(shout.Title, shout.Detail);
+            }
             SetStatus($"{device.Name}: {signal.Name} — {signal.ControlLastResult}");
             clickStopwatch.Stop();
             AddLog(result.IsSuccess ? "INFO" : "WARN", device.Name,
@@ -1551,6 +1567,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         catch (Exception ex)
         {
             signal.ControlLastResult = $"Command failed: {ex.Message}";
+            ShowControlShout("Command failed", "The operation could not complete. Check Diagnostics for the technical reason.");
             AddLog("ERROR", device.Name, $"Quick control failed for {signal.ObjectReference}: {ex}");
             SetStatus($"{device.Name}: {signal.Name} command failed — {ex.Message}");
             MarkDiagnosticAlert();
@@ -1618,6 +1635,56 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             ? " • IED did not disclose the cause; check Local/Remote, command authorization and interlocks on the device."
             : string.Empty;
         return actual + error + cause + guidance;
+    }
+
+    internal static (string Title, string Detail) BuildControlShout(Iec61850ControlCommandResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        var cause = (result.AddCause ?? string.Empty).Trim();
+        var normalized = cause.ToLowerInvariant().Replace('_', '-').Replace(' ', '-');
+        var title = normalized.Contains("interlock", StringComparison.Ordinal)
+            ? "Command blocked by interlock"
+            : normalized.Contains("synchro", StringComparison.Ordinal)
+                ? "Command blocked by synchrocheck"
+                : normalized.Contains("authority", StringComparison.Ordinal) ||
+                  normalized.Contains("authorization", StringComparison.Ordinal) ||
+                  normalized.Contains("access-violation", StringComparison.Ordinal)
+                    ? "Command authorization denied"
+                    : normalized.Contains("mode", StringComparison.Ordinal)
+                        ? "Command blocked by operating mode"
+                        : "Command rejected by IED";
+
+        // Even when the engineer knows the hardware was in Local, generic MMS
+        // access-denied does not encode that fact. Avoid a false positive:
+        // show Local/Remote as a troubleshooting hint, not proven rejection.
+        var evidence = BuildControlRejectionDetail(result);
+        var detail = title == "Command rejected by IED" &&
+                     evidence.Contains("object-access-denied", StringComparison.OrdinalIgnoreCase)
+            ? "IED refused the command (MMS access denied). Check BCU Local/Remote and permissions; see Diagnostics."
+            : title == "Command blocked by interlock"
+                ? "IED reports interlocking protection. Verify the permissives before retrying."
+                : title == "Command blocked by synchrocheck"
+                    ? "IED reports synchrocheck protection. Check synchronization conditions."
+                    : title == "Command authorization denied"
+                        ? "IED reports insufficient control authority. Check the operator access level."
+                        : title == "Command blocked by operating mode"
+                            ? "IED reports an operating-mode restriction. Check Local/Remote and control mode."
+                            : evidence;
+        return (title, detail.Length <= 220 ? detail : detail[..220] + "…");
+    }
+
+    private void ShowControlShout(string title, string detail)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(() => ShowControlShout(title, detail));
+            return;
+        }
+        _controlShoutTimer.Stop();
+        ControlShoutTitle.Text = title;
+        ControlShoutDetail.Text = detail;
+        ControlShoutCard.Visibility = Visibility.Visible;
+        _controlShoutTimer.Start();
     }
 
     private async void ControlDetails_Click(object sender, RoutedEventArgs e)

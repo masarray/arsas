@@ -62,6 +62,58 @@ public sealed class CommandIdentityRejectionP76FTests
         Assert.DoesNotContain("check Local/Remote", message);
     }
 
+    [Theory]
+    [InlineData("blocked-by-interlocking", "Command blocked by interlock")]
+    [InlineData("blocked-by-synchrocheck", "Command blocked by synchrocheck")]
+    [InlineData("no-access-authority", "Command authorization denied")]
+    [InlineData("blocked-by-mode", "Command blocked by operating mode")]
+    public void Toast_UsesRealIedAddCauseWhenAvailable(string addCause, string expected)
+    {
+        var result = new Iec61850ControlCommandResult
+        {
+            Message = "Control service rejected",
+            AddCause = addCause
+        };
+        var toast = MainWindow.BuildControlShout(result);
+        Assert.Equal(expected, toast.Title);
+    }
+
+    [Fact]
+    public void Toast_GenericMmsAccessDeniedDoesNotClaimLocalIsProven()
+    {
+        var result = new Iec61850ControlCommandResult
+        {
+            Message = "MMS Confirmed-Write rejected: object-access-denied (3)"
+        };
+        var toast = MainWindow.BuildControlShout(result);
+        Assert.Equal("Command rejected by IED", toast.Title);
+        Assert.Contains("Check BCU Local/Remote", toast.Detail);
+        Assert.DoesNotContain("confirmed local", toast.Detail, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Toast_XamlIsNonModalAndTimerAutoDismisses()
+    {
+        var xaml = Read("MainWindow.xaml");
+        var code = Read("MainWindow.xaml.cs");
+        Assert.Contains("x:Name=\"ControlShoutCard\"", xaml);
+        Assert.Contains("Panel.ZIndex=\"90\"", xaml);
+        Assert.Contains("Interval = TimeSpan.FromSeconds(5)", code);
+        Assert.Contains("ControlShoutCard.Visibility = Visibility.Collapsed", code);
+    }
+
+    private static string Read(string path)
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var file = Path.Combine(directory.FullName, path);
+            if (File.Exists(file)) return File.ReadAllText(file);
+            directory = directory.Parent;
+        }
+        throw new FileNotFoundException(path);
+    }
+
     private static SignalDefinition Command(string reference, string dataset) => new()
     {
         ObjectReference = reference,
@@ -69,7 +121,6 @@ public sealed class CommandIdentityRejectionP76FTests
         DataSetReference = dataset,
         IsControlSignal = true,
         IsSelected = true,
-        ControlModelResolved = true,
         ControlCdc = "DPC",
         ControlModelText = "Direct · Normal security"
     };
