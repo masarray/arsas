@@ -317,9 +317,14 @@ internal static class DiagnosticReportBuilder
                 $"requestedButUndecoded={stream.SqNumAdvertisedMissing}; " +
                 $"EntryID requested={stream.EntryIdAdvertised}, omitted={stream.EntryIdOmitted}, " +
                 $"emptyOrUnprojected={stream.EntryIdEmptyOrUnprojected}");
-            // Evidence only: ARIEC write outcomes and per-report inclusion reason.
+            // Do not inflate diagnostics for unrelated/no-evidence streams.
+            // Keep the snapshot bounded even if many RptIDs are observed.
             // Start-return timestamp is not a precise MMS send timestamp.
-            builder.AppendLine($"    RCB lifecycle : RptEnaWrite={Verdict(stream.RptEnaWriteAccepted)}, " +
+            if (stream.RptEnaWriteAccepted.HasValue || stream.GiWriteAccepted.HasValue ||
+                stream.ActivationReturnedAtUtc.HasValue || stream.GiReasonFrames > 0 ||
+                stream.IntegrityReasonFrames > 0 || stream.ReasonUnavailableFrames > 0 ||
+                stream.LastAnomalyCurrentSqNum.HasValue)
+                builder.AppendLine($"    RCB lifecycle : RptEnaWrite={Verdict(stream.RptEnaWriteAccepted)}, " +
                 $"GIWrite={Verdict(stream.GiWriteAccepted)}, " +
                 $"startReturnUtc={stream.ActivationReturnedAtUtc?.ToString("O") ?? "-"}, " +
                 $"GIreasonFrames={stream.GiReasonFrames}, integrityReasonFrames={stream.IntegrityReasonFrames}, " +
