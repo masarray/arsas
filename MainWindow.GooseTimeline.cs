@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
+using AR.Iec61850.Mms;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Services;
 using ArIED61850Tester.Views;
