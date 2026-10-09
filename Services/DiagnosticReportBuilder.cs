@@ -292,8 +292,8 @@ internal static class DiagnosticReportBuilder
             $"BufOvfl={snapshot.Overflows}, untracked={snapshot.UntrackedStreamCount}, " +
             $"OptFldsDecoded={snapshot.OptFldsDecoded}, OptFldsUnknown={snapshot.OptFldsUnknown}");
         builder.AppendLine("  Qualification   : ARIEC decoder-sourced wire OptFlds evidence; " +
-            "OptFldsUnknown is not proof of absent wire fields. No alerts do not prove " +
-            "SOE continuity, GI causality or reconnect/replay completeness.");
+            "OptFldsUnknown is not proof of absent wire fields. No alerts does not prove SOE/event continuity, " +
+            "GI causality or reconnect/replay completeness.");
 
         foreach (var (stream, index) in snapshot.Streams.Select((stream, index) => (stream, index)))
         {
