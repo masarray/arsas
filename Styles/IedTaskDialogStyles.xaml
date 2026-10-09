@@ -39,17 +39,72 @@
         <Setter Property="CornerRadius" Value="14"/>
         <Setter Property="Padding" Value="16"/>
     </Style>
-    <Style x:Key="TaskDialogPrimaryAction" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+    <!-- A standalone merged dictionary must not resolve BasedOn to App.xaml
+         while it is being constructed: the global PrimaryButton/SoftButton
+         styles are outside this dictionary's StaticResource parse scope. -->
+    <Style x:Key="TaskDialogButtonBase" TargetType="{x:Type Button}">
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontSize" Value="12.5"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Background" Value="{StaticResource TaskDialogCard}"/>
+        <Setter Property="Foreground" Value="{StaticResource TaskDialogInk}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource TaskDialogBorder}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="12,9"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Button}">
+                    <Border x:Name="Chrome" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="10" SnapsToDevicePixels="True">
+                        <ContentPresenter ContentSource="Content"
+                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          Margin="{TemplateBinding Padding}" RecognizesAccessKey="True"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chrome" Property="Opacity" Value="0.9"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Chrome" Property="Opacity" Value="0.8"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Chrome" Property="Opacity" Value="0.45"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="TaskDialogPrimaryAction" TargetType="{x:Type Button}"
+           BasedOn="{StaticResource TaskDialogButtonBase}">
+        <Setter Property="Background" Value="#2563EB"/>
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="BorderBrush" Value="#2563EB"/>
         <Setter Property="MinHeight" Value="64"/>
         <Setter Property="Padding" Value="15,12"/>
     </Style>
-    <Style x:Key="TaskDialogSecondaryAction" TargetType="Button" BasedOn="{StaticResource SoftButton}">
+    <Style x:Key="TaskDialogSecondaryAction" TargetType="{x:Type Button}"
+           BasedOn="{StaticResource TaskDialogButtonBase}">
+        <Setter Property="Background" Value="#F8FAFF"/>
+        <Setter Property="BorderBrush" Value="#C9D9EE"/>
         <Setter Property="MinHeight" Value="64"/>
         <Setter Property="Padding" Value="15,12"/>
     </Style>
-    <Style x:Key="TaskDialogFooterButton" TargetType="Button" BasedOn="{StaticResource SoftButton}">
+    <Style x:Key="TaskDialogFooterButton" TargetType="{x:Type Button}"
+           BasedOn="{StaticResource TaskDialogButtonBase}">
         <Setter Property="MinHeight" Value="38"/>
         <Setter Property="MinWidth" Value="102"/>
+    </Style>
+    <Style x:Key="TaskDialogSubmitAction" TargetType="{x:Type Button}"
+           BasedOn="{StaticResource TaskDialogPrimaryAction}">
+        <Setter Property="MinHeight" Value="38"/>
+        <Setter Property="MinWidth" Value="174"/>
+        <Setter Property="Padding" Value="13,8"/>
     </Style>
     <Style x:Key="TaskDialogError" TargetType="TextBlock">
         <Setter Property="Foreground" Value="#B42318"/>

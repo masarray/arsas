@@ -3,8 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="{Binding DialogTitle}" Width="760" MinWidth="700" MaxHeight="680"
         SizeToContent="Height" WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
-        ShowInTaskbar="False" Background="{StaticResource TaskDialogCanvas}"
-        FontFamily="{StaticResource AppFontFamily}" Icon="Assets/app-icon.ico">
+        ShowInTaskbar="False" Background="{DynamicResource TaskDialogCanvas}"
+        FontFamily="{DynamicResource AppFontFamily}" Icon="Assets/app-icon.ico">
     <Window.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>

@@ -4,8 +4,8 @@
         Title="Add IEC 61850 IED" Width="700" MinWidth="640" MaxHeight="620"
         SizeToContent="Height" WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize" ShowInTaskbar="False"
-        Background="{StaticResource TaskDialogCanvas}"
-        FontFamily="{StaticResource AppFontFamily}" Icon="Assets/app-icon.ico">
+        Background="{DynamicResource TaskDialogCanvas}"
+        FontFamily="{DynamicResource AppFontFamily}" Icon="Assets/app-icon.ico">
     <Window.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -87,7 +87,7 @@
                         Margin="0,18,0,0">
                 <Button Content="Cancel" Style="{StaticResource TaskDialogFooterButton}"
                         Click="Cancel_Click" IsCancel="True" Margin="0,0,10,0"/>
-                <Button Content="Connect &amp; Discover" Style="{StaticResource PrimaryButton}"
+                <Button Content="Connect &amp; Discover" Style="{StaticResource TaskDialogSubmitAction}"
                         MinWidth="174" MinHeight="38" IsDefault="True" Click="Connect_Click"/>
             </StackPanel>
         </Grid>

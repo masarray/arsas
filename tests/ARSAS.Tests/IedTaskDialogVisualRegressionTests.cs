@@ -22,7 +22,7 @@ public sealed class IedTaskDialogVisualRegressionTests
             var root = Assert.IsType<XElement>(document.Root);
             Assert.Equal("Window", root.Name.LocalName);
             Assert.Equal("Height", (string?)root.Attribute("SizeToContent"));
-            Assert.Equal("TaskDialogCanvas", ResourceRef((string?)root.Attribute("Background")));
+            Assert.Equal("TaskDialogCanvas", ResourceRef((string?)root.Attribute("Background"), "DynamicResource"));
             Assert.True(double.TryParse((string?)root.Attribute("MaxHeight"),
                 NumberStyles.Float, CultureInfo.InvariantCulture, out var max) && max <= 700);
             Assert.Null(root.Attribute("Height"));
@@ -36,6 +36,57 @@ public sealed class IedTaskDialogVisualRegressionTests
                 element => element.Attribute("Foreground")?.Value == "{StaticResource Muted}" ||
                            element.Attribute("Foreground")?.Value == "{StaticResource Ink}");
         }
+    }
+
+    [Fact]
+    public void DialogStyles_AreSelfContained_AndBothWindowsInitializeOnSta()
+    {
+        var dictionary = XDocument.Load(Find("Styles/IedTaskDialogStyles.xaml"));
+        var declared = dictionary.Descendants()
+            .Attributes(Xaml + "Key")
+            .Select(attribute => attribute.Value)
+            .ToHashSet(StringComparer.Ordinal);
+        var resourceReferences = dictionary.Descendants()
+            .Attributes()
+            .Select(attribute => ResourceRef(attribute.Value))
+            .Where(value => value is not null)
+            .Cast<string>()
+            .ToArray();
+
+        // ResourceDictionary.Source is loaded on its own; inheritance from an
+        // application-level style can throw StaticResourceExtension at runtime
+        // even when compiled XAML and text-based CI contracts all pass.
+        Assert.All(resourceReferences, key => Assert.Contains(key, declared));
+        Assert.Contains("TaskDialogButtonBase", declared);
+        Assert.Contains("TaskDialogPrimaryAction", declared);
+        Assert.Contains("TaskDialogSubmitAction", declared);
+
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        Exception? failure = null;
+        var thread = new System.Threading.Thread(() =>
+        {
+            try
+            {
+                var choice = new ArIED61850Tester.SclSignalSelectionModeWindow(1);
+                var connect = new ArIED61850Tester.IpConnectWizardWindow("127.0.0.1");
+                Assert.NotNull(choice.TryFindResource("TaskDialogPrimaryAction"));
+                Assert.NotNull(connect.TryFindResource("TaskDialogSubmitAction"));
+                Assert.NotNull(choice.Background);
+                Assert.NotNull(connect.Background);
+                choice.Close();
+                connect.Close();
+            }
+            catch (Exception error)
+            {
+                failure = error;
+            }
+        });
+        thread.SetApartmentState(System.Threading.ApartmentState.STA);
+        thread.Start();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(20)), "WPF dialog initialization timed out.");
+        Assert.True(failure is null, failure?.ToString());
     }
 
     [Fact]
@@ -98,9 +149,9 @@ public sealed class IedTaskDialogVisualRegressionTests
         Assert.Contains("port is <= 0 or > 65535", source, StringComparison.Ordinal);
     }
 
-    private static string? ResourceRef(string? value)
+    private static string? ResourceRef(string? value, string extension = "StaticResource")
     {
-        const string prefix = "{StaticResource ";
+        var prefix = "{" + extension + " ";
         return value?.StartsWith(prefix, StringComparison.Ordinal) == true &&
                value.EndsWith("}", StringComparison.Ordinal)
             ? value[prefix.Length..^1] : null;

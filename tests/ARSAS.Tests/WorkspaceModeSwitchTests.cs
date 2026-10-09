@@ -42,8 +42,10 @@ public sealed class WorkspaceModeSwitchTests
         Assert.Contains("Browse Offline", selectionWindow, StringComparison.Ordinal);
         Assert.Contains("TaskDialogPrimaryAction", selectionWindow, StringComparison.Ordinal);
         Assert.Contains("TaskDialogSecondaryAction", selectionWindow, StringComparison.Ordinal);
-        Assert.Contains("BasedOn=\"{StaticResource PrimaryButton}\"", dialogStyles, StringComparison.Ordinal);
-        Assert.Contains("BasedOn=\"{StaticResource SoftButton}\"", dialogStyles, StringComparison.Ordinal);
+        Assert.Contains("x:Key=\"TaskDialogButtonBase\"", dialogStyles, StringComparison.Ordinal);
+        Assert.Contains("BasedOn=\"{StaticResource TaskDialogButtonBase}\"", dialogStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("BasedOn=\"{StaticResource PrimaryButton}\"", dialogStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("BasedOn=\"{StaticResource SoftButton}\"", dialogStyles, StringComparison.Ordinal);
         Assert.Contains("_sharedSclSelectionAuthorityDeviceIds", workflow, StringComparison.Ordinal);
         Assert.Contains("ApplyStaticDataSetSelection", engineering, StringComparison.Ordinal);
         Assert.Contains("selectionAlreadyApplied: true", engineering, StringComparison.Ordinal);
