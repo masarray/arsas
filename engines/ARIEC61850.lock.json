@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "352c81e6a798635c6addcee0683235ca87ad416d",
-  "sourcePullRequest": 153,
-  "purpose": "CODE-VERIFIED INTEROPERABILITY TRIAL ONLY; P6.2 ServerAt authority extends P0-P6.1 at immutable commit 352c81e6a798635c6addcee0683235ca87ad416d. Neither code verification nor the SCD readout implies physical validation or production promotion. All historical physical and P6.1 baselines remain unchanged; static RCB/report semantics and no cyclic polling invariant are untouched.",
+  "commit": "43f8935eb636967359028a0d9df293aac1812d99",
+  "sourcePullRequest": 155,
+  "purpose": "P7.7 CODE-VERIFIED INTEROPERABILITY TRIAL ONLY: DataSet-first bounded typed LN closure, exactly one smart GVA pass over names plus successful live DataSet directory evidence. Extends immutable P6.2 pin 352c81e6a798635c6addcee0683235ca87ad416d with one engine commit. No full GetNameList rescan, no cyclic process polling or dynamic DataSet mutation. Physical F650 parity and buffered continuity remain acceptance gates; prior golden-wire and field-proven baselines unchanged.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,

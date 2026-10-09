@@ -18,6 +18,22 @@ public sealed class SmartDiscoverySemanticEnrichmentRegressionTests
     }
 
     [Fact]
+    public void DataSetFirstTypeClosure_UsesOneVerifiedEnginePass_NoNewNameSweepOrValuePolling()
+    {
+        var capture = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SmartDiscoveryCapture.cs"));
+        var enginePin = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
+
+        Assert.Contains("MaxNameListPages = 64", capture, StringComparison.Ordinal);
+        Assert.Contains("MaxDataSetTypeExtraLogicalNodes = 48", capture, StringComparison.Ordinal);
+        Assert.Contains("MaxDataSetTypeMemberHints = 2048", capture, StringComparison.Ordinal);
+        Assert.Contains(".ProbeSmartAsync(_session, discovery, smartOptions, CancellationToken.None)", capture, StringComparison.Ordinal);
+        Assert.DoesNotContain(".ProbeSmartAsync(_session, discovery.IedDirectory, smartOptions, CancellationToken.None)", capture, StringComparison.Ordinal);
+        Assert.Contains("43f8935eb636967359028a0d9df293aac1812d99", enginePin, StringComparison.Ordinal);
+        Assert.Contains("discoveryValues=deferred", capture, StringComparison.Ordinal);
+        Assert.Contains("initialReadBatches=0", capture, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SmartCapture_StillDefersOnlyBroadFallbackPasses()
     {
         var capture = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SmartDiscoveryCapture.cs"));
