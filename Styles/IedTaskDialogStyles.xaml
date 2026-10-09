@@ -1,0 +1,65 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Locally scoped, high-contrast task-dialog tokens. The main workspace,
+         reporting UI and protocol flows keep their original global styles. -->
+    <SolidColorBrush x:Key="TaskDialogCanvas" Color="#F2F6FC"/>
+    <SolidColorBrush x:Key="TaskDialogCard" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="TaskDialogInk" Color="#14263D"/>
+    <SolidColorBrush x:Key="TaskDialogMuted" Color="#52657B"/>
+    <SolidColorBrush x:Key="TaskDialogBorder" Color="#D6E2F0"/>
+    <SolidColorBrush x:Key="TaskDialogHintSurface" Color="#EDF5FF"/>
+    <SolidColorBrush x:Key="TaskDialogHintBorder" Color="#CADFFD"/>
+
+    <Style x:Key="TaskDialogHeading" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="22"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource TaskDialogInk}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+    <Style x:Key="TaskDialogSubtitle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12.5"/>
+        <Setter Property="Foreground" Value="{StaticResource TaskDialogMuted}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="LineHeight" Value="19"/>
+    </Style>
+    <Style x:Key="TaskDialogSectionTitle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource TaskDialogMuted}"/>
+    </Style>
+    <Style x:Key="TaskDialogFieldLabel" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12.5"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource TaskDialogInk}"/>
+    </Style>
+    <Style x:Key="TaskDialogCardStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource TaskDialogCard}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource TaskDialogBorder}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="14"/>
+        <Setter Property="Padding" Value="16"/>
+    </Style>
+    <Style x:Key="TaskDialogPrimaryAction" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+        <Setter Property="MinHeight" Value="64"/>
+        <Setter Property="Padding" Value="15,12"/>
+    </Style>
+    <Style x:Key="TaskDialogSecondaryAction" TargetType="Button" BasedOn="{StaticResource SoftButton}">
+        <Setter Property="MinHeight" Value="64"/>
+        <Setter Property="Padding" Value="15,12"/>
+    </Style>
+    <Style x:Key="TaskDialogFooterButton" TargetType="Button" BasedOn="{StaticResource SoftButton}">
+        <Setter Property="MinHeight" Value="38"/>
+        <Setter Property="MinWidth" Value="102"/>
+    </Style>
+    <Style x:Key="TaskDialogError" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="#B42318"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Style.Triggers>
+            <Trigger Property="Text" Value="">
+                <Setter Property="Visibility" Value="Collapsed"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+</ResourceDictionary>
