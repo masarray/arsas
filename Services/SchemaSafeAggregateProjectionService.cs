@@ -158,10 +158,16 @@ public static class SchemaSafeAggregateProjectionService
 
         var requested = NormalizeReference(requestedReference).TrimEnd('.');
         var dataObjectReference = NormalizeReference(dataObject.Reference).TrimEnd('.');
-        if (requested.Length <= dataObjectReference.Length ||
-            !requested.StartsWith(dataObjectReference + ".", StringComparison.OrdinalIgnoreCase))
+        // A top-level WYE/DEL has multiple phases and must never be collapsed.
+        // Top-level scalar CMV/MV FCDs (such as AuxV) can resolve their unique
+        // typed cVal.mag.f or mag.f using the same schema-safe leaf tiers.
+        var topLevel = requested.Equals(dataObjectReference, StringComparison.OrdinalIgnoreCase);
+        var scalarCdc = string.Equals(dataObject.InferredCdc, "CMV", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(dataObject.InferredCdc, "MV", StringComparison.OrdinalIgnoreCase);
+        if ((topLevel && !scalarCdc) ||
+            (!topLevel && !requested.StartsWith(dataObjectReference + ".", StringComparison.OrdinalIgnoreCase)))
         {
-            status = $"Static DataSet primary-leaf resolution does not own top-level DataObject {requestedReference}.";
+            status = $"Static DataSet primary-leaf resolution cannot collapse {requestedReference} to one scalar.";
             return false;
         }
 

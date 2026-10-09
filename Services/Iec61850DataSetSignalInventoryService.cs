@@ -78,6 +78,7 @@ public static class Iec61850DataSetSignalInventoryService
             {
                 if (ApplyEngineDataSetAuthority(current, descriptor, inventoryReference, runtimeBinding))
                     enriched++;
+                AddPhaseRows(signals, model, descriptor, inventoryReference, added);
                 continue;
             }
 
@@ -88,9 +89,62 @@ public static class Iec61850DataSetSignalInventoryService
             var signal = CreateSignal(descriptor, runtimeBinding, inventoryReference);
             signals.Add(signal);
             added.Add(signal);
+            AddPhaseRows(signals, model, descriptor, inventoryReference, added);
         }
 
         return new Iec61850DataSetSignalInventoryMergeResult(added, enriched, mandatory.Count);
+    }
+
+    private static void AddPhaseRows(
+        ICollection<SignalDefinition> signals,
+        LiveIedModelDiscoveryDocument model,
+        Iec61850SignalDescriptor descriptor,
+        string staticMember,
+        List<SignalDefinition> added)
+    {
+        // Only schema-proven phase descendants of an unresolved whole-DO FCD.
+        // Keep the original mandatory FCD row; never replace its identity.
+        if (descriptor.ResolutionStatus != Iec61850SignalCatalogResolutionStatus.Unresolved)
+            return;
+
+        var membership = FirstMembership(descriptor);
+        if (membership is null || string.IsNullOrWhiteSpace(membership.DataSetReference))
+            return;
+
+        foreach (var leaf in Iec61850StaticPhaseLeafProjection.Resolve(
+                     model, staticMember, descriptor.FunctionalConstraint))
+        {
+            if (signals.Any(signal =>
+                ReferenceEquals(signal.ObjectReference, leaf.Reference) &&
+                ReferenceEquals(signal.DisplayReference, leaf.Reference) &&
+                ReferenceEquals(signal.DataSetReference, membership.DataSetReference)))
+                continue;
+
+            var row = new SignalDefinition
+            {
+                Name = descriptor.DataObject + " " + leaf.Phase,
+                ObjectReference = leaf.Reference,
+                DisplayReference = leaf.Reference,
+                FunctionalConstraint = "MX",
+                DataType = leaf.DataType,
+                Category = "Measurement",
+                Confidence = "High",
+                DataSetReference = membership.DataSetReference,
+                ReportControlReference = descriptor.ReportMemberships.FirstOrDefault()?.ReportControlReference ?? "",
+                QualityReference = leaf.QualityReference,
+                TimestampReference = leaf.TimestampReference,
+                Source = "ARIEC61850 signal inventory • mandatory static DataSet member • schema named phase",
+                IsReportCapable = true,
+                ReportCoverage = "Static DataSet phase leaf • awaiting configured report",
+                ReportCoverageReason = "Exact schema-proven phase of the configured static FCD; requires actual report ingress.",
+                ProbeStatus = "Exact phase schema; report pending",
+                Value = "-",
+                Quality = "Unknown",
+                DeviceTimestamp = "-"
+            };
+            signals.Add(row);
+            added.Add(row);
+        }
     }
 
     private static SignalDefinition? FindExistingMembershipSignal(
