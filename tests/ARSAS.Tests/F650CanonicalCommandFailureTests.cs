@@ -83,10 +83,11 @@ public sealed class F650CanonicalCommandFailureTests
     {
         var main = Read("MainWindow.xaml.cs");
         Assert.Contains("if (!result.IsSuccess)", main, StringComparison.Ordinal);
-        Assert.Contains("IED Command Failed —", main, StringComparison.Ordinal);
-        Assert.Contains("MessageBoxImage.Warning", main, StringComparison.Ordinal);
-        Assert.Contains("explanation.Confidence", main, StringComparison.Ordinal);
-        Assert.Contains("The exact MMS response and AddCause", main, StringComparison.Ordinal);
+        Assert.Contains("Iec61850ControlShout.FromResult(result)", main, StringComparison.Ordinal);
+        Assert.Contains("ShowControlShout(notice.Title, notice.Detail)", main, StringComparison.Ordinal);
+        Assert.Contains("MarkDiagnosticAlert()", main, StringComparison.Ordinal);
+        Assert.DoesNotContain("IED Command Failed —", main, StringComparison.Ordinal);
+        Assert.DoesNotContain("MessageBoxImage.Warning", main, StringComparison.Ordinal);
     }
 
     [Fact]
