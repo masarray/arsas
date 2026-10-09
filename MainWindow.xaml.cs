@@ -35,6 +35,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly Dictionary<string, List<SignalDefinition>> _controlFeedbackIndex = new(StringComparer.OrdinalIgnoreCase);
     private readonly DispatcherTimer _uiFlushTimer;
     private readonly DispatcherTimer _progressAnimationTimer;
+    // One timer per window: concurrent negative command results replace the
+    // current notice without spawning per-result tasks or blocking WPF input.
+    private readonly DispatcherTimer _controlShoutTimer = new(DispatcherPriority.Normal)
+    {
+        Interval = TimeSpan.FromSeconds(8)
+    };
     private Iec61850MonitorDevice? _selectedDevice;
     private string _newDeviceIp = "192.168.1.10";
     private string _newDevicePort = "102";
@@ -115,6 +121,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         InitializeComponent();
         DataContext = this;
+        _controlShoutTimer.Tick += (_, _) =>
+        {
+            _controlShoutTimer.Stop();
+            ControlShoutCard.Visibility = Visibility.Collapsed;
+        };
 
         _uiFlushTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
@@ -1543,21 +1554,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             AddLog(result.IsSuccess ? "INFO" : "WARN", device.Name,
                 $"Control UI timing: {signal.ObjectReference}; sequence={claim.Sequence}; click-to-result={clickStopwatch.Elapsed.TotalMilliseconds:0.###} ms; engine-total={result.TotalElapsedText}; serviceAccepted={result.ServiceAccepted}; stage={result.Stage}.");
 
-            // A rejected physical control needs a prominent operator-visible
-            // explanation; the status bar and Diagnostics alone are insufficient.
-            // Never present a generic MMS access-denied as proven Local/Remote.
+            // Failure must be visible without a modal dialog blocking unrelated
+            // IED operations. Service/AddCause evidence stays in diagnostics and
+            // the per-command result; the notice never invents Local/Remote.
             if (!result.IsSuccess)
             {
-                var explanation = Iec61850ControlFailureReason.Explain(result);
                 MarkDiagnosticAlert();
-                MessageBox.Show(this,
-                    $"{explanation.Summary}\n\nEvidence: {explanation.Evidence}\n" +
-                    $"Certainty: {explanation.Confidence}\n\nCheck: {explanation.Checks}\n\n" +
-                    "The exact MMS response and AddCause (if supplied) remain in Diagnostics.",
-                    result.CompletionState.Equals("NotSent", StringComparison.OrdinalIgnoreCase)
-                        ? $"Command Not Sent — {signal.ObjectReference}"
-                        : $"IED Command Failed — {signal.ObjectReference}",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                var notice = Iec61850ControlShout.FromResult(result);
+                ShowControlShout(notice.Title, notice.Detail);
             }
         }
         catch (OperationCanceledException)
@@ -1571,6 +1575,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             AddLog("ERROR", device.Name, $"Quick control failed for {signal.ObjectReference}: {ex}");
             SetStatus($"{device.Name}: {signal.Name} command failed — {ex.Message}");
             MarkDiagnosticAlert();
+            var notice = Iec61850ControlShout.FromUnexpectedFailure();
+            ShowControlShout(notice.Title, notice.Detail);
         }
         finally
         {
@@ -1612,6 +1618,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         return result.IsSuccess
             ? $"{result.Stage}: {result.FeedbackValue}{suffix}"
             : $"{result.Stage}: {Iec61850ControlFailureReason.Explain(result).Summary} • {result.Message}{suffix}";
+    }
+
+    private void ShowControlShout(string title, string detail)
+    {
+        // UI ownership is confined to WPF Dispatcher. The runtime's atomic
+        // per-target command admission remains independent of display timing.
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(() => ShowControlShout(title, detail));
+            return;
+        }
+        _controlShoutTimer.Stop();
+        ControlShoutTitle.Text = title;
+        ControlShoutDetail.Text = detail;
+        ControlShoutCard.Visibility = Visibility.Visible;
+        _controlShoutTimer.Start();
     }
 
     private async void ControlDetails_Click(object sender, RoutedEventArgs e)
