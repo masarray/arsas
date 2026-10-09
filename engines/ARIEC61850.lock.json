@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
-  "ref": "feat/495-dataset-type-closure",
+  "ref": "main",
   "commit": "f42318c70a2af8f467d0eb21f0709d6115f6c35a",
   "sourcePullRequest": 157,
   "purpose": "EXPERIMENTAL DISCOVERY DATASET TYPE CLOSURE, code qualification pending: exact engine PR #157, extends immutable P6.2 baseline without touching canonical command/RCB or cyclic polling invariants. Physical F650 parity required before promotion.",
@@ -71,6 +71,17 @@
     "realStationSclNotCommitted": true,
     "fixture": "sanitized J Server / F ServerAt multi-AP",
     "noAutomaticMmsFailover": true,
+    "physicalQualificationRequired": true
+  },
+  "datasetFirstDiscoveryTrial": {
+    "status": "code-trial-not-physical",
+    "issue": 495,
+    "enginePullRequest": 157,
+    "baseEngineCommit": "352c81e6a798635c6addcee0683235ca87ad416d",
+    "exactCommit": "f42318c70a2af8f467d0eb21f0709d6115f6c35a",
+    "consumerPullRequest": 497,
+    "fullNameListFallbackForbidden": true,
+    "cyclicMmsProcessPollingForbidden": true,
     "physicalQualificationRequired": true
   }
 }

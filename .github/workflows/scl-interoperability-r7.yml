@@ -110,6 +110,23 @@ jobs:
             }
             Write-Host 'Running exact P6.2 ServerAt trial on the P6.1 code-only ancestry; physical/main promotion remains blocked.'
           }
+          elseif ($null -ne $lock.datasetFirstDiscoveryTrial -and
+                  $lock.commit -eq $lock.datasetFirstDiscoveryTrial.exactCommit) {
+            $closure = $lock.datasetFirstDiscoveryTrial
+            if ($lock.ref -ne 'main' -or
+                [int]$lock.sourcePullRequest -ne 157 -or
+                [int]$closure.enginePullRequest -ne 157 -or
+                [int]$closure.consumerPullRequest -ne 497 -or
+                [int]$closure.issue -ne 495 -or
+                $closure.status -ne 'code-trial-not-physical' -or
+                $closure.baseEngineCommit -ne $lock.sclServerAtTrial.exactCommit -or
+                -not [bool]$closure.physicalQualificationRequired -or
+                -not [bool]$closure.fullNameListFallbackForbidden -or
+                -not [bool]$closure.cyclicMmsProcessPollingForbidden) {
+              throw 'P7.6G DataSet-first discovery experimental pin provenance is invalid.'
+            }
+            Write-Host 'DataSet-first closure trial qualified for CI only; no physical promotion.'
+          }
           elseif ($lock.commit -eq $convergence.activeStack.engineModelAndScl.head) {
             if ([int]$lock.sourcePullRequest -notin @(134, 135) -or
                 $lock.purpose -notmatch 'R7 physical SCL repair pin') {

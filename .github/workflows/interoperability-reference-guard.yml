@@ -88,6 +88,19 @@ jobs:
           $serverAt = $lock.sclServerAtTrial
           $originalTrial = $lock.commit -eq $trial.exactCommit -and
                            [int]$lock.sourcePullRequest -eq 148
+          $closure = $lock.datasetFirstDiscoveryTrial
+          $datasetTrial = $null -ne $closure -and
+                          $closure.status -eq 'code-trial-not-physical' -and
+                          [int]$closure.issue -eq 495 -and
+                          [int]$closure.enginePullRequest -eq 157 -and
+                          [int]$closure.consumerPullRequest -eq 497 -and
+                          $closure.baseEngineCommit -eq $serverAt.exactCommit -and
+                          $lock.commit -eq $closure.exactCommit -and
+                          [int]$lock.sourcePullRequest -eq 157 -and
+                          $lock.ref -eq 'main' -and
+                          [bool]$closure.physicalQualificationRequired -and
+                          [bool]$closure.fullNameListFallbackForbidden -and
+                          [bool]$closure.cyclicMmsProcessPollingForbidden
           $serverAtTrial = $null -ne $serverAt -and
                            $lock.commit -eq $serverAt.exactCommit -and
                            $serverAt.exactCommit -eq '352c81e6a798635c6addcee0683235ca87ad416d' -and
@@ -102,7 +115,7 @@ jobs:
             if ($trial.status -ne 'code-verified-not-physical' -or
                 [int]$trial.issue -ne 144 -or
                 [int]$trial.integrationPullRequest -ne 148 -or
-                -not ($originalTrial -or $serverAtTrial) -or
+                -not ($originalTrial -or $serverAtTrial -or $datasetTrial) -or
                 -not [bool]$trial.fullDiscoveryFallbackForbidden -or
                 -not [bool]$trial.vendorBranchingForbidden -or
                 -not [bool]$trial.physicalPromotionRequired) {
