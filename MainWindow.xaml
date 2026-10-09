@@ -738,7 +738,7 @@
                                         <TextBlock Text="IED Command Panel" FontSize="13.6" FontWeight="SemiBold" Foreground="{StaticResource Ink}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Expander.Header>
-                                <Border Style="{StaticResource WorkspaceCard}" Background="{StaticResource CommandPanelSurface}" Padding="16" BorderBrush="#BFD0E5">
+                                <Border Style="{StaticResource WorkspaceCard}" Background="{StaticResource CommandPanelSurface}" Padding="6" BorderBrush="#BFD0E5">
                                     <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>

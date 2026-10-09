@@ -41,7 +41,7 @@ public sealed class GooseTimelineEventPolicyTests
         var leaves = Read("Models/GooseSubscriberModels.cs");
         Assert.Contains("ShowGooseRetransmissions", view);
         Assert.Contains("GooseTimelineEventPolicy.Evaluate", timeline);
-        Assert.Contains("TimeSpan.FromSeconds(3)", leaves);
+        Assert.Contains("AddSeconds(3)", leaves);
         Assert.DoesNotContain("IsMeaningfulGooseTimelineEvent", timeline);
     }
 

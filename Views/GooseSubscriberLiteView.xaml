@@ -155,9 +155,9 @@
 
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" MinWidth="520"/>
+                <ColumnDefinition Width="*" MinWidth="420"/>
                 <ColumnDefinition Width="9"/>
-                <ColumnDefinition Width="390" MinWidth="340"/>
+                <ColumnDefinition Width="360" MinWidth="315"/>
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" Style="{StaticResource Card}" Padding="10" Visibility="Collapsed">
