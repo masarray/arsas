@@ -6,9 +6,9 @@
   "sourcePullRequest": 157,
   "purpose": "EXPERIMENTAL DISCOVERY DATASET TYPE CLOSURE, code qualification pending: exact engine PR #157, extends immutable P6.2 baseline without touching canonical command/RCB or cyclic polling invariants. Physical F650 parity required before promotion.",
   "previousTrialPin": {
-    "commit": "352c81e6a798635c6addcee0683235ca87ad416d",
-    "sourcePullRequest": 153,
-    "purpose": "Previous F650 physical field trial and P6.2 engine baseline kept for rollback."
+    "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
+    "sourcePullRequest": 134,
+    "purpose": "Previous P0-5b/P0-5c field-capture engine pin retained as the physical R5 baseline before canonical communication evidence, logical RCB SCL projection, and round-trip association validation were added."
   },
   "priorGoldenWirePin": {
     "commit": "0023ef9a4373855497464ed3979e359c4041c95d",
