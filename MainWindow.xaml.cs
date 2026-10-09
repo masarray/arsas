@@ -1585,14 +1585,39 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 var stopped = stage.Equals("SBOw", StringComparison.OrdinalIgnoreCase) && !operateSent
                     ? " • Operate NOT sent"
                     : string.Empty;
-                var cause = string.IsNullOrWhiteSpace(result.AddCause) ? string.Empty : $" • AddCause={result.AddCause}";
-                return $"IED REJECTED {stage}: {result.Message}{cause}{stopped}{suffix}";
+                var detail = BuildControlRejectionDetail(result);
+                return $"IED REJECTED {stage}: {detail}{stopped}{suffix}";
             }
         }
 
         return result.IsSuccess
             ? $"{result.Stage}: {result.FeedbackValue}{suffix}"
             : $"{result.Stage}: {result.Message}{suffix}";
+    }
+
+    // Report only the actual IEC 61850/MMS evidence. F650 can reject an
+    // Operate with object-access-denied while in Local, but the same MMS
+    // service error is also possible for other causes. Never fabricate the
+    // remote/interlock/auth state unless the IED supplies AddCause.
+    internal static string BuildControlRejectionDetail(Iec61850ControlCommandResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        var actual = string.IsNullOrWhiteSpace(result.Message)
+            ? "The IED did not provide a detailed rejection message."
+            : result.Message.Trim();
+        var error = string.IsNullOrWhiteSpace(result.ControlError)
+            ? string.Empty : $" • ControlError={result.ControlError.Trim()}";
+        var cause = string.IsNullOrWhiteSpace(result.AddCause)
+            ? string.Empty : $" • AddCause={result.AddCause.Trim()}";
+        var hasExplicitReason = !string.IsNullOrWhiteSpace(result.ControlError) ||
+                                !string.IsNullOrWhiteSpace(result.AddCause);
+        // A control refusal is not proof of any particular relay state.
+        var guidance = !hasExplicitReason &&
+                       (actual.Contains("object-access-denied", StringComparison.OrdinalIgnoreCase) ||
+                        actual.Contains("access denied", StringComparison.OrdinalIgnoreCase))
+            ? " • IED did not disclose the cause; check Local/Remote, command authorization and interlocks on the device."
+            : string.Empty;
+        return actual + error + cause + guidance;
     }
 
     private async void ControlDetails_Click(object sender, RoutedEventArgs e)
