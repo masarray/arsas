@@ -32,7 +32,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("MaxDataSetDirectoryReads = 64", capture, StringComparison.Ordinal);
         Assert.Contains("GetOrCreateSmartDiscoveryAssociationFlight(", capture, StringComparison.Ordinal);
         Assert.Contains("DiscoverSmartSingleFlightAsync(smartOptions, CancellationToken.None)", capture, StringComparison.Ordinal);
-        Assert.Contains("ProbeSmartAsync(_session, discovery.IedDirectory, smartOptions, CancellationToken.None)", capture, StringComparison.Ordinal);
+        Assert.Contains("ProbeSmartAsync(_session, discovery, smartOptions, CancellationToken.None)", capture, StringComparison.Ordinal);
         Assert.DoesNotContain("_session.DiscoverAsync(", capture, StringComparison.Ordinal);
         Assert.DoesNotContain("DiscoverDomainVariableNamesAsync", capture, StringComparison.Ordinal);
         Assert.DoesNotContain("TryBuildSupplementalGetNameListSnapshotAsync", capture, StringComparison.Ordinal);
@@ -407,12 +407,12 @@ public sealed class CanonicalLiveSclExportRegressionTests
         using var document = System.Text.Json.JsonDocument.Parse(lockFile);
         var root = document.RootElement;
 
-        // The current source is the explicit P6.2 code-only trial. P6.1 remains
-        // immutable ancestry, not a field-proven replacement or a new main pin.
+        // P7.7 extends the immutable P6.2 engine head as a code-only
+        // DataSet semantic trial, not a new physical/production authority.
         Assert.Equal(
-            "352c81e6a798635c6addcee0683235ca87ad416d",
+            "43f8935eb636967359028a0d9df293aac1812d99",
             root.GetProperty("commit").GetString());
-        Assert.Equal(153, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(155, root.GetProperty("sourcePullRequest").GetInt32());
 
         Assert.Equal(
             "648124097621046f5f127ceb1cf853fea54db730",
@@ -448,8 +448,15 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Equal(153, serverAt.GetProperty("sourcePullRequest").GetInt32());
         Assert.Equal(trial.GetProperty("exactCommit").GetString(),
             serverAt.GetProperty("baseEngineCommit").GetString());
-        Assert.Equal(root.GetProperty("commit").GetString(),
+        Assert.Equal("352c81e6a798635c6addcee0683235ca87ad416d",
             serverAt.GetProperty("exactCommit").GetString());
+        var datasetTrial = root.GetProperty("dataSetTypeClosureTrial");
+        Assert.Equal(root.GetProperty("commit").GetString(), datasetTrial.GetProperty("exactCommit").GetString());
+        Assert.Equal(serverAt.GetProperty("exactCommit").GetString(), datasetTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal(155, datasetTrial.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal("code-verified-candidate-not-physical", datasetTrial.GetProperty("status").GetString());
+        Assert.True(datasetTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(datasetTrial.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
         Assert.True(serverAt.GetProperty("physicalQualificationRequired").GetBoolean());
         Assert.True(serverAt.GetProperty("noAutomaticMmsFailover").GetBoolean());
         Assert.Equal(759, trial.GetProperty("ciRun").GetInt32());

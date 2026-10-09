@@ -85,6 +85,27 @@ jobs:
       - name: Verify P0-5c smart capture sources
         shell: powershell
         run: |
+          $lock = Get-Content .\ArIED61850Tester\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
+          $closure = $lock.dataSetTypeClosureTrial
+          $dataSetTrial = $null -ne $closure -and
+                          $lock.commit -eq '43f8935eb636967359028a0d9df293aac1812d99' -and
+                          $lock.commit -eq $closure.exactCommit -and
+                          [int]$lock.sourcePullRequest -eq 155 -and
+                          [int]$closure.sourcePullRequest -eq 155 -and
+                          $closure.baseEngineCommit -eq '352c81e6a798635c6addcee0683235ca87ad416d' -and
+                          $closure.status -eq 'code-verified-candidate-not-physical' -and
+                          [bool]$closure.physicalQualificationRequired -and
+                          [bool]$closure.fullNameRescanForbidden -and
+                          [bool]$closure.cyclicMmsProcessPollingForbidden -and
+                          [bool]$closure.dynamicDataSetWritesForbidden -and
+                          [int]$closure.maxNameListPages -eq 64 -and
+                          [int]$closure.maxExtraLogicalNodes -eq 48 -and
+                          [int]$closure.maxMemberHints -eq 2048
+          $expectedSmartProbe = if ($dataSetTrial) {
+            'ProbeSmartAsync\(_session, discovery, smartOptions, CancellationToken\.None\)'
+          } else {
+            'ProbeSmartAsync\(_session, discovery\.IedDirectory, smartOptions, CancellationToken\.None\)'
+          }
           $helper = Get-Content .\ArIED61850Tester\Services\NativeIec61850Client.SmartDiscoveryCapture.cs -Raw
           $optimization = Get-Content .\ArIED61850Tester\Services\NativeIec61850Client.SmartDiscoveryOptimization.cs -Raw
           $lifecycle = Get-Content .\ArIED61850Tester\Services\NativeIec61850Client.SmartDiscoveryLifecycle.cs -Raw
@@ -98,7 +119,7 @@ jobs:
               $helper -notmatch 'GetOrCreateSmartDiscoveryAssociationFlight' -or
               $helper -notmatch 'flight\.WaitAsync\(cancellationToken\)' -or
               $helper -notmatch '_mmsIoGate\.WaitAsync\(CancellationToken\.None\)' -or
-              $helper -notmatch 'ProbeSmartAsync\(_session, discovery\.IedDirectory, smartOptions, CancellationToken\.None\)' -or
+              $helper -notmatch $expectedSmartProbe -or
               $optimization -notmatch 'TryGetSmartDiscoveryAuthority' -or
               $optimization -notmatch 'BuildSmartCaptureSignalProjection' -or
               $optimization -notmatch 'AddSmartIndexedLogicalNodeFallbacks' -or

@@ -17,7 +17,7 @@ public sealed class SmartDiscoveryAssociationSingleFlightRegressionTests
         Assert.Contains("flight.WaitAsync(cancellationToken)", capture, StringComparison.Ordinal);
         Assert.Contains("_mmsIoGate.WaitAsync(CancellationToken.None)", capture, StringComparison.Ordinal);
         Assert.Contains("DiscoverSmartSingleFlightAsync(smartOptions, CancellationToken.None)", capture, StringComparison.Ordinal);
-        Assert.Contains("ProbeSmartAsync(_session, discovery.IedDirectory, smartOptions, CancellationToken.None)", capture, StringComparison.Ordinal);
+        Assert.Contains("ProbeSmartAsync(_session, discovery, smartOptions, CancellationToken.None)", capture, StringComparison.Ordinal);
         Assert.DoesNotContain("ProbeSmartAsync(_session, discovery.IedDirectory, smartOptions, cancellationToken)", capture, StringComparison.Ordinal);
 
         Assert.Contains("_smartDiscoveryAssociationFlight", lifecycle, StringComparison.Ordinal);

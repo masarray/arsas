@@ -62,8 +62,16 @@ public sealed class SmartInteroperabilityTrialGuardRegressionTests
         Assert.Equal(153, serverAt.GetProperty("sourcePullRequest").GetInt32());
         Assert.Equal(trial.GetProperty("exactCommit").GetString(),
             serverAt.GetProperty("baseEngineCommit").GetString());
-        Assert.Equal(root.GetProperty("commit").GetString(),
+        Assert.Equal("352c81e6a798635c6addcee0683235ca87ad416d",
             serverAt.GetProperty("exactCommit").GetString());
+        var closure = root.GetProperty("dataSetTypeClosureTrial");
+        Assert.Equal(root.GetProperty("commit").GetString(), closure.GetProperty("exactCommit").GetString());
+        Assert.Equal(serverAt.GetProperty("exactCommit").GetString(), closure.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal(155, closure.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal("code-verified-candidate-not-physical", closure.GetProperty("status").GetString());
+        Assert.True(closure.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(closure.GetProperty("fullNameRescanForbidden").GetBoolean());
+        Assert.True(closure.GetProperty("dynamicDataSetWritesForbidden").GetBoolean());
         Assert.True(serverAt.GetProperty("physicalQualificationRequired").GetBoolean());
         Assert.True(serverAt.GetProperty("noAutomaticMmsFailover").GetBoolean());
 

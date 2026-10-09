@@ -110,6 +110,28 @@ jobs:
             }
             Write-Host 'Running exact P6.2 ServerAt trial on the P6.1 code-only ancestry; physical/main promotion remains blocked.'
           }
+          elseif ($null -ne $lock.dataSetTypeClosureTrial -and
+                  $lock.commit -eq $lock.dataSetTypeClosureTrial.exactCommit) {
+            $closure = $lock.dataSetTypeClosureTrial
+            if ($lock.commit -ne '43f8935eb636967359028a0d9df293aac1812d99' -or
+                $lock.ref -ne 'main' -or
+                [int]$lock.sourcePullRequest -ne 155 -or
+                [int]$closure.sourcePullRequest -ne 155 -or
+                $closure.baseEngineCommit -ne $lock.sclServerAtTrial.exactCommit -or
+                $closure.baseEngineCommit -ne '352c81e6a798635c6addcee0683235ca87ad416d' -or
+                $closure.status -ne 'code-verified-candidate-not-physical' -or
+                -not [bool]$closure.physicalQualificationRequired -or
+                -not [bool]$closure.fullNameRescanForbidden -or
+                -not [bool]$closure.cyclicMmsProcessPollingForbidden -or
+                -not [bool]$closure.dynamicDataSetWritesForbidden -or
+                [int]$closure.maxNameListPages -ne 64 -or
+                [int]$closure.maxExtraLogicalNodes -ne 48 -or
+                [int]$closure.maxMemberHints -ne 2048 -or
+                $lock.purpose -notmatch 'CODE-VERIFIED INTEROPERABILITY TRIAL ONLY') {
+              throw 'P7.7 DataSet-first code-only trial provenance is invalid or promoted.'
+            }
+            Write-Host 'Running bounded DataSet-first P7.7 engine trial. Physical promotion remains blocked.'
+          }
           elseif ($lock.commit -eq $convergence.activeStack.engineModelAndScl.head) {
             if ([int]$lock.sourcePullRequest -notin @(134, 135) -or
                 $lock.purpose -notmatch 'R7 physical SCL repair pin') {

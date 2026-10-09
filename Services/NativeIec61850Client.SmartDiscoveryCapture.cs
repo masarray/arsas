@@ -30,7 +30,9 @@ public sealed partial class NativeIec61850Client
             ProbeReportAttributes = true,
             MaxReportAttributeProbes = 64,
             ReadDataSetDirectories = true,
-            MaxDataSetDirectoryReads = 64
+            MaxDataSetDirectoryReads = 64,
+            MaxDataSetTypeExtraLogicalNodes = 48,
+            MaxDataSetTypeMemberHints = 2048
         };
 
     private async Task<IReadOnlyList<SignalDefinition>> DiscoverSignalsSmartForCaptureAsync(
@@ -187,12 +189,12 @@ public sealed partial class NativeIec61850Client
 
             progress?.Report(new IedDiscoveryProgress(
                 IedDiscoveryStage.ProbingLogicalNodes,
-                "Smart MMS type discovery: coverage-aware Logical Node hierarchy probes…",
+                "Reading details for signals used by the IED reports…",
                 52d, 5, 10));
 
             var typeWatch = Stopwatch.StartNew();
             var variableTypes = await LiveIedVariableTypeProbeExecutor
-                .ProbeSmartAsync(_session, discovery.IedDirectory, smartOptions, CancellationToken.None)
+                .ProbeSmartAsync(_session, discovery, smartOptions, CancellationToken.None)
                 .ConfigureAwait(false);
             typeWatch.Stop();
 
@@ -270,6 +272,8 @@ public sealed partial class NativeIec61850Client
                 .Count();
             var rawVariables = snapshot.DomainVariables.Values.Sum(values => values.Count);
             var successfulTypeRoots = variableTypes.Count(result => result.IsSuccess);
+            var dataSetTypeHints = discovery.IedDirectory.Points.Count(point =>
+                string.Equals(point.Source, "LiveMmsDataSetDirectoryTypeHint", StringComparison.Ordinal));
             var typeBudget = _session.LastSmartTypeProbeBudget?.Summary ?? "Smart type budget unavailable.";
 
             totalWatch.Stop();
@@ -278,6 +282,7 @@ public sealed partial class NativeIec61850Client
                 $"IEDName={(string.IsNullOrWhiteSpace(identity.IedName) ? "unresolved" : identity.IedName)} ({identity.Source}); " +
                 $"{discovery.Summary} {liveModel.Summary} LN={logicalNodes}, SCADA candidates={signals.Count}, " +
                 $"MMS names={rawVariables}, smart type probes={variableTypes.Count}, successful type probes={successfulTypeRoots}, " +
+                $"DataSet-backed typed member hints={dataSetTypeHints}, " +
                 $"indexed LN hints={projectionStats.LogicalNodeHints}, indexed fallback signals={projectionStats.AddedFallbackSignals}. " +
                 $"{typeBudget} " +
                 $"TimingMs directory={directoryWatch.Elapsed.TotalMilliseconds:F1}, types={typeWatch.Elapsed.TotalMilliseconds:F1}, " +
