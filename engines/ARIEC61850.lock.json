@@ -72,5 +72,18 @@
     "fixture": "sanitized J Server / F ServerAt multi-AP",
     "noAutomaticMmsFailover": true,
     "physicalQualificationRequired": true
+  },
+  "dataSetTypeClosureTrial": {
+    "exactCommit": "43f8935eb636967359028a0d9df293aac1812d99",
+    "baseEngineCommit": "352c81e6a798635c6addcee0683235ca87ad416d",
+    "sourcePullRequest": 155,
+    "status": "code-verified-candidate-not-physical",
+    "physicalQualificationRequired": true,
+    "fullNameRescanForbidden": true,
+    "cyclicMmsProcessPollingForbidden": true,
+    "dynamicDataSetWritesForbidden": true,
+    "maxNameListPages": 64,
+    "maxExtraLogicalNodes": 48,
+    "maxMemberHints": 2048
   }
 }
