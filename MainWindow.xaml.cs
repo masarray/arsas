@@ -345,16 +345,32 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (Exception ex)
         {
-            AddLog("ERROR", "SCL", $"Could not open {sourceLabel}: {ex.Message}");
-            SetStatus($"{sourceLabel}: SCL open failed. Diagnostics is marked with !.");
+            // Opening a valid SCL also opens a WPF action chooser. A broken XAML
+            // resource after model import is not an ARIEC61850 parser failure.
+            var presentationFailure = IsSclPresentationFailure(ex);
+            AddLog("ERROR", "SCL", $"Could not finish opening {sourceLabel}: {ex}");
+            SetStatus(presentationFailure
+                ? $"{sourceLabel}: SCL action window failed to open; the model may already be loaded."
+                : $"{sourceLabel}: SCL open failed. Diagnostics is marked with !.");
             MarkDiagnosticAlert();
-            MessageBox.Show(
-                this,
-                $"ARSAS could not open this SCL file through the ARIEC61850 engine.\n\n{ex.Message}",
-                "Open SCL",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            var message = presentationFailure
+                ? $"ARSAS could not display the SCL action window. The imported model may already be available in Engineering.\n\n{ex.GetBaseException().Message}\n\nSee Diagnostics for details."
+                : $"ARSAS could not open this SCL file through the ARIEC61850 engine.\n\n{ex.Message}";
+            MessageBox.Show(this, message, "Open SCL",
+                MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private static bool IsSclPresentationFailure(Exception exception)
+    {
+        for (Exception? cause = exception; cause is not null; cause = cause.InnerException)
+        {
+            if (cause is System.Windows.Markup.XamlParseException ||
+                cause is ResourceReferenceKeyNotFoundException ||
+                cause.Message.Contains("StaticResourceExtension", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     private void ApplySclWorkspaceToDevice(

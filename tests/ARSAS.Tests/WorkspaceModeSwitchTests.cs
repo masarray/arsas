@@ -25,20 +25,27 @@ public sealed class WorkspaceModeSwitchTests
     {
         var workflow = File.ReadAllText(FindRepoFile("MainWindow.SharedSclWorkspace.cs"));
         var selectionWindow = File.ReadAllText(FindRepoFile("SclSignalSelectionModeWindow.xaml"));
+        var selectionCode = File.ReadAllText(FindRepoFile("SclSignalSelectionModeWindow.xaml.cs"));
+        var dialogStyles = File.ReadAllText(FindRepoFile("Styles/IedTaskDialogStyles.xaml"));
         var engineering = File.ReadAllText(FindRepoFile("MainWindow.xaml.cs"));
         var fat = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.cs"));
         var fatProjection = File.ReadAllText(FindRepoFile("IoListTestingWindow.FatV2Ux.cs"));
 
         Assert.Contains("new SclSignalSelectionModeWindow", workflow, StringComparison.Ordinal);
         Assert.DoesNotContain("MessageBox.Show", workflow, StringComparison.Ordinal);
-        Assert.Contains("Workspace opened offline", selectionWindow, StringComparison.Ordinal);
+        Assert.Contains("Workspace opened offline", selectionCode, StringComparison.Ordinal);
+        Assert.Contains("ContextHeading", selectionWindow, StringComparison.Ordinal);
         Assert.Contains("Static DataSet", selectionWindow, StringComparison.Ordinal);
         Assert.Contains("Select Signals", selectionWindow, StringComparison.Ordinal);
         Assert.Contains("RCB Engineering", selectionWindow, StringComparison.Ordinal);
         Assert.Contains("Download COMTRADE", selectionWindow, StringComparison.Ordinal);
         Assert.Contains("Browse Offline", selectionWindow, StringComparison.Ordinal);
-        Assert.Contains("PrimaryButton", selectionWindow, StringComparison.Ordinal);
-        Assert.Contains("SoftButton", selectionWindow, StringComparison.Ordinal);
+        Assert.Contains("TaskDialogPrimaryAction", selectionWindow, StringComparison.Ordinal);
+        Assert.Contains("TaskDialogSecondaryAction", selectionWindow, StringComparison.Ordinal);
+        Assert.Contains("x:Key=\"TaskDialogButtonBase\"", dialogStyles, StringComparison.Ordinal);
+        Assert.Contains("BasedOn=\"{StaticResource TaskDialogButtonBase}\"", dialogStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("BasedOn=\"{StaticResource PrimaryButton}\"", dialogStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("BasedOn=\"{StaticResource SoftButton}\"", dialogStyles, StringComparison.Ordinal);
         Assert.Contains("_sharedSclSelectionAuthorityDeviceIds", workflow, StringComparison.Ordinal);
         Assert.Contains("ApplyStaticDataSetSelection", engineering, StringComparison.Ordinal);
         Assert.Contains("selectionAlreadyApplied: true", engineering, StringComparison.Ordinal);
