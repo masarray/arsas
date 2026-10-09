@@ -13,6 +13,9 @@
         </ResourceDictionary>
     </Window.Resources>
 
+    <!-- Open SCL mode retains the "Workspace opened offline" heading supplied
+         by ContextHeading in code-behind. Card-scoped mode uses IED Actions.
+         Both keep the same explicit monitoring vs offline task authority. -->
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                   Focusable="False" Padding="0">
         <Grid Margin="24,22,24,22">
