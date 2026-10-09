@@ -50,6 +50,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public Dictionary<string, Iec61850MonitorPoint> ReportReferenceIndex { get; } = new(StringComparer.OrdinalIgnoreCase);
         public PriorityQueue<string, long> PollQueue { get; } = new();
         public Dictionary<string, Iec61850ReportContinuityState> ReportStreams { get; } = new(StringComparer.OrdinalIgnoreCase);
+        // Active association only: exact ARIEC write-step outcomes for each
+        // planned RCB. Cleared wherever ReportStreams is cleared.
+        public Dictionary<string, NativeReportMonitorStartResult> ReportActivationByPlanId { get; } =
+            new(StringComparer.OrdinalIgnoreCase);
         public long ContinuityProcessUpdatesSeen { get; set; }
         public int ContinuityUntrackedStreams { get; set; }
         public int LastUnroutedReportCount { get; set; }
@@ -491,6 +495,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.ReportReferenceIndex.Clear();
         session.PollQueue.Clear();
         session.ReportStreams.Clear();
+        session.ReportActivationByPlanId.Clear();
         session.ContinuityProcessUpdatesSeen = 0;
         session.ContinuityUntrackedStreams = 0;
         session.Device.ReportContinuityEvidence = null;
@@ -813,6 +818,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     : result.UsedDynamicDataSet ? "Dynamic active" : "Static active";
                 session.ActiveReportPlans[plan.PlanId] = plan;
                 session.ActiveReportPlanOrder.Add(plan);
+                session.ReportActivationByPlanId[plan.PlanId] = result;
 
                 var coveredPoints = ResolveCoveredPoints(plan, result.CoveredReferences);
                 var acquisitionLabel = session.StaticDataSetReportOnly
@@ -1350,7 +1356,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     DataSetReference = string.IsNullOrWhiteSpace(frame.DataSetReference)
                         ? plan.DataSetReference : frame.DataSetReference,
                     ReportId = frame.ReportId,
-                    Buffered = plan.Buffered
+                    Buffered = plan.Buffered,
+                    RptEnaWriteAccepted = session.ReportActivationByPlanId.TryGetValue(plan.PlanId, out var activation)
+                        ? activation.RptEnaWriteAccepted : null,
+                    GiWriteAccepted = session.ReportActivationByPlanId.TryGetValue(plan.PlanId, out var giActivation)
+                        ? giActivation.GeneralInterrogationWriteAccepted : null,
+                    ActivationReturnedAtUtc = session.ReportActivationByPlanId.TryGetValue(plan.PlanId, out var returned)
+                        ? returned.ActivationReturnedAtUtc : null
                 };
                 session.ReportStreams[streamKey] = state;
             }
@@ -1801,6 +1813,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
         session.ReportStreams.Clear();
+        session.ReportActivationByPlanId.Clear();
         session.ContinuityProcessUpdatesSeen = 0;
         session.ContinuityUntrackedStreams = 0;
         session.Device.ReportContinuityEvidence = null;
@@ -2108,6 +2121,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.StaticReportProjection.Reset();
         session.PollQueue.Clear();
         session.ReportStreams.Clear();
+        session.ReportActivationByPlanId.Clear();
         session.ContinuityProcessUpdatesSeen = 0;
         session.ContinuityUntrackedStreams = 0;
         session.Device.ReportContinuityEvidence = null;

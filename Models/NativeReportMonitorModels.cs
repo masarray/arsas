@@ -8,6 +8,13 @@ public sealed class NativeReportMonitorStartResult
     public string SubscriptionSummary { get; init; } = string.Empty;
     public int MemberCount { get; init; }
     public int WriteStepCount { get; init; }
+    // Exact ARIEC attribute write outcomes, not guesses from an enabled
+    // UI state. null means the engine did not provide a matching write step.
+    public bool? RptEnaWriteAccepted { get; init; }
+    public bool? GeneralInterrogationWriteAccepted { get; init; }
+    // Client returned from ARIEC activation at this UTC instant. This is not
+    // an MMS wire-write timestamp and may follow buffered report reception.
+    public DateTimeOffset? ActivationReturnedAtUtc { get; init; }
     public bool UsedDynamicDataSet { get; init; }
     public bool DynamicAttempted { get; init; }
     public string DynamicAttemptState { get; init; } = string.Empty;
@@ -55,6 +62,11 @@ public sealed class NativeReportFrameMetadata
     public bool? OptFldsEntryId { get; init; }
     public bool? OptFldsBufferOverflow { get; init; }
     public bool? OptFldsConfRev { get; init; }
+    public bool? OptFldsReasonForInclusion { get; init; }
+    // Nullable on purpose: reason not requested / empty decoder reason is
+    // UNKNOWN, not evidence that no GI/integrity report was emitted.
+    public bool? GeneralInterrogationReasonSeen { get; init; }
+    public bool? IntegrityReasonSeen { get; init; }
     public ulong? SubSequenceNumber { get; init; }
     public bool? MoreSegmentsFollow { get; init; }
     public bool? BufferOverflow { get; init; }

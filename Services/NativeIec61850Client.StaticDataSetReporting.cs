@@ -419,6 +419,9 @@ public sealed partial class NativeIec61850Client
             SubscriptionSummary = subscription.Summary,
             MemberCount = subscription.Members.Count,
             WriteStepCount = start.WriteSteps.Count,
+            RptEnaWriteAccepted = ReadStaticActivationWriteResult(start.WriteSteps, "RptEna"),
+            GeneralInterrogationWriteAccepted = ReadStaticActivationWriteResult(start.WriteSteps, "GI"),
+            ActivationReturnedAtUtc = DateTimeOffset.UtcNow,
             UsedDynamicDataSet = false,
             DynamicAttempted = false,
             DynamicAttemptState = "NotApplicable",
@@ -428,6 +431,24 @@ public sealed partial class NativeIec61850Client
             CoveredReferences = coveredReferences,
             Warnings = warnings
         };
+    }
+
+    // ARIEC provides a chronological write-step list. The last attempted
+    // write of the same attribute is authoritative after bounded retries.
+    // No additional MMS reads/writes or local IEC 61850 semantic parsing.
+    internal static bool? ReadStaticActivationWriteResult(
+        IReadOnlyList<ArMms.MmsReportAttributeWriteStep> steps, string attribute)
+    {
+        ArgumentNullException.ThrowIfNull(steps);
+        ArgumentException.ThrowIfNullOrWhiteSpace(attribute);
+        for (var i = steps.Count - 1; i >= 0; i--)
+        {
+            var step = steps[i];
+            if (step.Attempted && string.Equals(step.Attribute, attribute,
+                    StringComparison.OrdinalIgnoreCase))
+                return step.IsSuccess;
+        }
+        return null;
     }
 
     private static NativeHybridReportPlanningResult StaticPlanningUnavailable(
