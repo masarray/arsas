@@ -72,6 +72,22 @@ public static class Iec61850StaticDataSetAuthoritySelection
                     selected.Add(control);
                 }
 
+                // A single configured WYE/DEL whole-DO membership can own several
+                // independent schema-proven phase leaves. Retain the original static
+                // membership and select every exact leaf with this DataSet owner.
+                foreach (var leaf in Iec61850StaticPhaseLeafProjection.Resolve(
+                             authorityModel, memberReference, descriptor.FunctionalConstraint))
+                {
+                    var matches = signals
+                        .Where(signal => !signal.IsControlSignal && signal.CanPublishToRuntime)
+                        .Where(signal => LiteralEquals(signal.DataSetReference, membership.DataSetReference))
+                        .Where(signal => LiteralEquals(signal.ObjectReference, leaf.Reference))
+                        .Where(signal => LiteralEquals(signal.DisplayReference, leaf.Reference))
+                        .ToArray();
+                    if (matches.Length == 1)
+                        selected.Add(matches[0]);
+                }
+
                 var candidates = signals
                     .Where(signal => !signal.IsControlSignal && signal.CanPublishToRuntime)
                     .Where(signal => LiteralEquals(signal.DataSetReference, membership.DataSetReference))
