@@ -1586,13 +1586,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     ? " • Operate NOT sent"
                     : string.Empty;
                 var cause = string.IsNullOrWhiteSpace(result.AddCause) ? string.Empty : $" • AddCause={result.AddCause}";
-                return $"IED REJECTED {stage}: {result.Message}{cause}{stopped}{suffix}";
+                var explanation = Iec61850ControlFailureReason.Explain(result);
+                return $"IED REJECTED {stage}: {explanation.Summary} [{explanation.Confidence}]. " +
+                       $"Check: {explanation.Checks}. Wire: {result.Message}{cause}{stopped}{suffix}";
             }
         }
 
         return result.IsSuccess
             ? $"{result.Stage}: {result.FeedbackValue}{suffix}"
-            : $"{result.Stage}: {result.Message}{suffix}";
+            : $"{result.Stage}: {Iec61850ControlFailureReason.Explain(result).Summary} • {result.Message}{suffix}";
     }
 
     private async void ControlDetails_Click(object sender, RoutedEventArgs e)

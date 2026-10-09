@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ArIED61850Tester.Models;
+using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
 
@@ -276,9 +277,8 @@ public partial class MainWindow
                 if (device.CommandSignals.Any(signal => signal.ControlCommandBusy))
                     continue;
 
-                var candidates = device.Signals
-                    .Where(signal => signal.IsSelected && signal.IsValidControlObject)
-                    .Where(signal => !signal.ControlModelResolved)
+                // Cache aliases of the same DataObject share one ctlModel probe.
+                var candidates = Iec61850ControlIdentity.InspectionRepresentatives(device.Signals)
                     .Where(signal => _controlModelPreloadAttempts.Add(ControlModelAttemptKey(device, signal)))
                     .ToArray();
 
@@ -337,7 +337,7 @@ public partial class MainWindow
     }
 
     private static string ControlModelAttemptKey(Iec61850MonitorDevice device, SignalDefinition signal)
-        => $"{device.DeviceId}|{RuntimeHelpers.GetHashCode(signal)}|{NormalizeReference(signal.ObjectReference)}";
+        => $"{device.DeviceId}|{Iec61850ControlIdentity.Normalize(signal.ObjectReference)}";
 
     private void TactileButton_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {

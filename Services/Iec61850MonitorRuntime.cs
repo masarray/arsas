@@ -78,6 +78,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     }
 
     private readonly ConcurrentDictionary<string, DeviceSession> _sessions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, byte> _activeControlTargets = new(StringComparer.OrdinalIgnoreCase);
     private long _eventSequence;
 
     public event Action<DiagnosticEntry>? Diagnostic;
@@ -630,6 +631,16 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         if (!_sessions.TryGetValue(deviceId, out var session) || !session.Client.IsConnected)
             throw new InvalidOperationException("The IED must be connected before a command can be sent.");
 
+        // One physical control target per device, regardless of DataSet aliases.
+        // Failed concurrent admission is local: no additional MMS Operate.
+        var targetKey = deviceId + "|" + Iec61850ControlIdentity.Normalize(request.Signal.ObjectReference);
+        if (!_activeControlTargets.TryAdd(targetKey, 0))
+        {
+            Log("WARN", session.Device.Name,
+                $"CONTROL_LOCAL_BUSY: {request.Signal.ObjectReference}; no additional MMS Operate was sent.");
+            throw new InvalidOperationException("Command already in progress for this IEC 61850 control object. No new MMS Operate was sent.");
+        }
+
         Log("INFO", session.Device.Name,
             $"Control execution requested: {request.Signal.ObjectReference} value={request.ValueText}; test={request.TestMode}; interlock={request.InterlockCheck}; synchro={request.SynchroCheck}; origin={request.OriginCategory}/{request.Originator}; IED acceptance is determined only from native MMS wire evidence.");
 
@@ -643,6 +654,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         finally
         {
             Interlocked.Decrement(ref session.ControlCommandActive);
+            _activeControlTargets.TryRemove(targetKey, out _);
         }
         clientStopwatch.Stop();
 
@@ -684,6 +696,16 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
         Log(result.IsSuccess ? "INFO" : "ERROR", session.Device.Name,
             $"Control {result.Stage}: {request.Signal.ObjectReference}; sequence={result.SequenceText}; requested={result.RequestedValue}; feedback={result.FeedbackValue}; {protocolEvidence}; {result.Message}");
+
+        if (!result.IsSuccess)
+        {
+            var explanation = Iec61850ControlFailureReason.Explain(result);
+            Log("ERROR", session.Device.Name,
+                $"CONTROL_FAILURE_CLASSIFIED: reference={request.Signal.ObjectReference}; " +
+                $"summary={explanation.Summary}; confidence={explanation.Confidence}; " +
+                $"evidence={explanation.Evidence}; checks={explanation.Checks}. " +
+                "Generic MMS denial does not prove Local/Remote, interlock or authorization.");
+        }
 
         var rejectedWireStep = result.WireSteps.FirstOrDefault(step => !step.RequestAccepted);
         if (rejectedWireStep != null)

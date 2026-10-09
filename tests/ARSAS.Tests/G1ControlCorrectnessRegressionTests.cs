@@ -140,9 +140,11 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.Contains("? \"SBOw\" : rejectedStep.Action", dialog, StringComparison.Ordinal);
         Assert.Contains("IED REJECTED {rejectedStage}", dialog, StringComparison.Ordinal);
         Assert.Contains("Operate was NOT sent because SBOw selection failed", dialog, StringComparison.Ordinal);
-        Assert.Contains("IED BLOCKED COMMAND BY INTERLOCKING", dialog, StringComparison.Ordinal);
-        Assert.Contains("IED BLOCKED COMMAND BY SYNCHROCHECK", dialog, StringComparison.Ordinal);
-        Assert.Contains("requested control condition/service is not supported", dialog, StringComparison.Ordinal);
+        var explanation = File.ReadAllText(Path.Combine(RepoRoot(), "Services", "Iec61850ControlFailureReason.cs"));
+        Assert.Contains("blocked-by-interlocking", explanation, StringComparison.Ordinal);
+        Assert.Contains("blocked-by-synchrocheck", explanation, StringComparison.Ordinal);
+        Assert.Contains("not-supported", explanation, StringComparison.Ordinal);
+        Assert.Contains("Iec61850ControlFailureReason.Explain(result)", dialog, StringComparison.Ordinal);
         Assert.Contains("CONTROL_REJECTED_BY_IED:", runtime, StringComparison.Ordinal);
         Assert.Contains("Control execution requested:", runtime, StringComparison.Ordinal);
         Assert.DoesNotContain("Control intent accepted:", runtime, StringComparison.Ordinal);

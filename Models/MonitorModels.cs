@@ -567,7 +567,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         var delta = isSelected ? 1 : -1;
         _selectedSignalCount = Math.Clamp(_selectedSignalCount + delta, 0, Signals.Count);
         if (signal.IsValidControlObject)
-            _selectedControlSignalCount = Math.Clamp(_selectedControlSignalCount + delta, 0, Signals.Count);
+            _selectedControlSignalCount = Iec61850ControlIdentity.CountSelected(Signals);
         else if (signal.CanPublishAsSignal)
             _selectedLiveSignalCount = Math.Clamp(_selectedLiveSignalCount + delta, 0, Signals.Count);
         RefreshCommandSignals();
@@ -579,7 +579,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         _selectedSignalCount = Signals.Count(signal =>
             signal.IsSelected && (!signal.IsControlSignal || signal.IsValidControlObject));
         _selectedLiveSignalCount = Signals.Count(signal => signal.IsSelected && signal.CanPublishAsSignal);
-        _selectedControlSignalCount = Signals.Count(signal => signal.IsSelected && signal.IsValidControlObject);
+        _selectedControlSignalCount = Iec61850ControlIdentity.CountSelected(Signals);
         RefreshCommandSignals();
         RefreshComputed();
     }
@@ -592,10 +592,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         // The Command Panel is an operating surface, not a second signal browser.
         // Keep unresolved, StatusOnly, unsupported, and feedback-only objects out so
         // the panel contains only actions the connected IED has proven executable.
-        var selected = Signals
-            .Where(signal => signal.IsSelected && signal.IsValidControlObject)
-            .Where(signal => signal.ControlModelResolved && signal.ControlSupportsOperate)
-            .Where(signal => !signal.IsGenericControl)
+        var selected = Iec61850ControlIdentity.DistinctOperable(Signals)
             .OrderBy(signal => signal.SortPriority)
             .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
             .ThenBy(signal => signal.Name, StringComparer.OrdinalIgnoreCase)
