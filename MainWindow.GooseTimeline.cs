@@ -61,7 +61,9 @@ public partial class MainWindow
 
     public string GoosePublisherCountText => $"{GooseStreams.Count:N0}";
     public string GooseEventCountText => $"{GooseEvents.Count:N0}";
-    public string GooseSelectedLeafCountText => $"{SelectedGooseStream?.Leaves.Count ?? 0:N0} values";
+    public string GooseSelectedLeafCountText => SelectedGooseStream is null
+        ? "0 signals"
+        : $"{SelectedGooseStream.EngineeringLeaves.Count:N0} signals · {SelectedGooseStream.Leaves.Count:N0} entries";
     public Visibility GooseNoEventsVisibility => GooseEvents.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
     [ModuleInitializer]
@@ -83,6 +85,10 @@ public partial class MainWindow
             typeof(MainWindow),
             GooseSubscriberLiteView.AdapterConfirmedEvent,
             new RoutedEventHandler(OnGooseAdapterConfirmed));
+        EventManager.RegisterClassHandler(
+            typeof(MainWindow),
+            GooseSubscriberLiteView.ImportPublisherModelRequestedEvent,
+            new RoutedEventHandler(OnImportGoosePublisherModelRequested));
         EventManager.RegisterClassHandler(
             typeof(MainWindow),
             GooseSubscriberLiteView.StartRequestedEvent,
@@ -149,6 +155,16 @@ public partial class MainWindow
         if (sender is not MainWindow window)
             return;
         window.ConfirmIedGooseAdapterSelection();
+        args.Handled = true;
+    }
+
+    private static void OnImportGoosePublisherModelRequested(object sender, RoutedEventArgs args)
+    {
+        if (sender is not MainWindow window)
+            return;
+        // Uses the existing, engine-validated SCL import workflow. Never infer
+        // publisher IP from GOOSE source MAC or synthesize missing FCDA identities.
+        window.OpenScl_Click(window, new RoutedEventArgs());
         args.Handled = true;
     }
 

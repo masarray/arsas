@@ -833,32 +833,51 @@ public partial class MainWindow
 
         public GooseStreamBindingDefinition? Resolve(GooseFrame frame)
         {
-            GooseStreamBindingDefinition? best = null;
+            // Never bind by GoID alone (not globally unique), by suffix, or by
+            // similar-looking DataSet names. Require an exact wire identity,
+            // equal revision where available, and equal flattened value count.
+            // Ambiguous top-scoring matches remain unbound rather than
+            // assigning someone else's electrical signal names.
+            GooseStreamBindingDefinition? winner = null;
             var bestScore = 0;
-            foreach (var candidate in Bindings)
+            var ambiguous = false;
+            var frameDataSet = NormalizeGooseReference(frame.Pdu.DataSetReference);
+            var frameGoCb = NormalizeGooseReference(frame.Pdu.GoCbRef);
+            foreach (var binding in Bindings)
             {
-                var score = 0;
-                if (candidate.AppId.HasValue && candidate.AppId.Value == frame.AppId)
-                    score += 50;
-                if (ReferencesMatch(NormalizeGooseReference(candidate.GoCbRef), NormalizeGooseReference(frame.Pdu.GoCbRef)))
-                    score += 120;
-                if (ReferencesMatch(NormalizeGooseReference(candidate.DataSetReference), NormalizeGooseReference(frame.Pdu.DataSetReference)))
-                    score += 90;
-                if (!string.IsNullOrWhiteSpace(candidate.GoId) && candidate.GoId.Equals(frame.Pdu.GoId, StringComparison.OrdinalIgnoreCase))
-                    score += 40;
-                if (candidate.ConfigurationRevision.HasValue && candidate.ConfigurationRevision.Value == frame.Pdu.ConfigurationRevision)
-                    score += 10;
-                if (candidate.Source.Equals("SCL", StringComparison.OrdinalIgnoreCase))
-                    score += 5;
+                if (binding.Leaves.Count != frame.Pdu.Values.Count)
+                    continue;
+                if (binding.AppId.HasValue && binding.AppId.Value != frame.AppId)
+                    continue;
+                if (binding.ConfigurationRevision.HasValue &&
+                    binding.ConfigurationRevision.Value != frame.Pdu.ConfigurationRevision)
+                    continue;
 
+                var goCb = NormalizeGooseReference(binding.GoCbRef);
+                var dataSet = NormalizeGooseReference(binding.DataSetReference);
+                if (goCb.Length > 0 && !string.Equals(goCb, frameGoCb, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (dataSet.Length > 0 && !string.Equals(dataSet, frameDataSet, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var goCbExact = goCb.Length > 0;
+                var dataSetExact = dataSet.Length > 0;
+                if (!goCbExact && !dataSetExact) continue;
+                var score = (goCbExact ? 120 : 0) + (dataSetExact ? 90 : 0) +
+                            (binding.AppId.HasValue ? 50 : 0) +
+                            (binding.ConfigurationRevision.HasValue ? 10 : 0) +
+                            (binding.Source.Equals("SCL", StringComparison.OrdinalIgnoreCase) ? 5 : 0);
                 if (score > bestScore)
                 {
+                    winner = binding;
                     bestScore = score;
-                    best = candidate;
+                    ambiguous = false;
                 }
+                else if (score == bestScore)
+                    ambiguous = true;
             }
 
-            return bestScore >= 90 ? best : null;
+            return ambiguous ? null : winner;
         }
     }
 }

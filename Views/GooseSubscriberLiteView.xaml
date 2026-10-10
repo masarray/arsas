@@ -410,7 +410,7 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Orientation="Horizontal">
                             <Ellipse Width="7" Height="7" Fill="{StaticResource Accent}" Margin="0,0,7,0"/>
-                            <TextBlock Text="GOOSE Inspector" FontSize="13" FontWeight="SemiBold"
+                            <TextBlock Text="DataSet Inspector" FontSize="13" FontWeight="SemiBold"
                                        Foreground="{StaticResource Ink}"/>
                         </StackPanel>
                         <Border Grid.Column="1" CornerRadius="9" Padding="7,2" BorderThickness="1">
@@ -549,9 +549,26 @@
                                     </StackPanel>
                                 </Border>
 
+                                <StackPanel Margin="0,0,0,7">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedGooseStream.BindingSource}" Value="Unbound">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="Signal names need the publisher's SCL/CID model." FontSize="10"
+                                               Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                                    <Button Content="Open Publisher SCL / CID" Click="ImportPublisherModel_Click"
+                                            HorizontalAlignment="Left" Padding="9,4" Margin="0,5,0,0"
+                                            FontSize="10" ToolTip="Load a trusted SCL/CID for this publisher; existing GOOSE capture continues."/>
+                                </StackPanel>
                                 <Grid Margin="0,0,0,5">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                    <TextBlock Text="DataSet values" FontSize="11.6" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                    <TextBlock Text="Signals &amp; quality" FontSize="11.6" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
                                     <Border Grid.Column="1" Background="#EEF4FF" BorderBrush="#C9D9F1"
                                             BorderThickness="1" CornerRadius="8" Padding="6,2">
                                         <TextBlock Text="{Binding GooseSelectedLeafCountText}" FontSize="9" Foreground="#45648E"/>
