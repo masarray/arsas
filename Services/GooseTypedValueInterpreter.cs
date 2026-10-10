@@ -113,7 +113,9 @@ public static class GooseCanonicalLeafProjection
         var pairedQualities = new HashSet<int>();
         foreach (var value in wireLeaves)
         {
-            if (!IsValue(value)) continue;
+            if (!IsValue(value) &&
+                !(IsModelBound(value) && value.SignalName.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase)))
+                continue;
             var valueRef = Owner(value.SignalReference, out _);
             var exact = qualities.Where(q =>
                 string.Equals(valueRef, Owner(q.SignalReference, out _), StringComparison.OrdinalIgnoreCase)).ToArray();
@@ -136,13 +138,40 @@ public static class GooseCanonicalLeafProjection
                     q.FunctionalConstraint.Equals(value.FunctionalConstraint, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(ownerName, Owner(q.SignalName, out var qKind), StringComparison.OrdinalIgnoreCase) &&
                     valueKind == "value" && qKind == "quality" &&
-                    CompatibleOwners(valueRef, Owner(q.SignalReference, out _))).ToArray();
+                    (CompatibleOwners(valueRef, Owner(q.SignalReference, out _)) ||
+                     CompatibleOwners(DoScopedReference(value.SignalReference),
+                                      DoScopedReference(q.SignalReference)))).ToArray();
                 if (adjacent.Length == 1)
                 {
                     var occurrences = wireLeaves.Count(row => IsValue(row) &&
                         string.Equals(ownerName, Owner(row.SignalName, out _), StringComparison.OrdinalIgnoreCase));
                     if (occurrences == 1) candidate = adjacent[0];
                 }
+            }
+            if (candidate is null && IsModelBound(value) &&
+                value.SignalName.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase))
+            {
+                // Some GE F650 SCL models publish typed q in the next FCDA but
+                // use different naming conventions for MMS reference vs display.
+                // Only two *unique*, adjacent, model-bound wire members with
+                // identical IEC LN.DO and a decoded quality status may be joined.
+                var shortOwner = Owner(value.SignalName, out var valueKind);
+                var neighbors = wireLeaves.Where(q =>
+                    q.DataSetIndex == value.DataSetIndex + 1 &&
+                    IsModelBound(q) &&
+                    q.SignalName.EndsWith(".q", StringComparison.OrdinalIgnoreCase) &&
+                    Owner(q.SignalName, out var qKind) == shortOwner &&
+                    qKind == "quality" && valueKind == "value" &&
+                    IsReadableQuality(q.Value) &&
+                    (string.IsNullOrWhiteSpace(q.FunctionalConstraint) ||
+                     string.IsNullOrWhiteSpace(value.FunctionalConstraint) ||
+                     q.FunctionalConstraint.Equals(value.FunctionalConstraint, StringComparison.OrdinalIgnoreCase)) &&
+                    (CompatibleOwners(valueRef, Owner(q.SignalReference, out _)) ||
+                     CompatibleOwners(DoScopedReference(value.SignalReference),
+                                      DoScopedReference(q.SignalReference)))).ToArray();
+                if (neighbors.Length == 1 &&
+                    wireLeaves.Count(row => row.SignalName.Equals(value.SignalName, StringComparison.OrdinalIgnoreCase)) == 1)
+                    candidate = neighbors[0];
             }
             if (candidate is null || !pairedQualities.Add(candidate.DataSetIndex))
                 continue;
@@ -165,6 +194,30 @@ public static class GooseCanonicalLeafProjection
         }
         return result;
     }
+
+    private static string? DoScopedReference(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return null;
+        var key = input.Trim().Replace('$', '.');
+        var slash = key.LastIndexOf('/');
+        var dot = key.IndexOf('.', slash + 1);
+        if (dot >= 0 && dot + 4 < key.Length &&
+            key.AsSpan(dot + 1, 3).Equals("ST.".AsSpan(), StringComparison.OrdinalIgnoreCase))
+            key = key.Remove(dot + 1, 3);
+        foreach (var suffix in new[] { ".stVal", ".q" })
+            if (key.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                key = key[..^suffix.Length];
+        return key;
+    }
+
+    private static bool IsReadableQuality(string value) =>
+        value.Equals("Good", StringComparison.OrdinalIgnoreCase) ||
+        value.StartsWith("Good ·", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("Invalid", StringComparison.OrdinalIgnoreCase) ||
+        value.StartsWith("Invalid ·", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("Questionable", StringComparison.OrdinalIgnoreCase) ||
+        value.StartsWith("Questionable ·", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("Reserved", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsModelBound(GooseLeafValueSnapshot leaf)
         => !leaf.BindingSource.Equals("Unbound", StringComparison.OrdinalIgnoreCase) &&

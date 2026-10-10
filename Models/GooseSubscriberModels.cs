@@ -104,6 +104,9 @@ public sealed partial class GooseStreamRow : ObservableObject
     private int _changedValueCount;
     private bool _test;
     private bool _needsCommissioning;
+    private string _vlanId = "Untagged";
+    private string _vlanPriority = "—";
+    private int _wireDataSetEntryCount;
 
     public string StreamKey { get; init; } = string.Empty;
     public ObservableCollection<GooseLeafValueRow> Leaves { get; } = new();
@@ -130,6 +133,9 @@ public sealed partial class GooseStreamRow : ObservableObject
     public int ChangedValueCount { get => _changedValueCount; set => Set(ref _changedValueCount, Math.Max(0, value)); }
     public bool Test { get => _test; set => Set(ref _test, value); }
     public bool NeedsCommissioning { get => _needsCommissioning; set => Set(ref _needsCommissioning, value); }
+    public string VlanId { get => _vlanId; private set => Set(ref _vlanId, value); }
+    public string VlanPriority { get => _vlanPriority; private set => Set(ref _vlanPriority, value); }
+    public int WireDataSetEntryCount { get => _wireDataSetEntryCount; private set => Set(ref _wireDataSetEntryCount, value); }
 
     public string IdentityText => !string.IsNullOrWhiteSpace(GoCbRef) ? GoCbRef : (!string.IsNullOrWhiteSpace(GoId) ? GoId : AppIdText);
     public string FlagsText => Test && NeedsCommissioning ? "TEST • ndsCom" : Test ? "TEST" : NeedsCommissioning ? "ndsCom" : "Normal";
@@ -144,6 +150,10 @@ public sealed partial class GooseStreamRow : ObservableObject
         SourceMac = snapshot.SourceMac;
         DestinationMac = snapshot.DestinationMac;
         VlanText = snapshot.VlanText;
+        VlanId = snapshot.VlanId;
+        VlanPriority = snapshot.VlanPriority;
+        WireDataSetEntryCount = snapshot.WireDataSetEntryCount == 0
+            ? snapshot.Leaves.Count : snapshot.WireDataSetEntryCount;
         StateNumberText = snapshot.StateNumberText;
         SequenceNumberText = snapshot.SequenceNumberText;
         SequenceStatus = snapshot.SequenceStatus;
@@ -252,4 +262,7 @@ public sealed record GooseStreamSnapshot(
     int ChangedValueCount,
     bool Test,
     bool NeedsCommissioning,
-    IReadOnlyList<GooseLeafValueSnapshot> Leaves);
+    IReadOnlyList<GooseLeafValueSnapshot> Leaves,
+    string VlanId = "Untagged",
+    string VlanPriority = "—",
+    int WireDataSetEntryCount = 0);

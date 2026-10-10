@@ -324,6 +324,8 @@ public partial class MainWindow
             EventText = eventText,
             EventTone = tone,
             Publisher = BuildGoosePublisherName(stream),
+            IedName = string.IsNullOrWhiteSpace(stream.ModelIedName) ? "Unresolved" : stream.ModelIedName,
+            GooseId = string.IsNullOrWhiteSpace(stream.GoId) ? "Not provided" : stream.GoId,
             StateSequenceText = $"{stream.StateNumberText} / {stream.SequenceNumberText}",
             SourceMac = stream.SourceMac,
             DestinationMac = stream.DestinationMac,

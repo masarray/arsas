@@ -662,6 +662,7 @@
                                     </Grid>
 
                                     <DataGrid Grid.Row="2" ItemsSource="{Binding SelectedDevice.Points}" IsReadOnly="True"
+                                              Loaded="ExplorerLiveGrid_Loaded"
                                               Style="{StaticResource ModernDataGrid}" FrozenColumnCount="2"
                                               EnableRowVirtualization="True" EnableColumnVirtualization="True"
                                               VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"

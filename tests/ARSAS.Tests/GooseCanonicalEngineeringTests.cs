@@ -93,6 +93,24 @@ public sealed class GooseCanonicalEngineeringTests
     }
 
     [Fact]
+    public void SameSclDoScopedReferencePlusAdjacentTypedQuality_PairsWithoutGuessing()
+    {
+        static GooseLeafValueSnapshot Leaf(int order,string name,string reference,string type,string value)
+            => new(order,order-1,name,reference,"ST","DPC",type,value,"",false,"SCL");
+        var wire=new[]{
+            Leaf(1,"CSWI6.Pos.stVal","BCUGEF650/CSWI6.Pos","Dbpos","Off"),
+            Leaf(2,"CSWI6.Pos.q","BCUGEF650/CSWI6.Pos","Quality","Good"),
+            Leaf(3,"CSWI7.Pos.stVal","BCUGEF650/CSWI7.Pos","Dbpos","Intermediate"),
+            Leaf(4,"CSWI7.Pos.q","BCUGEF650/CSWI7.Pos","Quality","Questionable")
+        };
+        var view=GooseCanonicalLeafProjection.Project(wire);
+        Assert.Equal(2,view.Count);
+        Assert.Equal("Good",view[0].Quality);
+        Assert.Equal("Questionable",view[1].Quality);
+        Assert.Equal(4,wire.Length);
+    }
+
+    [Fact]
     public void DifferentExplicitLogicalDevicesCannotTransferQuality()
     {
         static GooseLeafValueSnapshot Leaf(int n,string name,string path,string type,string value)
@@ -104,6 +122,24 @@ public sealed class GooseCanonicalEngineeringTests
         var projected=GooseCanonicalLeafProjection.Project(leaves);
         Assert.Equal(2,projected.Count);
         Assert.Equal("—",projected[0].Quality);
+    }
+
+    [Fact]
+    public void F650WireDataSet_RendersQInQualityColumn_WithoutReorderingRawMembers()
+    {
+        static GooseLeafValueSnapshot Leaf(int pos,string name,string reference,string type,string value)
+            => new(pos,pos-1,name,reference,"ST","DPC",type,value,"",false,"SCL");
+        var wire = new[] {
+            Leaf(1,"CSWI6.Pos.stVal","BCUGEF650/CSWI6.Pos.stVal","Dbpos","Off"),
+            Leaf(2,"CSWI6.Pos.q","CSWI6.Pos.q","Quality","Good"),
+            Leaf(3,"CSWI7.Pos.stVal","BCUGEF650/CSWI7.Pos.stVal","Dbpos","Intermediate"),
+            Leaf(4,"CSWI7.Pos.q","CSWI7.Pos.q","Quality","Good")
+        };
+        var view = GooseCanonicalLeafProjection.Project(wire);
+        Assert.Equal(4, wire.Length);
+        Assert.Equal(2, view.Count);
+        Assert.All(view, leaf => Assert.Equal("Good",leaf.Quality));
+        Assert.Equal(new[]{0,2},view.Select(leaf=>leaf.DataSetIndex).ToArray());
     }
 
     [Fact]

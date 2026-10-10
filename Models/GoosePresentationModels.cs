@@ -23,6 +23,19 @@ public sealed partial class GooseStreamRow
 
     public string ModelIedDisplay => string.IsNullOrWhiteSpace(ModelIedName) ? "Not resolved" : ModelIedName;
     public string GooseIdDisplay => string.IsNullOrWhiteSpace(GoId) ? "Not provided" : GoId;
+    public string ApplicationIdDecimal
+    {
+        get
+        {
+            var raw = AppIdText.Trim();
+            return raw.StartsWith("0x", StringComparison.OrdinalIgnoreCase) &&
+                   ushort.TryParse(raw.AsSpan(2), NumberStyles.HexNumber,
+                       CultureInfo.InvariantCulture, out var value)
+                ? value.ToString(CultureInfo.InvariantCulture) : raw;
+        }
+    }
+    public string SimulationTestText => Test ? "True" : "False";
+    public string DataSetEntryCountText => WireDataSetEntryCount.ToString(CultureInfo.InvariantCulture);
     public string DataSetShortName => string.IsNullOrWhiteSpace(DataSetReference) ? "Not provided" : ShortReference(DataSetReference);
     public string GoCbRefShortName => string.IsNullOrWhiteSpace(GoCbRef) ? "Not provided" : ShortReference(GoCbRef);
     public string StateSequenceText => $"{StateNumberText} / {SequenceNumberText}";
@@ -36,6 +49,9 @@ public sealed partial class GooseStreamRow
         Raise(nameof(DisplayName));
         Raise(nameof(DisplaySecondary));
         Raise(nameof(ModelIedDisplay));
+        Raise(nameof(ApplicationIdDecimal));
+        Raise(nameof(SimulationTestText));
+        Raise(nameof(DataSetEntryCountText));
         Raise(nameof(GooseIdDisplay));
         Raise(nameof(DataSetShortName));
         Raise(nameof(GoCbRefShortName));
@@ -78,6 +94,8 @@ public sealed class GooseEventRow : ObservableObject
     public string DestinationMac { get; init; } = "—";
     public string DataSetName { get; init; } = "—";
     public string RelativeTime { get; init; } = "—";
+    public string IedName { get; init; } = "Unresolved";
+    public string GooseId { get; init; } = "Not provided";
     public GooseStreamSnapshot? Snapshot { get; init; }
 
     public bool IsRecent { get => _isRecent; private set => Set(ref _isRecent, value); }
