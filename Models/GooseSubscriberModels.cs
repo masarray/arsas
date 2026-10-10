@@ -28,6 +28,9 @@ public sealed class GooseLeafValueRow : ObservableObject
     private string _cdc = string.Empty;
     private string _bType = string.Empty;
     private string _value = "-";
+    private string _displayValue = "-";
+    private string _valueTypeToken = "";
+    private string _valueVisualKind = Iec61850ValueStatePresentation.Neutral;
     private string _previousValue = string.Empty;
     private string _bindingSource = "Unbound";
     private string _quality = "—";
@@ -49,6 +52,12 @@ public sealed class GooseLeafValueRow : ObservableObject
     public bool IsChanged { get => _isChanged; set => Set(ref _isChanged, value); }
     public bool IsHighlighted { get => _isHighlighted; private set => Set(ref _isHighlighted, value); }
     public string TypeText => string.Join(" / ", new[] { Cdc, BType }.Where(item => !string.IsNullOrWhiteSpace(item)));
+    // The same three presentation properties drive Explorer, Global Live, Event
+    // Log and the GOOSE inspector. Raw Value/FCDA order never changes.
+    public string IecDataType => !string.IsNullOrWhiteSpace(BType) ? BType : Cdc;
+    public string DisplayValue => _displayValue;
+    public string ValueTypeToken => _valueTypeToken;
+    public string ValueVisualKind => _valueVisualKind;
 
     public void Apply(GooseLeafValueSnapshot snapshot)
     {
@@ -70,7 +79,18 @@ public sealed class GooseLeafValueRow : ObservableObject
             _highlightUntilUtc = DateTimeOffset.UtcNow.AddSeconds(3);
             IsHighlighted = true;
         }
+        // Bounded UI scheduler already coalesces incoming frames. Compute once
+        // per applied snapshot, not repeatedly during WPF layout/binding reads.
+        var dataType = IecDataType;
+        var display = GooseEngineeringValueFormatter.Format(Value, dataType);
+        var typeToken = Iec61850ValueStatePresentation.TypeToken(dataType);
+        var visualKind = Iec61850ValueStatePresentation.ClassifyVisualKind(
+            display, dataType, reference: SignalReference);
+        Set(ref _displayValue, display, nameof(DisplayValue));
+        Set(ref _valueTypeToken, typeToken, nameof(ValueTypeToken));
+        Set(ref _valueVisualKind, visualKind, nameof(ValueVisualKind));
         Raise(nameof(TypeText));
+        Raise(nameof(IecDataType));
     }
 
     public bool ExpireHighlight(DateTimeOffset nowUtc)

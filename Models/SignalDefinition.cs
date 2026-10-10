@@ -23,6 +23,7 @@ public class SignalDefinition : ObservableObject
     private bool _controlModelResolved;
     private string _controlValueType = string.Empty;
     private string _controlCurrentValue = "-";
+    private Iec61850ProcessValueBadge? _controlProcessValue;
     private string? _deferredControlCurrentValue;
     private string _controlSetPointText = string.Empty;
     private string _controlLastResult = string.Empty;
@@ -125,7 +126,46 @@ public class SignalDefinition : ObservableObject
         Iec61850ControlModelKind.DirectEnhanced or
         Iec61850ControlModelKind.SboEnhanced;
     public bool IsReadOnlyControl => _controlModelResolved && !ControlSupportsOperate;
-    public string ControlValueType { get => _controlValueType; set => Set(ref _controlValueType, value?.Trim() ?? string.Empty); }
+    public string ControlValueType
+    {
+        get => _controlValueType;
+        set
+        {
+            if (Set(ref _controlValueType, value?.Trim() ?? string.Empty))
+                RefreshControlProcessValue();
+        }
+    }
+
+    // Cache per signal; recompute only when feedback or declared control type changes.
+    // All control requests continue using ControlCurrentValue unchanged.
+    public Iec61850ProcessValueBadge ControlProcessValue =>
+        _controlProcessValue ??= BuildControlProcessValue();
+
+    private Iec61850ProcessValueBadge BuildControlProcessValue()
+    {
+        var position = IsPositionSemanticControl ||
+            string.Equals(ControlCdc, "DPC", StringComparison.OrdinalIgnoreCase);
+        var type = position ? "Dbpos" :
+            !string.IsNullOrWhiteSpace(ControlValueType) ? ControlValueType : ControlCdc;
+        var boolType = type.Equals("SPS", StringComparison.OrdinalIgnoreCase) ||
+                       type.Equals("SPC", StringComparison.OrdinalIgnoreCase) ||
+                       type.Equals("Boolean", StringComparison.OrdinalIgnoreCase);
+        var display = position || boolType
+            ? ArIED61850Tester.Services.Iec61850ValueFormatter.FormatReportProcessValue(
+                ControlCurrentValue, type, "", position ? "Position" : "Status", ObjectReference)
+            : ControlCurrentValue;
+        return new Iec61850ProcessValueBadge(
+            display, type,
+            Iec61850ValueStatePresentation.TypeToken(type),
+            Iec61850ValueStatePresentation.ClassifyVisualKind(
+                display, type, reference: ObjectReference));
+    }
+
+    private void RefreshControlProcessValue()
+    {
+        _controlProcessValue = null;
+        Raise(nameof(ControlProcessValue));
+    }
 
     /// <summary>
     /// Current process feedback shown in the fast Command Panel. While a command is in
@@ -458,7 +498,10 @@ public class SignalDefinition : ObservableObject
     private void ApplyControlCurrentValue(string normalized)
     {
         if (Set(ref _controlCurrentValue, normalized, nameof(ControlCurrentValue)))
+        {
             Raise(nameof(ControlCurrentTone));
+            RefreshControlProcessValue();
+        }
     }
 
     private void UpdateControlModelFromEvidence(string? evidence, bool updateDisplay)
@@ -508,6 +551,7 @@ public class SignalDefinition : ObservableObject
         Raise(nameof(IsSetPointControl));
         Raise(nameof(IsGenericControl));
         Raise(nameof(SignalPropertiesSummary));
+        RefreshControlProcessValue();
     }
 
     private string NormalizeControlResultText(string text)

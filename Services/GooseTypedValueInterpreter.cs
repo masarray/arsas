@@ -15,18 +15,16 @@ public static class GooseTypedValueInterpreter
         if (value.Kind != MmsDataKind.BitString)
             return MmsDataValueRenderer.ToCompactString(value, reference);
         var raw = value.RawValue;
+        if (IsQuality(reference, bType))
+            return RenderQuality(value);
         if (raw.Count == 2 && raw[0] == 6 &&
             (string.Equals(bType, "Dbpos", StringComparison.OrdinalIgnoreCase) ||
              string.Equals(cdc, "DPC", StringComparison.OrdinalIgnoreCase)))
-            return ((raw[1] >> 6) & 3) switch
-            {
-                0 => "Intermediate",
-                1 => "Off",
-                2 => "On",
-                _ => "Invalid"
-            };
-        if (IsQuality(reference, bType))
-            return RenderQuality(value);
+            return Iec61850ValueFormatter.FormatOperatorDbpos((raw[1] >> 6) & 3);
+        if (raw.Count == 2 && raw[0] == 7 &&
+            (IsBooleanType(bType) || IsBooleanType(cdc)))
+            return Iec61850ValueFormatter.FormatReportProcessValue(
+                (raw[1] & 0x80) != 0, "Boolean", "", "Status", reference ?? "");
         return MmsDataValueRenderer.ToCompactString(value, reference);
     }
 
@@ -55,13 +53,31 @@ public static class GooseTypedValueInterpreter
             if (comma == 2 && byte.TryParse(content[..comma], System.Globalization.NumberStyles.HexNumber,
                 System.Globalization.CultureInfo.InvariantCulture, out var bits) &&
                 previous.Contains("unused=6", StringComparison.OrdinalIgnoreCase))
-                return ((bits >> 6) & 3) switch
-                {
-                    0 => "Intermediate", 1 => "Off", 2 => "On", _ => "Invalid"
-                };
+                return Iec61850ValueFormatter.FormatOperatorDbpos((bits >> 6) & 3);
         }
-        return GooseEngineeringValueFormatter.Format(previous);
+        if ((IsBooleanType(bType) || IsBooleanType(cdc)) &&
+            previous.StartsWith("bits(", StringComparison.OrdinalIgnoreCase) &&
+            previous.Contains("unused=7", StringComparison.OrdinalIgnoreCase))
+        {
+            var content = previous.AsSpan(5);
+            var comma = content.IndexOf(',');
+            if (comma == 2 && byte.TryParse(content[..comma],
+                    System.Globalization.NumberStyles.HexNumber,
+                    System.Globalization.CultureInfo.InvariantCulture, out var bits))
+                return Iec61850ValueFormatter.FormatReportProcessValue(
+                    (bits & 0x80) != 0, "Boolean", "", "Status", "");
+        }
+        return GooseEngineeringValueFormatter.Format(previous,
+            string.Equals(bType, "Dbpos", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(cdc, "DPC", StringComparison.OrdinalIgnoreCase)
+                ? "Dbpos" : IsBooleanType(bType) || IsBooleanType(cdc) ? "Boolean" : bType);
     }
+
+    private static bool IsBooleanType(string? value) =>
+        value is not null && (value.Equals("Boolean", StringComparison.OrdinalIgnoreCase) ||
+                              value.Equals("BOOL", StringComparison.OrdinalIgnoreCase) ||
+                              value.Equals("SPS", StringComparison.OrdinalIgnoreCase) ||
+                              value.Equals("SPC", StringComparison.OrdinalIgnoreCase));
 
     public static bool IsQuality(string? reference, string? bType)
         => string.Equals(bType, "Quality", StringComparison.OrdinalIgnoreCase) ||

@@ -1,36 +1,34 @@
-using System.Globalization;
-using System.Text.RegularExpressions;
+using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester.Models;
 
+/// <summary>
+/// Compatibility presentation adapter. Never infer process state from a raw
+/// value without the corresponding declared IEC 61850 type; the canonical
+/// MMS/report formatter is the only Dbpos and Boolean vocabulary authority.
+/// </summary>
 public static class GooseEngineeringValueFormatter
 {
-    private static readonly Regex CompactBitString = new(
-        @"^bits\((?<hex>[0-9A-Fa-f]{2}),\s*unused=(?<unused>[67])\)$",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
-    public static string Format(string? rawValue)
+    public static string Format(string? rawValue, string? dataType = null)
     {
         var text = rawValue?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(text) || text == "<missing in frame>")
+        if (text.Length == 0 || text == "<missing in frame>")
             return text;
 
-        var match = CompactBitString.Match(text);
-        if (!match.Success ||
-            !byte.TryParse(match.Groups["hex"].Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var value))
-        {
-            return text;
-        }
+        var type = (dataType ?? string.Empty).Trim();
+        if (type.Equals("Dbpos", StringComparison.OrdinalIgnoreCase) ||
+            type.Equals("DPC", StringComparison.OrdinalIgnoreCase) ||
+            type.Equals("DoublePointStatus", StringComparison.OrdinalIgnoreCase))
+            return Iec61850ValueFormatter.FormatReportProcessValue(
+                text, "Dbpos", "", "Position", "");
 
-        if (match.Groups["unused"].Value == "7")
-            return (value & 0x80) == 0 ? "false" : "true";
+        if (type.Equals("Boolean", StringComparison.OrdinalIgnoreCase) ||
+            type.Equals("BOOL", StringComparison.OrdinalIgnoreCase) ||
+            type.Equals("SPS", StringComparison.OrdinalIgnoreCase) ||
+            type.Equals("SPC", StringComparison.OrdinalIgnoreCase))
+            return Iec61850ValueFormatter.FormatReportProcessValue(
+                text, "Boolean", "", "Status", "");
 
-        return ((value >> 6) & 0x03) switch
-        {
-            0 => "Intermediate [00]",
-            1 => "Open [01]",
-            2 => "Closed [10]",
-            _ => "Invalid [11]"
-        };
+        return text;
     }
 }
