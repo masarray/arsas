@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
+using ArIED61850Tester.Services;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -124,23 +125,27 @@ public partial class MainWindow
             if (GooseAdapters.Count == 0)
                 RefreshGooseAdapters();
 
-            // MMS route is an initial NIC recommendation, not proof of the
-            // station GOOSE VLAN. Only auto-start when one non-loopback Npcap
-            // adapter uniquely matches the actual Windows-routed interface.
+            // Exact OS/Npcap interface identity selects the candidate, not an
+            // adapter's display name or the presence of a single remaining NIC.
+            // The selected NIC is an observation point, NOT proof of GOOSE emission.
             var proposed = ResolveGooseAdapterForIed(device, out var route);
-            if (proposed is not null && !LooksLikeLoopback(proposed))
+            _gooseCaptureContextHint = route.Contains("Same-PC", StringComparison.Ordinal)
+                ? "Same-PC simulator: verify it actually publishes Ethernet GOOSE on this adapter."
+                : "If no frames arrive, check the publisher, station NIC and VLAN.";
+            AddLog("INFO", "GOOSE", $"Adapter selection: {route}");
+            if (proposed is not null)
             {
                 SelectedGooseAdapter = proposed;
-                GooseStatusText = $"Listening on suggested adapter {proposed.DisplayText}. Change adapter if GOOSE uses a separate port/VLAN.";
-                SetStatus($"GOOSE: starting on {proposed.DisplayText}.");
+                GooseStatusText = $"Matched capture NIC {proposed.DisplayText}. GOOSE frame reception not yet verified.";
+                SetStatus($"GOOSE: observing on {proposed.DisplayText}.");
                 StartGooseSubscriber_Click(this, new RoutedEventArgs());
                 return;
             }
             SelectedGooseAdapter = null;
             _pendingIedGooseAutoStart = device;
             GooseStatusText = GooseAdapters.Count == 0
-                ? "No Ethernet capture adapter found. Check Npcap and refresh adapters."
-                : $"Choose the GOOSE station adapter for {device.Name}; capture begins on selection. {route}";
+                ? "No Npcap capture adapter found. Check installation and refresh."
+                : $"Choose GOOSE adapter for {device.Name}; capture starts on confirmation. {route}";
             SetStatus($"GOOSE: select network adapter for {device.Name}.");
         }));
     }
@@ -157,46 +162,29 @@ public partial class MainWindow
             return null;
         }
 
-        var localAddress = ResolveLocalIpv4ForTarget(target);
-        if (localAddress is not null)
+        try
         {
-            var networkInterface = NetworkInterface.GetAllNetworkInterfaces()
-                .FirstOrDefault(adapter => adapter.GetIPProperties().UnicastAddresses.Any(unicast =>
-                    unicast.Address.AddressFamily == AddressFamily.InterNetwork &&
-                    unicast.Address.Equals(localAddress)));
-
-            if (networkInterface is not null)
-            {
-                var matches = GooseAdapters
-                    .Where(adapter => CaptureAdapterMatchesNetworkInterface(adapter, networkInterface))
-                    .ToList();
-                if (matches.Count == 1)
-                {
-                    routeDetail =
-                        $"Windows route {localAddress} → {target} via {networkInterface.Name} ({networkInterface.Description})";
-                    return matches[0];
-                }
-
-                routeDetail = matches.Count == 0
-                    ? $"Windows selected {networkInterface.Name} ({localAddress}), but no Npcap adapter matched its ID/MAC."
-                    : $"Windows selected {networkInterface.Name} ({localAddress}), but {matches.Count} Npcap adapters matched.";
-            }
-            else
-            {
-                routeDetail = $"Windows selected local address {localAddress}, but its network interface was not found.";
-            }
+            var route = ResolveLocalIpv4ForTarget(target);
+            var interfaces = NetworkInterface.GetAllNetworkInterfaces()
+                .Select(nic => new GooseWindowsInterfaceSnapshot(
+                    nic.Id,
+                    nic.Name,
+                    nic.Description,
+                    nic.GetPhysicalAddress().ToString(),
+                    nic.GetIPProperties().UnicastAddresses
+                        .Where(unicast => unicast.Address.AddressFamily == AddressFamily.InterNetwork)
+                        .Select(unicast => unicast.Address)
+                        .ToArray()))
+                .ToArray();
+            var selection = GooseAdapterSelectionPolicy.Resolve(target, route, interfaces, GooseAdapters.ToArray());
+            routeDetail = selection.Evidence;
+            return selection.Adapter;
         }
-
-        var usable = GooseAdapters
-            .Where(adapter => !LooksLikeLoopback(adapter))
-            .ToList();
-        if (usable.Count == 1)
+        catch (Exception ex) when (ex is NetworkInformationException or SocketException or InvalidOperationException)
         {
-            routeDetail += $" Falling back to the only non-loopback capture adapter: {usable[0].DisplayText}.";
-            return usable[0];
+            routeDetail = $"Network adapter identity unavailable: {ex.Message}. Select the capture adapter manually.";
+            return null;
         }
-
-        return null;
     }
 
     private static IPAddress? ResolveLocalIpv4ForTarget(IPAddress target)
@@ -236,9 +224,5 @@ public partial class MainWindow
         => Regex.Replace(value ?? string.Empty, "[^0-9A-Fa-f]", string.Empty).ToUpperInvariant();
 
     private static bool LooksLikeLoopback(GooseAdapterOption adapter)
-    {
-        var text = $"{adapter.Name} {adapter.Description} {adapter.FriendlyName}";
-        return text.Contains("loopback", StringComparison.OrdinalIgnoreCase) ||
-               text.Contains("npcap loopback", StringComparison.OrdinalIgnoreCase);
-    }
+        => GooseAdapterSelectionPolicy.IsNpcapPseudoLoopback(adapter);
 }
