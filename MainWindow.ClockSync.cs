@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.Net;
+using System.Windows.Threading;
 using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
@@ -7,8 +9,9 @@ public partial class MainWindow
 {
     private readonly SntpClockService _sntpClockService = new();
     private readonly SemaphoreSlim _clockSyncIntegrationGate = new(1, 1);
-    private readonly HashSet<string> _clockSyncObservedClients = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _clockSyncRepliedClients = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, byte> _clockSyncObservedClients = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, byte> _clockSyncRepliedClients = new(StringComparer.OrdinalIgnoreCase);
+    private int _clockSyncUiRenderQueued;
     private string _lastClockSyncStatus = string.Empty;
     private bool _clockSyncLifecycleAttached;
     private long _clockSyncDesiredVersion;
@@ -77,7 +80,11 @@ public partial class MainWindow
                 return;
 
             if (active.State != SntpClockServiceState.Stopped)
+            {
                 await _sntpClockService.StopAsync();
+                _clockSyncObservedClients.Clear();
+                _clockSyncRepliedClients.Clear();
+            }
 
             if (version != Volatile.Read(ref _clockSyncDesiredVersion) || !_clockSyncEnabled)
                 return;
@@ -108,30 +115,46 @@ public partial class MainWindow
         }
     }
 
-    private void ClockSyncService_StatusChanged(SntpClockServiceSnapshot snapshot)
+    private void ClockSyncService_StatusChanged(SntpClockServiceSnapshot _)
     {
-        void Publish()
+        // One dispatcher operation per burst, regardless of how many IEDs
+        // query UDP/123 concurrently. The UI reads the newest state at flush.
+        if (Dispatcher.HasShutdownStarted) return;
+        if (Dispatcher.CheckAccess())
         {
-            RefreshGlobalSntpToggle(snapshot);
-            ClockSyncSnapshotChanged?.Invoke(snapshot);
-            var status = $"{snapshot.State}|{snapshot.TransportMode}|{snapshot.Detail}";
-            if (status.Equals(_lastClockSyncStatus, StringComparison.Ordinal))
-                return;
-            _lastClockSyncStatus = status;
-            AddLog(snapshot.State is SntpClockServiceState.Faulted or SntpClockServiceState.PortUnavailable
-                ? "WARN" : "INFO", "SNTP Server", snapshot.Detail);
+            RenderClockSyncStatus(_sntpClockService.Snapshot);
+            return;
         }
-        if (Dispatcher.CheckAccess()) Publish();
-        else if (!Dispatcher.HasShutdownStarted)
-            Dispatcher.BeginInvoke(new Action(Publish));
+        if (Interlocked.Exchange(ref _clockSyncUiRenderQueued, 1) != 0)
+            return;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            Interlocked.Exchange(ref _clockSyncUiRenderQueued, 0);
+            if (!Dispatcher.HasShutdownStarted)
+                RenderClockSyncStatus(_sntpClockService.Snapshot);
+        }));
+    }
+
+    private void RenderClockSyncStatus(SntpClockServiceSnapshot snapshot)
+    {
+        RefreshGlobalSntpToggle(snapshot);
+        ClockSyncSnapshotChanged?.Invoke(snapshot);
+        var status = $"{snapshot.State}|{snapshot.TransportMode}|{snapshot.Detail}";
+        if (status.Equals(_lastClockSyncStatus, StringComparison.Ordinal))
+            return;
+        _lastClockSyncStatus = status;
+        AddLog(snapshot.State is SntpClockServiceState.Faulted or SntpClockServiceState.PortUnavailable
+            ? "WARN" : "INFO", "SNTP Server", snapshot.Detail);
     }
 
     private void ClockSyncService_ClientRequestObserved(SntpClientObservation observation)
     {
         var key = observation.Address.ToString();
+        // Deduplicate on the worker BEFORE posting to WPF. An IED querying
+        // once per second must not enqueue a UI log message every second.
+        if (!_clockSyncObservedClients.TryAdd(key, 0)) return;
         void Publish()
         {
-            if (!_clockSyncObservedClients.Add(key)) return;
             var device = Devices.FirstOrDefault(item =>
                 item.IpAddress.Equals(key, StringComparison.OrdinalIgnoreCase));
             AddLog("INFO", "SNTP Server",
@@ -144,9 +167,9 @@ public partial class MainWindow
     private void ClockSyncService_ReplySent(SntpReplyObservation observation)
     {
         var key = observation.Address.ToString();
+        if (!_clockSyncRepliedClients.TryAdd(key, 0)) return;
         void Publish()
         {
-            if (!_clockSyncRepliedClients.Add(key)) return;
             var device = Devices.FirstOrDefault(item =>
                 item.IpAddress.Equals(key, StringComparison.OrdinalIgnoreCase));
             AddLog("INFO", "SNTP Server",
