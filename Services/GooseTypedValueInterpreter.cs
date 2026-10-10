@@ -97,50 +97,102 @@ public static class GooseTypedValueInterpreter
 }
 
 /// <summary>
-/// Exact reference-identity engineering view of GOOSE allData. Raw wire
-/// entries remain separately available and untouched, including orphan q.
+/// Engineering readout only: preserves every original ordered GOOSE FCDA in
+/// GooseStreamRow.Leaves. Pairs q only where its owner is unambiguous.
 /// </summary>
 public static class GooseCanonicalLeafProjection
 {
     public static IReadOnlyList<GooseLeafValueSnapshot> Project(IReadOnlyList<GooseLeafValueSnapshot> wireLeaves)
     {
-        var owners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var quality = new Dictionary<string, List<GooseLeafValueSnapshot>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var leaf in wireLeaves)
+        var values = wireLeaves.Where(leaf =>
+            Owner(leaf.SignalReference, out var kind) is not null && kind == "value").ToArray();
+        var qualities = wireLeaves.Where(leaf =>
+            Owner(leaf.SignalReference, out var kind) is not null && kind == "quality").ToArray();
+
+        var pairs = new Dictionary<int, GooseLeafValueSnapshot>();
+        var pairedQualities = new HashSet<int>();
+        foreach (var value in wireLeaves)
         {
-            var key = CanonicalOwner(leaf.SignalReference, out var kind);
-            if (key is null) continue;
-            if (kind == "value") owners.Add(key);
-            else if (kind == "quality")
+            if (!IsValue(value)) continue;
+            var valueRef = Owner(value.SignalReference, out _);
+            var exact = qualities.Where(q =>
+                string.Equals(valueRef, Owner(q.SignalReference, out _), StringComparison.OrdinalIgnoreCase)).ToArray();
+            // Exact qualified-reference pairing has priority. Never accept
+            // duplicate status/quality owners as a unique match.
+            var exactValueCount = values.Count(other =>
+                string.Equals(valueRef, Owner(other.SignalReference, out _), StringComparison.OrdinalIgnoreCase));
+            GooseLeafValueSnapshot? candidate = exact.Length == 1 && exactValueCount == 1
+                ? exact[0] : null;
+
+            if (candidate is null && exact.Length == 0 && IsModelBound(value))
             {
-                if (!quality.TryGetValue(key, out var found))
-                    quality[key] = found = new List<GooseLeafValueSnapshot>(1);
-                found.Add(leaf);
+                // Some SCL publishers expose mixed abbreviated DA references.
+                // The ordered wire DataSet itself provides a stronger fallback:
+                // adjacent typed q following stVal, same FC, exact LN.DO name,
+                // unique in this stream. Never match unrelated LD-qualified refs.
+                var ownerName = Owner(value.SignalName, out var valueKind);
+                var adjacent = wireLeaves.Where(q => q.DataSetIndex == value.DataSetIndex + 1 &&
+                    IsModelBound(q) && IsQuality(q) &&
+                    q.FunctionalConstraint.Equals(value.FunctionalConstraint, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(ownerName, Owner(q.SignalName, out var qKind), StringComparison.OrdinalIgnoreCase) &&
+                    valueKind == "value" && qKind == "quality" &&
+                    CompatibleOwners(valueRef, Owner(q.SignalReference, out _))).ToArray();
+                if (adjacent.Length == 1)
+                {
+                    var occurrences = wireLeaves.Count(row => IsValue(row) &&
+                        string.Equals(ownerName, Owner(row.SignalName, out _), StringComparison.OrdinalIgnoreCase));
+                    if (occurrences == 1) candidate = adjacent[0];
+                }
             }
+            if (candidate is null || !pairedQualities.Add(candidate.DataSetIndex))
+                continue;
+            pairs[value.DataSetIndex] = candidate;
         }
 
         var result = new List<GooseLeafValueSnapshot>(wireLeaves.Count);
         foreach (var leaf in wireLeaves)
         {
-            var key = CanonicalOwner(leaf.SignalReference, out var kind);
-            quality.TryGetValue(key ?? string.Empty, out var companions);
-            var hasUniqueCompanion = key is not null && owners.Contains(key) &&
-                                     companions is { Count: 1 };
-            if (hasUniqueCompanion && kind == "quality") continue;
-            if (hasUniqueCompanion && kind == "value")
+            if (pairedQualities.Contains(leaf.DataSetIndex)) continue;
+            if (pairs.TryGetValue(leaf.DataSetIndex, out var quality))
                 result.Add(leaf with
                 {
                     SignalName = leaf.SignalName.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase)
                         ? leaf.SignalName[..^6] : leaf.SignalName,
-                    Quality = companions![0].Value,
-                    IsChanged = leaf.IsChanged || companions[0].IsChanged
+                    Quality = quality.Value,
+                    IsChanged = leaf.IsChanged || quality.IsChanged
                 });
             else result.Add(leaf);
         }
         return result;
     }
 
-    private static string? CanonicalOwner(string? source, out string kind)
+    private static bool IsModelBound(GooseLeafValueSnapshot leaf)
+        => !leaf.BindingSource.Equals("Unbound", StringComparison.OrdinalIgnoreCase) &&
+           !string.IsNullOrWhiteSpace(leaf.SignalReference);
+
+    private static bool IsValue(GooseLeafValueSnapshot leaf)
+        => Owner(leaf.SignalReference, out var kind) is not null && kind == "value";
+
+    private static bool IsQuality(GooseLeafValueSnapshot leaf)
+        => Owner(leaf.SignalReference, out var kind) is not null && kind == "quality" &&
+           (GooseTypedValueInterpreter.IsQuality(leaf.SignalReference, leaf.BType) ||
+            leaf.SignalName.EndsWith(".q", StringComparison.OrdinalIgnoreCase));
+
+    private static bool CompatibleOwners(string? primary, string? quality)
+    {
+        if (primary is null || quality is null) return false;
+        if (primary.Equals(quality, StringComparison.OrdinalIgnoreCase)) return true;
+        // An abbreviated SCL reference may omit its LD prefix. Two explicit
+        // different LD prefixes are NOT equivalent, regardless of matching LN.
+        var a = primary.LastIndexOf('/');
+        var b = quality.LastIndexOf('/');
+        if (a >= 0 && b >= 0) return false;
+        return (a >= 0 ? primary[(a+1)..] : primary)
+            .Equals(b >= 0 ? quality[(b+1)..] : quality,
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? Owner(string? source, out string kind)
     {
         kind = string.Empty;
         if (string.IsNullOrWhiteSpace(source)) return null;

@@ -7,6 +7,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using ArIED61850Tester.Models;
+using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
 
@@ -191,6 +192,11 @@ public partial class MainWindow
         _liveSignalSearchView = source == null
             ? null
             : CollectionViewSource.GetDefaultView(source);
+        // Natural ordering is presentation-only. The underlying static DataSet
+        // descriptors and MMS/GOOSE FCDA order must remain untouched.
+        if (_liveSignalSearchView is ListCollectionView listView &&
+            listView.SortDescriptions.Count == 0 && listView.CustomSort is null)
+            listView.CustomSort = IecNaturalLiveMonitorSort.Instance;
         ApplyLiveSignalSearch();
     }
 

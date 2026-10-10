@@ -31,6 +31,8 @@ public sealed class GooseTimelineEventPolicyTests
         var first = new GooseTimelineSignature("intermediate", "1", "", "Normal");
         Assert.True(GooseTimelineEventPolicy.Evaluate(first, first with { State = "2" }, false).Include);
         Assert.True(GooseTimelineEventPolicy.Evaluate(first, first with { Diagnostics = "Bad confRev" }, false).Include);
+        Assert.False(GooseTimelineEventPolicy.Evaluate(first,
+            first with { Diagnostics = "GOOSE test flag is set." },false).Include);
     }
 
     [Fact]

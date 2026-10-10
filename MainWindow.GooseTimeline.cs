@@ -19,6 +19,23 @@ public partial class MainWindow
     private readonly ConcurrentQueue<(GooseSubscriberFrameSnapshot Frame, GooseTimelineDecision Decision)> _pendingGooseTimeline = new();
     private readonly Dictionary<string, GooseTimelineSignature> _lastGooseTimelineSignature = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _gooseTimelineGate = new();
+    private readonly GooseCrossStreamEventPolicy _gooseMirroredEvents = new();
+    private bool _settingGooseLiveSelection;
+    private bool _followLatestGooseEvents = true;
+    public bool FollowLatestGooseEvents
+    {
+        get => _followLatestGooseEvents;
+        set
+        {
+            if (!Set(ref _followLatestGooseEvents, value)) return;
+            if (value && GooseEvents.Count > 0)
+            {
+                _settingGooseLiveSelection = true;
+                try { SelectedGooseEvent = GooseEvents[^1]; }
+                finally { _settingGooseLiveSelection = false; }
+            }
+        }
+    }
     private bool _showGooseRetransmissions;
     public bool ShowGooseRetransmissions
     {
@@ -40,6 +57,8 @@ public partial class MainWindow
         {
             if (!Set(ref _selectedGooseEvent, value))
                 return;
+            if (!_settingGooseLiveSelection && value is not null)
+                FollowLatestGooseEvents = false;
 
             if (value is not null)
             {
@@ -213,6 +232,18 @@ public partial class MainWindow
             _lastGooseTimelineSignature.TryGetValue(frame.StreamKey, out var previous);
             decision = GooseTimelineEventPolicy.Evaluate(previous, fingerprint, ShowGooseRetransmissions);
             _lastGooseTimelineSignature[frame.StreamKey] = fingerprint;
+            if (decision.Include && decision.PayloadChanged && !decision.IsNew &&
+                !ShowGooseRetransmissions)
+            {
+                var changes = frame.StreamEvent.GooseValues
+                    .Where(v => v.IsChanged && v.SignalReference.EndsWith(".stVal",StringComparison.OrdinalIgnoreCase))
+                    .Select(v => new GooseProcessDelta(v.SignalReference,v.DisplayValue,v.IsMappedToScl))
+                    .ToArray();
+                var identity = GooseCrossStreamEventPolicy.Identity(
+                    frame.Frame.Source.ToString(),changes);
+                if (_gooseMirroredEvents.IsMirror(identity,frame.StreamKey,frame.CaptureTimestamp))
+                    return;
+            }
         }
         if (!decision.Include) return;
         _pendingGooseTimeline.Enqueue((frame, decision));
@@ -242,7 +273,12 @@ public partial class MainWindow
             while (GooseEvents.Count > MaxGooseTimelineEvents)
                 GooseEvents.RemoveAt(0);
 
-            SelectedGooseEvent ??= eventRow;
+            if (FollowLatestGooseEvents)
+            {
+                _settingGooseLiveSelection = true;
+                try { SelectedGooseEvent = eventRow; }
+                finally { _settingGooseLiveSelection = false; }
+            }
             processed++;
         }
 
@@ -401,7 +437,13 @@ public partial class MainWindow
         }
         _lastGooseTimelineTimestamp.Clear();
         _gooseTimelineStart = null;
-        lock (_gooseTimelineGate) _lastGooseTimelineSignature.Clear();
+        lock (_gooseTimelineGate)
+        {
+            _lastGooseTimelineSignature.Clear();
+            _gooseMirroredEvents.Reset();
+        }
+        _followLatestGooseEvents = true;
+        Raise(nameof(FollowLatestGooseEvents));
         _nextGooseHighlightExpiryCheckUtc = DateTimeOffset.MinValue;
         GooseEvents.Clear();
         SelectedGooseEvent = null;

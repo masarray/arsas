@@ -448,6 +448,10 @@ public partial class MainWindow
             }
 
             row.Apply(snapshot);
+            // In follow-live mode the inspector shows current stream state
+            // between meaningful events; selecting history freezes the frame.
+            if (FollowLatestGooseEvents && _selectedGooseEvent?.StreamKey == snapshot.StreamKey)
+                SelectedGooseStream = row;
             processed++;
         }
 
