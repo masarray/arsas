@@ -94,3 +94,10 @@ Validate the feature with a known publisher and SCL before relying on names in p
 - Vendor-specific structured DataSet members are rendered compactly as one `allData` item. The grid does not invent nested field names beyond metadata provided by ARIEC61850.
 - Npcap capture visibility depends on Windows driver installation, adapter binding, VLAN offload behavior, and switch port mirroring/network topology.
 - This workspace provides engineering evidence, not an IEC 61850 conformance certificate or cybersecurity assurance.
+
+
+## Same-PC C264 adapter selection (P8, draft field candidate)
+
+The IED-card GOOSE entry now resolves the capture NIC from authoritative Windows/Npcap interface GUID, then a unique non-conflicting valid MAC. For an MMS endpoint hosted on this computer, the **interface owning the target IPv4** takes precedence over the Windows socket route. A KM-TEST virtual Ethernet adapter is not rejected just because its friendly name says "loopback"; only the dedicated Npcap `NPF_Loopback` pseudo-interface is excluded from automatic Ethernet capture. If identity is missing or ambiguous, the operator selects the adapter manually; no random one-NIC fallback occurs. The manual picker still supports explicit Npcap loopback investigation.
+
+Clicking the IED-card GOOSE action may begin *read-only observation* when an exact unique NIC match exists; it is **not** evidence that a GOOSE publisher emitted a frame. The top bar explains that actual Ethernet GOOSE reception remains pending and suggests checking whether the simulator publishes and whether that adapter receives multicast/VLAN traffic. These conditions must be verified on the operator's PC before claiming capture parity. No new native transport, background adapter scan, per-packet UI timer, or control/write traffic is introduced.

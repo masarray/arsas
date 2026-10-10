@@ -146,7 +146,7 @@
                     </Border>
                     <TextBlock Grid.Column="2" Text="{Binding GooseStatusText}" FontSize="10.5"
                                Foreground="{StaticResource Muted}" VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis" ToolTip="{Binding GooseBindingText}"/>
+                               TextTrimming="CharacterEllipsis" ToolTip="{Binding GooseStatusText}"/>
                     <TextBlock Grid.Column="3" Text="{Binding GooseCounterText}" FontSize="10.5"
                                FontWeight="SemiBold" Foreground="#45648E" VerticalAlignment="Center"/>
                 </Grid>

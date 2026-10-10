@@ -31,6 +31,7 @@ public partial class MainWindow
     private string _gooseStatusText = "Select a network adapter, then start the read-only GOOSE subscriber.";
     private string _gooseBindingText = "No GOOSE model evaluated yet.";
     private string _gooseCaptureFilter = GooseSubscriberRuntime.DefaultCaptureFilter;
+    private string _gooseCaptureContextHint = "If no frames arrive, verify publisher, adapter and VLAN.";
     private long _gooseCapturedFrames;
     private long _gooseFrames;
     private long _gooseOtherFrames;
@@ -189,7 +190,7 @@ public partial class MainWindow
                 GooseCaptureFilter,
                 _applicationCancellation.Token);
             IsGooseCapturing = true;
-            GooseStatusText = $"Listening on {SelectedGooseAdapter.DisplayText}. Waiting for GOOSE frames…";
+            GooseStatusText = $"Waiting for actual GOOSE frames on {SelectedGooseAdapter.DisplayText}. {_gooseCaptureContextHint}";
             SetStatus("GOOSE Subscriber started in read-only capture mode.");
             AddLog("INFO", "GOOSE", $"Subscriber started on adapter {SelectedGooseAdapter.Index}: {SelectedGooseAdapter.Description}. Binding: {_gooseBindingCatalog.Summary}");
         }
@@ -275,12 +276,10 @@ public partial class MainWindow
             var previousName = SelectedGooseAdapter?.Name;
             var adapters = _gooseSubscriberRuntime.ListAdapters();
             GooseAdapters.ReplaceAll(adapters);
-            var usableAdapters = adapters.Where(adapter => !LooksLikeLoopback(adapter)).ToArray();
-            // Never silently choose the first of several network interfaces: an
-            // unrelated LAN/Wi-Fi adapter can miss all IEC 61850 GOOSE frames.
+            // Preserve only an explicitly selected capture-device identity.
+            // Never silently choose the sole unrelated NIC (especially on same-host simulators).
             SelectedGooseAdapter = adapters.FirstOrDefault(adapter =>
-                adapter.Name.Equals(previousName, StringComparison.OrdinalIgnoreCase))
-                ?? (usableAdapters.Length == 1 ? usableAdapters[0] : null);
+                previousName is not null && adapter.Name.Equals(previousName, StringComparison.OrdinalIgnoreCase));
             GooseStatusText = adapters.Count == 0
                 ? "No Npcap/WinPcap adapters found. Install Npcap, then refresh adapters."
                 : $"{adapters.Count:N0} capture adapter(s) available. Choose the station Ethernet adapter and press Start.";
