@@ -277,8 +277,8 @@ public partial class MainWindow
         builder.AppendLine($"Broadcasts       : {snapshot.BroadcastCount}");
         builder.AppendLine($"Client requests  : {snapshot.ClientRequestCount}");
         builder.AppendLine($"Replies sent     : {snapshot.ReplyCount}");
-        builder.AppendLine($"Selected IED request observed: {_clockSyncObservedClients.Contains(device.IpAddress)}");
-        builder.AppendLine($"Selected IED reply sent      : {_clockSyncRepliedClients.Contains(device.IpAddress)}");
+        builder.AppendLine($"Selected IED request observed: {_clockSyncObservedClients.ContainsKey(device.IpAddress)}");
+        builder.AppendLine($"Selected IED reply sent      : {_clockSyncRepliedClients.ContainsKey(device.IpAddress)}");
         builder.AppendLine();
         builder.AppendLine("SNTP server activity, request/reply counters and a positive TimeSynchrnz value are supporting evidence only.");
         builder.AppendLine("They never grant 'Time Sync OK' without the device-side LTMS/timestamp evidence evaluated above.");
