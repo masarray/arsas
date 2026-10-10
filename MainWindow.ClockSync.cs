@@ -1,7 +1,4 @@
-using System.Collections.Specialized;
-using System.ComponentModel;
 using System.Net;
-using ArIED61850Tester.Models;
 using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
@@ -14,6 +11,7 @@ public partial class MainWindow
     private readonly HashSet<string> _clockSyncRepliedClients = new(StringComparer.OrdinalIgnoreCase);
     private string _lastClockSyncStatus = string.Empty;
     private bool _clockSyncLifecycleAttached;
+    private long _clockSyncDesiredVersion;
 
     internal event Action<SntpClockServiceSnapshot>? ClockSyncSnapshotChanged;
     internal SntpClockServiceSnapshot ClockSyncSnapshot => _sntpClockService.Snapshot;
@@ -22,109 +20,83 @@ public partial class MainWindow
     {
         if (_clockSyncLifecycleAttached)
             return;
-
         _clockSyncLifecycleAttached = true;
-        InstallGlobalSntpToggle();
-
-        if (_clockSyncEnabled)
-        {
-            Devices.CollectionChanged += ClockSyncDevices_CollectionChanged;
-            foreach (var device in Devices)
-                AttachClockSyncDevice(device);
-        }
 
         _sntpClockService.StatusChanged += ClockSyncService_StatusChanged;
         _sntpClockService.ClientRequestObserved += ClockSyncService_ClientRequestObserved;
         _sntpClockService.ReplySent += ClockSyncService_ReplySent;
         Closed += ClockSyncMainWindow_Closed;
+        InstallGlobalSntpToggle();
         PublishGlobalSntpUiState();
+        // Deliberately no IED subscriptions: SNTP is an operator-controlled,
+        // standalone commissioning clock listening only after toggle ON.
     }
 
-    private void ClockSyncDevices_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    private async Task ReconcileStandaloneClockAsync()
     {
-        if (!_clockSyncEnabled)
-            return;
-
-        if (e.OldItems != null)
-        {
-            foreach (var item in e.OldItems.OfType<Iec61850MonitorDevice>())
-                item.PropertyChanged -= ClockSyncDevice_PropertyChanged;
-        }
-
-        if (e.NewItems != null)
-        {
-            foreach (var item in e.NewItems.OfType<Iec61850MonitorDevice>())
-                AttachClockSyncDevice(item);
-        }
-    }
-
-    private void AttachClockSyncDevice(Iec61850MonitorDevice device)
-    {
-        if (!_clockSyncEnabled)
-            return;
-
-        device.PropertyChanged -= ClockSyncDevice_PropertyChanged;
-        device.PropertyChanged += ClockSyncDevice_PropertyChanged;
-
-        if (device.IsConnected)
-            ScheduleClockSyncReconcile(device);
-    }
-
-    private void ClockSyncDevice_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (!_clockSyncEnabled || sender is not Iec61850MonitorDevice device || !device.IsConnected)
-            return;
-
-        if (e.PropertyName == nameof(Iec61850MonitorDevice.IsConnected) ||
-            e.PropertyName == nameof(Iec61850MonitorDevice.IpAddress))
-        {
-            ScheduleClockSyncReconcile(device);
-        }
-    }
-
-    private void ScheduleClockSyncReconcile(Iec61850MonitorDevice device)
-    {
-        if (!_clockSyncEnabled)
-            return;
-
-        if (!Dispatcher.CheckAccess())
-        {
-            Dispatcher.BeginInvoke(new Action(() => ScheduleClockSyncReconcile(device)));
-            return;
-        }
-
-        _ = EnsureClockSyncForDeviceAsync(device);
-    }
-
-    private async Task EnsureClockSyncForDeviceAsync(Iec61850MonitorDevice device)
-    {
-        if (!_clockSyncEnabled || !device.IsConnected ||
-            !IPAddress.TryParse(device.IpAddress, out var iedAddress) ||
-            iedAddress.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork)
-            return;
-
-        await _clockSyncIntegrationGate.WaitAsync();
+        var version = Interlocked.Increment(ref _clockSyncDesiredVersion);
         try
         {
-            // Re-check after entering the integration gate so a queued connect event cannot
-            // restart SNTP after the operator has switched the global toggle off.
-            if (!_clockSyncEnabled || !device.IsConnected)
+            await _clockSyncIntegrationGate.WaitAsync(_applicationCancellation.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        try
+        {
+            if (version != Volatile.Read(ref _clockSyncDesiredVersion))
                 return;
 
-            await _sntpClockService.EnsureStartedAsync(iedAddress, _applicationCancellation.Token);
-            _sntpClockService.RequestImmediateBroadcast();
+            if (!_clockSyncEnabled)
+            {
+                await _sntpClockService.StopAsync();
+                _clockSyncObservedClients.Clear();
+                _clockSyncRepliedClients.Clear();
+                return;
+            }
+
+            var selected = _selectedSntpBinding;
+            if (selected is null)
+            {
+                _clockSyncEnabled = false;
+                await _sntpClockService.StopAsync();
+                SetStatus("SNTP: select a PC IPv4 address.");
+                return;
+            }
+
+            // Re-resolve after the async gate: a removed NIC or changed IP must
+            // never be served under an obsolete adapter identity.
+            var binding = SntpNetworkRouteResolver.ResolveForLocal(
+                selected.LocalAddress, selected.InterfaceId);
+            var active = _sntpClockService.Snapshot;
+            if (active.State == SntpClockServiceState.Serving &&
+                active.Binding?.LocalAddress.Equals(binding.LocalAddress) == true &&
+                active.Binding.InterfaceId.Equals(binding.InterfaceId, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            if (active.State != SntpClockServiceState.Stopped)
+                await _sntpClockService.StopAsync();
+
+            if (version != Volatile.Read(ref _clockSyncDesiredVersion) || !_clockSyncEnabled)
+                return;
+
+            await _sntpClockService.StartOnLocalAddressAsync(
+                binding.LocalAddress, binding.InterfaceId, _applicationCancellation.Token);
         }
         catch (OperationCanceledException) when (_applicationCancellation.IsCancellationRequested)
         {
         }
         catch (Exception ex)
         {
-            AddLog("WARN", "SNTP Server",
-                $"{device.Name}: IEC 61850 remains connected, but the global ARSAS SNTP Server could not start: {ex.Message}");
+            AddLog("WARN", "SNTP Server", $"Cannot serve the selected PC IP: {ex.Message}");
+            SetStatus("SNTP Server: check selected PC IP or UDP/123 availability.");
         }
         finally
         {
             _clockSyncIntegrationGate.Release();
+            PublishGlobalSntpUiState();
         }
     }
 
@@ -132,93 +104,66 @@ public partial class MainWindow
     {
         void Publish()
         {
-            // Global telemetry receives every evidence-counter change even when the textual
-            // service detail did not change. FAT is only one passive consumer of this state.
             RefreshGlobalSntpToggle(snapshot);
             ClockSyncSnapshotChanged?.Invoke(snapshot);
-
             var status = $"{snapshot.State}|{snapshot.TransportMode}|{snapshot.Detail}";
             if (status.Equals(_lastClockSyncStatus, StringComparison.Ordinal))
                 return;
-
             _lastClockSyncStatus = status;
-            var level = snapshot.State switch
-            {
-                SntpClockServiceState.Serving => "INFO",
-                SntpClockServiceState.Starting => "INFO",
-                SntpClockServiceState.Stopped => "INFO",
-                _ => "WARN"
-            };
-            AddLog(level, "SNTP Server", snapshot.Detail);
+            AddLog(snapshot.State is SntpClockServiceState.Faulted or SntpClockServiceState.PortUnavailable
+                ? "WARN" : "INFO", "SNTP Server", snapshot.Detail);
         }
-
-        if (Dispatcher.CheckAccess())
-            Publish();
-        else
+        if (Dispatcher.CheckAccess()) Publish();
+        else if (!Dispatcher.HasShutdownStarted)
             Dispatcher.BeginInvoke(new Action(Publish));
     }
 
     private void ClockSyncService_ClientRequestObserved(SntpClientObservation observation)
     {
         var key = observation.Address.ToString();
-
         void Publish()
         {
-            if (!_clockSyncObservedClients.Add(key))
-                return;
-
+            if (!_clockSyncObservedClients.Add(key)) return;
             var device = Devices.FirstOrDefault(item =>
                 item.IpAddress.Equals(key, StringComparison.OrdinalIgnoreCase));
-            var name = device?.Name ?? key;
             AddLog("INFO", "SNTP Server",
-                $"{name} ({key}) sent an SNTPv{observation.Version} client request to ARSAS. Request observed; synchronization is not yet proven.");
+                $"{device?.Name ?? key} ({key}) sent an SNTPv{observation.Version} request. Clock synchronization is not yet proven.");
         }
-
-        if (Dispatcher.CheckAccess())
-            Publish();
-        else
-            Dispatcher.BeginInvoke(new Action(Publish));
+        if (Dispatcher.CheckAccess()) Publish();
+        else if (!Dispatcher.HasShutdownStarted) Dispatcher.BeginInvoke(new Action(Publish));
     }
 
     private void ClockSyncService_ReplySent(SntpReplyObservation observation)
     {
         var key = observation.Address.ToString();
-
         void Publish()
         {
-            if (!_clockSyncRepliedClients.Add(key))
-                return;
-
+            if (!_clockSyncRepliedClients.Add(key)) return;
             var device = Devices.FirstOrDefault(item =>
                 item.IpAddress.Equals(key, StringComparison.OrdinalIgnoreCase));
-            var name = device?.Name ?? key;
-            var transport = observation.TransportMode == SntpClockTransportMode.NpcapRaw ? "Npcap RAW" : "UDP";
             AddLog("INFO", "SNTP Server",
-                $"{name} ({key}) received an ARSAS SNTP Mode 4 reply via {transport}. Reply sent; relay clock synchronization remains unproven until device evidence confirms it.");
+                $"{device?.Name ?? key} ({key}): SNTP Mode 4 reply sent. Device-side clock synchronization remains unproven.");
         }
-
-        if (Dispatcher.CheckAccess())
-            Publish();
-        else
-            Dispatcher.BeginInvoke(new Action(Publish));
+        if (Dispatcher.CheckAccess()) Publish();
+        else if (!Dispatcher.HasShutdownStarted) Dispatcher.BeginInvoke(new Action(Publish));
     }
 
     private async void ClockSyncMainWindow_Closed(object? sender, EventArgs e)
     {
         try
         {
-            Devices.CollectionChanged -= ClockSyncDevices_CollectionChanged;
-            foreach (var device in Devices)
-                device.PropertyChanged -= ClockSyncDevice_PropertyChanged;
-
+            _clockSyncEnabled = false;
+            Interlocked.Increment(ref _clockSyncDesiredVersion);
             _sntpClockService.StatusChanged -= ClockSyncService_StatusChanged;
             _sntpClockService.ClientRequestObserved -= ClockSyncService_ClientRequestObserved;
             _sntpClockService.ReplySent -= ClockSyncService_ReplySent;
-            await _sntpClockService.DisposeAsync();
+            await _clockSyncIntegrationGate.WaitAsync();
+            try { await _sntpClockService.DisposeAsync(); }
+            finally { _clockSyncIntegrationGate.Release(); }
         }
-        catch
+        catch (Exception)
         {
-            // Application shutdown must never be blocked by a commissioning helper service.
+            // Do not block application shutdown on a commissioning utility.
         }
     }
 }
