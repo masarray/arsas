@@ -113,7 +113,9 @@ public static class GooseCanonicalLeafProjection
         var pairedQualities = new HashSet<int>();
         foreach (var value in wireLeaves)
         {
-            if (!IsValue(value)) continue;
+            if (!IsValue(value) &&
+                !(IsModelBound(value) && value.SignalName.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase)))
+                continue;
             var valueRef = Owner(value.SignalReference, out _);
             var exact = qualities.Where(q =>
                 string.Equals(valueRef, Owner(q.SignalReference, out _), StringComparison.OrdinalIgnoreCase)).ToArray();
@@ -136,7 +138,9 @@ public static class GooseCanonicalLeafProjection
                     q.FunctionalConstraint.Equals(value.FunctionalConstraint, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(ownerName, Owner(q.SignalName, out var qKind), StringComparison.OrdinalIgnoreCase) &&
                     valueKind == "value" && qKind == "quality" &&
-                    CompatibleOwners(valueRef, Owner(q.SignalReference, out _))).ToArray();
+                    (CompatibleOwners(valueRef, Owner(q.SignalReference, out _)) ||
+                     CompatibleOwners(DoScopedReference(value.SignalReference),
+                                      DoScopedReference(q.SignalReference)))).ToArray();
                 if (adjacent.Length == 1)
                 {
                     var occurrences = wireLeaves.Count(row => IsValue(row) &&
@@ -162,7 +166,9 @@ public static class GooseCanonicalLeafProjection
                     (string.IsNullOrWhiteSpace(q.FunctionalConstraint) ||
                      string.IsNullOrWhiteSpace(value.FunctionalConstraint) ||
                      q.FunctionalConstraint.Equals(value.FunctionalConstraint, StringComparison.OrdinalIgnoreCase)) &&
-                    CompatibleOwners(valueRef, Owner(q.SignalReference, out _))).ToArray();
+                    (CompatibleOwners(valueRef, Owner(q.SignalReference, out _)) ||
+                     CompatibleOwners(DoScopedReference(value.SignalReference),
+                                      DoScopedReference(q.SignalReference)))).ToArray();
                 if (neighbors.Length == 1 &&
                     wireLeaves.Count(row => row.SignalName.Equals(value.SignalName, StringComparison.OrdinalIgnoreCase)) == 1)
                     candidate = neighbors[0];
@@ -187,6 +193,84 @@ public static class GooseCanonicalLeafProjection
             else result.Add(leaf);
         }
         return result;
+    }
+
+    private static string? DoScopedReference(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return null;
+        var key=input.Trim().Replace('
+        value.Equals("Good", StringComparison.OrdinalIgnoreCase) ||
+        value.StartsWith("Good ·", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("Invalid", StringComparison.OrdinalIgnoreCase) ||
+        value.StartsWith("Invalid ·", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("Questionable", StringComparison.OrdinalIgnoreCase) ||
+        value.StartsWith("Questionable ·", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("Reserved", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsModelBound(GooseLeafValueSnapshot leaf)
+        => !leaf.BindingSource.Equals("Unbound", StringComparison.OrdinalIgnoreCase) &&
+           !string.IsNullOrWhiteSpace(leaf.SignalReference);
+
+    private static bool IsValue(GooseLeafValueSnapshot leaf)
+        => Owner(leaf.SignalReference, out var kind) is not null && kind == "value";
+
+    private static bool IsQuality(GooseLeafValueSnapshot leaf)
+        => Owner(leaf.SignalReference, out var kind) is not null && kind == "quality" &&
+           (GooseTypedValueInterpreter.IsQuality(leaf.SignalReference, leaf.BType) ||
+            leaf.SignalName.EndsWith(".q", StringComparison.OrdinalIgnoreCase));
+
+    private static bool CompatibleOwners(string? primary, string? quality)
+    {
+        if (primary is null || quality is null) return false;
+        if (primary.Equals(quality, StringComparison.OrdinalIgnoreCase)) return true;
+        // An abbreviated SCL reference may omit its LD prefix. Two explicit
+        // different LD prefixes are NOT equivalent, regardless of matching LN.
+        var a = primary.LastIndexOf('/');
+        var b = quality.LastIndexOf('/');
+        if (a >= 0 && b >= 0) return false;
+        return (a >= 0 ? primary[(a+1)..] : primary)
+            .Equals(b >= 0 ? quality[(b+1)..] : quality,
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? Owner(string? source, out string kind)
+    {
+        kind = string.Empty;
+        if (string.IsNullOrWhiteSpace(source)) return null;
+        var key = source.Trim().Replace('$', '.');
+        var slash = key.LastIndexOf('/');
+        var dot = key.IndexOf('.', slash + 1);
+        if (dot >= 0 && dot + 4 < key.Length &&
+            key.AsSpan(dot + 1, 3).Equals("ST.".AsSpan(), StringComparison.OrdinalIgnoreCase))
+            key = key.Remove(dot + 1, 3);
+        var bracket = key.LastIndexOf('[');
+        if (bracket >= 0 && key.EndsWith("]", StringComparison.Ordinal) &&
+            key[(bracket + 1)..^1].Equals("ST", StringComparison.OrdinalIgnoreCase))
+            key = key[..bracket];
+        if (key.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase) ||
+            key.EndsWith(".mag.f", StringComparison.OrdinalIgnoreCase))
+        {
+            kind = "value";
+            return key[..^6];
+        }
+        if (key.EndsWith(".q", StringComparison.OrdinalIgnoreCase))
+        {
+            kind = "quality";
+            return key[..^2];
+        }
+        return null;
+    }
+}
+,'.');
+        var slash=key.LastIndexOf('/');
+        var dot=key.IndexOf('.',slash+1);
+        if(dot>=0 && dot+4<key.Length &&
+           key.AsSpan(dot+1,3).Equals("ST.".AsSpan(),StringComparison.OrdinalIgnoreCase))
+            key=key.Remove(dot+1,3);
+        foreach(var suffix in new[]{".stVal",".q"})
+            if(key.EndsWith(suffix,StringComparison.OrdinalIgnoreCase))
+                key=key[..^suffix.Length];
+        return key;
     }
 
     private static bool IsReadableQuality(string value) =>

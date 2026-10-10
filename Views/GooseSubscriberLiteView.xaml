@@ -382,6 +382,10 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
                                 <DataGridTextColumn Header="GOOSE DataSet" Binding="{Binding DataSetName}" Width="135" MinWidth="118"/>
+                                <!-- Historical engineering columns retained but hidden from compact operator timeline. -->
+                                <DataGridTextColumn Header="Relative time" Binding="{Binding RelativeTime}" Width="0" Visibility="Collapsed"/>
+                                <DataGridTextColumn Header="Source MAC" Binding="{Binding SourceMac}" Width="0" Visibility="Collapsed"/>
+                                <DataGridTextColumn Header="Destination MAC" Binding="{Binding DestinationMac}" Width="0" Visibility="Collapsed"/>
                                 <DataGridTextColumn Header="Details" Binding="{Binding Summary}" Width="*" MinWidth="215"/>
                             </DataGrid.Columns>
                         </DataGrid>

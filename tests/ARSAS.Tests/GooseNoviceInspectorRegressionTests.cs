@@ -58,7 +58,8 @@ public sealed class GooseNoviceInspectorRegressionTests
             "Configuration revision","Simulation test","Number of DataSet entries"})
             Assert.Contains($"Text=\"{label}\"",view);
         Assert.Contains("SelectedGooseStream.ApplicationIdDecimal",view);
-        Assert.Contains("WireDataSetEntryCount",Read("MainWindow.GooseSubscriber.cs"));
+        Assert.Contains("WireDataSetEntryCount",Read("Models/GooseSubscriberModels.cs"));
+        Assert.Contains("rawValueCount);",Read("MainWindow.GooseSubscriber.cs"));
         Assert.Contains("IedName = ",Read("MainWindow.GooseTimeline.cs"));
         Assert.Contains("GooseId = ",Read("MainWindow.GooseTimeline.cs"));
     }
