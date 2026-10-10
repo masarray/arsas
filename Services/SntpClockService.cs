@@ -113,6 +113,39 @@ public sealed class SntpClockService : IAsyncDisposable
     public IReadOnlyCollection<SntpClientObservation> ObservedClients
         => _clients.Values.OrderBy(item => item.Address.ToString(), StringComparer.OrdinalIgnoreCase).ToArray();
 
+    /// <summary>
+    /// Independent PC-address listener. The calling application controls
+    /// adapter switching through an explicit serialized Stop/Start operation.
+    /// This entry point does not inspect IEDs or MMS associations.
+    /// </summary>
+    public async Task StartOnLocalAddressAsync(
+        IPAddress localAddress, string interfaceId, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(localAddress);
+        ArgumentException.ThrowIfNullOrWhiteSpace(interfaceId);
+        await _lifecycleGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var requested = SntpNetworkRouteResolver.ResolveForLocal(localAddress, interfaceId);
+            if ((_udp != null || _rawTransport != null) && _binding is not null)
+            {
+                if (_binding.LocalAddress.Equals(requested.LocalAddress) &&
+                    _binding.InterfaceId.Equals(requested.InterfaceId, StringComparison.OrdinalIgnoreCase))
+                    return;
+
+                throw new InvalidOperationException("Stop the active SNTP server before selecting another PC IP address.");
+            }
+
+            await StartCoreAsync(requested, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _lifecycleGate.Release();
+        }
+    }
+
+    // Retained as compatibility for older clients; the standalone ARSAS
+    // lifecycle uses StartOnLocalAddressAsync instead.
     public async Task EnsureStartedAsync(IPAddress iedAddress, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(iedAddress);
