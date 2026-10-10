@@ -646,6 +646,9 @@
                                     </Border>
                                 </Grid>
 
+                                <!-- Operator view = exact ordered GOOSE allData entries.
+                                     The q member remains a typed Value row; deliberately
+                                     do not infer or fabricate a separate Quality column. -->
                                 <DataGrid ItemsSource="{Binding SelectedGooseStream.Leaves}"
                                           IsReadOnly="True" AutoGenerateColumns="False"
                                           Style="{StaticResource ModernDataGrid}"
