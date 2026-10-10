@@ -1,5 +1,8 @@
 # Copy-paste handoff — ARSAS C264 local-simulator continuation
 
+> **10 October continuation checkpoint — actual code now exists:** [ARSAS PR #504](https://github.com/masarray/arsas/pull/504) is a **draft P1 implementation**, based directly on #501. Exact initial patch HEAD `f90f4697fb1ee607bb5500119f6b5298ce01879f`: centered editable IED IP, scoped Fault Records checkbox-column alignment and two regression contracts. **Do not redo these fixes or assume they passed Windows CI/visual DPI validation yet.** First inspect #504's current HEAD and workflow results, repair any failing tests, then continue P0/P2/P3 with separate scoped PRs. The engine #157 pin and physical field acceptance stay unchanged.
+
+
 You are continuing a **two-repository, Windows WPF / IEC 61850 electrical-engineering tool** project. Work in GitHub, not by replacing it with a web app. The latest request is to **implement the audited plan for C264 same-host simulator, report Unknown/pending values, GOOSE capture adapter intelligence and two GUI alignment bugs**, without losing any previous progress. Read [C264 same-host repair plan](./C264_SAME_HOST_REPAIR_PLAN_2026-10-10.md) in full **before editing code**. Treat that plan as technical source of truth but VERIFY actual current GitHub refs, source and CI at start; do not treat stale snapshots as immutable GitHub state.
 
 ## Repository and locked baseline
