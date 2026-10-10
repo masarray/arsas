@@ -37,12 +37,21 @@ public static class SntpNetworkRouteResolver
     /// Detects disconnected NICs, stale saved IPs and moved alias addresses.
     /// </summary>
     public static SntpNetworkBinding ResolveForLocal(IPAddress localAddress, string? interfaceId = null)
+        => SelectLocalBinding(localAddress, interfaceId, GetLocalBindings());
+
+    /// <summary>
+    /// Pure canonical IP+NIC selector so alias and duplicate-interface cases
+    /// can be unit-tested without touching the host network or UDP port.
+    /// </summary>
+    public static SntpNetworkBinding SelectLocalBinding(
+        IPAddress localAddress, string? interfaceId, IReadOnlyList<SntpNetworkBinding> available)
     {
         ArgumentNullException.ThrowIfNull(localAddress);
+        ArgumentNullException.ThrowIfNull(available);
         if (localAddress.AddressFamily != AddressFamily.InterNetwork ||
             IPAddress.IsLoopback(localAddress) || localAddress.Equals(IPAddress.Any))
             throw new ArgumentException("Select an active non-loopback PC IPv4 address.", nameof(localAddress));
-        var matches = GetLocalBindings()
+        var matches = available
             .Where(item => item.LocalAddress.Equals(localAddress) &&
                 (interfaceId is null || item.InterfaceId.Equals(interfaceId, StringComparison.OrdinalIgnoreCase)))
             .ToArray();
