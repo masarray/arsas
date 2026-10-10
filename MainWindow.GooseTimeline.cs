@@ -25,6 +25,7 @@ public partial class MainWindow
         get => _showGooseRetransmissions;
         set => Set(ref _showGooseRetransmissions, value);
     }
+    private DateTimeOffset? _gooseTimelineStart;
     private readonly Dictionary<string, DateTimeOffset> _lastGooseTimelineTimestamp = new(StringComparer.OrdinalIgnoreCase);
     private GooseEventRow? _selectedGooseEvent;
     private bool _goosePresentationInstalled;
@@ -40,8 +41,16 @@ public partial class MainWindow
             if (!Set(ref _selectedGooseEvent, value))
                 return;
 
-            if (value is not null && _gooseStreamIndex.TryGetValue(value.StreamKey, out var stream))
-                SelectedGooseStream = stream;
+            if (value is not null)
+            {
+                // Inspector is immutable for the chosen historical frame.
+                // Streaming latest publisher state must never mutate this row.
+                var historical = new GooseStreamRow { StreamKey = value.StreamKey };
+                historical.Apply(value.Snapshot);
+                SelectedGooseStream = historical;
+            }
+            else
+                SelectedGooseStream = null;
         }
     }
 
@@ -247,6 +256,7 @@ public partial class MainWindow
         if (_lastGooseTimelineTimestamp.TryGetValue(captured.StreamKey, out var prev))
             deltaText = FormatGooseDelta(captured.CaptureTimestamp - prev);
         _lastGooseTimelineTimestamp[captured.StreamKey] = captured.CaptureTimestamp;
+        _gooseTimelineStart ??= captured.CaptureTimestamp;
         return new GooseEventRow
         {
             StreamKey = captured.StreamKey,
@@ -256,6 +266,11 @@ public partial class MainWindow
             EventTone = tone,
             Publisher = BuildGoosePublisherName(stream),
             StateSequenceText = $"{stream.StateNumberText} / {stream.SequenceNumberText}",
+            SourceMac = stream.SourceMac,
+            DestinationMac = stream.DestinationMac,
+            DataSetName = ShortGooseReference(stream.DataSetReference),
+            RelativeTime = (captured.CaptureTimestamp - _gooseTimelineStart.Value).TotalSeconds.ToString("0.000000", CultureInfo.InvariantCulture),
+            Snapshot = stream,
             Summary = valueAnomaly ? "Payload changed without stNum increment — verify publisher." :
                 BuildGooseEventSummary(stream, decision.IsNew, hasNewWarning)
         };
@@ -357,6 +372,7 @@ public partial class MainWindow
         {
         }
         _lastGooseTimelineTimestamp.Clear();
+        _gooseTimelineStart = null;
         lock (_gooseTimelineGate) _lastGooseTimelineSignature.Clear();
         _nextGooseHighlightExpiryCheckUtc = DateTimeOffset.MinValue;
         GooseEvents.Clear();

@@ -348,7 +348,7 @@
                             </DataGrid.RowStyle>
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Time" Binding="{Binding TimeText}" Width="88"/>
-                                <DataGridTextColumn Header="Δt" Binding="{Binding DeltaText}" Width="72"/>
+                                <DataGridTextColumn Header="Relative time" Binding="{Binding RelativeTime}" Width="90"/>
                                 <DataGridTemplateColumn Header="Event" Width="102">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
@@ -373,8 +373,10 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="155" MinWidth="120"/>
-                                <DataGridTextColumn Header="st / sq" Binding="{Binding StateSequenceText}" Width="78"/>
+                                <DataGridTextColumn Header="Source MAC" Binding="{Binding SourceMac}" Width="115"/>
+                                <DataGridTextColumn Header="Destination MAC" Binding="{Binding DestinationMac}" Width="115"/>
+                                <DataGridTextColumn Header="GOOSE DataSet" Binding="{Binding DataSetName}" Width="130"/>
+                                <DataGridTextColumn Header="st / sq" Binding="{Binding StateSequenceText}" Width="0" Visibility="Collapsed"/>
                                 <DataGridTextColumn Header="Details" Binding="{Binding Summary}" Width="*" MinWidth="150"/>
                             </DataGrid.Columns>
                         </DataGrid>
@@ -556,7 +558,7 @@
                                     </Border>
                                 </Grid>
 
-                                <ItemsControl ItemsSource="{Binding SelectedGooseStream.Leaves}">
+                                <ItemsControl ItemsSource="{Binding SelectedGooseStream.EngineeringLeaves}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Border Background="#FBFDFF" BorderBrush="#DCE6F3" BorderThickness="1"
@@ -583,7 +585,7 @@
                                                                        FontSize="9.6" FontWeight="SemiBold" Foreground="#344054"
                                                                        TextTrimming="CharacterEllipsis" MaxWidth="120" ToolTip="{Binding Value}"/>
                                                         </Border>
-                                                        <TextBlock Text="{Binding TypeText}" FontSize="8.3" Foreground="{StaticResource Muted}"
+                                                        <TextBlock Text="{Binding Quality}" FontSize="8.7" Foreground="{StaticResource Muted}"
                                                                    HorizontalAlignment="Right" Margin="0,2,0,0"/>
                                                     </StackPanel>
                                                 </Grid>

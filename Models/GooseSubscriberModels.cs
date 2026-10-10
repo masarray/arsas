@@ -30,6 +30,7 @@ public sealed class GooseLeafValueRow : ObservableObject
     private string _value = "-";
     private string _previousValue = string.Empty;
     private string _bindingSource = "Unbound";
+    private string _quality = "—";
     private bool _isChanged;
     private bool _isHighlighted;
     private DateTimeOffset _highlightUntilUtc;
@@ -44,6 +45,7 @@ public sealed class GooseLeafValueRow : ObservableObject
     public string Value { get => _value; set => Set(ref _value, string.IsNullOrWhiteSpace(value) ? "-" : value); }
     public string PreviousValue { get => _previousValue; set => Set(ref _previousValue, value ?? string.Empty); }
     public string BindingSource { get => _bindingSource; set => Set(ref _bindingSource, string.IsNullOrWhiteSpace(value) ? "Unbound" : value); }
+    public string Quality { get => _quality; set => Set(ref _quality, value ?? "—"); }
     public bool IsChanged { get => _isChanged; set => Set(ref _isChanged, value); }
     public bool IsHighlighted { get => _isHighlighted; private set => Set(ref _isHighlighted, value); }
     public string TypeText => string.Join(" / ", new[] { Cdc, BType }.Where(item => !string.IsNullOrWhiteSpace(item)));
@@ -61,6 +63,7 @@ public sealed class GooseLeafValueRow : ObservableObject
         PreviousValue = snapshot.PreviousValue;
         Value = snapshot.Value;
         BindingSource = snapshot.BindingSource;
+        Quality = snapshot.Quality;
         IsChanged = snapshot.IsChanged || changedOnWire;
         if (IsChanged)
         {
@@ -104,6 +107,7 @@ public sealed partial class GooseStreamRow : ObservableObject
 
     public string StreamKey { get; init; } = string.Empty;
     public ObservableCollection<GooseLeafValueRow> Leaves { get; } = new();
+    public ObservableCollection<GooseLeafValueRow> EngineeringLeaves { get; } = new();
 
     public string AppIdText { get => _appIdText; set => Set(ref _appIdText, value ?? "-"); }
     public string GoCbRef { get => _goCbRef; set => Set(ref _goCbRef, value ?? string.Empty); }
@@ -154,10 +158,23 @@ public sealed partial class GooseStreamRow : ObservableObject
         Test = snapshot.Test;
         NeedsCommissioning = snapshot.NeedsCommissioning;
         ApplyLeaves(snapshot.Leaves);
+        ApplyEngineeringLeaves(ArIED61850Tester.Services.GooseCanonicalLeafProjection.Project(snapshot.Leaves));
         Raise(nameof(IdentityText));
         Raise(nameof(FlagsText));
         Raise(nameof(HealthText));
         RaisePresentationProperties();
+    }
+
+    private void ApplyEngineeringLeaves(IReadOnlyList<GooseLeafValueSnapshot> snapshots)
+    {
+        while (EngineeringLeaves.Count > snapshots.Count)
+            EngineeringLeaves.RemoveAt(EngineeringLeaves.Count - 1);
+        for (var index = 0; index < snapshots.Count; index++)
+        {
+            if (index >= EngineeringLeaves.Count)
+                EngineeringLeaves.Add(new GooseLeafValueRow { Order = snapshots[index].Order, DataSetIndex = snapshots[index].DataSetIndex });
+            EngineeringLeaves[index].Apply(snapshots[index]);
+        }
     }
 
     private void ApplyLeaves(IReadOnlyList<GooseLeafValueSnapshot> snapshots)
@@ -210,7 +227,8 @@ public sealed record GooseLeafValueSnapshot(
     string Value,
     string PreviousValue,
     bool IsChanged,
-    string BindingSource);
+    string BindingSource,
+    string Quality = "—");
 
 public sealed record GooseStreamSnapshot(
     string StreamKey,

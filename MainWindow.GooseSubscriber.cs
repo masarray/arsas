@@ -698,8 +698,10 @@ public partial class MainWindow
             var bindingSource = decoded?.IsMappedToScl == true
                 ? "SCL"
                 : binding?.Source ?? "Unbound";
+            var resolvedCdc = decoded?.IsMappedToScl == true ? decoded.Cdc : definition?.Cdc ?? string.Empty;
+            var resolvedType = decoded?.IsMappedToScl == true ? decoded.BType : definition?.BType ?? string.Empty;
             var value = index < rawValueCount
-                ? decoded?.DisplayValue ?? MmsDataValueRenderer.ToCompactString(frame.Pdu.Values[index], signalReference)
+                ? GooseTypedValueInterpreter.Render(frame.Pdu.Values[index], resolvedCdc, resolvedType, signalReference)
                 : "<missing in frame>";
 
             leaves.Add(new GooseLeafValueSnapshot(
@@ -708,8 +710,8 @@ public partial class MainWindow
                 definition?.SignalName ?? BuildSignalName(signalReference, index),
                 signalReference,
                 decoded?.IsMappedToScl == true ? decoded.Fc : definition?.FunctionalConstraint ?? string.Empty,
-                decoded?.IsMappedToScl == true ? decoded.Cdc : definition?.Cdc ?? string.Empty,
-                decoded?.IsMappedToScl == true ? decoded.BType : definition?.BType ?? string.Empty,
+                resolvedCdc,
+                resolvedType,
                 value,
                 decoded?.PreviousDisplayValue ?? string.Empty,
                 decoded?.IsChanged ?? false,
