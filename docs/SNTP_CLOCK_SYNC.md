@@ -2,17 +2,24 @@
 
 ARSAS includes a small clean-room SNTPv4 commissioning service for station-bus work. The implementation is written specifically for ARSAS from the protocol behavior described by RFC 4330 and RFC 5905; it does not embed or copy a third-party NTP implementation.
 
+## Minimal operator UI
+
+The compact main header contains a **NTP Server toggle**, a **dropdown of active PC IPv4 addresses**, and an **SNTP communication LED**. Technical request/reply counters, selected NIC and UTC reference limitations are provided as tooltips instead of permanent GUI text. Blue means listening, green means a reply was sent during the current session, amber means a pending request or service problem, and grey means stopped. No LED state alone proves that a relay is synchronized.
+
+The lifecycle is independent of all IED sessions and uses C#/.NET async UDP, with the existing optional Npcap RAW fallback retained. No new native code, Windows service, or Windows Time configuration change is introduced. UI dispatcher notifications are coalesced, and per-client log notifications deduplicated before dispatch.
+
 ## Current behavior
 
-- Starts automatically after the first IPv4 IED reaches `IsConnected = true` while the FAT `Clock Sync` checkbox is enabled.
-- Uses the Windows route to that IED to select the station-bus IPv4 interface.
+- Starts only when the operator turns **NTP Server ON** in the main header, independently of IED/MMS/Discovery/FAT; it defaults OFF.
+- Lists all active non-loopback PC IPv4 addresses, including multiple aliases on an adapter, for explicit server IP selection.
+- Revalidates IP and network-adapter identity before binding; serialized rebind on IP change and fail-closed on ambiguous or missing addresses.
 - Prefers a normal UDP/123 socket bound only to that local interface.
 - If Windows Time or another process already owns UDP/123, automatically falls back to raw Ethernet capture/injection through Npcap on the same station-bus adapter.
 - Never stops, restarts, or reconfigures Windows Time.
 - Replies to SNTPv3/v4 client Mode 3 requests with server Mode 4.
 - Copies the client Version, Poll, and Transmit timestamp into the reply fields required by SNTP server semantics.
 - Sends an immediate SNTPv4 Mode 5 directed broadcast, then repeats every 64 seconds by default when a usable directed-broadcast address exists.
-- Sends another immediate broadcast when a newly connected IED is observed.
+- No IED connection is needed for broadcast or unicast service; its startup broadcast occurs only after explicit operator enablement.
 - Separately records `broadcast sent`, `client request seen`, and `Mode 4 reply sent` evidence.
 - Advertises synchronized commissioning packets with commissioning compatibility `stratum 2` and reference ID `LOCL`.
 - Performs a wall-clock sanity/step check. A large time step suppresses broadcast and makes that instant's unicast reply RFC-style unsynchronized (`LI=3`, `stratum=0`, `INIT`, server timestamps zero).
@@ -63,9 +70,9 @@ Npcap is therefore optional for the normal UDP path but required for the RAW fal
 
 ## Network scope
 
-ARSAS serves the first station-bus interface selected by Windows routing. IEDs on that subnet can use unicast SNTP by configuring the ARSAS laptop station-bus IP as the server, or Mode 5 broadcast when the relay configuration supports broadcast-client operation.
+ARSAS binds to the **local PC IPv4 address selected in the toolbar**, not the route to a connected IED. A relay may request unicast time by using that address, regardless of whether it has an MMS association with ARSAS. An optional Mode 5 directed broadcast is emitted only after the operator switches the service ON.
 
-If another connected IED routes through a different local IPv4 interface, ARSAS reports that the existing clock service remains on the original station-bus binding rather than silently moving the clock source.
+Changing the selected local IP while enabled serializes Stop → fresh interface validation → Start. An IP removed from the computer cannot silently migrate the service to another station LAN. One ARSAS SNTP transport is active at a time; switching OFF stops it, and ARSAS closing disposes the service.
 
 ## Validation
 
@@ -89,3 +96,7 @@ If another connected IED routes through a different local IPv4 interface, ARSAS 
 - preservation of a single VLAN tag;
 - raw Mode 5 Ethernet/directed-broadcast construction;
 - rejection of non-Mode-3 or wrong-destination-port traffic.
+
+## Standalone lifecycle regression
+
+`GlobalSntpLifecycleRegressionTests` verifies the compact PC IP picker and independent lifecycle; `SntpLocalBindingTests` verifies alias selection on one NIC, rejection of stale/duplicate adapter addresses, loopback and unspecified IP guards. Windows CI also checks portable publish and smoke tests. Physical acceptance remains necessary: with zero connected IEDs, toggle ON, receive an SNTP Mode 3 client request, send a Mode 4 reply, toggle OFF, and verify UDP/123 is no longer held by ARSAS.\n

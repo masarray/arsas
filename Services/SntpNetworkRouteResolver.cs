@@ -21,6 +21,45 @@ public sealed record SntpNetworkBinding(
 /// </summary>
 public static class SntpNetworkRouteResolver
 {
+    /// <summary>
+    /// Enumerates the PC's actual active IPv4 unicast addresses. Never uses an
+    /// IED endpoint as a substitute for a server listen address. Keeps aliases.
+    /// </summary>
+    public static IReadOnlyList<SntpNetworkBinding> GetLocalBindings()
+        => GetIpv4Candidates()
+            .Select(Build)
+            .OrderBy(item => item.InterfaceName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.LocalAddress.ToString(), StringComparer.Ordinal)
+            .ToArray();
+
+    /// <summary>
+    /// Re-checks the chosen address and its adapter immediately before binding.
+    /// Detects disconnected NICs, stale saved IPs and moved alias addresses.
+    /// </summary>
+    public static SntpNetworkBinding ResolveForLocal(IPAddress localAddress, string? interfaceId = null)
+        => SelectLocalBinding(localAddress, interfaceId, GetLocalBindings());
+
+    /// <summary>
+    /// Pure canonical IP+NIC selector so alias and duplicate-interface cases
+    /// can be unit-tested without touching the host network or UDP port.
+    /// </summary>
+    public static SntpNetworkBinding SelectLocalBinding(
+        IPAddress localAddress, string? interfaceId, IReadOnlyList<SntpNetworkBinding> available)
+    {
+        ArgumentNullException.ThrowIfNull(localAddress);
+        ArgumentNullException.ThrowIfNull(available);
+        if (localAddress.AddressFamily != AddressFamily.InterNetwork ||
+            IPAddress.IsLoopback(localAddress) || localAddress.Equals(IPAddress.Any))
+            throw new ArgumentException("Select an active non-loopback PC IPv4 address.", nameof(localAddress));
+        var matches = available
+            .Where(item => item.LocalAddress.Equals(localAddress) &&
+                (interfaceId is null || item.InterfaceId.Equals(interfaceId, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+        if (matches.Length != 1)
+            throw new InvalidOperationException($"PC address {localAddress} is not uniquely assigned to an active network interface. Refresh the IP list.");
+        return matches[0];
+    }
+
     public static SntpNetworkBinding ResolveForRemote(IPAddress remoteAddress)
     {
         ArgumentNullException.ThrowIfNull(remoteAddress);
@@ -116,9 +155,6 @@ public static class SntpNetworkRouteResolver
                     networkInterface.Id));
             }
         }
-
-        if (candidates.Count == 0)
-            throw new InvalidOperationException("No active IPv4 station-bus network adapter is available.");
 
         return candidates;
     }
