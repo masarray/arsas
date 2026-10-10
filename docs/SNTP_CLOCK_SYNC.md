@@ -1,91 +1,26 @@
-# ARSAS Clock Sync — SNTP commissioning service
+# Standalone ARSAS SNTP Server
 
-ARSAS includes a small clean-room SNTPv4 commissioning service for station-bus work. The implementation is written specifically for ARSAS from the protocol behavior described by RFC 4330 and RFC 5905; it does not embed or copy a third-party NTP implementation.
+ARSAS serves **a selected local PC IPv4 address** on UDP/123 independently from IEC 61850 association, IED Discovery, Open SCL, GOOSE or FAT. This is a managed .NET lifecycle around the existing tested SNTP protocol and transport implementations.
 
-## Current behavior
+## Operator workflow
 
-- Starts automatically after the first IPv4 IED reaches `IsConnected = true` while the FAT `Clock Sync` checkbox is enabled.
-- Uses the Windows route to that IED to select the station-bus IPv4 interface.
-- Prefers a normal UDP/123 socket bound only to that local interface.
-- If Windows Time or another process already owns UDP/123, automatically falls back to raw Ethernet capture/injection through Npcap on the same station-bus adapter.
-- Never stops, restarts, or reconfigures Windows Time.
-- Replies to SNTPv3/v4 client Mode 3 requests with server Mode 4.
-- Copies the client Version, Poll, and Transmit timestamp into the reply fields required by SNTP server semantics.
-- Sends an immediate SNTPv4 Mode 5 directed broadcast, then repeats every 64 seconds by default when a usable directed-broadcast address exists.
-- Sends another immediate broadcast when a newly connected IED is observed.
-- Separately records `broadcast sent`, `client request seen`, and `Mode 4 reply sent` evidence.
-- Advertises synchronized commissioning packets with commissioning compatibility `stratum 2` and reference ID `LOCL`.
-- Performs a wall-clock sanity/step check. A large time step suppresses broadcast and makes that instant's unicast reply RFC-style unsynchronized (`LI=3`, `stratum=0`, `INIT`, server timestamps zero).
-- Never fails an IEC 61850 association when SNTP cannot start.
+1. In the main toolbar select a local computer IPv4 address in the dropdown. All active non-loopback unicast IPv4 addresses, including aliases on one NIC, are enumerated when the dropdown opens.
+2. Switch **NTP Server** ON. ARSAS validates the selected address and adapter and starts its SNTP transport without opening any IED connection.
+3. Switch OFF to stop all transport workers and release UDP/123. Changing the PC IP while enabled serializes Stop, revalidation and Start.
+4. Communication dot: grey=off; blue=serving/waiting; amber=requests unanswered or service unavailable; green=at least one Mode-4 reply sent this run; red=fault. This reflects SNTP packet exchange, **not proof of relay clock synchronization**. Hover for details.
 
-## Evidence semantics
+The service defaults **OFF** until the operator enables it. It stops when ARSAS closes. If an active PC IP disappears, refresh the dropdown to stop serving the stale interface. A disconnected or ambiguous binding cannot be silently moved to an unrelated NIC.
 
-FAT Clock Sync telemetry intentionally distinguishes packet activity from actual relay synchronization:
+## Transport and time trust
 
-- `B` / Broadcast: ARSAS transmitted a Mode 5 broadcast.
-- `Req`: ARSAS observed a client Mode 3 request from an IED.
-- `Reply`: ARSAS successfully transmitted a Mode 4 response.
-- `sync not proven`: none of the three counters alone proves that the relay accepted the source or adjusted its internal clock.
+The existing SNTPv3/v4 Mode-4 unicast and Mode-5 directed-broadcast implementations remain intact. On an explicit ON command, ARSAS tries to bind UDP/123 exclusively to the selected PC IP. If another service owns that socket, the existing Npcap RAW path may be used; Windows Time is not disabled or reconfigured. No new unmanaged implementation is introduced.
 
-A broadcast without a client request may still be valid when the relay is explicitly configured for broadcast NTP, but ARSAS does not treat it as an acknowledgement. For unicast SNTP, the strongest wire-level evidence is a Mode 3 request followed by a Mode 4 reply. Device-side time-quality or clock evidence is still required before declaring the relay synchronized.
+The service is a **local Windows-clock commissioning reference**, not a GPS receiver, UTC-traceable grandmaster or guaranteed time source for protection tests. Existing clock-health guards, compatibility stratum and device-side evidence requirements remain unchanged.
 
-## Commissioning compatibility stratum
+## Acceptance
 
-Authorized field observations on the historical reference configuration showed that a conservative high-stratum local source could be rejected or remain marked unsynchronized. ARSAS therefore uses the same `stratum 2` advertisement for Mode 4 replies and Mode 5 broadcasts. This is a bounded commissioning default, not a claim about all IEDs. The original device-specific naming and observation context remain traceable in the [pre-migration source revision](https://github.com/masarray/arsas/commit/e03ff1caa7d83902ef106f0c4aafdc3fb24143e5).
-
-The value is named in code as `SntpServerProfile.CommissioningCompatibilityStratum` and is protected by regression tests. It does not claim that the Windows laptop is physically traceable to a stratum-1 GNSS/PTP/atomic source. `LOCL` remains the reference ID and ARSAS diagnostics describe the laptop as a local commissioning source.
-
-If the Windows clock fails the ARSAS clock-health guard, synchronized stratum is not advertised: the affected unicast response becomes unsynchronized (`LI=3`, `stratum=0`, `INIT`) and broadcast is suppressed.
-
-## Accuracy and trust boundary
-
-ARSAS intentionally does not claim UTC traceability. The Windows system clock is treated as a temporary commissioning reference. ARSAS checks for gross time sanity and sudden wall-clock steps, but it does not claim the laptop is equivalent to GPS, IRIG-B, PTP, or an IEC/IEEE 61850-9-3 grandmaster.
-
-A later phase can add explicit Windows upstream-source verification and/or device-side time-quality correlation without changing the SNTP packet engine.
-
-## UDP/123 ownership and Npcap RAW fallback
-
-Windows Time and other NTP software may already own UDP/123. ARSAS first attempts exclusive ownership of UDP/123 on the selected station-bus address. If that succeeds, normal Windows UDP sockets are used.
-
-If the bind fails, ARSAS leaves the existing Windows service untouched and attempts an Npcap RAW fallback on the same adapter. The fallback:
-
-- captures Ethernet frames matching `udp dst port 123`;
-- accepts only supported IPv4 SNTP Mode 3 client requests addressed to the station-bus laptop;
-- preserves a single incoming 802.1Q/802.1ad VLAN tag on the Mode 4 reply;
-- builds Ethernet, IPv4 and UDP headers directly;
-- calculates IPv4 and UDP checksums;
-- replies directly to the request source MAC/IP/UDP port;
-- injects Mode 5 broadcasts with Ethernet broadcast MAC and the route-derived directed-broadcast IPv4 address.
-
-If both the normal socket path and Npcap fallback are unavailable, Clock Sync reports `PortUnavailable`; MMS/GOOSE/SV/FAT IEC 61850 behavior remains fail-open.
-
-Npcap is therefore optional for the normal UDP path but required for the RAW fallback. The Windows installer warns when Npcap is not detected; it does not silently install drivers or modify Windows Time/firewall policy.
-
-## Network scope
-
-ARSAS serves the first station-bus interface selected by Windows routing. IEDs on that subnet can use unicast SNTP by configuring the ARSAS laptop station-bus IP as the server, or Mode 5 broadcast when the relay configuration supports broadcast-client operation.
-
-If another connected IED routes through a different local IPv4 interface, ARSAS reports that the existing clock service remains on the original station-bus binding rather than silently moving the clock source.
-
-## Validation
-
-`SntpPacketTests` covers:
-
-- SNTP client request recognition;
-- version/poll field copy behavior;
-- Mode 4 reply semantics;
-- originate timestamp echo;
-- commissioning compatibility stratum 2 on unicast and broadcast packets;
-- Mode 5 broadcast semantics;
-- RFC-style unsynchronized response fields;
-- directed-broadcast calculation;
-- NTP timestamp round-trip accuracy.
-
-`SntpEthernetFrameCodecTests` additionally covers:
-
-- raw Ethernet Mode 3 recognition;
-- MAC/IP/UDP endpoint swapping for Mode 4 replies;
-- valid IPv4 and UDP checksums;
-- preservation of a single VLAN tag;
-- raw Mode 5 Ethernet/directed-broadcast construction;
-- rejection of non-Mode-3 or wrong-destination-port traffic.
+- Start from zero IEDs, choose PC IP, switch ON: serving UDP/123 without waiting for MMS.
+- Valid SNTP request to that PC IP gets the expected Mode-4 response; indicator responds to observed requests/replies.
+- Switch OFF: service releases transport. Toggle ON/OFF repeatedly without duplicate workers or listeners.
+- Change selected PC IP when serving: stop and start once with updated adapter; reject missing/ambiguous addresses.
+- Leave IED connections, reports, control functions, GOOSE monitoring and FAT operationally unaffected.
