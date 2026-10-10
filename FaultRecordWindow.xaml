@@ -254,6 +254,24 @@
                           SelectionChanged="FaultRecordsGrid_SelectionChanged">
                     <DataGrid.Columns>
                         <DataGridTemplateColumn Header="Get" Width="48">
+                            <!-- Restrict the zero-inset alignment to this checkbox column.
+                                 Other text headers/cells retain the existing 9px typography inset. -->
+                            <DataGridTemplateColumn.HeaderStyle>
+                                <Style TargetType="{x:Type DataGridColumnHeader}"
+                                       BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                                    <Setter Property="VerticalContentAlignment" Value="Center"/>
+                                </Style>
+                            </DataGridTemplateColumn.HeaderStyle>
+                            <DataGridTemplateColumn.CellStyle>
+                                <Style TargetType="{x:Type DataGridCell}"
+                                       BasedOn="{StaticResource {x:Type DataGridCell}}">
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    <Setter Property="VerticalContentAlignment" Value="Center"/>
+                                </Style>
+                            </DataGridTemplateColumn.CellStyle>
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"

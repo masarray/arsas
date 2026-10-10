@@ -50,6 +50,8 @@
                                   Background="{StaticResource TaskDialogCard}"
                                   BorderBrush="{StaticResource TaskDialogBorder}"
                                   IsEditable="True" IsTextSearchEnabled="False"
+                                  HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                  Loaded="RelayIpBox_Loaded"
                                   ToolTip="Enter a new IP address or choose a previously saved address"
                                   ItemsSource="{Binding RecentRelayIps, RelativeSource={RelativeSource AncestorType=Window}}"
                                   Text="{Binding RelayIpAddress, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=LostFocus}"/>

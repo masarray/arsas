@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows;
+using System.Windows.Controls;
 using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
@@ -36,6 +37,19 @@ public partial class IpConnectWizardWindow : Window
         foreach (var endpoint in UserPreferenceStore.LoadRecentEndpoints())
             RecentRelayIps.Add(endpoint);
         Loaded += (_, _) => RelayIpBox.Focus();
+    }
+
+    // WPF's editable ComboBox displays text in a templated TextBox, not directly
+    // in its selection presenter. Apply alignment to both modes while preserving
+    // the theme template, keyboard editing, focus and recent-address binding.
+    private void RelayIpBox_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (RelayIpBox.Template.FindName("PART_EditableTextBox", RelayIpBox) is TextBox editor)
+        {
+            editor.TextAlignment = TextAlignment.Center;
+            editor.HorizontalContentAlignment = HorizontalAlignment.Center;
+            editor.VerticalContentAlignment = VerticalAlignment.Center;
+        }
     }
 
     private void Connect_Click(object sender, RoutedEventArgs e)
