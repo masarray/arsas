@@ -13,12 +13,13 @@ public sealed class GooseEngineeringPresentationRegressionTests
         Assert.Contains("GooseEvents.Add(eventRow)", t);
         foreach(var name in new[]{"Time","Relative time","Source MAC","Destination MAC","GOOSE DataSet","Details"})
             Assert.Contains($"Header=\"{name}\"", ui);
-        Assert.Contains("ItemsSource=\"{Binding SelectedGooseStream.EngineeringLeaves}\"", ui);
-        Assert.Contains("Binding Quality", ui);
+        Assert.Contains("ItemsSource=\"{Binding SelectedGooseStream.Leaves}\"", ui);
+        Assert.Contains("Text=\"DataSet entries\"", ui);
+        Assert.DoesNotContain("SelectedGooseStream.EngineeringLeaves", ui);
         Assert.Contains("<DataGrid ItemsSource=", ui, StringComparison.Ordinal);
         Assert.Contains("Header=\"Signal\"", ui, StringComparison.Ordinal);
         Assert.Contains("Header=\"Value\"", ui, StringComparison.Ordinal);
-        Assert.Contains("Header=\"Quality\"", ui, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"Quality\"", ui, StringComparison.Ordinal);
         Assert.Contains("VirtualizingPanel.VirtualizationMode=\"Recycling\"", ui, StringComparison.Ordinal);
     }
 

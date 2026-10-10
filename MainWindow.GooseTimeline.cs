@@ -81,8 +81,8 @@ public partial class MainWindow
     public string GoosePublisherCountText => $"{GooseVisibleStreams.Cast<GooseStreamRow>().Count():N0}";
     public string GooseEventCountText => $"{GooseVisibleEvents.Cast<GooseEventRow>().Count():N0}";
     public string GooseSelectedLeafCountText => SelectedGooseStream is null
-        ? "0 signals"
-        : $"{SelectedGooseStream.EngineeringLeaves.Count:N0} signals · {SelectedGooseStream.Leaves.Count:N0} entries";
+        ? "0 entries"
+        : $"{SelectedGooseStream.Leaves.Count:N0} entries";
     public Visibility GooseNoEventsVisibility => GooseVisibleEvents.Cast<GooseEventRow>().Any() ? Visibility.Collapsed : Visibility.Visible;
 
     [ModuleInitializer]

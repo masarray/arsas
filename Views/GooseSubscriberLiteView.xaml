@@ -639,14 +639,17 @@
                                 </StackPanel>
                                 <Grid Margin="0,0,0,5">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                    <TextBlock Text="Signals &amp; quality" FontSize="11.6" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                    <TextBlock Text="DataSet entries" FontSize="11.6" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
                                     <Border Grid.Column="1" Background="#EEF4FF" BorderBrush="#C9D9F1"
                                             BorderThickness="1" CornerRadius="8" Padding="6,2">
                                         <TextBlock Text="{Binding GooseSelectedLeafCountText}" FontSize="9" Foreground="#45648E"/>
                                     </Border>
                                 </Grid>
 
-                                <DataGrid ItemsSource="{Binding SelectedGooseStream.EngineeringLeaves}"
+                                <!-- Operator view = exact ordered GOOSE allData entries.
+                                     The q member remains a typed Value row; deliberately
+                                     do not infer or fabricate a separate Quality column. -->
+                                <DataGrid ItemsSource="{Binding SelectedGooseStream.Leaves}"
                                           IsReadOnly="True" AutoGenerateColumns="False"
                                           Style="{StaticResource ModernDataGrid}"
                                           HeadersVisibility="Column" RowHeight="30" ColumnHeaderHeight="30"
@@ -680,26 +683,6 @@
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
                                                     <Setter Property="ToolTip" Value="{Binding Value}"/>
-                                                </Style>
-                                            </DataGridTextColumn.ElementStyle>
-                                        </DataGridTextColumn>
-                                        <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="100" MinWidth="86">
-                                            <DataGridTextColumn.ElementStyle>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-                                                    <Setter Property="ToolTip" Value="{Binding Quality}"/>
-                                                    <Setter Property="FontWeight" Value="SemiBold"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Quality}" Value="Good">
-                                                            <Setter Property="Foreground" Value="#067647"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Quality}" Value="Invalid">
-                                                            <Setter Property="Foreground" Value="#B42318"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Quality}" Value="Questionable">
-                                                            <Setter Property="Foreground" Value="#B54708"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
                                                 </Style>
                                             </DataGridTextColumn.ElementStyle>
                                         </DataGridTextColumn>
