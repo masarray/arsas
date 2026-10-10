@@ -11,7 +11,8 @@ public sealed class NativeExplorerNaturalSortRegressionTests
         Assert.Contains("ItemsSource=\"{Binding SelectedDevice.Points}\" IsReadOnly=\"True\"",xaml);
         Assert.Contains("Loaded=\"ExplorerLiveGrid_Loaded\"",xaml);
         var source=Read("MainWindow.IecNaturalSort.cs");
-        Assert.Contains("view.CustomSort = IecNaturalLiveMonitorSort.Instance",source);
+        Assert.Contains("AttachIecNaturalGridSort(sender as DataGrid, IecNaturalLiveMonitorSort.Instance)",source);
+        Assert.Contains("view.CustomSort = comparer;",source);
         Assert.Contains("view.SortDescriptions.Clear()",source);
     }
 

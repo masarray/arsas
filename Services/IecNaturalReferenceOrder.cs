@@ -57,3 +57,29 @@ public sealed class IecNaturalLiveMonitorSort : IComparer
             IecNaturalReferenceOrder.Compare(first.IecReference,second.IecReference);
     }
 }
+
+public sealed class IecNaturalCommandSort : IComparer
+{
+    public static IecNaturalCommandSort Instance { get; } = new();
+    public int Compare(object? a, object? b)
+    {
+        if (ReferenceEquals(a, b)) return 0;
+        if (a is not SignalDefinition left || b is not SignalDefinition right)
+            return Comparer.DefaultInvariant.Compare(a,b);
+        var result = IecNaturalReferenceOrder.Compare(left.DisplayReference,right.DisplayReference);
+        return result != 0 ? result : IecNaturalReferenceOrder.Compare(left.ObjectReference,right.ObjectReference);
+    }
+}
+
+public sealed class IecNaturalGlobalMonitorSort : IComparer
+{
+    public static IecNaturalGlobalMonitorSort Instance { get; } = new();
+    public int Compare(object? a, object? b)
+    {
+        if (ReferenceEquals(a,b)) return 0;
+        if (a is not Iec61850MonitorPoint left || b is not Iec61850MonitorPoint right)
+            return Comparer.DefaultInvariant.Compare(a,b);
+        var device = string.Compare(left.DeviceName,right.DeviceName,StringComparison.OrdinalIgnoreCase);
+        return device != 0 ? device : IecNaturalLiveMonitorSort.Instance.Compare(left,right);
+    }
+}

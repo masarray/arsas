@@ -31,7 +31,7 @@ public partial class MainWindow
             if (value && GooseEvents.Count > 0)
             {
                 _settingGooseLiveSelection = true;
-                try { SelectedGooseEvent = GooseEvents[^1]; }
+                try { SelectedGooseEvent = GooseVisibleEvents.Cast<GooseEventRow>().LastOrDefault(); }
                 finally { _settingGooseLiveSelection = false; }
             }
         }
@@ -78,12 +78,12 @@ public partial class MainWindow
         }
     }
 
-    public string GoosePublisherCountText => $"{GooseStreams.Count:N0}";
-    public string GooseEventCountText => $"{GooseEvents.Count:N0}";
+    public string GoosePublisherCountText => $"{GooseVisibleStreams.Cast<GooseStreamRow>().Count():N0}";
+    public string GooseEventCountText => $"{GooseVisibleEvents.Cast<GooseEventRow>().Count():N0}";
     public string GooseSelectedLeafCountText => SelectedGooseStream is null
         ? "0 signals"
         : $"{SelectedGooseStream.EngineeringLeaves.Count:N0} signals · {SelectedGooseStream.Leaves.Count:N0} entries";
-    public Visibility GooseNoEventsVisibility => GooseEvents.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility GooseNoEventsVisibility => GooseVisibleEvents.Cast<GooseEventRow>().Any() ? Visibility.Collapsed : Visibility.Visible;
 
     [ModuleInitializer]
     internal static void RegisterGoosePresentationIntegration()
@@ -151,6 +151,8 @@ public partial class MainWindow
     {
         if (args.PropertyName == nameof(SelectedGooseStream))
             Raise(nameof(GooseSelectedLeafCountText));
+        if (args.PropertyName == nameof(SelectedDevice))
+            RefreshGooseScopeViews();
     }
 
     private static void OnRefreshGooseAdaptersRequested(object sender, RoutedEventArgs args)
@@ -273,7 +275,7 @@ public partial class MainWindow
             while (GooseEvents.Count > MaxGooseTimelineEvents)
                 GooseEvents.RemoveAt(0);
 
-            if (FollowLatestGooseEvents)
+            if (FollowLatestGooseEvents && IsGooseIedInScope(eventRow.IedName))
             {
                 _settingGooseLiveSelection = true;
                 try { SelectedGooseEvent = eventRow; }

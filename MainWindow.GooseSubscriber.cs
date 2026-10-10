@@ -332,6 +332,8 @@ public partial class MainWindow
                 row.Apply(BuildGooseStreamSnapshot(captured, _gooseBindingCatalog));
         }
 
+        if (_goosePresentationInstalled)
+            RefreshGooseScopeViews();
         Raise(nameof(GooseSelectedStreamText));
         Raise(nameof(GooseNoLeafValuesVisibility));
         Raise(nameof(GooseSelectedLeafCountText));
@@ -423,6 +425,7 @@ public partial class MainWindow
             return;
 
         var processed = 0;
+        var scopeIdentityChanged = false;
         foreach (var pair in _pendingGooseFrames.ToArray())
         {
             if (processed >= 64)
@@ -447,7 +450,10 @@ public partial class MainWindow
                 SelectedGooseStream ??= row;
             }
 
+            var previousIedName = row.ModelIedName;
             row.Apply(snapshot);
+            if (!string.Equals(previousIedName, row.ModelIedName, StringComparison.OrdinalIgnoreCase))
+                scopeIdentityChanged = true;
             // In follow-live mode the inspector shows current stream state
             // between meaningful events; selecting history freezes the frame.
             if (FollowLatestGooseEvents && _selectedGooseEvent?.StreamKey == snapshot.StreamKey)
@@ -455,6 +461,13 @@ public partial class MainWindow
             processed++;
         }
 
+        if (scopeIdentityChanged)
+            RefreshGooseScopeViews();
+        // The first captured publisher may be unresolved or belong to a
+        // different IED. Never leave that row in the selected-IED inspector.
+        if (SelectedGooseEvent is null && SelectedGooseStream is not null &&
+            !IsGooseIedInScope(SelectedGooseStream.ModelIedName))
+            SelectedGooseStream = GooseVisibleStreams.Cast<GooseStreamRow>().FirstOrDefault();
         Raise(nameof(GooseCounterText));
         Raise(nameof(GooseNoStreamsVisibility));
         Raise(nameof(GooseNoLeafValuesVisibility));

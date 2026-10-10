@@ -747,7 +747,7 @@
                                         </Grid.RowDefinitions>
 
                                         <Grid Grid.Row="0">
-                                            <DataGrid ItemsSource="{Binding SelectedDevice.CommandSignals}" IsReadOnly="False" CanUserAddRows="False" CanUserDeleteRows="False"
+                                            <DataGrid ItemsSource="{Binding SelectedDevice.CommandSignals}" Loaded="CommandGrid_Loaded" IsReadOnly="False" CanUserAddRows="False" CanUserDeleteRows="False"
                                                       Style="{StaticResource CommandDataGrid}" RowStyle="{StaticResource CommandDataGridRow}"
                                                       CellStyle="{StaticResource CommandDataGridCell}" ColumnHeaderStyle="{StaticResource CommandDataGridHeader}"
                                                       AutoGenerateColumns="False" MaxHeight="320" MinHeight="56" RowHeight="48" MinRowHeight="46" FrozenColumnCount="1"
@@ -1032,7 +1032,7 @@
                                 </Button>
                             </Grid>
                         </Grid>
-                        <DataGrid x:Name="GlobalLiveGrid" ItemsSource="{Binding GlobalPoints}" IsReadOnly="True" Style="{StaticResource ModernDataGrid}"
+                        <DataGrid x:Name="GlobalLiveGrid" ItemsSource="{Binding GlobalPoints}" Loaded="GlobalLiveGrid_Loaded" IsReadOnly="True" Style="{StaticResource ModernDataGrid}"
                                   FrozenColumnCount="3" EnableRowVirtualization="True" EnableColumnVirtualization="True"
                                   VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                                   ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto">
