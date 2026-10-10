@@ -796,7 +796,10 @@ public partial class MainWindow
             streamEvent.ChangedValueCount,
             frame.Pdu.Test,
             frame.Pdu.NeedsCommissioning,
-            leaves);
+            leaves,
+            frame.Vlan is { } tagged ? tagged.VlanId.ToString(CultureInfo.InvariantCulture) : "Untagged",
+            frame.Vlan is { } priority ? priority.PriorityCodePoint.ToString(CultureInfo.InvariantCulture) : "—",
+            rawValueCount);
     }
 
     private static string FirstNonEmpty(params string?[] values)

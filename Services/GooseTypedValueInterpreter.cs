@@ -144,6 +144,29 @@ public static class GooseCanonicalLeafProjection
                     if (occurrences == 1) candidate = adjacent[0];
                 }
             }
+            if (candidate is null && IsModelBound(value) &&
+                value.SignalName.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase))
+            {
+                // Some GE F650 SCL models publish typed q in the next FCDA but
+                // use different naming conventions for MMS reference vs display.
+                // Only two *unique*, adjacent, model-bound wire members with
+                // identical IEC LN.DO and a decoded quality status may be joined.
+                var shortOwner = Owner(value.SignalName, out var valueKind);
+                var neighbors = wireLeaves.Where(q =>
+                    q.DataSetIndex == value.DataSetIndex + 1 &&
+                    IsModelBound(q) &&
+                    q.SignalName.EndsWith(".q", StringComparison.OrdinalIgnoreCase) &&
+                    Owner(q.SignalName, out var qKind) == shortOwner &&
+                    qKind == "quality" && valueKind == "value" &&
+                    IsReadableQuality(q.Value) &&
+                    (string.IsNullOrWhiteSpace(q.FunctionalConstraint) ||
+                     string.IsNullOrWhiteSpace(value.FunctionalConstraint) ||
+                     q.FunctionalConstraint.Equals(value.FunctionalConstraint, StringComparison.OrdinalIgnoreCase)) &&
+                    CompatibleOwners(valueRef, Owner(q.SignalReference, out _))).ToArray();
+                if (neighbors.Length == 1 &&
+                    wireLeaves.Count(row => row.SignalName.Equals(value.SignalName, StringComparison.OrdinalIgnoreCase)) == 1)
+                    candidate = neighbors[0];
+            }
             if (candidate is null || !pairedQualities.Add(candidate.DataSetIndex))
                 continue;
             pairs[value.DataSetIndex] = candidate;
@@ -165,6 +188,15 @@ public static class GooseCanonicalLeafProjection
         }
         return result;
     }
+
+    private static bool IsReadableQuality(string value) =>
+        value.Equals("Good", StringComparison.OrdinalIgnoreCase) ||
+        value.StartsWith("Good ·", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("Invalid", StringComparison.OrdinalIgnoreCase) ||
+        value.StartsWith("Invalid ·", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("Questionable", StringComparison.OrdinalIgnoreCase) ||
+        value.StartsWith("Questionable ·", StringComparison.OrdinalIgnoreCase) ||
+        value.Equals("Reserved", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsModelBound(GooseLeafValueSnapshot leaf)
         => !leaf.BindingSource.Equals("Unbound", StringComparison.OrdinalIgnoreCase) &&

@@ -107,6 +107,24 @@ public sealed class GooseCanonicalEngineeringTests
     }
 
     [Fact]
+    public void F650WireDataSet_RendersQInQualityColumn_WithoutReorderingRawMembers()
+    {
+        static GooseLeafValueSnapshot Leaf(int pos,string name,string reference,string type,string value)
+            => new(pos,pos-1,name,reference,"ST","DPC",type,value,"",false,"SCL");
+        var wire = new[] {
+            Leaf(1,"CSWI6.Pos.stVal","BCUGEF650/CSWI6.Pos.stVal","Dbpos","Off"),
+            Leaf(2,"CSWI6.Pos.q","CSWI6.Pos.q","Quality","Good"),
+            Leaf(3,"CSWI7.Pos.stVal","BCUGEF650/CSWI7.Pos.stVal","Dbpos","Intermediate"),
+            Leaf(4,"CSWI7.Pos.q","CSWI7.Pos.q","Quality","Good")
+        };
+        var view = GooseCanonicalLeafProjection.Project(wire);
+        Assert.Equal(4, wire.Length);
+        Assert.Equal(2, view.Count);
+        Assert.All(view, leaf => Assert.Equal("Good",leaf.Quality));
+        Assert.Equal(new[]{0,2},view.Select(leaf=>leaf.DataSetIndex).ToArray());
+    }
+
+    [Fact]
     public void PreviousTypedQualityAndDbpos_AreReadableInChangeSummary()
     {
         Assert.Equal("Good", GooseTypedValueInterpreter.RenderPrevious("bits(0000, unused=3)", "", "Quality"));

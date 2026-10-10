@@ -354,9 +354,10 @@
                                 </Style>
                             </DataGrid.RowStyle>
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Time" Binding="{Binding TimeText}" Width="88"/>
-                                <DataGridTextColumn Header="Relative time" Binding="{Binding RelativeTime}" Width="90"/>
-                                <DataGridTemplateColumn Header="Event" Width="0" Visibility="Collapsed">
+                                <DataGridTextColumn Header="Time" Binding="{Binding TimeText}" Width="116" MinWidth="106"/>
+                                <DataGridTextColumn Header="IED" Binding="{Binding IedName}" Width="92" MinWidth="75"/>
+                                <DataGridTextColumn Header="GOOSE ID" Binding="{Binding GooseId}" Width="113" MinWidth="98"/>
+                                <DataGridTemplateColumn Header="Event" Width="92">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Border x:Name="Badge" Background="#EEF4FF" BorderBrush="#C9D9F1"
@@ -380,11 +381,8 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <DataGridTextColumn Header="Source MAC" Binding="{Binding SourceMac}" Width="115"/>
-                                <DataGridTextColumn Header="Destination MAC" Binding="{Binding DestinationMac}" Width="115"/>
-                                <DataGridTextColumn Header="GOOSE DataSet" Binding="{Binding DataSetName}" Width="130"/>
-                                <DataGridTextColumn Header="st / sq" Binding="{Binding StateSequenceText}" Width="0" Visibility="Collapsed"/>
-                                <DataGridTextColumn Header="Details" Binding="{Binding Summary}" Width="*" MinWidth="150"/>
+                                <DataGridTextColumn Header="GOOSE DataSet" Binding="{Binding DataSetName}" Width="135" MinWidth="118"/>
+                                <DataGridTextColumn Header="Details" Binding="{Binding Summary}" Width="*" MinWidth="215"/>
                             </DataGrid.Columns>
                         </DataGrid>
 
@@ -462,24 +460,33 @@
                                         <TextBlock Text="Identity" FontSize="11.4" FontWeight="SemiBold"
                                                    Foreground="{StaticResource Ink}" Margin="0,0,0,6"/>
                                         <Grid>
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="78"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                             <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
                                             </Grid.RowDefinitions>
-                                            <TextBlock Text="IED" FontSize="9.6" Foreground="{StaticResource Muted}"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding SelectedGooseStream.ModelIedDisplay}" FontSize="10.1"
-                                                       FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock Grid.Row="1" Text="GOOSE ID" FontSize="9.6" Foreground="{StaticResource Muted}" Margin="0,4,0,0"/>
-                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedGooseStream.GooseIdDisplay}" FontSize="10.1"
-                                                       Foreground="{StaticResource Ink}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock Grid.Row="2" Text="APPID" FontSize="9.6" Foreground="{StaticResource Muted}" Margin="0,4,0,0"/>
-                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedGooseStream.AppIdText}" FontSize="10.1"
-                                                       Foreground="{StaticResource Ink}" Margin="0,4,0,0"/>
-                                            <TextBlock Grid.Row="3" Text="DataSet" FontSize="9.6" Foreground="{StaticResource Muted}" Margin="0,4,0,0"/>
-                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedGooseStream.DataSetShortName}" FontSize="10.1"
-                                                       Foreground="{StaticResource Ink}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"
-                                                       ToolTip="{Binding SelectedGooseStream.DataSetReference}"/>
+                                            <TextBlock Grid.Row="0" Text="IED" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,0,0,0"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedGooseStream.ModelIedDisplay}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,0,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.ModelIedDisplay}"/>
+                                            <TextBlock Grid.Row="1" Text="GOOSE ID" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedGooseStream.GooseIdDisplay}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.GooseIdDisplay}"/>
+                                            <TextBlock Grid.Row="2" Text="Application ID" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedGooseStream.ApplicationIdDecimal}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.ApplicationIdDecimal}"/>
+                                            <TextBlock Grid.Row="3" Text="DataSet" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedGooseStream.DataSetShortName}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.DataSetShortName}"/>
                                         </Grid>
                                     </StackPanel>
                                 </Border>
@@ -490,22 +497,39 @@
                                         <TextBlock Text="Communication" FontSize="11.4" FontWeight="SemiBold"
                                                    Foreground="{StaticResource Ink}" Margin="0,0,0,6"/>
                                         <Grid>
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="78"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                             <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
                                             </Grid.RowDefinitions>
-                                            <TextBlock Text="Source" FontSize="9.6" Foreground="{StaticResource Muted}"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding SelectedGooseStream.SourceMac}" FontSize="9.9" Foreground="{StaticResource Ink}"/>
-                                            <TextBlock Grid.Row="1" Text="Destination" FontSize="9.6" Foreground="{StaticResource Muted}" Margin="0,4,0,0"/>
-                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedGooseStream.DestinationMac}" FontSize="9.9"
-                                                       Foreground="{StaticResource Ink}" Margin="0,4,0,0"/>
-                                            <TextBlock Grid.Row="2" Text="VLAN" FontSize="9.6" Foreground="{StaticResource Muted}" Margin="0,4,0,0"/>
-                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedGooseStream.VlanText}" FontSize="9.9"
-                                                       Foreground="{StaticResource Ink}" Margin="0,4,0,0"/>
-                                            <TextBlock Grid.Row="3" Text="TAL" FontSize="9.6" Foreground="{StaticResource Muted}" Margin="0,4,0,0"/>
-                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedGooseStream.TimeAllowedToLiveText}" FontSize="9.9"
-                                                       Foreground="{StaticResource Ink}" Margin="0,4,0,0"/>
+                                            <TextBlock Grid.Row="0" Text="Source MAC" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,0,0,0"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedGooseStream.SourceMac}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,0,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.SourceMac}"/>
+                                            <TextBlock Grid.Row="1" Text="Destination MAC" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedGooseStream.DestinationMac}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.DestinationMac}"/>
+                                            <TextBlock Grid.Row="2" Text="VLAN ID" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedGooseStream.VlanId}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.VlanId}"/>
+                                            <TextBlock Grid.Row="3" Text="VLAN priority" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedGooseStream.VlanPriority}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.VlanPriority}"/>
+                                            <TextBlock Grid.Row="4" Text="Time allowed to live" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedGooseStream.TimeAllowedToLiveText}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.TimeAllowedToLiveText}"/>
                                         </Grid>
                                     </StackPanel>
                                 </Border>
@@ -516,23 +540,51 @@
                                         <TextBlock Text="Current state" FontSize="11.4" FontWeight="SemiBold"
                                                    Foreground="{StaticResource Ink}" Margin="0,0,0,6"/>
                                         <Grid>
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="78"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                             <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
                                             </Grid.RowDefinitions>
-                                            <TextBlock Text="st / sq" FontSize="9.6" Foreground="{StaticResource Muted}"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding SelectedGooseStream.StateSequenceText}" FontSize="10.1"
-                                                       FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
-                                            <TextBlock Grid.Row="1" Text="Event" FontSize="9.6" Foreground="{StaticResource Muted}" Margin="0,4,0,0"/>
-                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedGooseStream.SequenceStatus}" FontSize="10.1"
-                                                       Foreground="{StaticResource Ink}" Margin="0,4,0,0"/>
-                                            <TextBlock Grid.Row="2" Text="confRev" FontSize="9.6" Foreground="{StaticResource Muted}" Margin="0,4,0,0"/>
-                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedGooseStream.ConfigurationRevisionText}" FontSize="10.1"
-                                                       Foreground="{StaticResource Ink}" Margin="0,4,0,0"/>
-                                            <TextBlock Grid.Row="3" Text="Model" FontSize="9.6" Foreground="{StaticResource Muted}" Margin="0,4,0,0"/>
-                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedGooseStream.ModelStateText}" FontSize="10.1"
-                                                       Foreground="{StaticResource Ink}" Margin="0,4,0,0"/>
+                                            <TextBlock Grid.Row="0" Text="Status number" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,0,0,0"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedGooseStream.StateNumberText}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,0,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.StateNumberText}"/>
+                                            <TextBlock Grid.Row="1" Text="Sequence number" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedGooseStream.SequenceNumberText}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.SequenceNumberText}"/>
+                                            <TextBlock Grid.Row="2" Text="Configuration revision" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedGooseStream.ConfigurationRevisionText}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.ConfigurationRevisionText}"/>
+                                            <TextBlock Grid.Row="3" Text="Simulation test" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedGooseStream.SimulationTestText}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.SimulationTestText}"/>
+                                            <TextBlock Grid.Row="4" Text="Number of DataSet entries" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedGooseStream.DataSetEntryCountText}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.DataSetEntryCountText}"/>
+                                            <TextBlock Grid.Row="5" Text="Event type" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding SelectedGooseStream.SequenceStatus}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.SequenceStatus}"/>
+                                            <TextBlock Grid.Row="6" Text="Model binding" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding SelectedGooseStream.ModelStateText}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.ModelStateText}"/>
                                         </Grid>
                                     </StackPanel>
                                 </Border>
