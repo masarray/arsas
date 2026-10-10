@@ -9,7 +9,7 @@ public sealed class GooseEngineeringPresentationRegressionTests
     {
         var t = Read("MainWindow.GooseTimeline.cs");
         var ui = Read("Views/GooseSubscriberLiteView.xaml");
-        Assert.Contains("historical.Apply(value.Snapshot)", t);
+        Assert.Contains("historical.Apply(snapshot)", t);
         Assert.Contains("GooseEvents.Add(eventRow)", t);
         foreach(var name in new[]{"Time","Relative time","Source MAC","Destination MAC","GOOSE DataSet","Details"})
             Assert.Contains($"Header=\"{name}\"", ui);
