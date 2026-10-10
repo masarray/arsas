@@ -24,6 +24,7 @@ public partial class MainWindow
     private DateTimeOffset _globalSntpSessionStartedUtc = DateTimeOffset.MaxValue;
     private DateTimeOffset _globalSntpLastActivityPulseUtc = DateTimeOffset.MinValue;
     private SntpNetworkBinding? _selectedSntpBinding;
+    private readonly SntpSavedSettings? _savedSntpSettings = SntpUserSettingsStore.Load();
 
     internal bool IsClockSyncEnabled => _clockSyncEnabled;
 
@@ -177,6 +178,9 @@ public partial class MainWindow
         _globalSntpPulseRing = ring;
         RefreshGlobalSntpPcAddresses();
         RefreshGlobalSntpToggle(_sntpClockService.Snapshot);
+        // Restore a previously explicit ON only on the exact same live NIC/IP.
+        if (_savedSntpSettings?.Enabled == true && _selectedSntpBinding is not null)
+            _ = SetClockSyncEnabledAsync(true);
     }
 
     private void RefreshGlobalSntpPcAddresses()
@@ -197,7 +201,9 @@ public partial class MainWindow
             item.InterfaceId.Equals(previous.InterfaceId, StringComparison.OrdinalIgnoreCase));
         // An active server whose NIC vanished is stopped, never silently
         // moved onto another PC network (especially a different station LAN).
-        var selected = matched ?? (previous is null && !_clockSyncEnabled ? choices.FirstOrDefault() : null);
+        var restored = previous is null ? SntpUserSettingsStore.Match(choices, _savedSntpSettings) : null;
+        var selected = matched ?? restored ??
+            (previous is null && _savedSntpSettings is null && !_clockSyncEnabled ? choices.FirstOrDefault() : null);
         _globalSntpUiRefreshing = true;
         try
         {
@@ -222,6 +228,7 @@ public partial class MainWindow
         }
         else
             PublishGlobalSntpUiState();
+        SaveSntpPreference();
     }
 
     private async void GlobalSntpToggle_Changed(object sender, RoutedEventArgs e)
@@ -238,6 +245,18 @@ public partial class MainWindow
             BeginNtpVisualSession();
         _clockSyncEnabled = enabled && _selectedSntpBinding is not null;
         await ReconcileStandaloneClockAsync();
+        SaveSntpPreference();
+    }
+
+    private void SaveSntpPreference()
+    {
+        // No disk IO per packet. Shutdown stopping SNTP must not change saved state.
+        if (_selectedSntpBinding is not { } binding) return;
+        var saved = new SntpSavedSettings(
+            binding.InterfaceId, binding.LocalAddress.ToString(),
+            _clockSyncEnabled && _sntpClockService.Snapshot.State == SntpClockServiceState.Serving);
+        if (!SntpUserSettingsStore.Save(saved))
+            AddLog("WARN", "SNTP Server", "Could not save the local SNTP preference.");
     }
 
     private void BeginNtpVisualSession()

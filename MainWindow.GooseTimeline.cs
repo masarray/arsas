@@ -204,7 +204,7 @@ public partial class MainWindow
         var fingerprint = new GooseTimelineSignature(
             string.Concat(values.Select(x => $"{x?.Length ?? 0}:{x}")),
             frame.Frame.Pdu.StateNumber.ToString(CultureInfo.InvariantCulture),
-            string.Join(" • ", frame.StreamEvent.Diagnostics.OrderBy(x => x, StringComparer.Ordinal)),
+            GooseTimelineEventPolicy.DiagnosticCategory(frame.StreamEvent.Diagnostics),
             frame.StreamEvent.GooseSequenceStatus.ToString());
         GooseTimelineDecision decision;
         lock (_gooseTimelineGate)

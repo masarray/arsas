@@ -34,6 +34,28 @@ public sealed class GooseTimelineEventPolicyTests
     }
 
     [Fact]
+    public void NumericGapAndTalChanges_AreTheSameDiagnosticEvent()
+    {
+        var a = GooseTimelineEventPolicy.DiagnosticCategory(new[]
+        {
+            "GOOSE test flag is set.",
+            "GOOSE supervision expired before this frame. Gap=2.303 ms, TAL=2 ms."
+        });
+        var b = GooseTimelineEventPolicy.DiagnosticCategory(new[]
+        {
+            "GOOSE test flag is set.",
+            "GOOSE supervision expired before this frame. Gap=15.719 ms, TAL=4 ms."
+        });
+        Assert.Equal(a,b);
+        var first = new GooseTimelineSignature("off|good","2",a,"Retransmission");
+        var next = first with { Diagnostics = b, Sequence = "Normal" };
+        Assert.False(GooseTimelineEventPolicy.Evaluate(first,next,false).Include);
+        Assert.True(GooseTimelineEventPolicy.Evaluate(first,next,true).Include);
+        Assert.True(GooseTimelineEventPolicy.Evaluate(first,next with { State = "3" },false).Include);
+        Assert.True(GooseTimelineEventPolicy.Evaluate(first,next with { Payload = "on|good" },false).Include);
+    }
+
+    [Fact]
     public void CurrentGooseUi_HasThreeSecondHighlightAndOperatorRetransmissionToggle()
     {
         var view = Read("Views/GooseSubscriberLiteView.xaml");

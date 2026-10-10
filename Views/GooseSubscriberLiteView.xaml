@@ -157,7 +157,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" MinWidth="420"/>
                 <ColumnDefinition Width="9"/>
-                <ColumnDefinition Width="360" MinWidth="315"/>
+                <ColumnDefinition Width="420" MinWidth="370"/>
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" Style="{StaticResource Card}" Padding="10" Visibility="Collapsed">
@@ -311,7 +311,7 @@
                         <DataGrid ItemsSource="{Binding GooseEvents}"
                                   SelectedItem="{Binding SelectedGooseEvent, Mode=TwoWay}"
                                   IsReadOnly="True" Style="{StaticResource ModernDataGrid}"
-                                  AutoGenerateColumns="False" RowHeight="38"
+                                  AutoGenerateColumns="False" RowHeight="32"
                                   EnableRowVirtualization="True"
                                   VirtualizingPanel.IsVirtualizing="True"
                                   VirtualizingPanel.VirtualizationMode="Recycling"
@@ -578,7 +578,7 @@
                                 <DataGrid ItemsSource="{Binding SelectedGooseStream.EngineeringLeaves}"
                                           IsReadOnly="True" AutoGenerateColumns="False"
                                           Style="{StaticResource ModernDataGrid}"
-                                          HeadersVisibility="Column" RowHeight="27" ColumnHeaderHeight="28"
+                                          HeadersVisibility="Column" RowHeight="30" ColumnHeaderHeight="30"
                                           MinHeight="55" MaxHeight="440"
                                           EnableRowVirtualization="True"
                                           VirtualizingPanel.IsVirtualizing="True"
@@ -604,7 +604,7 @@
                                             </DataGridTextColumn.ElementStyle>
                                         </DataGridTextColumn>
                                         <DataGridTextColumn Header="Value"
-                                            Binding="{Binding Value, Converter={StaticResource GooseValueConverter}}" Width="90" MinWidth="65">
+                                            Binding="{Binding Value, Converter={StaticResource GooseValueConverter}}" Width="112" MinWidth="98">
                                             <DataGridTextColumn.ElementStyle>
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
@@ -612,11 +612,23 @@
                                                 </Style>
                                             </DataGridTextColumn.ElementStyle>
                                         </DataGridTextColumn>
-                                        <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="83" MinWidth="70">
+                                        <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="100" MinWidth="86">
                                             <DataGridTextColumn.ElementStyle>
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
                                                     <Setter Property="ToolTip" Value="{Binding Quality}"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Quality}" Value="Good">
+                                                            <Setter Property="Foreground" Value="#067647"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Quality}" Value="Invalid">
+                                                            <Setter Property="Foreground" Value="#B42318"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Quality}" Value="Questionable">
+                                                            <Setter Property="Foreground" Value="#B54708"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
                                                 </Style>
                                             </DataGridTextColumn.ElementStyle>
                                         </DataGridTextColumn>
