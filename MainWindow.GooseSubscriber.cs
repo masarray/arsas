@@ -16,6 +16,8 @@ namespace ArIED61850Tester;
 public partial class MainWindow
 {
     private readonly GooseSubscriberRuntime _gooseSubscriberRuntime = new();
+    private const int MaxGooseCachedStreams = 256;
+    private readonly object _gooseCacheGate = new();
     private readonly ConcurrentDictionary<string, GooseSubscriberFrameSnapshot> _pendingGooseFrames = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, GooseSubscriberFrameSnapshot> _latestGooseFrames = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, GooseStreamRow> _gooseStreamIndex = new(StringComparer.OrdinalIgnoreCase);
@@ -217,8 +219,11 @@ public partial class MainWindow
 
     private void ResetGooseView(bool resetCounters)
     {
-        _pendingGooseFrames.Clear();
-        _latestGooseFrames.Clear();
+        lock (_gooseCacheGate)
+        {
+            _pendingGooseFrames.Clear();
+            _latestGooseFrames.Clear();
+        }
         _gooseStreamIndex.Clear();
         GooseStreams.Clear();
         SelectedGooseStream = null;
@@ -364,8 +369,33 @@ public partial class MainWindow
 
     private void GooseSubscriberRuntime_FrameReceived(GooseSubscriberFrameSnapshot snapshot)
     {
-        _latestGooseFrames[snapshot.StreamKey] = snapshot;
-        _pendingGooseFrames[snapshot.StreamKey] = snapshot;
+        // Canonical cache: one latest typed frame per stream. Retransmissions
+        // replace previous state rather than allocating a new GUI object.
+        // Eviction occurs only for a NEW stream beyond budget; normal capture
+        // therefore takes O(1) dictionary operations without sorting.
+        lock (_gooseCacheGate)
+        {
+            if (!_latestGooseFrames.ContainsKey(snapshot.StreamKey) &&
+                _latestGooseFrames.Count >= MaxGooseCachedStreams)
+            {
+                KeyValuePair<string, GooseSubscriberFrameSnapshot>? oldest = null;
+                foreach (var entry in _latestGooseFrames)
+                {
+                    if (!oldest.HasValue ||
+                        entry.Value.CaptureTimestamp < oldest.Value.Value.CaptureTimestamp)
+                        oldest = entry;
+                }
+                if (oldest.HasValue)
+                {
+                    _latestGooseFrames.TryRemove(oldest.Value.Key, out _);
+                    _pendingGooseFrames.TryRemove(oldest.Value.Key, out _);
+                    lock (_gooseTimelineGate)
+                        _lastGooseTimelineSignature.Remove(oldest.Value.Key);
+                }
+            }
+            _latestGooseFrames[snapshot.StreamKey] = snapshot;
+            _pendingGooseFrames[snapshot.StreamKey] = snapshot;
+        }
     }
 
     private void GooseSubscriberRuntime_StatusChanged(GooseSubscriberStatusSnapshot status)
