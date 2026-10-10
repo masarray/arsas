@@ -4,6 +4,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Media.Animation;
 using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
@@ -16,6 +17,12 @@ public partial class MainWindow
     private ToggleButton? _globalSntpToggle;
     private ComboBox? _globalSntpIpPicker;
     private Ellipse? _globalSntpStateDot;
+    private Ellipse? _globalSntpPulseRing;
+    private bool _globalSntpBreathing;
+    private long _globalSntpLastRenderedRequestCount;
+    private long _globalSntpLastRenderedReplyCount;
+    private DateTimeOffset _globalSntpSessionStartedUtc = DateTimeOffset.MaxValue;
+    private DateTimeOffset _globalSntpLastActivityPulseUtc = DateTimeOffset.MinValue;
     private SntpNetworkBinding? _selectedSntpBinding;
 
     internal bool IsClockSyncEnabled => _clockSyncEnabled;
@@ -25,8 +32,19 @@ public partial class MainWindow
         if (_globalSntpToggle is not null || WorkflowNavShell.Parent is not Grid headerGrid)
             return;
 
+        // Use the SAME shared ARSAS design tokens as the rest of the workstation.
+        // Only activity is animated; there is no timer, network polling, or
+        // UI thread callback dedicated to the NTP header.
+        var ink = (Brush)FindResource("Ink");
+        var muted = (Brush)FindResource("Muted");
+        var accent = (Brush)FindResource("Accent");
+        var line = (Brush)FindResource("BorderStrong");
+        var surface = (Brush)FindResource("SurfaceElevated");
+        var font = (FontFamily)FindResource("AppFontFamily");
+
         var track = new FrameworkElementFactory(typeof(Border));
         track.SetValue(Border.CornerRadiusProperty, new CornerRadius(12));
+        track.SetValue(Border.BorderThicknessProperty, new Thickness(0));
         track.SetBinding(Border.BackgroundProperty,
             new Binding(nameof(ToggleButton.Background))
             { RelativeSource = new RelativeSource(RelativeSourceMode.TemplatedParent) });
@@ -43,11 +61,12 @@ public partial class MainWindow
         {
             Name = "GlobalSntpServerToggle",
             Width = 42, Height = 22,
+            VerticalAlignment = VerticalAlignment.Center,
             BorderThickness = new Thickness(0),
             HorizontalContentAlignment = HorizontalAlignment.Left,
-            Background = new SolidColorBrush(Color.FromRgb(153, 166, 181)),
+            Background = muted,
             Template = new ControlTemplate(typeof(ToggleButton)) { VisualTree = track },
-            ToolTip = "Start or stop the independent SNTP service on the selected PC IP."
+            ToolTip = "Enable or disable the independent NTP Server."
         };
         toggle.Checked += GlobalSntpToggle_Changed;
         toggle.Unchecked += GlobalSntpToggle_Changed;
@@ -55,52 +74,107 @@ public partial class MainWindow
         var label = new TextBlock
         {
             Text = "NTP Server",
-            FontSize = 11.4,
-            FontWeight = FontWeights.Medium,
+            FontFamily = font,
+            FontSize = 12.2,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = ink,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(7, 0, 10, 0)
+            Margin = new Thickness(9, 0, 12, 0)
         };
+
+        var itemStyle = new Style(typeof(ComboBoxItem));
+        itemStyle.Setters.Add(new Setter(Control.ForegroundProperty, ink));
+        itemStyle.Setters.Add(new Setter(Control.FontFamilyProperty, font));
+        itemStyle.Setters.Add(new Setter(Control.FontSizeProperty, 12.8));
+        itemStyle.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.SemiBold));
+        itemStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(9, 5, 9, 5)));
 
         var picker = new ComboBox
         {
             Name = "GlobalSntpPcIpPicker",
-            Width = 145, Height = 27,
+            Width = 156, Height = 32,
             DisplayMemberPath = nameof(SntpNetworkBinding.LocalAddress),
-            Margin = new Thickness(0, 0, 10, 0),
+            FontFamily = font,
+            FontSize = 12.8,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = ink,
+            Background = surface,
+            BorderBrush = line,
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(9, 3, 4, 3),
+            ItemContainerStyle = itemStyle,
+            Margin = new Thickness(0, 0, 11, 0),
+            VerticalAlignment = VerticalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,
-            FontSize = 11,
-            ToolTip = "Choose a local PC IPv4 address. Refreshes when opened; no IED connection required."
+            ToolTip = "Select the PC's local IPv4 address."
         };
+        TextOptions.SetTextFormattingMode(picker, TextFormattingMode.Display);
+        TextOptions.SetTextRenderingMode(picker, TextRenderingMode.ClearType);
         picker.DropDownOpened += (_, _) => RefreshGlobalSntpPcAddresses();
         picker.SelectionChanged += GlobalSntpIp_SelectionChanged;
 
+        // One shared visual: steady center dot indicates serving; outer ring
+        // flashes only when a new NTP request or reply is actually observed.
+        var heartbeat = new Grid
+        {
+            Width = 22, Height = 24,
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "NTP Server is stopped."
+        };
+        var ring = new Ellipse
+        {
+            Width = 16, Height = 16, Opacity = 0,
+            Fill = Brushes.Transparent,
+            Stroke = accent, StrokeThickness = 1.6,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            RenderTransform = new ScaleTransform(1, 1),
+            RenderTransformOrigin = new Point(0.5, 0.5),
+            IsHitTestVisible = false
+        };
         var led = new Ellipse
         {
             Name = "GlobalSntpTrafficIndicator",
             Width = 9, Height = 9,
-            Fill = Brushes.SlateGray,
+            Fill = muted,
             VerticalAlignment = VerticalAlignment.Center,
-            ToolTip = "No SNTP communication yet."
+            HorizontalAlignment = HorizontalAlignment.Center,
+            ToolTip = "NTP Server is stopped."
         };
+        heartbeat.Children.Add(ring);
+        heartbeat.Children.Add(led);
 
-        var toolbar = new StackPanel
+        var contents = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        contents.Children.Add(toggle);
+        contents.Children.Add(label);
+        contents.Children.Add(picker);
+        contents.Children.Add(heartbeat);
+        var toolbar = new Border
         {
             Name = "StandaloneSntpToolbar",
-            Orientation = Orientation.Horizontal,
+            Height = 42,
+            CornerRadius = new CornerRadius(10),
+            Background = surface,
+            BorderBrush = (Brush)FindResource("Line"),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(11, 0, 11, 0),
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0, 0, 0)
+            Margin = new Thickness(9, 0, 0, 0),
+            Child = contents,
+            SnapsToDevicePixels = true
         };
-        toolbar.Children.Add(toggle);
-        toolbar.Children.Add(label);
-        toolbar.Children.Add(picker);
-        toolbar.Children.Add(led);
         Grid.SetColumn(toolbar, 2);
         headerGrid.Children.Add(toolbar);
 
         _globalSntpToggle = toggle;
         _globalSntpIpPicker = picker;
         _globalSntpStateDot = led;
+        _globalSntpPulseRing = ring;
         RefreshGlobalSntpPcAddresses();
         RefreshGlobalSntpToggle(_sntpClockService.Snapshot);
     }
@@ -142,7 +216,10 @@ public partial class MainWindow
         if (_globalSntpUiRefreshing || _globalSntpIpPicker is null) return;
         _selectedSntpBinding = _globalSntpIpPicker.SelectedItem as SntpNetworkBinding;
         if (_clockSyncEnabled)
+        {
+            BeginNtpVisualSession();
             await ReconcileStandaloneClockAsync();
+        }
         else
             PublishGlobalSntpUiState();
     }
@@ -157,8 +234,18 @@ public partial class MainWindow
 
     internal async Task SetClockSyncEnabledAsync(bool enabled)
     {
+        if (enabled && !_clockSyncEnabled)
+            BeginNtpVisualSession();
         _clockSyncEnabled = enabled && _selectedSntpBinding is not null;
         await ReconcileStandaloneClockAsync();
+    }
+
+    private void BeginNtpVisualSession()
+    {
+        var snapshot = _sntpClockService.Snapshot;
+        _globalSntpSessionStartedUtc = DateTimeOffset.UtcNow;
+        _globalSntpLastRenderedRequestCount = snapshot.ClientRequestCount;
+        _globalSntpLastRenderedReplyCount = snapshot.ReplyCount;
     }
 
     private void PublishGlobalSntpUiState()
@@ -178,38 +265,103 @@ public partial class MainWindow
     {
         if (_globalSntpToggle is null || _globalSntpIpPicker is null || _globalSntpStateDot is null)
             return;
+
         _globalSntpUiRefreshing = true;
         try { _globalSntpToggle.IsChecked = _clockSyncEnabled; }
         finally { _globalSntpUiRefreshing = false; }
 
-        var serving = _clockSyncEnabled && snapshot.State == SntpClockServiceState.Serving;
-        var fault = _clockSyncEnabled && snapshot.State is
-            SntpClockServiceState.Faulted or SntpClockServiceState.PortUnavailable;
-        _globalSntpToggle.Background = new SolidColorBrush(serving
-            ? Color.FromRgb(25, 164, 117)
-            : fault ? Color.FromRgb(218, 142, 36)
-            : _clockSyncEnabled ? Color.FromRgb(64, 124, 210) : Color.FromRgb(153, 166, 181));
+        var state = SntpHeaderHeartbeatPolicy.Evaluate(
+            _clockSyncEnabled, snapshot, _globalSntpSessionStartedUtc,
+            _globalSntpLastRenderedRequestCount, _globalSntpLastRenderedReplyCount);
+        _globalSntpToggle.Background = _clockSyncEnabled
+            ? (Brush)FindResource("Accent")
+            : (Brush)FindResource("Muted");
         _globalSntpToggle.HorizontalContentAlignment = _clockSyncEnabled
             ? HorizontalAlignment.Right : HorizontalAlignment.Left;
 
-        var exchanged = serving && snapshot.ReplyCount > 0;
-        var unanswered = serving && snapshot.ClientRequestCount > snapshot.ReplyCount;
-        _globalSntpStateDot.Fill = new SolidColorBrush(
-            fault ? Color.FromRgb(226, 79, 78)
-            : exchanged ? Color.FromRgb(16, 185, 129)
-            : unanswered ? Color.FromRgb(235, 162, 48)
-            : serving ? Color.FromRgb(64, 137, 228)
-            : Color.FromRgb(148, 163, 184));
-        _globalSntpStateDot.ToolTip =
-            $"SNTP: {snapshot.State}\n" +
+        var dot = _globalSntpStateDot;
+        dot.Fill = state.Tone switch
+        {
+            SntpHeaderHeartbeatTone.Fault => (Brush)FindResource("Danger"),
+            SntpHeaderHeartbeatTone.Reply => (Brush)FindResource("Success"),
+            SntpHeaderHeartbeatTone.Request => (Brush)FindResource("Warning"),
+            SntpHeaderHeartbeatTone.Serving => (Brush)FindResource("Accent"),
+            _ => (Brush)FindResource("Muted")
+        };
+
+        // A single WPF composition clock performs the gentle running
+        // heartbeat. It is started/stopped on state transitions, never per
+        // packet; no DispatcherTimer, Thread.Sleep or background worker.
+        if (state.Serving != _globalSntpBreathing)
+        {
+            _globalSntpBreathing = state.Serving;
+            if (state.Serving)
+            {
+                dot.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation
+                {
+                    From = 0.53, To = 1.0,
+                    Duration = TimeSpan.FromMilliseconds(950),
+                    AutoReverse = true,
+                    RepeatBehavior = RepeatBehavior.Forever
+                });
+            }
+            else
+            {
+                dot.BeginAnimation(UIElement.OpacityProperty, null);
+                dot.Opacity = 1;
+                if (_globalSntpPulseRing is { } ring)
+                {
+                    ring.BeginAnimation(UIElement.OpacityProperty, null);
+                    ring.Opacity = 0;
+                }
+            }
+        }
+
+        // Status callbacks are already coalesced at the integration layer;
+        // avoid restarting the activity animation on rapid packet bursts.
+        var now = DateTimeOffset.UtcNow;
+        if (state.Serving &&
+            (state.NewRequest || state.NewReply) &&
+            now - _globalSntpLastActivityPulseUtc >= TimeSpan.FromMilliseconds(280))
+        {
+            _globalSntpLastActivityPulseUtc = now;
+            FlashNtpTrafficRing(state.NewReply);
+        }
+        _globalSntpLastRenderedRequestCount = snapshot.ClientRequestCount;
+        _globalSntpLastRenderedReplyCount = snapshot.ReplyCount;
+
+        var tooltip =
+            $"NTP: {snapshot.State}\n" +
             $"PC IP: {snapshot.Binding?.LocalAddress.ToString() ?? _selectedSntpBinding?.LocalAddress.ToString() ?? "—"}\n" +
-            $"Mode: {snapshot.TransportMode}\n" +
+            $"Transport: {snapshot.TransportMode}\n" +
             $"Requests: {snapshot.ClientRequestCount} · Replies: {snapshot.ReplyCount}\n" +
             $"Last reply: {snapshot.LastReplyUtc?.ToLocalTime().ToString("HH:mm:ss") ?? "—"}\n" +
-            "Replies show packet activity, not device clock synchronization.";
+            "Activity indicates packets, not proof of relay clock synchronization.";
+        dot.ToolTip = tooltip;
+        if (dot.Parent is FrameworkElement parent)
+            parent.ToolTip = tooltip;
         _globalSntpIpPicker.ToolTip = _selectedSntpBinding is null
             ? "Select an active PC IPv4 address."
             : $"{_selectedSntpBinding.InterfaceName} · {_selectedSntpBinding.LocalAddress}\n" +
               $"Broadcast: {_selectedSntpBinding.DirectedBroadcast?.ToString() ?? "N/A"}";
+    }
+
+    private void FlashNtpTrafficRing(bool successfulReply)
+    {
+        if (_globalSntpPulseRing is not { } ring)
+            return;
+        ring.Stroke = (Brush)FindResource(successfulReply ? "Success" : "Warning");
+        ring.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation
+        {
+            From = 0.95, To = 0,
+            Duration = TimeSpan.FromMilliseconds(720),
+            FillBehavior = FillBehavior.Stop
+        });
+        if (ring.RenderTransform is ScaleTransform scale)
+        {
+            var duration = new Duration(TimeSpan.FromMilliseconds(720));
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.65, 1.55, duration));
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.65, 1.55, duration));
+        }
     }
 }
