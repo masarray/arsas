@@ -1,5 +1,8 @@
 # ARSAS / ARIEC61850 — C264 same-host simulator field handoff (2026-10-10)
 
+> **New implementation checkpoint:** [ARSAS draft #504](https://github.com/masarray/arsas/pull/504) introduces the *P1-only* editable-IP and Fault Records alignment fixes, with regression tests, on the exact #501 baseline. Initial HEAD `f90f4697fb1ee607bb5500119f6b5298ce01879f`. Windows CI/visual testing must still be checked at the latest HEAD; the report-projection and GOOSE same-host defects are NOT fixed by #504. Avoid parallel duplicate P1 work. Keep this handoff and the fuller [#502 plan](https://github.com/masarray/arsas/pull/502) for P2/P3.
+
+
 **Status:** engineering strategy and evidence checkpoint ONLY. This document does **not** implement the four outstanding fixes and is **not** field acceptance or merge authorization.
 
 ## Start here: operator context and observed evidence
