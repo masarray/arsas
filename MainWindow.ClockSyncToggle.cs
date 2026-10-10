@@ -150,9 +150,9 @@ public partial class MainWindow
     private async void GlobalSntpToggle_Changed(object sender, RoutedEventArgs e)
     {
         if (_globalSntpUiRefreshing || _globalSntpToggle is null) return;
-        _globalSntpToggle.IsEnabled = false;
-        try { await SetClockSyncEnabledAsync(_globalSntpToggle.IsChecked == true); }
-        finally { _globalSntpToggle.IsEnabled = true; }
+        // Keep the switch interactive even while a slow Npcap fallback starts.
+        // Serialized lifecycle + versioned intent safely handle rapid ON/OFF.
+        await SetClockSyncEnabledAsync(_globalSntpToggle.IsChecked == true);
     }
 
     internal async Task SetClockSyncEnabledAsync(bool enabled)

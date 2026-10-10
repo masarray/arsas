@@ -97,16 +97,19 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
-            // Fail closed on stale/missing IP: do not keep advertising time on
-            // the previous NIC after the user has explicitly changed binding.
-            _clockSyncEnabled = false;
-            try { await _sntpClockService.StopAsync(); }
-            catch (Exception stopError)
+            // Only the current request may change desired state. A stale
+            // failed Start must not override a newer ON/OFF or IP selection.
+            if (version == Volatile.Read(ref _clockSyncDesiredVersion))
             {
-                AddLog("WARN", "SNTP Server", $"Stop after failed bind: {stopError.Message}");
+                _clockSyncEnabled = false;
+                try { await _sntpClockService.StopAsync(); }
+                catch (Exception stopError)
+                {
+                    AddLog("WARN", "SNTP Server", $"Stop after failed bind: {stopError.Message}");
+                }
+                AddLog("WARN", "SNTP Server", $"Cannot serve the selected PC IP: {ex.Message}");
+                SetStatus("SNTP Server: check the selected PC IP.");
             }
-            AddLog("WARN", "SNTP Server", $"Cannot serve the selected PC IP: {ex.Message}");
-            SetStatus("SNTP Server: check the selected PC IP.");
         }
         finally
         {
