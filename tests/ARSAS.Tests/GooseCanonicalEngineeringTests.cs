@@ -72,6 +72,41 @@ public sealed class GooseCanonicalEngineeringTests
     }
 
     [Fact]
+    public void OrderedBoundAdjacentQuality_DoesNotRemainAsDuplicateRow()
+    {
+        static GooseLeafValueSnapshot Leaf(int n,string name,string reference,string type,string value)
+            => new(n,n-1,name,reference,"ST","DPC",type,value,"",false,"SCL");
+        // A producer's valid FCDA may mix full and abbreviated reference forms.
+        var source = new[] {
+            Leaf(1,"CSWI6.Pos.stVal","BCUGEF650/CSWI6.Pos.stVal","Dbpos","Off"),
+            Leaf(2,"CSWI6.Pos.q","CSWI6.Pos.q","Quality","Good"),
+            Leaf(3,"CSWI7.Pos.stVal","BCUGEF650/CSWI7.Pos.stVal","Dbpos","Intermediate"),
+            Leaf(4,"CSWI7.Pos.q","CSWI7.Pos.q","Quality","Questionable")
+        };
+        var projected = GooseCanonicalLeafProjection.Project(source);
+        Assert.Equal(4,source.Length);
+        Assert.Equal(2,projected.Count);
+        Assert.Equal("Good",projected[0].Quality);
+        Assert.Equal("Questionable",projected[1].Quality);
+        Assert.Equal(0,projected[0].DataSetIndex);
+        Assert.Equal(2,projected[1].DataSetIndex);
+    }
+
+    [Fact]
+    public void DifferentExplicitLogicalDevicesCannotTransferQuality()
+    {
+        static GooseLeafValueSnapshot Leaf(int n,string name,string path,string type,string value)
+            => new(n,n-1,name,path,"ST","DPC",type,value,"",false,"SCL");
+        var leaves=new[]{
+            Leaf(1,"CSWI6.Pos.stVal","LDA/CSWI6.Pos.stVal","Dbpos","Off"),
+            Leaf(2,"CSWI6.Pos.q","LDB/CSWI6.Pos.q","Quality","Good")
+        };
+        var projected=GooseCanonicalLeafProjection.Project(leaves);
+        Assert.Equal(2,projected.Count);
+        Assert.Equal("—",projected[0].Quality);
+    }
+
+    [Fact]
     public void PreviousTypedQualityAndDbpos_AreReadableInChangeSummary()
     {
         Assert.Equal("Good", GooseTypedValueInterpreter.RenderPrevious("bits(0000, unused=3)", "", "Quality"));

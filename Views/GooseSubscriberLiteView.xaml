@@ -300,11 +300,18 @@
                                            FontWeight="SemiBold" Foreground="#45648E"/>
                             </Border>
                         </StackPanel>
-                        <CheckBox Grid.Column="1" Content="Show retransmissions"
-                                   IsChecked="{Binding ShowGooseRetransmissions, Mode=TwoWay}"
-                                   FontSize="9.6" Foreground="{StaticResource Muted}"
-                                   VerticalAlignment="Center"
-                                   ToolTip="Show all GOOSE retransmissions; changes and new warnings appear by default."/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <CheckBox Content="Follow latest" Margin="0,0,14,0"
+                                      IsChecked="{Binding FollowLatestGooseEvents, Mode=TwoWay}"
+                                      FontSize="10" Foreground="{StaticResource Muted}"
+                                      VerticalAlignment="Center"
+                                      ToolTip="Follow the newest change; deselect to inspect an immutable historical frame."/>
+                            <CheckBox Content="Show retransmissions"
+                                      IsChecked="{Binding ShowGooseRetransmissions, Mode=TwoWay}"
+                                      FontSize="10" Foreground="{StaticResource Muted}"
+                                      VerticalAlignment="Center"
+                                      ToolTip="Display every received frame in Messages, including retransmissions. Raw capture remains available when off."/>
+                        </StackPanel>
                     </Grid>
 
                     <Grid Grid.Row="2">

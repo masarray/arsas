@@ -47,7 +47,15 @@ public static class GooseTimelineEventPolicy
                      current.Sequence.Contains("Normal", StringComparison.OrdinalIgnoreCase);
         var newAnomaly = !first && SequenceFamily(previous!.Sequence) != SequenceFamily(current.Sequence) &&
                          !normal && !string.IsNullOrWhiteSpace(current.Sequence);
-        return new GooseTimelineDecision(first || valueChanged || stateChanged || diagnosticChanged || newAnomaly || showRetransmissions,
-            first, valueChanged, stateChanged, diagnosticChanged, newAnomaly);
+        // Normal Test=true, changing TAL/gap and sequence classifications are
+        // packet diagnostics, not new process events. Only a newly introduced
+        // model identity/configuration fault is an independent warning row.
+        var newCriticalFinding = diagnosticChanged &&
+            (current.Diagnostics.Contains("confRev", StringComparison.OrdinalIgnoreCase) ||
+             current.Diagnostics.Contains("APPID differs", StringComparison.OrdinalIgnoreCase) ||
+             current.Diagnostics.Contains("DataSet reference differs", StringComparison.OrdinalIgnoreCase));
+        return new GooseTimelineDecision(first || valueChanged || stateChanged ||
+            newCriticalFinding || showRetransmissions,
+            first, valueChanged, stateChanged, newCriticalFinding, newAnomaly);
     }
 }
