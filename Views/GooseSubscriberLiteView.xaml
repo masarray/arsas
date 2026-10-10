@@ -185,7 +185,7 @@
                     </Grid>
 
                     <Grid Grid.Row="2">
-                        <ListBox ItemsSource="{Binding GooseStreams}"
+                        <ListBox ItemsSource="{Binding GooseVisibleStreams}"
                                  SelectedItem="{Binding SelectedGooseStream, Mode=TwoWay}"
                                  BorderThickness="0" Background="Transparent"
                                  HorizontalContentAlignment="Stretch"
@@ -301,6 +301,14 @@
                             </Border>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <ComboBox Width="188" Height="27" Margin="0,0,12,0"
+                                      SelectedIndex="{Binding GooseIedScopeIndex, Mode=TwoWay}"
+                                      Style="{StaticResource ModernComboBox}"
+                                      ToolTip="{Binding GooseSelectedScopeHint}"
+                                      FontSize="10.5">
+                                <ComboBoxItem Content="Selected IED only"/>
+                                <ComboBoxItem Content="All IED GOOSE signals"/>
+                            </ComboBox>
                             <CheckBox Content="Follow latest" Margin="0,0,14,0"
                                       IsChecked="{Binding FollowLatestGooseEvents, Mode=TwoWay}"
                                       FontSize="10" Foreground="{StaticResource Muted}"
@@ -315,7 +323,7 @@
                     </Grid>
 
                     <Grid Grid.Row="2">
-                        <DataGrid ItemsSource="{Binding GooseEvents}"
+                        <DataGrid ItemsSource="{Binding GooseVisibleEvents}"
                                   SelectedItem="{Binding SelectedGooseEvent, Mode=TwoWay}"
                                   IsReadOnly="True" Style="{StaticResource ModernDataGrid}"
                                   AutoGenerateColumns="False" RowHeight="32"
