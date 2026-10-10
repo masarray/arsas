@@ -45,9 +45,14 @@ public partial class MainWindow
             {
                 // Inspector is immutable for the chosen historical frame.
                 // Streaming latest publisher state must never mutate this row.
-                var historical = new GooseStreamRow { StreamKey = value.StreamKey };
-                historical.Apply(value.Snapshot);
-                SelectedGooseStream = historical;
+                if (value.Snapshot is { } snapshot)
+                {
+                    var historical = new GooseStreamRow { StreamKey = value.StreamKey };
+                    historical.Apply(snapshot);
+                    SelectedGooseStream = historical;
+                }
+                else if (_gooseStreamIndex.TryGetValue(value.StreamKey, out var simulated))
+                    SelectedGooseStream = simulated;
             }
             else
                 SelectedGooseStream = null;

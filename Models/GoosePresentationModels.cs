@@ -72,11 +72,13 @@ public sealed class GooseEventRow : ObservableObject
     public required string Publisher { get; init; }
     public required string StateSequenceText { get; init; }
     public required string Summary { get; init; }
-    public required string SourceMac { get; init; }
-    public required string DestinationMac { get; init; }
-    public required string DataSetName { get; init; }
-    public required string RelativeTime { get; init; }
-    public required GooseStreamSnapshot Snapshot { get; init; }
+    // Real wire events populate all six-column fields plus an immutable frame.
+    // Simulated demo events may omit the frame; they keep their explicit values.
+    public string SourceMac { get; init; } = "—";
+    public string DestinationMac { get; init; } = "—";
+    public string DataSetName { get; init; } = "—";
+    public string RelativeTime { get; init; } = "—";
+    public GooseStreamSnapshot? Snapshot { get; init; }
 
     public bool IsRecent { get => _isRecent; private set => Set(ref _isRecent, value); }
     public string TimeText => Timestamp.ToLocalTime().ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);

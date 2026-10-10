@@ -14,8 +14,8 @@ public static class GooseTypedValueInterpreter
     {
         if (value.Kind != MmsDataKind.BitString)
             return MmsDataValueRenderer.ToCompactString(value, reference);
-        var raw = value.RawValue.Span;
-        if (raw.Length == 2 && raw[0] == 6 &&
+        var raw = value.RawValue;
+        if (raw.Count == 2 && raw[0] == 6 &&
             (string.Equals(bType, "Dbpos", StringComparison.OrdinalIgnoreCase) ||
              string.Equals(cdc, "DPC", StringComparison.OrdinalIgnoreCase)))
             return ((raw[1] >> 6) & 3) switch
@@ -60,9 +60,9 @@ public static class GooseTypedValueInterpreter
     {
         if (value.Kind != MmsDataKind.BitString)
             return MmsDataValueRenderer.ToCompactString(value);
-        var raw = value.RawValue.Span;
+        var raw = value.RawValue;
         // IEC 61850 Quality: exactly 13 significant bits, encoded MSB-first.
-        if (raw.Length != 3 || raw[0] != 3)
+        if (raw.Count != 3 || raw[0] != 3)
             return MmsDataValueRenderer.ToCompactString(value);
         var flags = (raw[1] << 8) | raw[2];
         var validity = (flags >> 14) & 3;
