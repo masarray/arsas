@@ -52,6 +52,26 @@ public sealed class GooseCanonicalEngineeringTests
     }
 
     [Fact]
+    public void MixedMmsFcNames_JoinOnlyExactLdAndLnMatchingQuality()
+    {
+        static GooseLeafValueSnapshot Leaf(int n,string reference,string value)
+            => new(n,n-1,reference[(reference.LastIndexOf('/')+1)..],reference,"ST","DPC","",
+                value,"",false,"SCL");
+        var rows = new[] {
+            Leaf(1,"BCUGEF650/CSWI6$ST$Pos$stVal","Off"),
+            Leaf(2,"BCUGEF650/CSWI6.Pos.q","Good"),
+            Leaf(3,"BCUGEF650/CSWI7.Pos.stVal","Intermediate"),
+            Leaf(4,"BCUGEF650/CSWI7$ST$Pos$q","Questionable"),
+            Leaf(5,"OTHERLD/CSWI6.Pos.q","Invalid")
+        };
+        var result = GooseCanonicalLeafProjection.Project(rows);
+        Assert.Equal(3,result.Count);
+        Assert.Equal("Good",result[0].Quality);
+        Assert.Equal("Questionable",result[1].Quality);
+        Assert.Equal("Invalid",result[2].Value);
+    }
+
+    [Fact]
     public void PreviousTypedQualityAndDbpos_AreReadableInChangeSummary()
     {
         Assert.Equal("Good", GooseTypedValueInterpreter.RenderPrevious("bits(0000, unused=3)", "", "Quality"));

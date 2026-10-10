@@ -96,43 +96,75 @@ public static class GooseTypedValueInterpreter
     }
 }
 
-/// <summary>Pairs only exact, independently identified q and primary FCDA references.</summary>
+/// <summary>
+/// Exact reference-identity engineering view of GOOSE allData. Raw wire
+/// entries remain separately available and untouched, including orphan q.
+/// </summary>
 public static class GooseCanonicalLeafProjection
 {
     public static IReadOnlyList<GooseLeafValueSnapshot> Project(IReadOnlyList<GooseLeafValueSnapshot> wireLeaves)
     {
-        var quality = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var valueOwners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var owners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var quality = new Dictionary<string, List<GooseLeafValueSnapshot>>(StringComparer.OrdinalIgnoreCase);
         foreach (var leaf in wireLeaves)
         {
-            var path = leaf.SignalReference;
-            if (string.IsNullOrWhiteSpace(path)) continue;
-            if (path.EndsWith(".q", StringComparison.OrdinalIgnoreCase))
-                quality[path[..^2]] = leaf.Value;
-            else if (path.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase) ||
-                     path.EndsWith(".mag.f", StringComparison.OrdinalIgnoreCase))
+            var key = CanonicalOwner(leaf.SignalReference, out var kind);
+            if (key is null) continue;
+            if (kind == "value") owners.Add(key);
+            else if (kind == "quality")
             {
-                var owner = path.EndsWith(".mag.f", StringComparison.OrdinalIgnoreCase)
-                    ? path[..^6] : path[..^6];
-                valueOwners.Add(owner);
+                if (!quality.TryGetValue(key, out var found))
+                    quality[key] = found = new List<GooseLeafValueSnapshot>(1);
+                found.Add(leaf);
             }
         }
+
         var result = new List<GooseLeafValueSnapshot>(wireLeaves.Count);
         foreach (var leaf in wireLeaves)
         {
-            var reference = leaf.SignalReference;
-            if (!string.IsNullOrWhiteSpace(reference) &&
-                reference.EndsWith(".q", StringComparison.OrdinalIgnoreCase) &&
-                valueOwners.Contains(reference[..^2]))
-                continue;
-            var objectRef = reference.EndsWith(".mag.f", StringComparison.OrdinalIgnoreCase)
-                ? reference[..^6] : reference.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase)
-                    ? reference[..^6] : string.Empty;
-            result.Add(leaf with
-            {
-                Quality = objectRef.Length > 0 && quality.TryGetValue(objectRef, out var q) ? q : "—"
-            });
+            var key = CanonicalOwner(leaf.SignalReference, out var kind);
+            quality.TryGetValue(key ?? string.Empty, out var companions);
+            var hasUniqueCompanion = key is not null && owners.Contains(key) &&
+                                     companions is { Count: 1 };
+            if (hasUniqueCompanion && kind == "quality") continue;
+            if (hasUniqueCompanion && kind == "value")
+                result.Add(leaf with
+                {
+                    SignalName = leaf.SignalName.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase)
+                        ? leaf.SignalName[..^6] : leaf.SignalName,
+                    Quality = companions![0].Value,
+                    IsChanged = leaf.IsChanged || companions[0].IsChanged
+                });
+            else result.Add(leaf);
         }
         return result;
+    }
+
+    private static string? CanonicalOwner(string? source, out string kind)
+    {
+        kind = string.Empty;
+        if (string.IsNullOrWhiteSpace(source)) return null;
+        var key = source.Trim().Replace('$', '.');
+        var slash = key.LastIndexOf('/');
+        var dot = key.IndexOf('.', slash + 1);
+        if (dot >= 0 && dot + 4 < key.Length &&
+            key.AsSpan(dot + 1, 3).Equals("ST.".AsSpan(), StringComparison.OrdinalIgnoreCase))
+            key = key.Remove(dot + 1, 3);
+        var bracket = key.LastIndexOf('[');
+        if (bracket >= 0 && key.EndsWith("]", StringComparison.Ordinal) &&
+            key[(bracket + 1)..^1].Equals("ST", StringComparison.OrdinalIgnoreCase))
+            key = key[..bracket];
+        if (key.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase) ||
+            key.EndsWith(".mag.f", StringComparison.OrdinalIgnoreCase))
+        {
+            kind = "value";
+            return key[..^6];
+        }
+        if (key.EndsWith(".q", StringComparison.OrdinalIgnoreCase))
+        {
+            kind = "quality";
+            return key[..^2];
+        }
+        return null;
     }
 }
