@@ -209,6 +209,7 @@ public partial class MainWindow
         GooseTimelineDecision decision;
         lock (_gooseTimelineGate)
         {
+            _gooseTimelineStart ??= frame.CaptureTimestamp;
             _lastGooseTimelineSignature.TryGetValue(frame.StreamKey, out var previous);
             decision = GooseTimelineEventPolicy.Evaluate(previous, fingerprint, ShowGooseRetransmissions);
             _lastGooseTimelineSignature[frame.StreamKey] = fingerprint;

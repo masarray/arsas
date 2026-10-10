@@ -35,6 +35,17 @@ public static class GooseTypedValueInterpreter
     {
         if (string.IsNullOrWhiteSpace(previous))
             return string.Empty;
+        if (string.Equals(bType, "Quality", StringComparison.OrdinalIgnoreCase) &&
+            previous.StartsWith("bits(", StringComparison.OrdinalIgnoreCase) &&
+            previous.Contains("unused=3", StringComparison.OrdinalIgnoreCase))
+        {
+            var data = previous.AsSpan(5);
+            var comma = data.IndexOf(',');
+            if (comma == 4 && ushort.TryParse(data[..comma],
+                System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture, out var bits))
+                return RenderQuality(MmsDataValue.BitString(3, new byte[] { (byte)(bits >> 8), (byte)bits }));
+        }
         if ((string.Equals(cdc, "DPC", StringComparison.OrdinalIgnoreCase) ||
              string.Equals(bType, "Dbpos", StringComparison.OrdinalIgnoreCase)) &&
              previous.StartsWith("bits(", StringComparison.OrdinalIgnoreCase))

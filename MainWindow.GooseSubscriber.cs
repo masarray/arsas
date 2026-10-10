@@ -772,7 +772,7 @@ public partial class MainWindow
     private static string BuildSignalName(string reference, int index)
     {
         if (string.IsNullOrWhiteSpace(reference))
-            return $"Leaf {index + 1}";
+            return $"Unmapped value #{index + 1}";
 
         var clean = Regex.Replace(reference, @"\[[^\]]+\]$", string.Empty);
         var slash = clean.LastIndexOf('/');
