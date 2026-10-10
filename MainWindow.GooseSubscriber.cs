@@ -332,6 +332,8 @@ public partial class MainWindow
                 row.Apply(BuildGooseStreamSnapshot(captured, _gooseBindingCatalog));
         }
 
+        if (_goosePresentationInstalled)
+            RefreshGooseScopeViews();
         Raise(nameof(GooseSelectedStreamText));
         Raise(nameof(GooseNoLeafValuesVisibility));
         Raise(nameof(GooseSelectedLeafCountText));
