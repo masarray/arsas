@@ -575,47 +575,53 @@
                                     </Border>
                                 </Grid>
 
-                                <ItemsControl ItemsSource="{Binding SelectedGooseStream.EngineeringLeaves}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Background="#FBFDFF" BorderBrush="#DCE6F3" BorderThickness="1"
-                                                    CornerRadius="9" Padding="7" Margin="0,0,0,5">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="22"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <TextBlock Text="{Binding Order}" FontSize="9.3" Foreground="#45648E"
-                                                               VerticalAlignment="Center"/>
-                                                    <StackPanel Grid.Column="1" Margin="2,0,7,0">
-                                                        <TextBlock Text="{Binding SignalName}" FontSize="10" FontWeight="SemiBold"
-                                                                   Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"/>
-                                                        <TextBlock Text="{Binding SignalReference}" FontSize="8.6"
-                                                                   Foreground="{StaticResource Muted}" TextTrimming="CharacterEllipsis"
-                                                                   ToolTip="{Binding SignalReference}"/>
-                                                    </StackPanel>
-                                                    <StackPanel Grid.Column="2" HorizontalAlignment="Right">
-                                                        <Border x:Name="ValueBadge" Background="#F2F4F7" BorderBrush="#D0D5DD"
-                                                                BorderThickness="1" CornerRadius="8" Padding="7,3">
-                                                            <TextBlock Text="{Binding Value, Converter={StaticResource GooseValueConverter}}"
-                                                                       FontSize="9.6" FontWeight="SemiBold" Foreground="#344054"
-                                                                       TextTrimming="CharacterEllipsis" MaxWidth="120" ToolTip="{Binding Value}"/>
-                                                        </Border>
-                                                        <TextBlock Text="{Binding Quality}" FontSize="8.7" Foreground="{StaticResource Muted}"
-                                                                   HorizontalAlignment="Right" Margin="0,2,0,0"/>
-                                                    </StackPanel>
-                                                </Grid>
-                                            </Border>
-                                            <DataTemplate.Triggers>
+                                <DataGrid ItemsSource="{Binding SelectedGooseStream.EngineeringLeaves}"
+                                          IsReadOnly="True" AutoGenerateColumns="False"
+                                          Style="{StaticResource ModernDataGrid}"
+                                          HeadersVisibility="Column" RowHeight="27" ColumnHeaderHeight="28"
+                                          MinHeight="55" MaxHeight="440"
+                                          EnableRowVirtualization="True"
+                                          VirtualizingPanel.IsVirtualizing="True"
+                                          VirtualizingPanel.VirtualizationMode="Recycling"
+                                          ScrollViewer.CanContentScroll="True"
+                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                    <DataGrid.RowStyle>
+                                        <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                                            <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
-                                                    <Setter TargetName="ValueBadge" Property="Background" Value="#FFF1C7"/>
-                                                    <Setter TargetName="ValueBadge" Property="BorderBrush" Value="#F59E0B"/>
+                                                    <Setter Property="Background" Value="#FFF1C7"/>
                                                 </DataTrigger>
-                                            </DataTemplate.Triggers>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGrid.RowStyle>
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="*" MinWidth="105">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                                    <Setter Property="ToolTip" Value="{Binding SignalReference}"/>
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                        </DataGridTextColumn>
+                                        <DataGridTextColumn Header="Value"
+                                            Binding="{Binding Value, Converter={StaticResource GooseValueConverter}}" Width="90" MinWidth="65">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                                    <Setter Property="ToolTip" Value="{Binding Value}"/>
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                        </DataGridTextColumn>
+                                        <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="83" MinWidth="70">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                                    <Setter Property="ToolTip" Value="{Binding Quality}"/>
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                        </DataGridTextColumn>
+                                    </DataGrid.Columns>
+                                </DataGrid>
                             </StackPanel>
                         </ScrollViewer>
 
