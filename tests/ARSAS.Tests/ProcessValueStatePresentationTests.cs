@@ -101,31 +101,33 @@ public sealed class ProcessValueStatePresentationTests
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.xaml"));
 
-        Assert.Contains("x:Key=\"ProcessValueBadgeTemplate\"", source, StringComparison.Ordinal);
+        var shared = File.ReadAllText(FindRepoFile("App.xaml"));
+        Assert.Contains("x:Key=\"ProcessValueBadgeTemplate\"", shared, StringComparison.Ordinal);
+        Assert.DoesNotContain("x:Key=\"ProcessValueBadgeTemplate\"", source, StringComparison.Ordinal);
         Assert.True(Count(source, "CellTemplate=\"{StaticResource ProcessValueBadgeTemplate}\"") >= 3,
             "Explorer, Global Live Monitor and Event Log must share the same process-value badge template.");
 
-        Assert.Contains("Text=\"{Binding ValueTypeToken}\"", source, StringComparison.Ordinal);
-        Assert.Contains("Binding=\"{Binding ValueTypeToken}\" Value=\"F\"", source, StringComparison.Ordinal);
-        Assert.Contains("Binding=\"{Binding ValueTypeToken}\" Value=\"I\"", source, StringComparison.Ordinal);
-        Assert.Contains("Binding=\"{Binding ValueTypeToken}\" Value=\"U\"", source, StringComparison.Ordinal);
-        Assert.Contains("Binding=\"{Binding ValueTypeToken}\" Value=\"B\"", source, StringComparison.Ordinal);
-        Assert.Contains("Binding=\"{Binding ValueTypeToken}\" Value=\"E\"", source, StringComparison.Ordinal);
-        Assert.Contains("Binding=\"{Binding ValueTypeToken}\" Value=\"DP\"", source, StringComparison.Ordinal);
-        Assert.Contains("Binding=\"{Binding ValueVisualKind}\" Value=\"BooleanTrue\"", source, StringComparison.Ordinal);
-        Assert.Contains("Binding=\"{Binding ValueVisualKind}\" Value=\"BooleanFalse\"", source, StringComparison.Ordinal);
-        Assert.Contains("Binding=\"{Binding ValueVisualKind}\" Value=\"PositionOpen\"", source, StringComparison.Ordinal);
-        Assert.Contains("Binding=\"{Binding ValueVisualKind}\" Value=\"PositionClose\"", source, StringComparison.Ordinal);
-        Assert.Contains("Binding=\"{Binding ValueVisualKind}\" Value=\"PositionIntermediate\"", source, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding ValueTypeToken}\"", shared, StringComparison.Ordinal);
+        Assert.Contains("Binding=\"{Binding ValueTypeToken}\" Value=\"F\"", shared, StringComparison.Ordinal);
+        Assert.Contains("Binding=\"{Binding ValueTypeToken}\" Value=\"I\"", shared, StringComparison.Ordinal);
+        Assert.Contains("Binding=\"{Binding ValueTypeToken}\" Value=\"U\"", shared, StringComparison.Ordinal);
+        Assert.Contains("Binding=\"{Binding ValueTypeToken}\" Value=\"B\"", shared, StringComparison.Ordinal);
+        Assert.Contains("Binding=\"{Binding ValueTypeToken}\" Value=\"E\"", shared, StringComparison.Ordinal);
+        Assert.Contains("Binding=\"{Binding ValueTypeToken}\" Value=\"DP\"", shared, StringComparison.Ordinal);
+        Assert.Contains("Binding=\"{Binding ValueVisualKind}\" Value=\"BooleanTrue\"", shared, StringComparison.Ordinal);
+        Assert.Contains("Binding=\"{Binding ValueVisualKind}\" Value=\"BooleanFalse\"", shared, StringComparison.Ordinal);
+        Assert.Contains("Binding=\"{Binding ValueVisualKind}\" Value=\"PositionOpen\"", shared, StringComparison.Ordinal);
+        Assert.Contains("Binding=\"{Binding ValueVisualKind}\" Value=\"PositionClose\"", shared, StringComparison.Ordinal);
+        Assert.Contains("Binding=\"{Binding ValueVisualKind}\" Value=\"PositionIntermediate\"", shared, StringComparison.Ordinal);
 
-        Assert.DoesNotContain("Property=\"Text\" Value=\"A\"", source, StringComparison.Ordinal);
-        Assert.Contains("#F1EFFF", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("#ECF8FF", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("#EAF4FF", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("#FFF8E6", source, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Type markers are metadata-only", source, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Closed/ON/true is red", source, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Open/OFF/false is green", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Property=\"Text\" Value=\"A\"", shared, StringComparison.Ordinal);
+        Assert.Contains("#F1EFFF", shared, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("#ECF8FF", shared, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("#EAF4FF", shared, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("#FFF8E6", shared, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Type markers are metadata-only", shared, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Closed/ON/true is red", shared, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Open/OFF/false is green", shared, StringComparison.OrdinalIgnoreCase);
     }
 
     private static int Count(string value, string needle)

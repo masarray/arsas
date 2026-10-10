@@ -15,10 +15,10 @@ public sealed class GooseCanonicalEngineeringTests
     }
 
     [Theory]
-    [InlineData(0, "Intermediate")]
-    [InlineData(1, "Off")]
-    [InlineData(2, "On")]
-    [InlineData(3, "Invalid")]
+    [InlineData(0, "Intermediate [00]")]
+    [InlineData(1, "Open [01]")]
+    [InlineData(2, "Close [10]")]
+    [InlineData(3, "Bad state [11]")]
     public void TypedDbpos_OnlyFromProvenDpc(int state, string expected)
     {
         var value = MmsDataValue.BitString(6, new[] { (byte)(state << 6) });
@@ -146,7 +146,7 @@ public sealed class GooseCanonicalEngineeringTests
     public void PreviousTypedQualityAndDbpos_AreReadableInChangeSummary()
     {
         Assert.Equal("Good", GooseTypedValueInterpreter.RenderPrevious("bits(0000, unused=3)", "", "Quality"));
-        Assert.Equal("Off", GooseTypedValueInterpreter.RenderPrevious("bits(40, unused=6)", "DPC", "Dbpos"));
+        Assert.Equal("Open [01]", GooseTypedValueInterpreter.RenderPrevious("bits(40, unused=6)", "DPC", "Dbpos"));
     }
 
     [Fact]

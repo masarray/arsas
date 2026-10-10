@@ -13,8 +13,14 @@ public sealed class GooseWireDataSetInspectorRegressionTests
         XNamespace ns="http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         var grid=xaml.Descendants(ns+"DataGrid").Single(x =>
             ((string?)x.Attribute("ItemsSource"))?.Contains("SelectedGooseStream.Leaves")==true);
-        var headers=grid.Descendants(ns+"DataGridTextColumn").Select(c=>(string?)c.Attribute("Header")).ToArray();
+        // Value is now a DataGridTemplateColumn, so verify both column kinds
+        // and its canonical process badge rather than assuming TextColumn.
+        var headers=grid.Descendants()
+            .Where(c=>c.Name==ns+"DataGridTextColumn" || c.Name==ns+"DataGridTemplateColumn")
+            .Select(c=>(string?)c.Attribute("Header")).ToArray();
         Assert.Equal(new[]{"Signal","Value"},headers);
+        Assert.Contains(grid.Descendants(ns+"DataGridTemplateColumn"),
+            c=>(string?)c.Attribute("CellTemplate")=="{StaticResource ProcessValueBadgeTemplate}");
         Assert.Contains("Text=\"DataSet entries\"",ui);
         Assert.DoesNotContain("SelectedGooseStream.EngineeringLeaves",ui);
         Assert.DoesNotContain("Header=\"Quality\"",ui);

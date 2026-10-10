@@ -15,124 +15,7 @@
              severity/quality. A/B/P markers make analog, Boolean and position values
              scannable without relying on color alone. Normal state families avoid red/green
              so availability, success, faults and bad quality keep their existing semantics. -->
-        <DataTemplate x:Key="ProcessValueBadgeTemplate">
-            <Border x:Name="ProcessValueBadge"
-                    CornerRadius="9" Padding="6,3" MinWidth="62"
-                    HorizontalAlignment="Left"
-                    Background="#F6F8FB" BorderBrush="#DCE3EC" BorderThickness="1">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border x:Name="ProcessValueKindBadge"
-                            MinWidth="20" Height="17" CornerRadius="5" Padding="3,0"
-                            Margin="0,0,6,0" Visibility="Collapsed"
-                            Background="#EEF2F6" BorderBrush="#D6DEE8" BorderThickness="1"
-                            ToolTip="{Binding IecDataType}">
-                        <TextBlock x:Name="ProcessValueKindText"
-                                   Text="{Binding ValueTypeToken}"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   FontSize="8.2" FontWeight="Bold" Foreground="#65758A"/>
-                    </Border>
-                    <TextBlock x:Name="ProcessValueText"
-                               Text="{Binding DisplayValue}" ToolTip="{Binding DisplayValue}"
-                               FontSize="11.8" FontWeight="SemiBold" Foreground="#344054"
-                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Border>
-            <DataTemplate.Triggers>
-                <!-- Type markers are metadata-only: F/I/U/B/E/DP come from the declared
-                     IEC/MMS data type. No value-shape or name heuristic creates a badge. -->
-                <DataTrigger Binding="{Binding ValueTypeToken}" Value="F">
-                    <Setter TargetName="ProcessValueKindBadge" Property="Visibility" Value="Visible"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#EEF4F8"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#CCD9E3"/>
-                    <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="#536D7C"/>
-                </DataTrigger>
-                <DataTrigger Binding="{Binding ValueTypeToken}" Value="I">
-                    <Setter TargetName="ProcessValueKindBadge" Property="Visibility" Value="Visible"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#EEF7F3"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#C9DED5"/>
-                    <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="#4E7567"/>
-                </DataTrigger>
-                <DataTrigger Binding="{Binding ValueTypeToken}" Value="U">
-                    <Setter TargetName="ProcessValueKindBadge" Property="Visibility" Value="Visible"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#F1F7F0"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#D2E1CE"/>
-                    <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="#607B58"/>
-                </DataTrigger>
-                <DataTrigger Binding="{Binding ValueTypeToken}" Value="E">
-                    <Setter TargetName="ProcessValueKindBadge" Property="Visibility" Value="Visible"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#F5F3F8"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#DDD7E7"/>
-                    <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="#6C6480"/>
-                </DataTrigger>
-                <DataTrigger Binding="{Binding ValueTypeToken}" Value="B">
-                    <Setter TargetName="ProcessValueKindBadge" Property="Visibility" Value="Visible"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#F3F0FF"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#D8D2F5"/>
-                    <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="#6557B5"/>
-                </DataTrigger>
-                <DataTrigger Binding="{Binding ValueTypeToken}" Value="DP">
-                    <Setter TargetName="ProcessValueKindBadge" Property="Visibility" Value="Visible"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#EEF7FC"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#C6DFEC"/>
-                    <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="#347795"/>
-                </DataTrigger>
 
-                <!-- Process state changes tone only; it never changes the type token. -->
-                <DataTrigger Binding="{Binding ValueVisualKind}" Value="BooleanTrue">
-                    <Setter TargetName="ProcessValueBadge" Property="Background" Value="#F1EFFF"/>
-                    <Setter TargetName="ProcessValueBadge" Property="BorderBrush" Value="#D8D2F5"/>
-                    <Setter TargetName="ProcessValueText" Property="Foreground" Value="#5A4DA7"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#7567D8"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#7567D8"/>
-                    <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="White"/>
-                </DataTrigger>
-
-                <DataTrigger Binding="{Binding ValueVisualKind}" Value="BooleanFalse">
-                    <Setter TargetName="ProcessValueBadge" Property="Background" Value="#F8F7FC"/>
-                    <Setter TargetName="ProcessValueBadge" Property="BorderBrush" Value="#E2DFED"/>
-                    <Setter TargetName="ProcessValueText" Property="Foreground" Value="#6C657D"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="Transparent"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#978DAA"/>
-                    <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="#6F6681"/>
-                </DataTrigger>
-
-                <DataTrigger Binding="{Binding ValueVisualKind}" Value="PositionOpen">
-                    <Setter TargetName="ProcessValueBadge" Property="Background" Value="#ECF8FF"/>
-                    <Setter TargetName="ProcessValueBadge" Property="BorderBrush" Value="#B9E2F4"/>
-                    <Setter TargetName="ProcessValueText" Property="Foreground" Value="#1F6F8F"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="Transparent"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#3B9FC5"/>
-                    <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="#247A9B"/>
-                </DataTrigger>
-
-                <DataTrigger Binding="{Binding ValueVisualKind}" Value="PositionClose">
-                    <Setter TargetName="ProcessValueBadge" Property="Background" Value="#EAF4FF"/>
-                    <Setter TargetName="ProcessValueBadge" Property="BorderBrush" Value="#B8D8F5"/>
-                    <Setter TargetName="ProcessValueText" Property="Foreground" Value="#245F9E"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#2F80ED"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#2F80ED"/>
-                    <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="White"/>
-                </DataTrigger>
-
-                <DataTrigger Binding="{Binding ValueVisualKind}" Value="PositionIntermediate">
-                    <Setter TargetName="ProcessValueBadge" Property="Background" Value="#FFF8E6"/>
-                    <Setter TargetName="ProcessValueBadge" Property="BorderBrush" Value="#F2D28A"/>
-                    <Setter TargetName="ProcessValueText" Property="Foreground" Value="#946200"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#F59E0B"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#F59E0B"/>
-                    <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="White"/>
-                </DataTrigger>
-
-                <DataTrigger Binding="{Binding ValueVisualKind}" Value="PositionBad">
-                    <Setter TargetName="ProcessValueBadge" Property="Background" Value="#FFF2E8"/>
-                    <Setter TargetName="ProcessValueBadge" Property="BorderBrush" Value="#F3BE91"/>
-                    <Setter TargetName="ProcessValueText" Property="Foreground" Value="#A14B0A"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="Background" Value="#E8791B"/>
-                    <Setter TargetName="ProcessValueKindBadge" Property="BorderBrush" Value="#E8791B"/>
-                    <Setter TargetName="ProcessValueKindText" Property="Foreground" Value="White"/>
-                </DataTrigger>
-            </DataTemplate.Triggers>
-        </DataTemplate>
 
         <DataTemplate x:Key="EventQualityBadgeTemplate">
             <Border x:Name="QualityBadge" CornerRadius="8" Padding="7,2" MinWidth="72"
@@ -757,44 +640,14 @@
                                                       CanUserResizeColumns="False" ClipToBounds="True">
                                                 <DataGrid.Columns>
                                                     <DataGridTextColumn Header="IEC Telegram" Binding="{Binding DisplayReference}" Width="1.9*" MinWidth="145" IsReadOnly="True"/>
-                                                    <DataGridTemplateColumn Header="Value" Width="0.78*" MinWidth="88">
+                                                    <DataGridTemplateColumn Header="Value" Width="0.93*" MinWidth="137">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
-                                                                <Border Padding="9,5" CornerRadius="10" HorizontalAlignment="Left" MinWidth="76">
-                                                                    <Border.Style>
-                                                                        <Style TargetType="Border">
-                                                                            <Setter Property="Background" Value="#F2F4F7"/>
-                                                                            <Setter Property="BorderBrush" Value="#D0D5DD"/>
-                                                                            <Setter Property="BorderThickness" Value="1"/>
-                                                                            <Style.Triggers>
-                                                                                <DataTrigger Binding="{Binding ControlCurrentTone}" Value="Energized">
-                                                                                    <Setter Property="Background" Value="#EAF4FF"/>
-                                                                                    <Setter Property="BorderBrush" Value="#B8D8F5"/>
-                                                                                </DataTrigger>
-                                                                                <DataTrigger Binding="{Binding ControlCurrentTone}" Value="Deenergized">
-                                                                                    <Setter Property="Background" Value="#F3F6F9"/>
-                                                                                    <Setter Property="BorderBrush" Value="#D5DEE8"/>
-                                                                                </DataTrigger>
-                                                                                <DataTrigger Binding="{Binding ControlCurrentTone}" Value="Abnormal">
-                                                                                    <Setter Property="Background" Value="#FFFAEB"/>
-                                                                                    <Setter Property="BorderBrush" Value="#FEDF89"/>
-                                                                                </DataTrigger>
-                                                                            </Style.Triggers>
-                                                                        </Style>
-                                                                    </Border.Style>
-                                                                    <TextBlock Text="{Binding ControlCurrentValue}" FontWeight="SemiBold" HorizontalAlignment="Center">
-                                                                        <TextBlock.Style>
-                                                                            <Style TargetType="TextBlock">
-                                                                                <Setter Property="Foreground" Value="#344054"/>
-                                                                                <Style.Triggers>
-                                                                                    <DataTrigger Binding="{Binding ControlCurrentTone}" Value="Energized"><Setter Property="Foreground" Value="#245F9E"/></DataTrigger>
-                                                                                    <DataTrigger Binding="{Binding ControlCurrentTone}" Value="Deenergized"><Setter Property="Foreground" Value="#617286"/></DataTrigger>
-                                                                                    <DataTrigger Binding="{Binding ControlCurrentTone}" Value="Abnormal"><Setter Property="Foreground" Value="#B54708"/></DataTrigger>
-                                                                                </Style.Triggers>
-                                                                            </Style>
-                                                                        </TextBlock.Style>
-                                                                    </TextBlock>
-                                                                </Border>
+                                                                <!-- Reuse the process badge; control model/command value is untouched. -->
+                                                                <ContentControl Content="{Binding ControlProcessValue}"
+                                                                                ContentTemplate="{StaticResource ProcessValueBadgeTemplate}"
+                                                                                HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                                                Padding="0" BorderThickness="0" Background="Transparent"/>
                                                             </DataTemplate>
                                                         </DataGridTemplateColumn.CellTemplate>
                                                     </DataGridTemplateColumn>

@@ -29,7 +29,7 @@ public partial class MainWindow
         var streamSpecs = new[]
         {
             DemoGooseSpec("gcb-incomer", "E02BCU1", "0x1001", "01:0C:CD:01:00:01", 100, "gcbTripStatus", "dsTripStatus",
-                ("Breaker position", "XCBR1.Pos.stVal", "DPC / Dbpos", "Closed [10]"),
+                ("Breaker position", "XCBR1.Pos.stVal", "DPC / Dbpos", "Close [10]"),
                 ("Master trip", "PTRC1.Tr.general", "ACT / BOOLEAN", "false"),
                 ("Close interlock release", "CILO1.EnaCls.stVal", "SPS / BOOLEAN", "true"),
                 ("Control authority", "CSWI1.Loc.stVal", "ENS / INT32", "Remote")),
@@ -37,12 +37,12 @@ public partial class MainWindow
                 ("Line differential pickup", "PDIF1.Str.general", "ACD / BOOLEAN", "false"),
                 ("Line differential trip", "PDIF1.Op.general", "ACT / BOOLEAN", "false"),
                 ("Teleprotection receive", "PSCH1.Op.general", "ACT / BOOLEAN", "false"),
-                ("Breaker position", "XCBR1.Pos.stVal", "DPC / Dbpos", "Closed [10]")),
+                ("Breaker position", "XCBR1.Pos.stVal", "DPC / Dbpos", "Close [10]")),
             DemoGooseSpec("gcb-trafodiff", "E03TDIF1", "0x1201", "01:0C:CD:01:02:01", 120, "gcbTransformerTrip", "dsTransformerTrip",
                 ("Transformer differential pickup", "PDIF1.Str.general", "ACD / BOOLEAN", "false"),
                 ("Transformer differential trip", "PDIF1.Op.general", "ACT / BOOLEAN", "false"),
                 ("Inrush restraint", "PHAR1.Str.general", "ACD / BOOLEAN", "false"),
-                ("HV breaker position", "XCBR1.Pos.stVal", "DPC / Dbpos", "Closed [10]")),
+                ("HV breaker position", "XCBR1.Pos.stVal", "DPC / Dbpos", "Close [10]")),
             DemoGooseSpec("gcb-busbar", "E04BDIF1", "0x1301", "01:0C:CD:01:03:01", 130, "gcbBusbarTrip", "dsBusbarTrip",
                 ("Busbar differential pickup", "PDIF1.Str.general", "ACD / BOOLEAN", "false"),
                 ("Busbar zone 1 trip", "PDIF1.Op.general", "ACT / BOOLEAN", "false"),
@@ -57,7 +57,7 @@ public partial class MainWindow
                 ("Overcurrent pickup", "PTOC1.Str.general", "ACD / BOOLEAN", "false"),
                 ("Earth-fault pickup", "PTOC3.Str.general", "ACD / BOOLEAN", "false"),
                 ("Master trip", "PTRC1.Tr.general", "ACT / BOOLEAN", "false"),
-                ("Breaker position", "XCBR1.Pos.stVal", "DPC / Dbpos", "Closed [10]"))
+                ("Breaker position", "XCBR1.Pos.stVal", "DPC / Dbpos", "Close [10]"))
         };
 
         var baseTime = DateTimeOffset.Now.AddMinutes(-4);

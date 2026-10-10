@@ -22,7 +22,7 @@ public static class Iec61850ValueFormatter
     private static string FormatNormalizedValue(object? value, string dataType, string unit)
     {
         if (IsDbposDataType(dataType) && TryNormalizeDbpos(value, out var dbpos))
-            return FormatDbpos(dbpos);
+            return FormatOperatorDbpos(dbpos);
 
         return value switch
         {
@@ -166,7 +166,7 @@ public static class Iec61850ValueFormatter
         }
     }
 
-    private static string FormatOperatorDbpos(int code) => code switch
+    public static string FormatOperatorDbpos(int code) => code switch
     {
         0 => "Intermediate [00]",
         1 => "Open [01]",
@@ -210,15 +210,6 @@ public static class Iec61850ValueFormatter
                normalized.Contains("counter", StringComparison.Ordinal) ||
                normalized.Contains("bcr", StringComparison.Ordinal);
     }
-
-    private static string FormatDbpos(int code) => code switch
-    {
-        0 => "Intermediate [00]",
-        1 => "Open [01]",
-        2 => "Closed [10]",
-        3 => "Bad state [11]",
-        _ => code.ToString(CultureInfo.InvariantCulture)
-    };
 
     private static bool TryParseDbposText(string text, out int code)
     {
