@@ -72,7 +72,8 @@ public sealed class SntpHeaderHeartbeatRegressionTests
         Assert.Contains("SntpHeaderHeartbeatPolicy.Evaluate", source, StringComparison.Ordinal);
         Assert.Contains("state.NewRequest || state.NewReply", source, StringComparison.Ordinal);
         Assert.Contains("_globalSntpBreathing", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("DispatcherTimer", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new DispatcherTimer(", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new System.Threading.Timer(", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Task.Delay", source, StringComparison.Ordinal);
         Assert.DoesNotContain("new Thread(", source, StringComparison.Ordinal);
     }
