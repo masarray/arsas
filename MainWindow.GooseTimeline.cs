@@ -247,9 +247,10 @@ public partial class MainWindow
         var valueAnomaly = decision.PayloadChanged && !decision.StateChanged;
         var changed = decision.PayloadChanged || decision.StateChanged;
         var eventText = decision.IsNew ? "New" :
-            valueAnomaly ? "Value changed" :
+            valueAnomaly ? "Unexpected change" :
+            changed ? "Changed" :
             hasNewWarning || decision.NewSequenceAnomaly ? "Warning" :
-            changed ? "State change" : FriendlySequenceStatus(stream.SequenceStatus);
+            FriendlySequenceStatus(stream.SequenceStatus);
         var tone = valueAnomaly || hasNewWarning || decision.NewSequenceAnomaly ? "Warning" :
             changed ? "Change" : "Info";
         var deltaText = "-";
@@ -271,8 +272,9 @@ public partial class MainWindow
             DataSetName = ShortGooseReference(stream.DataSetReference),
             RelativeTime = (captured.CaptureTimestamp - _gooseTimelineStart.Value).TotalSeconds.ToString("0.000000", CultureInfo.InvariantCulture),
             Snapshot = stream,
-            Summary = valueAnomaly ? "Payload changed without stNum increment — verify publisher." :
-                BuildGooseEventSummary(stream, decision.IsNew, hasNewWarning)
+            Summary = valueAnomaly
+                ? "Unexpected stNum: " + BuildGooseEventSummary(stream, false, hasNewWarning)
+                : BuildGooseEventSummary(stream, decision.IsNew, hasNewWarning)
         };
     }
 
@@ -289,18 +291,21 @@ public partial class MainWindow
 
     private static string BuildGooseEventSummary(GooseStreamSnapshot stream, bool isNew, bool hasDiagnostics)
     {
-        if (hasDiagnostics)
-            return ShortenGooseText(stream.DiagnosticsSummary, 150);
-
+        // The details column must lead with actual signal deltas, not a
+        // persistent Test=true banner or a raw sequence diagnostic.
         var changed = stream.Leaves
             .Where(leaf => leaf.IsChanged)
             .Take(2)
             .Select(leaf =>
             {
-                var current = ShortenGooseText(GooseEngineeringValueFormatter.Format(leaf.Value), 30);
-                return IsGenericGooseLeafName(leaf.SignalName)
-                    ? current
-                    : $"{ShortenGooseText(leaf.SignalName, 22)}: {current}";
+                var name = IsGenericGooseLeafName(leaf.SignalName)
+                    ? $"Value {leaf.Order}"
+                    : ShortenGooseText(leaf.SignalName, 22);
+                var before = GooseTypedValueInterpreter.RenderPrevious(leaf.PreviousValue, leaf.Cdc, leaf.BType);
+                var after = ShortenGooseText(leaf.Value, 26);
+                return string.IsNullOrWhiteSpace(before)
+                    ? $"{name}: {after}"
+                    : $"{name}: {ShortenGooseText(before, 20)} → {after}";
             })
             .ToArray();
         if (changed.Length > 0)
@@ -312,8 +317,9 @@ public partial class MainWindow
         }
 
         if (isNew)
-            return $"Publisher detected • {stream.Leaves.Count:N0} DataSet value(s)";
-
+            return $"Publisher detected · {stream.Leaves.Count:N0} DataSet entries";
+        if (hasDiagnostics)
+            return ShortenGooseText(stream.DiagnosticsSummary, 150);
         return FriendlySequenceStatus(stream.SequenceStatus);
     }
 

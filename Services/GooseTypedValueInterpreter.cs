@@ -30,6 +30,28 @@ public static class GooseTypedValueInterpreter
         return MmsDataValueRenderer.ToCompactString(value, reference);
     }
 
+    /// <summary>Legacy previous values have only MMS renderer text, not the old typed node.</summary>
+    public static string RenderPrevious(string? previous, string? cdc, string? bType)
+    {
+        if (string.IsNullOrWhiteSpace(previous))
+            return string.Empty;
+        if ((string.Equals(cdc, "DPC", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(bType, "Dbpos", StringComparison.OrdinalIgnoreCase)) &&
+             previous.StartsWith("bits(", StringComparison.OrdinalIgnoreCase))
+        {
+            var content = previous.AsSpan(5);
+            var comma = content.IndexOf(',');
+            if (comma == 2 && byte.TryParse(content[..comma], System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture, out var bits) &&
+                previous.Contains("unused=6", StringComparison.OrdinalIgnoreCase))
+                return ((bits >> 6) & 3) switch
+                {
+                    0 => "Intermediate", 1 => "Off", 2 => "On", _ => "Invalid"
+                };
+        }
+        return GooseEngineeringValueFormatter.Format(previous);
+    }
+
     public static bool IsQuality(string? reference, string? bType)
         => string.Equals(bType, "Quality", StringComparison.OrdinalIgnoreCase) ||
            (reference?.EndsWith(".q", StringComparison.OrdinalIgnoreCase) ?? false);
@@ -69,11 +91,20 @@ public static class GooseCanonicalLeafProjection
     public static IReadOnlyList<GooseLeafValueSnapshot> Project(IReadOnlyList<GooseLeafValueSnapshot> wireLeaves)
     {
         var quality = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var valueOwners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var leaf in wireLeaves)
         {
-            if (!string.IsNullOrWhiteSpace(leaf.SignalReference) &&
-                leaf.SignalReference.EndsWith(".q", StringComparison.OrdinalIgnoreCase))
-                quality[leaf.SignalReference[..^2]] = leaf.Value;
+            var path = leaf.SignalReference;
+            if (string.IsNullOrWhiteSpace(path)) continue;
+            if (path.EndsWith(".q", StringComparison.OrdinalIgnoreCase))
+                quality[path[..^2]] = leaf.Value;
+            else if (path.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase) ||
+                     path.EndsWith(".mag.f", StringComparison.OrdinalIgnoreCase))
+            {
+                var owner = path.EndsWith(".mag.f", StringComparison.OrdinalIgnoreCase)
+                    ? path[..^6] : path[..^6];
+                valueOwners.Add(owner);
+            }
         }
         var result = new List<GooseLeafValueSnapshot>(wireLeaves.Count);
         foreach (var leaf in wireLeaves)
@@ -81,12 +112,11 @@ public static class GooseCanonicalLeafProjection
             var reference = leaf.SignalReference;
             if (!string.IsNullOrWhiteSpace(reference) &&
                 reference.EndsWith(".q", StringComparison.OrdinalIgnoreCase) &&
-                quality.ContainsKey(reference[..^2]) &&
-                wireLeaves.Any(candidate => candidate.SignalReference.StartsWith(reference[..^2] + ".", StringComparison.OrdinalIgnoreCase)
-                    && !candidate.SignalReference.EndsWith(".q", StringComparison.OrdinalIgnoreCase)))
+                valueOwners.Contains(reference[..^2]))
                 continue;
-            var suffix = reference.LastIndexOf('.');
-            var objectRef = suffix > 0 ? reference[..suffix] : string.Empty;
+            var objectRef = reference.EndsWith(".mag.f", StringComparison.OrdinalIgnoreCase)
+                ? reference[..^6] : reference.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase)
+                    ? reference[..^6] : string.Empty;
             result.Add(leaf with
             {
                 Quality = objectRef.Length > 0 && quality.TryGetValue(objectRef, out var q) ? q : "—"

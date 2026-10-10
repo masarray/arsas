@@ -349,7 +349,7 @@
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Time" Binding="{Binding TimeText}" Width="88"/>
                                 <DataGridTextColumn Header="Relative time" Binding="{Binding RelativeTime}" Width="90"/>
-                                <DataGridTemplateColumn Header="Event" Width="102">
+                                <DataGridTemplateColumn Header="Event" Width="0" Visibility="Collapsed">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Border x:Name="Badge" Background="#EEF4FF" BorderBrush="#C9D9F1"
