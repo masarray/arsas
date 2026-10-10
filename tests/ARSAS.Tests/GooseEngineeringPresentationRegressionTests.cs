@@ -15,6 +15,11 @@ public sealed class GooseEngineeringPresentationRegressionTests
             Assert.Contains($"Header=\"{name}\"", ui);
         Assert.Contains("ItemsSource=\"{Binding SelectedGooseStream.EngineeringLeaves}\"", ui);
         Assert.Contains("Binding Quality", ui);
+        Assert.Contains("<DataGrid ItemsSource=", ui, StringComparison.Ordinal);
+        Assert.Contains("Header=\"Signal\"", ui, StringComparison.Ordinal);
+        Assert.Contains("Header=\"Value\"", ui, StringComparison.Ordinal);
+        Assert.Contains("Header=\"Quality\"", ui, StringComparison.Ordinal);
+        Assert.Contains("VirtualizingPanel.VirtualizationMode=\"Recycling\"", ui, StringComparison.Ordinal);
     }
 
     private static string Read(string path)
