@@ -124,13 +124,23 @@ public partial class MainWindow
             if (GooseAdapters.Count == 0)
                 RefreshGooseAdapters();
 
-            // Never assume the unicast MMS route is the GOOSE L2 network. The
-            // Npcap adapter must be explicitly selected before capture begins.
+            // MMS route is an initial NIC recommendation, not proof of the
+            // station GOOSE VLAN. Only auto-start when one non-loopback Npcap
+            // adapter uniquely matches the actual Windows-routed interface.
+            var proposed = ResolveGooseAdapterForIed(device, out var route);
+            if (proposed is not null && !LooksLikeLoopback(proposed))
+            {
+                SelectedGooseAdapter = proposed;
+                GooseStatusText = $"Listening on suggested adapter {proposed.DisplayText}. Change adapter if GOOSE uses a separate port/VLAN.";
+                SetStatus($"GOOSE: starting on {proposed.DisplayText}.");
+                StartGooseSubscriber_Click(this, new RoutedEventArgs());
+                return;
+            }
             SelectedGooseAdapter = null;
             _pendingIedGooseAutoStart = device;
             GooseStatusText = GooseAdapters.Count == 0
-                ? "No Ethernet capture adapter found. Check Npcap and refresh the adapter list."
-                : $"Select the station network adapter for {device.Name}. GOOSE capture starts automatically after selection.";
+                ? "No Ethernet capture adapter found. Check Npcap and refresh adapters."
+                : $"Choose the GOOSE station adapter for {device.Name}; capture begins on selection. {route}";
             SetStatus($"GOOSE: select network adapter for {device.Name}.");
         }));
     }

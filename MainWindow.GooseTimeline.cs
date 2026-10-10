@@ -25,6 +25,7 @@ public partial class MainWindow
         get => _showGooseRetransmissions;
         set => Set(ref _showGooseRetransmissions, value);
     }
+    private DateTimeOffset? _gooseTimelineStart;
     private readonly Dictionary<string, DateTimeOffset> _lastGooseTimelineTimestamp = new(StringComparer.OrdinalIgnoreCase);
     private GooseEventRow? _selectedGooseEvent;
     private bool _goosePresentationInstalled;
@@ -40,14 +41,29 @@ public partial class MainWindow
             if (!Set(ref _selectedGooseEvent, value))
                 return;
 
-            if (value is not null && _gooseStreamIndex.TryGetValue(value.StreamKey, out var stream))
-                SelectedGooseStream = stream;
+            if (value is not null)
+            {
+                // Inspector is immutable for the chosen historical frame.
+                // Streaming latest publisher state must never mutate this row.
+                if (value.Snapshot is { } snapshot)
+                {
+                    var historical = new GooseStreamRow { StreamKey = value.StreamKey };
+                    historical.Apply(snapshot);
+                    SelectedGooseStream = historical;
+                }
+                else if (_gooseStreamIndex.TryGetValue(value.StreamKey, out var simulated))
+                    SelectedGooseStream = simulated;
+            }
+            else
+                SelectedGooseStream = null;
         }
     }
 
     public string GoosePublisherCountText => $"{GooseStreams.Count:N0}";
     public string GooseEventCountText => $"{GooseEvents.Count:N0}";
-    public string GooseSelectedLeafCountText => $"{SelectedGooseStream?.Leaves.Count ?? 0:N0} values";
+    public string GooseSelectedLeafCountText => SelectedGooseStream is null
+        ? "0 signals"
+        : $"{SelectedGooseStream.EngineeringLeaves.Count:N0} signals · {SelectedGooseStream.Leaves.Count:N0} entries";
     public Visibility GooseNoEventsVisibility => GooseEvents.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
     [ModuleInitializer]
@@ -69,6 +85,10 @@ public partial class MainWindow
             typeof(MainWindow),
             GooseSubscriberLiteView.AdapterConfirmedEvent,
             new RoutedEventHandler(OnGooseAdapterConfirmed));
+        EventManager.RegisterClassHandler(
+            typeof(MainWindow),
+            GooseSubscriberLiteView.ImportPublisherModelRequestedEvent,
+            new RoutedEventHandler(OnImportGoosePublisherModelRequested));
         EventManager.RegisterClassHandler(
             typeof(MainWindow),
             GooseSubscriberLiteView.StartRequestedEvent,
@@ -138,6 +158,16 @@ public partial class MainWindow
         args.Handled = true;
     }
 
+    private static void OnImportGoosePublisherModelRequested(object sender, RoutedEventArgs args)
+    {
+        if (sender is not MainWindow window)
+            return;
+        // Uses the existing, engine-validated SCL import workflow. Never infer
+        // publisher IP from GOOSE source MAC or synthesize missing FCDA identities.
+        window.OpenScl_Click(window, new RoutedEventArgs());
+        args.Handled = true;
+    }
+
     private static void OnStartGooseRequested(object sender, RoutedEventArgs args)
     {
         if (sender is not MainWindow window)
@@ -179,6 +209,7 @@ public partial class MainWindow
         GooseTimelineDecision decision;
         lock (_gooseTimelineGate)
         {
+            _gooseTimelineStart ??= frame.CaptureTimestamp;
             _lastGooseTimelineSignature.TryGetValue(frame.StreamKey, out var previous);
             decision = GooseTimelineEventPolicy.Evaluate(previous, fingerprint, ShowGooseRetransmissions);
             _lastGooseTimelineSignature[frame.StreamKey] = fingerprint;
@@ -238,15 +269,17 @@ public partial class MainWindow
         var valueAnomaly = decision.PayloadChanged && !decision.StateChanged;
         var changed = decision.PayloadChanged || decision.StateChanged;
         var eventText = decision.IsNew ? "New" :
-            valueAnomaly ? "Value changed" :
+            valueAnomaly ? "Unexpected change" :
+            changed ? "Changed" :
             hasNewWarning || decision.NewSequenceAnomaly ? "Warning" :
-            changed ? "State change" : FriendlySequenceStatus(stream.SequenceStatus);
+            FriendlySequenceStatus(stream.SequenceStatus);
         var tone = valueAnomaly || hasNewWarning || decision.NewSequenceAnomaly ? "Warning" :
             changed ? "Change" : "Info";
         var deltaText = "-";
         if (_lastGooseTimelineTimestamp.TryGetValue(captured.StreamKey, out var prev))
             deltaText = FormatGooseDelta(captured.CaptureTimestamp - prev);
         _lastGooseTimelineTimestamp[captured.StreamKey] = captured.CaptureTimestamp;
+        _gooseTimelineStart ??= captured.CaptureTimestamp;
         return new GooseEventRow
         {
             StreamKey = captured.StreamKey,
@@ -256,8 +289,14 @@ public partial class MainWindow
             EventTone = tone,
             Publisher = BuildGoosePublisherName(stream),
             StateSequenceText = $"{stream.StateNumberText} / {stream.SequenceNumberText}",
-            Summary = valueAnomaly ? "Payload changed without stNum increment — verify publisher." :
-                BuildGooseEventSummary(stream, decision.IsNew, hasNewWarning)
+            SourceMac = stream.SourceMac,
+            DestinationMac = stream.DestinationMac,
+            DataSetName = ShortGooseReference(stream.DataSetReference),
+            RelativeTime = (captured.CaptureTimestamp - _gooseTimelineStart.Value).TotalSeconds.ToString("0.000000", CultureInfo.InvariantCulture),
+            Snapshot = stream,
+            Summary = valueAnomaly
+                ? "Unexpected stNum: " + BuildGooseEventSummary(stream, false, hasNewWarning)
+                : BuildGooseEventSummary(stream, decision.IsNew, hasNewWarning)
         };
     }
 
@@ -274,18 +313,21 @@ public partial class MainWindow
 
     private static string BuildGooseEventSummary(GooseStreamSnapshot stream, bool isNew, bool hasDiagnostics)
     {
-        if (hasDiagnostics)
-            return ShortenGooseText(stream.DiagnosticsSummary, 150);
-
+        // The details column must lead with actual signal deltas, not a
+        // persistent Test=true banner or a raw sequence diagnostic.
         var changed = stream.Leaves
             .Where(leaf => leaf.IsChanged)
             .Take(2)
             .Select(leaf =>
             {
-                var current = ShortenGooseText(GooseEngineeringValueFormatter.Format(leaf.Value), 30);
-                return IsGenericGooseLeafName(leaf.SignalName)
-                    ? current
-                    : $"{ShortenGooseText(leaf.SignalName, 22)}: {current}";
+                var name = IsGenericGooseLeafName(leaf.SignalName)
+                    ? $"Value {leaf.Order}"
+                    : ShortenGooseText(leaf.SignalName, 22);
+                var before = GooseTypedValueInterpreter.RenderPrevious(leaf.PreviousValue, leaf.Cdc, leaf.BType);
+                var after = ShortenGooseText(leaf.Value, 26);
+                return string.IsNullOrWhiteSpace(before)
+                    ? $"{name}: {after}"
+                    : $"{name}: {ShortenGooseText(before, 20)} → {after}";
             })
             .ToArray();
         if (changed.Length > 0)
@@ -297,8 +339,9 @@ public partial class MainWindow
         }
 
         if (isNew)
-            return $"Publisher detected • {stream.Leaves.Count:N0} DataSet value(s)";
-
+            return $"Publisher detected · {stream.Leaves.Count:N0} DataSet entries";
+        if (hasDiagnostics)
+            return ShortenGooseText(stream.DiagnosticsSummary, 150);
         return FriendlySequenceStatus(stream.SequenceStatus);
     }
 
@@ -357,6 +400,7 @@ public partial class MainWindow
         {
         }
         _lastGooseTimelineTimestamp.Clear();
+        _gooseTimelineStart = null;
         lock (_gooseTimelineGate) _lastGooseTimelineSignature.Clear();
         _nextGooseHighlightExpiryCheckUtc = DateTimeOffset.MinValue;
         GooseEvents.Clear();

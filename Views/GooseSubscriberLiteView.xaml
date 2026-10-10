@@ -348,8 +348,8 @@
                             </DataGrid.RowStyle>
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Time" Binding="{Binding TimeText}" Width="88"/>
-                                <DataGridTextColumn Header="Δt" Binding="{Binding DeltaText}" Width="72"/>
-                                <DataGridTemplateColumn Header="Event" Width="102">
+                                <DataGridTextColumn Header="Relative time" Binding="{Binding RelativeTime}" Width="90"/>
+                                <DataGridTemplateColumn Header="Event" Width="0" Visibility="Collapsed">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Border x:Name="Badge" Background="#EEF4FF" BorderBrush="#C9D9F1"
@@ -373,8 +373,10 @@
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
-                                <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="155" MinWidth="120"/>
-                                <DataGridTextColumn Header="st / sq" Binding="{Binding StateSequenceText}" Width="78"/>
+                                <DataGridTextColumn Header="Source MAC" Binding="{Binding SourceMac}" Width="115"/>
+                                <DataGridTextColumn Header="Destination MAC" Binding="{Binding DestinationMac}" Width="115"/>
+                                <DataGridTextColumn Header="GOOSE DataSet" Binding="{Binding DataSetName}" Width="130"/>
+                                <DataGridTextColumn Header="st / sq" Binding="{Binding StateSequenceText}" Width="0" Visibility="Collapsed"/>
                                 <DataGridTextColumn Header="Details" Binding="{Binding Summary}" Width="*" MinWidth="150"/>
                             </DataGrid.Columns>
                         </DataGrid>
@@ -408,7 +410,7 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Orientation="Horizontal">
                             <Ellipse Width="7" Height="7" Fill="{StaticResource Accent}" Margin="0,0,7,0"/>
-                            <TextBlock Text="GOOSE Inspector" FontSize="13" FontWeight="SemiBold"
+                            <TextBlock Text="DataSet Inspector" FontSize="13" FontWeight="SemiBold"
                                        Foreground="{StaticResource Ink}"/>
                         </StackPanel>
                         <Border Grid.Column="1" CornerRadius="9" Padding="7,2" BorderThickness="1">
@@ -547,56 +549,79 @@
                                     </StackPanel>
                                 </Border>
 
+                                <StackPanel Margin="0,0,0,7">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedGooseStream.BindingSource}" Value="Unbound">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="Signal names need the publisher's SCL/CID model." FontSize="10"
+                                               Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                                    <Button Content="Open Publisher SCL / CID" Click="ImportPublisherModel_Click"
+                                            HorizontalAlignment="Left" Padding="9,4" Margin="0,5,0,0"
+                                            FontSize="10" ToolTip="Load a trusted SCL/CID for this publisher; existing GOOSE capture continues."/>
+                                </StackPanel>
                                 <Grid Margin="0,0,0,5">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                    <TextBlock Text="DataSet values" FontSize="11.6" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                    <TextBlock Text="Signals &amp; quality" FontSize="11.6" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
                                     <Border Grid.Column="1" Background="#EEF4FF" BorderBrush="#C9D9F1"
                                             BorderThickness="1" CornerRadius="8" Padding="6,2">
                                         <TextBlock Text="{Binding GooseSelectedLeafCountText}" FontSize="9" Foreground="#45648E"/>
                                     </Border>
                                 </Grid>
 
-                                <ItemsControl ItemsSource="{Binding SelectedGooseStream.Leaves}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Background="#FBFDFF" BorderBrush="#DCE6F3" BorderThickness="1"
-                                                    CornerRadius="9" Padding="7" Margin="0,0,0,5">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="22"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <TextBlock Text="{Binding Order}" FontSize="9.3" Foreground="#45648E"
-                                                               VerticalAlignment="Center"/>
-                                                    <StackPanel Grid.Column="1" Margin="2,0,7,0">
-                                                        <TextBlock Text="{Binding SignalName}" FontSize="10" FontWeight="SemiBold"
-                                                                   Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"/>
-                                                        <TextBlock Text="{Binding SignalReference}" FontSize="8.6"
-                                                                   Foreground="{StaticResource Muted}" TextTrimming="CharacterEllipsis"
-                                                                   ToolTip="{Binding SignalReference}"/>
-                                                    </StackPanel>
-                                                    <StackPanel Grid.Column="2" HorizontalAlignment="Right">
-                                                        <Border x:Name="ValueBadge" Background="#F2F4F7" BorderBrush="#D0D5DD"
-                                                                BorderThickness="1" CornerRadius="8" Padding="7,3">
-                                                            <TextBlock Text="{Binding Value, Converter={StaticResource GooseValueConverter}}"
-                                                                       FontSize="9.6" FontWeight="SemiBold" Foreground="#344054"
-                                                                       TextTrimming="CharacterEllipsis" MaxWidth="120" ToolTip="{Binding Value}"/>
-                                                        </Border>
-                                                        <TextBlock Text="{Binding TypeText}" FontSize="8.3" Foreground="{StaticResource Muted}"
-                                                                   HorizontalAlignment="Right" Margin="0,2,0,0"/>
-                                                    </StackPanel>
-                                                </Grid>
-                                            </Border>
-                                            <DataTemplate.Triggers>
+                                <DataGrid ItemsSource="{Binding SelectedGooseStream.EngineeringLeaves}"
+                                          IsReadOnly="True" AutoGenerateColumns="False"
+                                          Style="{StaticResource ModernDataGrid}"
+                                          HeadersVisibility="Column" RowHeight="27" ColumnHeaderHeight="28"
+                                          MinHeight="55" MaxHeight="440"
+                                          EnableRowVirtualization="True"
+                                          VirtualizingPanel.IsVirtualizing="True"
+                                          VirtualizingPanel.VirtualizationMode="Recycling"
+                                          ScrollViewer.CanContentScroll="True"
+                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                    <DataGrid.RowStyle>
+                                        <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                                            <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
-                                                    <Setter TargetName="ValueBadge" Property="Background" Value="#FFF1C7"/>
-                                                    <Setter TargetName="ValueBadge" Property="BorderBrush" Value="#F59E0B"/>
+                                                    <Setter Property="Background" Value="#FFF1C7"/>
                                                 </DataTrigger>
-                                            </DataTemplate.Triggers>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGrid.RowStyle>
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="*" MinWidth="105">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                                    <Setter Property="ToolTip" Value="{Binding SignalReference}"/>
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                        </DataGridTextColumn>
+                                        <DataGridTextColumn Header="Value"
+                                            Binding="{Binding Value, Converter={StaticResource GooseValueConverter}}" Width="90" MinWidth="65">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                                    <Setter Property="ToolTip" Value="{Binding Value}"/>
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                        </DataGridTextColumn>
+                                        <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="83" MinWidth="70">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                                    <Setter Property="ToolTip" Value="{Binding Quality}"/>
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                        </DataGridTextColumn>
+                                    </DataGrid.Columns>
+                                </DataGrid>
                             </StackPanel>
                         </ScrollViewer>
 

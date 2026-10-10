@@ -28,7 +28,7 @@ public sealed partial class GooseStreamRow
     public string StateSequenceText => $"{StateNumberText} / {SequenceNumberText}";
     public string StateSequenceCompactText => $"st {StateNumberText} • sq {SequenceNumberText}";
     public string ModelStateText => BindingSource.Equals("Unbound", StringComparison.OrdinalIgnoreCase)
-        ? "Raw / unbound"
+        ? "Signal names unavailable · open matching publisher SCL/CID"
         : BindingSource;
 
     private void RaisePresentationProperties()
@@ -72,6 +72,13 @@ public sealed class GooseEventRow : ObservableObject
     public required string Publisher { get; init; }
     public required string StateSequenceText { get; init; }
     public required string Summary { get; init; }
+    // Real wire events populate all six-column fields plus an immutable frame.
+    // Simulated demo events may omit the frame; they keep their explicit values.
+    public string SourceMac { get; init; } = "—";
+    public string DestinationMac { get; init; } = "—";
+    public string DataSetName { get; init; } = "—";
+    public string RelativeTime { get; init; } = "—";
+    public GooseStreamSnapshot? Snapshot { get; init; }
 
     public bool IsRecent { get => _isRecent; private set => Set(ref _isRecent, value); }
     public string TimeText => Timestamp.ToLocalTime().ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);

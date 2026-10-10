@@ -14,6 +14,9 @@ public partial class GooseSubscriberLiteView : UserControl
     public static readonly RoutedEvent AdapterConfirmedEvent = EventManager.RegisterRoutedEvent(
         nameof(AdapterConfirmed), RoutingStrategy.Bubble, typeof(RoutedEventHandler), typeof(GooseSubscriberLiteView));
 
+    public static readonly RoutedEvent ImportPublisherModelRequestedEvent = EventManager.RegisterRoutedEvent(
+        nameof(ImportPublisherModelRequested), RoutingStrategy.Bubble, typeof(RoutedEventHandler), typeof(GooseSubscriberLiteView));
+
     public static readonly RoutedEvent StartRequestedEvent = EventManager.RegisterRoutedEvent(
         nameof(StartRequested), RoutingStrategy.Bubble, typeof(RoutedEventHandler), typeof(GooseSubscriberLiteView));
 
@@ -46,6 +49,12 @@ public partial class GooseSubscriberLiteView : UserControl
         remove => RemoveHandler(AdapterConfirmedEvent, value);
     }
 
+    public event RoutedEventHandler ImportPublisherModelRequested
+    {
+        add => AddHandler(ImportPublisherModelRequestedEvent, value);
+        remove => RemoveHandler(ImportPublisherModelRequestedEvent, value);
+    }
+
     public event RoutedEventHandler StartRequested
     {
         add => AddHandler(StartRequestedEvent, value);
@@ -72,6 +81,9 @@ public partial class GooseSubscriberLiteView : UserControl
         if (e.Key == System.Windows.Input.Key.Return && sender is ComboBox { IsDropDownOpen: false })
             RaiseEvent(new RoutedEventArgs(AdapterConfirmedEvent, this));
     }
+
+    private void ImportPublisherModel_Click(object sender, RoutedEventArgs e)
+        => RaiseEvent(new RoutedEventArgs(ImportPublisherModelRequestedEvent, this));
 
     private void RefreshAdapters_Click(object sender, RoutedEventArgs e)
         => RaiseEvent(new RoutedEventArgs(RefreshAdaptersRequestedEvent, this));
