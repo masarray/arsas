@@ -409,7 +409,7 @@ jobs:
         run: dotnet build .\ArIED61850Tester\ArIED61850Tester.sln -c Release --no-restore
 
       - name: Run pinned engine P10 identity and canonical SCL regression
-        run: dotnet test .\ARIEC61850\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --filter "FullyQualifiedName~TrustedSclIedIdentityMatcherTests|FullyQualifiedName~CanonicalLiveIedSclExporterTests" --logger "trx;LogFileName=engine-p10-identity.trx" --results-directory .\ArIED61850Tester\TestResults
+        run: dotnet test .\ARIEC61850\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --filter "FullyQualifiedName~TrustedSclIedIdentityMatcherTests|FullyQualifiedName~CanonicalLiveIedSclExporterTests" --logger "trx;LogFileName=engine-p10-identity.trx" --results-directory .\ArIED61850Tester\EngineTestResults
 
       - name: Run ARSAS application regression tests
         run: dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore --logger "trx;LogFileName=arsas-tests.trx" --results-directory .\ArIED61850Tester\TestResults
@@ -438,6 +438,14 @@ jobs:
           path: |
             ArIED61850Tester\TestResults\*.trx
             ArIED61850Tester\TestResults\ci-canonical-authority.json
+          if-no-files-found: error
+
+      - name: Upload P10 engine identity regression evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ARSAS-p10-engine-identity-evidence
+          path: ArIED61850Tester\EngineTestResults\engine-p10-identity.trx
           if-no-files-found: error
 
       - name: Build and test exact pinned ArdIrec native bridge once
