@@ -127,6 +127,25 @@ jobs:
             }
             Write-Host 'DataSet-first closure trial qualified for CI only; no physical promotion.'
           }
+          elseif ($null -ne $lock.p10IdentityTrial -and
+                  $lock.commit -eq $lock.p10IdentityTrial.exactCommit) {
+            $p10 = $lock.p10IdentityTrial
+            $closure = $lock.datasetFirstDiscoveryTrial
+            if ($lock.ref -ne 'main' -or
+                [int]$lock.sourcePullRequest -ne 161 -or
+                [int]$p10.enginePullRequest -ne 161 -or
+                $p10.baseEngineCommit -ne $closure.exactCommit -or
+                $p10.exactCommit -ne '00ad2819b99ffe6b3f885e59aa24a6afb2b4d8e1' -or
+                $p10.status -ne 'code-trial-not-physical' -or
+                -not [bool]$p10.physicalQualificationRequired -or
+                -not [bool]$p10.fullNameListFallbackForbidden -or
+                -not [bool]$p10.cyclicMmsProcessPollingForbidden -or
+                $p10.identitySource -ne 'TrustedSclExactDomainMatch' -or
+                $closure.status -ne 'code-trial-not-physical') {
+              throw 'P10 identity trial is not pinned to exact qualified DataSet-first ancestry.'
+            }
+            Write-Host 'P10 trusted-SCL identity trial accepted for code CI ONLY; R7/R10 physical gate unchanged.'
+          }
           elseif ($lock.commit -eq $convergence.activeStack.engineModelAndScl.head) {
             if ([int]$lock.sourcePullRequest -notin @(134, 135) -or
                 $lock.purpose -notmatch 'R7 physical SCL repair pin') {
