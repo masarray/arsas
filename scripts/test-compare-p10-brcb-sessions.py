@@ -139,6 +139,68 @@ class TestComparator(unittest.TestCase):
             mod.independent_triage(mod.parse_report(report()),
                                    mod.parse_report(report(engine="f" * 40)))
 
+    def test_complete_bounded_chronology_exposes_20s_non_gi_recurrence(self):
+        data = report(frames=4, overflow=1, with_chronology=False)
+        data = data.replace("BRCB chronology: first=2, recent=0, omittedMiddle=0",
+                            "BRCB chronology: first=4, recent=0, omittedMiddle=0")
+        data = data.replace("    OptFlds       : decoded=25/25", """      frame#1: receivedUtc=2026-10-11T06:25:51Z, SqNum=10, GIreason=NO, BufOvfl=YES, EntryIDrelation=unverified, findings=1
+      frame#2: receivedUtc=2026-10-11T06:25:51.100Z, SqNum=11, GIreason=NO, BufOvfl=NO, EntryIDrelation=changed, findings=0
+      frame#3: receivedUtc=2026-10-11T06:26:11Z, SqNum=1, GIreason=NO, BufOvfl=NO, EntryIDrelation=changed, findings=1
+      frame#4: receivedUtc=2026-10-11T06:26:17Z, SqNum=2, GIreason=NO, BufOvfl=NO, EntryIDrelation=changed, findings=0
+    OptFlds       : decoded=25/25""")
+        return data
+
+    def test_late_non_gi_recurrence_after_full_receive_gap(self):
+        sample = self.test_complete_bounded_chronology_exposes_20s_non_gi_recurrence()
+        triage = mod.independent_triage(mod.parse_report(sample), mod.parse_report(sample))
+        evidence = triage["sessions"]["open_scl"][0]["receive_order_gap_evidence"]
+        self.assertEqual("COMPLETE_BOUNDED_DECODER_RECEIVE_ORDER", evidence["coverage"])
+        self.assertEqual(19900.0, evidence["longest_receive_gap_ms"])
+        anomaly = evidence["non_gi_backward_finding_after_gap"]
+        self.assertEqual(3, anomaly["frame"])
+        self.assertEqual((11, 1), (anomaly["previous_sqnum"], anomaly["sqnum"]))
+        self.assertEqual(19900.0, anomaly["gap_ms"])
+        self.assertEqual(21000.0, anomaly["elapsed_since_start_return_ms"])
+        self.assertIn("NOT_SOE_LOSSLESS", triage["qualification"])
+
+    def test_truncated_chronology_never_invents_receive_gap(self):
+        sample = self.test_complete_bounded_chronology_exposes_20s_non_gi_recurrence()
+        sample = "\\n".join(line for line in sample.splitlines() if "frame#2:" not in line)
+        evidence = mod.independent_triage(mod.parse_report(sample), mod.parse_report(sample))["sessions"]["open_scl"][0]["receive_order_gap_evidence"]
+        self.assertEqual("UNVERIFIABLE", evidence["coverage"])
+        self.assertEqual("RETAINED_CHRONOLOGY_INCOMPLETE", evidence["reason"])
+        self.assertIsNone(evidence["longest_receive_gap_ms"])
+        self.assertIsNone(evidence["non_gi_backward_finding_after_gap"])
+
+    def test_omitted_middle_never_certifies_gaps(self):
+        sample = self.test_complete_bounded_chronology_exposes_20s_non_gi_recurrence()
+        sample = sample.replace("omittedMiddle=0", "omittedMiddle=1")
+        evidence = mod.independent_triage(mod.parse_report(sample), mod.parse_report(sample))["sessions"]["open_scl"][0]["receive_order_gap_evidence"]
+        self.assertEqual("CHRONOLOGY_HAS_OMITTED_OR_UNACCOUNTED_FRAMES", evidence["reason"])
+
+    def test_out_of_order_or_duplicate_frame_ids_do_not_certify_receive_order(self):
+        sample = self.test_complete_bounded_chronology_exposes_20s_non_gi_recurrence()
+        sample = sample.replace("frame#3:", "frame#2:")
+        evidence = mod.independent_triage(mod.parse_report(sample), mod.parse_report(sample))["sessions"]["open_scl"][0]["receive_order_gap_evidence"]
+        self.assertEqual("RECEIVE_FRAME_INDICES_NOT_CONTIGUOUS", evidence["reason"])
+
+    def test_nonmonotonic_timestamps_do_not_certify_receive_order(self):
+        sample = self.test_complete_bounded_chronology_exposes_20s_non_gi_recurrence()
+        sample = sample.replace("frame#3: receivedUtc=2026-10-11T06:26:11Z",
+                                "frame#3: receivedUtc=2026-10-11T06:25:50Z")
+        evidence = mod.independent_triage(mod.parse_report(sample), mod.parse_report(sample))["sessions"]["open_scl"][0]["receive_order_gap_evidence"]
+        self.assertEqual("NONMONOTONIC_DECODER_RECEIVE_TIMESTAMPS", evidence["reason"])
+
+    def test_gi_reason_only_and_unverified_fixture_do_not_claim_non_gi_recurrence(self):
+        sample = self.test_complete_bounded_chronology_exposes_20s_non_gi_recurrence()
+        sample = sample.replace("frame#3: receivedUtc=2026-10-11T06:26:11Z, SqNum=1, GIreason=NO",
+                                "frame#3: receivedUtc=2026-10-11T06:26:11Z, SqNum=1, GIreason=YES")
+        evidence = mod.independent_triage(mod.parse_report(sample), mod.parse_report(sample))["sessions"]["open_scl"][0]["receive_order_gap_evidence"]
+        self.assertEqual("COMPLETE_BOUNDED_DECODER_RECEIVE_ORDER", evidence["coverage"])
+        self.assertIsNone(evidence["non_gi_backward_finding_after_gap"])
+        old = mod.independent_triage(mod.parse_report(report()), mod.parse_report(report()))
+        self.assertEqual("UNVERIFIABLE", old["sessions"]["open_scl"][0]["receive_order_gap_evidence"]["coverage"])
+
     def test_empty_chronology_allowed_but_does_not_invent_events(self):
         result = mod.compare(mod.parse_report(report(with_chronology=False)),
                              mod.parse_report(report(with_chronology=False)))

@@ -24,6 +24,7 @@ DATASET = re.compile(r"^\s*Static DataSets\s*:\s*(\d+)")
 BUFOVFL = re.compile(r"(?:^|,)\s*BufOvfl=(\d+)(?:,|$)")
 SQ_GI = re.compile(r"\bsqWithGIreason=(\d+)\b")
 LIFECYCLE = re.compile(r"^\s*RCB lifecycle\s*:")
+CHRONOLOGY = re.compile(r"^\s*BRCB chronology:\s*first=(\d+),\s*recent=(\d+),\s*omittedMiddle=(\d+)")
 
 def _field(line: str, key: str) -> str | None:
     match = re.search(rf"(?:^|,\s*){re.escape(key)}=([^,;\s]+)", line)
@@ -45,6 +46,7 @@ class Stream:
     start_return_utc: str | None = None
     last_anomaly_utc: str | None = None
     chronology: tuple[tuple[str, ...], ...] = ()
+    chronology_declared: tuple[int, int, int] | None = None
     recent_anomalies: tuple[tuple[str, ...], ...] = ()
 
 def parse_report(report: str) -> dict:
@@ -80,7 +82,8 @@ def parse_report(report: str) -> dict:
                                    anomalous_frames=0, discontinuities=0,
                                    after_last_finding=None, sq_with_gi_reason=None,
                                    gi_reason_frames=None, start_return_utc=None,
-                                   last_anomaly_utc=None, chronology=[], recent_anomalies=[])
+                                   last_anomaly_utc=None, chronology=[],
+                                   chronology_declared=None, recent_anomalies=[])
             continue
         if active is None or active not in streams:
             continue
@@ -98,6 +101,9 @@ def parse_report(report: str) -> dict:
             streams[active]["gi_reason_frames"] = int(count) if count is not None and count.isdecimal() else None
             streams[active]["start_return_utc"] = _field(line, "startReturnUtc")
             streams[active]["last_anomaly_utc"] = _field(line, "lastAnomalyUtc")
+        m = CHRONOLOGY.match(line)
+        if m and streams[active]["kind"] == "BRCB":
+            streams[active]["chronology_declared"] = tuple(map(int, m.groups()))
         m = FRAME.match(line)
         if m:
             values = m.groups()
@@ -128,6 +134,66 @@ def _elapsed_ms(start: str | None, end: str | None) -> float | None:
     except (TypeError, ValueError):
         return None
 
+def _receive_order_gap_evidence(stream: Stream) -> dict:
+    """Only a fully retained decoder receive chronology authorizes temporal inferences.
+
+    Neither callback timestamps nor SqNum/EntryID establish MMS packet order or SOE delivery.
+    An invalid, bounded, omitted or untimed chronology returns unknown, not zero.
+    """
+    rows = stream.chronology
+    declared = stream.chronology_declared
+    reason = None
+    if declared is None:
+        reason = "MISSING_CHRONOLOGY_DECLARATION"
+    elif declared[2] != 0 or sum(declared[:2]) != stream.frames:
+        reason = "CHRONOLOGY_HAS_OMITTED_OR_UNACCOUNTED_FRAMES"
+    elif len(rows) != stream.frames or len(rows) != sum(declared[:2]):
+        reason = "RETAINED_CHRONOLOGY_INCOMPLETE"
+    elif [int(row[0]) for row in rows] != list(range(1, stream.frames + 1)):
+        reason = "RECEIVE_FRAME_INDICES_NOT_CONTIGUOUS"
+    times = []
+    if reason is None:
+        for row in rows:
+            try:
+                moment = datetime.fromisoformat(row[1].replace("Z", "+00:00"))
+                if moment.tzinfo is None or moment.utcoffset() is None:
+                    raise ValueError("no UTC offset")
+            except (TypeError, ValueError, OverflowError):
+                reason = "MISSING_OR_INVALID_RECEIVE_TIMESTAMPS"
+                break
+            times.append(moment)
+        if reason is None and any(b < a for a, b in zip(times, times[1:])):
+            reason = "NONMONOTONIC_DECODER_RECEIVE_TIMESTAMPS"
+    if reason is not None:
+        return dict(coverage="UNVERIFIABLE", reason=reason,
+                    recorded_frames=len(rows), expected_frames=stream.frames,
+                    longest_receive_gap_ms=None,
+                    non_gi_backward_finding_after_gap=None)
+    gaps = [(b - a).total_seconds() * 1000 for a, b in zip(times, times[1:])]
+    candidates = []
+    for index, gap in enumerate(gaps, start=1):
+        before, after = rows[index - 1], rows[index]
+        try:
+            prev_sq, curr_sq = int(before[2]), int(after[2])
+        except ValueError:
+            continue
+        # A genuine decoded finding that recurs without GI or BufOvfl on this
+        # received frame; this is NOT evidence of harmless replay or lost SOE.
+        if (after[3] == "NO" and after[4] == "NO" and
+                int(after[6]) > 0 and curr_sq <= prev_sq):
+            candidates.append(dict(previous_frame=int(before[0]), frame=int(after[0]),
+                                   previous_sqnum=prev_sq, sqnum=curr_sq,
+                                   gap_ms=round(gap, 3),
+                                   elapsed_since_start_return_ms=_elapsed_ms(
+                                       stream.start_return_utc, after[1]),
+                                   received_utc=after[1],
+                                   entry_id_relation=after[5]))
+    strongest = max(candidates, key=lambda x: x["gap_ms"]) if candidates else None
+    return dict(coverage="COMPLETE_BOUNDED_DECODER_RECEIVE_ORDER", reason=None,
+                recorded_frames=len(rows), expected_frames=stream.frames,
+                longest_receive_gap_ms=round(max(gaps), 3) if gaps else None,
+                non_gi_backward_finding_after_gap=strongest)
+
 def independent_triage(left: dict, right: dict) -> dict:
     """Evidence for *separate* sessions, never a paired BRCB reliability comparison."""
     _require_matching_authority(left, right)
@@ -155,14 +221,15 @@ def independent_triage(left: dict, right: dict) -> dict:
                              last_anomaly_ms_after_start_return=_elapsed_ms(
                                  stream.start_return_utc, stream.last_anomaly_utc),
                              retained_chronology_frames=len(stream.chronology),
-                             retained_anomaly_frames=len(stream.recent_anomalies)))
+                             retained_anomaly_frames=len(stream.recent_anomalies),
+                             receive_order_gap_evidence=_receive_order_gap_evidence(stream)))
         return rows
     return dict(status="INDEPENDENT_SESSIONS_OBSERVATION_ONLY",
                 same_slot_dataset_scope=matched,
                 paired_comparison_blocked_reason=None if matched else "different BRCB slots or DataSets",
                 ied=left["ied"], fingerprint=left["fingerprint"], engine_commit=left["engine"],
                 sessions=dict(open_scl=session_rows(la), discovery=session_rows(ra)),
-                qualification="NOT_PAIRED_RELIABILITY_COMPARISON; NOT_WIRE_ORDER_PROOF; NOT_SOE_LOSSLESS; NOT_R10_PHYSICAL_ACCEPTANCE")
+                qualification="NOT_PAIRED_RELIABILITY_COMPARISON; DECODER_RECEIVE_TIMESTAMPS_NOT_WIRE_ORDER; NOT_SOE_LOSSLESS; NOT_R10_PHYSICAL_ACCEPTANCE")
 
 def compare(left: dict, right: dict) -> dict:
     _require_matching_authority(left, right)
