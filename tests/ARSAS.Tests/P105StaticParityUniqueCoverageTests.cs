@@ -103,6 +103,34 @@ public sealed class P105StaticParityUniqueCoverageTests
         }
     }
 
+    [Theory]
+    [InlineData("BCUGEF650/CSWI1.Pos.stVal", "CSWI Pos", "CSWI1 Pos")]
+    [InlineData("BCUGEF650/CSWI16.Pos.stVal", "CSWI Pos", "CSWI16 Pos")]
+    [InlineData("BCUGEF650/MMXU1.A.phsA.cVal.mag.f", "MMXU A", "MMXU1 A")]
+    [InlineData("BCUGEF650/CSWI1.Pos.stVal", "CSWI1 Pos", "CSWI1 Pos")]
+    [InlineData("not-a-logical-node", "Equipment status", "Equipment status")]
+    public void ExplorerSignalLabel_UsesExactLnInstanceWithoutChangingMmsReference(
+        string reference, string signalName, string expected)
+    {
+        var point = new Iec61850MonitorPoint
+        {
+            DeviceId = "ge",
+            DeviceName = "BCUGE",
+            IecReference = reference,
+            SignalName = signalName
+        };
+        Assert.Equal(expected, point.ExplorerSignalName);
+        Assert.Equal(reference, point.IecReference);
+        Assert.Equal(signalName, point.SignalName);
+    }
+
+    [Fact]
+    public void ExplorerGrid_BindsQualifiedLabelNotBareSignalName()
+    {
+        var xaml = File.ReadAllText(FindRepoFile("MainWindow.xaml"));
+        Assert.Contains("Header=\"Signal\" Binding=\"{Binding ExplorerSignalName}\"", xaml, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void MalformedBindingFc_RemainsIncomparableDespiteExactIncidenceCounters()
     {
