@@ -329,6 +329,21 @@ internal static class DiagnosticReportBuilder
                     $"lastFindingUtc={stream.LastFindingReceivedAtUtc?.ToString("O") ?? "-"}, " +
                     $"lastFrameUtc={stream.LastFrameReceivedAtUtc?.ToString("O") ?? "-"}; " +
                     "later clean frames are observed report traffic, not proof of complete buffered SOE.");
+            // Chronology is a small immutable copy of decoder metadata only:
+            // first 32 frames plus 8 most recent frames; no raw EntryID or values.
+            if (stream.Buffered && stream.Chronology.Count > 0)
+            {
+                builder.AppendLine($"    BRCB chronology: first={stream.ChronologyInitialCount}, " +
+                    $"recent={stream.ChronologyRecentCount}, omittedMiddle={stream.ChronologyOmittedFrames}; " +
+                    "receive-order metadata only, not TCP/wire-order or SOE completeness proof.");
+                foreach (var item in stream.Chronology)
+                    builder.AppendLine($"      frame#{item.FrameOrdinal}: " +
+                        $"receivedUtc={item.ReceivedAtUtc?.ToString("O") ?? "unknown"}, " +
+                        $"SqNum={item.SequenceNumber?.ToString() ?? "unknown"}, " +
+                        $"GIreason={Verdict(item.GiReason)}, " +
+                        $"BufOvfl={Verdict(item.BufferOverflow)}, " +
+                        $"EntryIDrelation={item.EntryIdRelation}, findings={item.FindingCount}");
+            }
             builder.AppendLine($"    OptFlds       : decoded={stream.OptFldsDecoded}/{stream.Frames}, " +
                 $"unknown={stream.OptFldsUnknown}, lastMask={Safe(stream.LastOptFldsHex)}, " +
                 $"SqNum requested={stream.SqNumAdvertised}, omitted={stream.SqNumOmitted}, " +
