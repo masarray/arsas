@@ -84,6 +84,8 @@ jobs:
               -not [bool]$association.physicalAcceptance.actualInformationReportObserved) {
             throw 'Accepted post-baseline SCL association authority drifted or lost physical evidence.'
           }
+          . .\ARSAS\scripts\test-p10-9f-core-routing-trial.ps1
+          $coreRoutingTrialValid = Test-P109FCoreRoutingTrial -Lock $lock
           $trial = $lock.smartInteroperabilityCodeTrial
           $serverAt = $lock.sclServerAtTrial
           $originalTrial = $lock.commit -eq $trial.exactCommit -and
@@ -131,7 +133,7 @@ jobs:
             if ($trial.status -ne 'code-verified-not-physical' -or
                 [int]$trial.issue -ne 144 -or
                 [int]$trial.integrationPullRequest -ne 148 -or
-                -not ($originalTrial -or $serverAtTrial -or $datasetTrial -or $p10Trial) -or
+                -not ($originalTrial -or $serverAtTrial -or $datasetTrial -or $p10Trial -or $coreRoutingTrialValid) -or
                 -not [bool]$trial.fullDiscoveryFallbackForbidden -or
                 -not [bool]$trial.vendorBranchingForbidden -or
                 -not [bool]$trial.physicalPromotionRequired) {

@@ -11,6 +11,10 @@ public sealed class P10MainlinePolicyExecutionTests
 {
     [Theory]
     [InlineData("p10-stacked-valid", true)]
+    [InlineData("core-trial-wrong-exact-sha-denied", false)]
+    [InlineData("core-trial-wrong-base-denied", false)]
+    [InlineData("core-trial-wrong-ci-denied", false)]
+    [InlineData("core-trial-physical-flag-denied", false)]
     [InlineData("p10-pr-main-denied", false)]
     [InlineData("p10-source-main-denied", false)]
     [InlineData("p10-wrong-sha-denied", false)]
@@ -51,6 +55,9 @@ public sealed class P10MainlinePolicyExecutionTests
         {
             Directory.CreateDirectory(Path.Combine(folder, "engines"));
             Directory.CreateDirectory(Path.Combine(folder, "evidence"));
+            Directory.CreateDirectory(Path.Combine(folder, "scripts"));
+            File.Copy(Path.Combine(root, "scripts", "test-p10-9f-core-routing-trial.ps1"),
+                Path.Combine(folder, "scripts", "test-p10-9f-core-routing-trial.ps1"));
             var lockDoc = JsonNode.Parse(File.ReadAllText(Path.Combine(root,
                 "engines", "ARIEC61850.lock.json")))!.AsObject();
 
@@ -59,6 +66,14 @@ public sealed class P10MainlinePolicyExecutionTests
             switch (scenario)
             {
                 case "p10-pr-main-denied": baseRef = "main"; break;
+                case "core-trial-wrong-exact-sha-denied":
+                    lockDoc["coreReportRoutingTrial"]!["exactCommit"] = new string('0', 40); break;
+                case "core-trial-wrong-base-denied":
+                    lockDoc["coreReportRoutingTrial"]!["baseEngineCommit"] = new string('0', 40); break;
+                case "core-trial-wrong-ci-denied":
+                    lockDoc["coreReportRoutingTrial"]!["coreCiRun"] = 0; break;
+                case "core-trial-physical-flag-denied":
+                    lockDoc["coreReportRoutingTrial"]!["physicalQualificationRequired"] = false; break;
                 case "p10-source-main-denied": sourceRef = "main"; break;
                 case "p10-wrong-sha-denied":
                     lockDoc["p10IdentityTrial"]!["exactCommit"] = new string('0', 40); break;

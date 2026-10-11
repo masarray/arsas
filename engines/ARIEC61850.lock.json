@@ -84,6 +84,21 @@
     "cyclicMmsProcessPollingForbidden": true,
     "physicalQualificationRequired": true
   },
+  "coreReportRoutingTrial": {
+    "status": "code-verified-not-physical",
+    "issue": 531,
+    "simulatorPullRequest": 163,
+    "corePullRequest": 164,
+    "baseEngineCommit": "00ad2819b99ffe6b3f885e59aa24a6afb2b4d8e1",
+    "simulatorFifoCommit": "ef0fe44f3b40e47dc18b1aac4476b635e67d531e",
+    "exactCommit": "fa93c9fdc7cd98fd3624227ee21c3eefc68bcac7",
+    "simulatorCiRun": 38141582981,
+    "coreCiRun": 38142115574,
+    "physicalQualificationRequired": true,
+    "mainlinePromotionForbidden": true,
+    "fullDiscoveryFallbackForbidden": true,
+    "cyclicMmsProcessPollingForbidden": true
+  },
   "p10IdentityTrial": {
     "status": "code-trial-not-physical",
     "enginePullRequest": 161,

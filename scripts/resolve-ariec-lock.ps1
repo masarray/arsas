@@ -117,11 +117,14 @@ if ($null -ne $lock.sclAssociationInteroperability) {
                 [bool]$p10.fullNameListFallbackForbidden -and
                 [bool]$p10.cyclicMmsProcessPollingForbidden
 
+            . (Join-Path $PSScriptRoot 'test-p10-9f-core-routing-trial.ps1')
+            $coreRoutingTrialValid = Test-P109FCoreRoutingTrial -Lock $lock
             $acceptedTrial = (
                 ($trialValid -and [string]$lock.commit -ceq [string]$trial.exactCommit -and [int]$lock.sourcePullRequest -eq 148) -or
                 ($serverAtValid -and [string]$lock.commit -ceq [string]$serverAt.exactCommit -and [int]$lock.sourcePullRequest -eq 153) -or
                 ($closureValid -and [string]$lock.commit -ceq [string]$closure.exactCommit -and [int]$lock.sourcePullRequest -eq 157) -or
-                ($p10Valid -and [string]$lock.commit -ceq [string]$p10.exactCommit -and [int]$lock.sourcePullRequest -eq 161)
+                ($p10Valid -and [string]$lock.commit -ceq [string]$p10.exactCommit -and [int]$lock.sourcePullRequest -eq 161) -or
+                ($p10Valid -and $coreRoutingTrialValid)
             )
             if (-not $historicalAnchorValid -or -not $acceptedTrial) {
                 throw 'SCL association physical-tested engine head differs from integration lock.'

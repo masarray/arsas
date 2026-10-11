@@ -109,6 +109,8 @@ jobs:
 
           # P10.1: exact, bounded and ancestry-checked code-trial allowlist.
           # This never grants field acceptance or mainline promotion.
+          . .\scripts\test-p10-9f-core-routing-trial.ps1
+          $coreRoutingTrialValid = Test-P109FCoreRoutingTrial -Lock $lock
           $trial = $lock.smartInteroperabilityCodeTrial
           $serverAt = $lock.sclServerAtTrial
           $closure = $lock.datasetFirstDiscoveryTrial
@@ -160,7 +162,7 @@ jobs:
                       $lock.commit -eq $p10.exactCommit -and
                       [int]$lock.sourcePullRequest -eq 161
 
-          if ($originalTrial -or $serverAtTrial -or $datasetTrial -or $p10Trial) {
+          if ($originalTrial -or $serverAtTrial -or $datasetTrial -or $p10Trial -or $coreRoutingTrialValid) {
             if (-not $historicalTrialValid -or
                 $lock.ref -ne 'main') {
               throw 'Stacked trial identity or ancestor authority is inconsistent.'
