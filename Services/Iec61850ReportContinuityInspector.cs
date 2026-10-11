@@ -33,6 +33,11 @@ internal sealed class Iec61850ReportContinuityState
     public long AnomalyFindings { get; set; }
     // Frame counts stay independent of findings: one frame may carry multiple anomalies.
     public long AnomalousFrames { get; set; }
+    // Bounded per-association receive-order evidence. No raw event history or timers.
+    public long FramesAfterLastFinding { get; set; }
+    public DateTimeOffset? FirstFrameReceivedAtUtc { get; set; }
+    public DateTimeOffset? LastFrameReceivedAtUtc { get; set; }
+    public DateTimeOffset? LastFindingReceivedAtUtc { get; set; }
     public long SequenceDiscontinuities { get; set; }
     public long SequenceWithChangedEntryId { get; set; }
     public long SequenceWithRepeatedEntryId { get; set; }
@@ -80,6 +85,10 @@ public sealed record Iec61850ReportContinuityStreamSnapshot
     public long Segmented { get; init; }
     public long Findings { get; init; }
     public long AnomalousFrames { get; init; }
+    public long FramesAfterLastFinding { get; init; }
+    public DateTimeOffset? FirstFrameReceivedAtUtc { get; init; }
+    public DateTimeOffset? LastFrameReceivedAtUtc { get; init; }
+    public DateTimeOffset? LastFindingReceivedAtUtc { get; init; }
     public long SequenceDiscontinuities { get; init; }
     public long SequenceWithChangedEntryId { get; init; }
     public long SequenceWithRepeatedEntryId { get; init; }
@@ -150,6 +159,11 @@ internal static class Iec61850ReportContinuityInspector
         ArgumentNullException.ThrowIfNull(frame);
 
         if (state.FramesSeen < long.MaxValue) state.FramesSeen++;
+        if (frame.ReceivedAt != default)
+        {
+            state.FirstFrameReceivedAtUtc ??= frame.ReceivedAt;
+            state.LastFrameReceivedAtUtc = frame.ReceivedAt;
+        }
         if (frame.SequenceNumber.HasValue)
         {
             if (state.SequencedFrames < long.MaxValue) state.SequencedFrames++;
@@ -381,8 +395,19 @@ internal static class Iec61850ReportContinuityInspector
             state.LastEntryIdProvenByOptFlds = false;
         }
 
-        if (findings is not null && state.AnomalousFrames < long.MaxValue)
-            state.AnomalousFrames++;
+        if (findings is not null)
+        {
+            if (state.AnomalousFrames < long.MaxValue)
+                state.AnomalousFrames++;
+            state.FramesAfterLastFinding = 0;
+            // Missing decoder timestamps remain unknown; do not reuse older time.
+            state.LastFindingReceivedAtUtc = frame.ReceivedAt == default ? null : frame.ReceivedAt;
+        }
+        else if (state.AnomalousFrames > 0 && state.FramesAfterLastFinding < long.MaxValue)
+        {
+            // Receive-order observation only; no claim of event delivery completeness.
+            state.FramesAfterLastFinding++;
+        }
         return findings is null ? Array.Empty<string>() : findings;
     }
 
@@ -411,6 +436,10 @@ internal static class Iec61850ReportContinuityInspector
                 Segmented = state.SegmentedFrames,
                 Findings = state.AnomalyFindings,
                 AnomalousFrames = state.AnomalousFrames,
+                FramesAfterLastFinding = state.FramesAfterLastFinding,
+                FirstFrameReceivedAtUtc = state.FirstFrameReceivedAtUtc,
+                LastFrameReceivedAtUtc = state.LastFrameReceivedAtUtc,
+                LastFindingReceivedAtUtc = state.LastFindingReceivedAtUtc,
                 SequenceDiscontinuities = state.SequenceDiscontinuities,
                 SequenceWithChangedEntryId = state.SequenceWithChangedEntryId,
                 SequenceWithRepeatedEntryId = state.SequenceWithRepeatedEntryId,
