@@ -220,6 +220,7 @@ internal static class Iec61850ReportContinuityInspector
         }
 
         var priorEntryIdPresent = !string.IsNullOrEmpty(state.LastEntryIdHex);
+        var priorEntryIdProven = state.LastEntryIdProvenByOptFlds;
         var entryIdPresent = !string.IsNullOrEmpty(frame.EntryIdHex);
         var entryIdChanged = priorEntryIdPresent && entryIdPresent &&
             !string.Equals(state.LastEntryIdHex, frame.EntryIdHex, StringComparison.OrdinalIgnoreCase);
@@ -428,7 +429,7 @@ internal static class Iec61850ReportContinuityInspector
             // Observational classification only. Both OptFlds must prove the
             // opaque cursor to label successive values as changed or repeated.
             var comparableEntryId = priorEntryIdPresent && entryIdPresent &&
-                state.LastEntryIdProvenByOptFlds && hasOptFlds && frame.OptFldsEntryId == true;
+                priorEntryIdProven && hasOptFlds && frame.OptFldsEntryId == true;
             var relation = !entryIdPresent ? "absent" :
                 !comparableEntryId ? "unverified" : entryIdChanged ? "changed" : "repeated";
             RecordChronology(state, new Iec61850BrcbChronologyFrame
