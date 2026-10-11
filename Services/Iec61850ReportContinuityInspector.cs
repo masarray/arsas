@@ -79,14 +79,14 @@ internal sealed class Iec61850ReportContinuityState
 /// Decoder-metadata-only evidence: no raw EntryID, process values, or packet bodies.
 /// FrameOrdinal is receive order, not a server event sequence or TCP packet index.
 /// </summary>
-public sealed record Iec61850BrcbChronologyFrame
+public readonly record struct Iec61850BrcbChronologyFrame
 {
     public long FrameOrdinal { get; init; }
     public DateTimeOffset? ReceivedAtUtc { get; init; }
     public ulong? SequenceNumber { get; init; }
     public bool? GiReason { get; init; }
     public bool? BufferOverflow { get; init; }
-    public string EntryIdRelation { get; init; } = "unverified";
+    public string? EntryIdRelation { get; init; }
     public int FindingCount { get; init; }
 }
 
