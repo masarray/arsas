@@ -20,6 +20,7 @@ FINGERPRINT = re.compile(r"\bfingerprint=([a-fA-F0-9]{64})\b")
 IED = re.compile(r"^\s*IED\s*:\s*([^\r\n]+)$")
 ENGINE = re.compile(r"^Engine version\s*:\s*[^+\r\n]+\+([0-9a-f]{40})\s*$")
 DATASET = re.compile(r"^\s*Static DataSets\s*:\s*(\d+)")
+BUFOVFL = re.compile(r"(?:^|,)\s*BufOvfl=(\d+)(?:,|$)")
 
 @dataclass(frozen=True)
 class Stream:
@@ -27,6 +28,7 @@ class Stream:
     rcb: str
     dataset: str
     frames: int
+    overflow_frames: int = 0
     anomalous_frames: int = 0
     discontinuities: int = 0
     after_last_finding: int | None = None
@@ -52,11 +54,18 @@ def parse_report(report: str) -> dict:
         m = STREAM.match(line)
         if m:
             kind, rcb, dataset, count = m.groups()
+            overflow_match = BUFOVFL.search(line)
+            if kind == "BRCB" and overflow_match is None:
+                raise ValueError(f"missing BRCB BufOvfl count for {rcb.strip()}")
+            overflow_frames = int(overflow_match.group(1)) if overflow_match else 0
+            if overflow_frames > int(count):
+                raise ValueError(f"BRCB BufOvfl count exceeds received frames for {rcb.strip()}")
             active = rcb.strip().casefold()
             if active in streams:
                 raise ValueError(f"duplicate RCB in diagnostic: {active}")
             streams[active] = dict(kind=kind, rcb=rcb.strip(), dataset=dataset.strip(),
-                                   frames=int(count), anomalous_frames=0, discontinuities=0,
+                                   frames=int(count), overflow_frames=overflow_frames,
+                                   anomalous_frames=0, discontinuities=0,
                                    after_last_finding=None, chronology=[], recent_anomalies=[])
             continue
         if active is None or active not in streams:
@@ -100,6 +109,8 @@ def compare(left: dict, right: dict) -> dict:
             raise ValueError(f"different DataSet on BRCB {ref}; comparison blocked")
         results.append(dict(rcb=a.rcb, dataset=a.dataset,
                             left_frames=a.frames, right_frames=b.frames,
+                            left_bufovfl_frames=a.overflow_frames,
+                            right_bufovfl_frames=b.overflow_frames,
                             left_findings_frames=a.anomalous_frames,
                             right_findings_frames=b.anomalous_frames,
                             left_sq_discontinuities=a.discontinuities,

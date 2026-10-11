@@ -15,12 +15,12 @@ FP = "439d4dc0507019533b154ed68f7f4007f39f6be92b5cd3f413ff3b84f619727e"
 ENGINE = "00ad2819b99ffe6b3f885e59aa24a6afb2b4d8e1"
 
 def report(ied="BCUGE", fp=FP, engine=ENGINE, slot="GW01",
-           dataset="BCUGEF650/LLN0.CSWI", frames=25, with_chronology=True):
+           dataset="BCUGEF650/LLN0.CSWI", frames=25, overflow=1, with_chronology=True):
     return f"""ARSAS Diagnostic Report
 Engine version  : 1.6.40+{engine}
   IED              : {ied}
     Discovery      : LiveDiscovery: fingerprint={fp}, requested=67
-  stream[0]      : BRCB, rcb=BCUGEF650/LLN0.BR.{slot}, dataset={dataset}, rptId=BRB01, frames={frames}, SqNum=25, findings=2
+  stream[0]      : BRCB, rcb=BCUGEF650/LLN0.BR.{slot}, dataset={dataset}, rptId=BRB01, frames={frames}, SqNum=25, findings=2, BufOvfl={overflow}
     RCB triage    : anomalousFrames=1, sqDiscontinuities=1, sqChangedEntryID=1
     RCB follow-up : receivedAfterLastFinding=3, firstFrameUtc=2026-10-11T06:25:51Z
     BRCB chronology: first=2, recent=0, omittedMiddle=0
@@ -72,6 +72,29 @@ class TestComparator(unittest.TestCase):
         line = next(l for l in data.splitlines() if "stream[0]" in l)
         with self.assertRaisesRegex(ValueError, "duplicate RCB"):
             mod.parse_report(data + line.replace("stream[0]", "stream[9]") + "\n")
+
+    def test_same_slot_overflow_counts_are_observable_not_loss_estimates(self):
+        result = mod.compare(mod.parse_report(report(overflow=1)),
+                             mod.parse_report(report(frames=43, overflow=3)))
+        slot = result["slots"][0]
+        self.assertEqual(1, slot["left_bufovfl_frames"])
+        self.assertEqual(3, slot["right_bufovfl_frames"])
+        self.assertIn("NOT_SOE_LOSSLESS", result["qualification"])
+
+    def test_brcb_missing_overflow_evidence_fails_closed(self):
+        truncated = report().replace(", BufOvfl=1", "")
+        with self.assertRaisesRegex(ValueError, "missing BRCB BufOvfl count"):
+            mod.parse_report(truncated)
+
+    def test_brcb_overflow_count_cannot_exceed_decoded_frames(self):
+        with self.assertRaisesRegex(ValueError, "exceeds received frames"):
+            mod.parse_report(report(frames=2, overflow=3))
+
+    def test_clean_brcb_zero_overflow_remains_comparable(self):
+        result = mod.compare(mod.parse_report(report(overflow=0)),
+                             mod.parse_report(report(overflow=0)))
+        self.assertEqual(0, result["slots"][0]["left_bufovfl_frames"])
+        self.assertEqual(0, result["slots"][0]["right_bufovfl_frames"])
 
     def test_empty_chronology_allowed_but_does_not_invent_events(self):
         result = mod.compare(mod.parse_report(report(with_chronology=False)),
