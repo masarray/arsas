@@ -323,6 +323,12 @@ internal static class DiagnosticReportBuilder
                     $"sqWithGIreason={stream.SequenceWithGiReason}, " +
                     $"sqWithBufOvfl={stream.SequenceWithOverflow}; " +
                     "EntryID difference/identical is not an event-loss or harmless-replay conclusion.");
+            if (stream.AnomalousFrames > 0)
+                builder.AppendLine($"    RCB follow-up : receivedAfterLastFinding={stream.FramesAfterLastFinding}, " +
+                    $"firstFrameUtc={stream.FirstFrameReceivedAtUtc?.ToString("O") ?? "-"}, " +
+                    $"lastFindingUtc={stream.LastFindingReceivedAtUtc?.ToString("O") ?? "-"}, " +
+                    $"lastFrameUtc={stream.LastFrameReceivedAtUtc?.ToString("O") ?? "-"}; " +
+                    "later clean frames are observed report traffic, not proof of complete buffered SOE.");
             builder.AppendLine($"    OptFlds       : decoded={stream.OptFldsDecoded}/{stream.Frames}, " +
                 $"unknown={stream.OptFldsUnknown}, lastMask={Safe(stream.LastOptFldsHex)}, " +
                 $"SqNum requested={stream.SqNumAdvertised}, omitted={stream.SqNumOmitted}, " +
