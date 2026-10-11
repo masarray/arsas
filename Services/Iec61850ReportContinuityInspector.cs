@@ -16,6 +16,9 @@ internal sealed class Iec61850ReportContinuityState
     public bool AwaitingMoreSegments { get; set; }
     public ulong? ConfigurationRevision { get; set; }
     public string LastEntryIdHex { get; set; } = string.Empty;
+    // A decoded value without raw OptionFields provenance cannot certify that
+    // the prior wire report advertised an EntryID. Do not treat it as comparable.
+    public bool LastEntryIdProvenByOptFlds { get; set; }
 
     // All counts belong to this exact report stream within the current
     // association. No static state, no process/control-plane side effects.
@@ -199,7 +202,9 @@ internal static class Iec61850ReportContinuityInspector
         {
             if (state.SequenceDiscontinuities < long.MaxValue)
                 state.SequenceDiscontinuities++;
-            if (buffered && priorEntryIdPresent && entryIdPresent)
+            if (buffered && priorEntryIdPresent && entryIdPresent &&
+                state.LastEntryIdProvenByOptFlds && frame.OptFldsEntryId == true &&
+                IsBoundedHex(frame.OptFldsRawHex))
             {
                 if (entryIdChanged)
                 {
@@ -364,7 +369,17 @@ internal static class Iec61850ReportContinuityInspector
         }
 
         if (entryIdPresent)
+        {
             state.LastEntryIdHex = frame.EntryIdHex;
+            state.LastEntryIdProvenByOptFlds = hasOptFlds && frame.OptFldsEntryId == true;
+        }
+        else
+        {
+            // Missing current EntryID invalidates comparisons with future frames;
+            // never compare across an opaque, unobserved resume cursor.
+            state.LastEntryIdHex = string.Empty;
+            state.LastEntryIdProvenByOptFlds = false;
+        }
 
         if (findings is not null && state.AnomalousFrames < long.MaxValue)
             state.AnomalousFrames++;
