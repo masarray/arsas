@@ -291,6 +291,9 @@ internal static class DiagnosticReportBuilder
             $"streams={snapshot.StreamCount}, findings={snapshot.Findings}, " +
             $"BufOvfl={snapshot.Overflows}, untracked={snapshot.UntrackedStreamCount}, " +
             $"OptFldsDecoded={snapshot.OptFldsDecoded}, OptFldsUnknown={snapshot.OptFldsUnknown}");
+        builder.AppendLine($"  Frame triage    : framesWithFindings={snapshot.AnomalousFrames}, " +
+            $"sequenceDiscontinuities={snapshot.SequenceDiscontinuities}; " +
+            "these are observational counts, not confirmed lost SOE events.");
         builder.AppendLine("  Qualification   : ARIEC decoder-sourced wire OptFlds evidence; " +
             "OptFldsUnknown is not proof of absent wire fields. No alerts does not prove SOE/event continuity, " +
             "GI causality or reconnect/replay completeness.");
@@ -311,6 +314,15 @@ internal static class DiagnosticReportBuilder
                 $"BufOvfl={stream.Overflow}, ConfRevChanges={stream.ConfRevChanges}, " +
                 $"EntryIDPresent={stream.EntryIdPresent}, firstSqNum={stream.FirstSqNum?.ToString() ?? "-"}, " +
                 $"lastSqNum={stream.LastSqNum?.ToString() ?? "-"}");
+            if (stream.Findings > 0)
+                builder.AppendLine($"    BRCB triage   : anomalousFrames={stream.AnomalousFrames}, " +
+                    $"sqDiscontinuities={stream.SequenceDiscontinuities}, " +
+                    $"sqChangedEntryID={stream.SequenceWithChangedEntryId}, " +
+                    $"sqRepeatedEntryID={stream.SequenceWithRepeatedEntryId}, " +
+                    $"sqEntryIDUnknown={stream.SequenceWithoutComparableEntryId}, " +
+                    $"sqWithGIreason={stream.SequenceWithGiReason}, " +
+                    $"sqWithBufOvfl={stream.SequenceWithOverflow}; " +
+                    "EntryID difference/identical is not an event-loss or harmless-replay conclusion.");
             builder.AppendLine($"    OptFlds       : decoded={stream.OptFldsDecoded}/{stream.Frames}, " +
                 $"unknown={stream.OptFldsUnknown}, lastMask={Safe(stream.LastOptFldsHex)}, " +
                 $"SqNum requested={stream.SqNumAdvertised}, omitted={stream.SqNumOmitted}, " +
