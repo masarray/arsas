@@ -125,6 +125,9 @@ def snapshot(root: ET.Element, name: str, ap_name: str, label: str) -> dict:
                 members = []
                 for fcda in ds.findall(TAG("FCDA")):
                     target_ld = attr(fcda, "ldInst") or inst
+                    fcda_ied = attr(fcda, "iedName")
+                    if fcda_ied and fcda_ied != name:
+                        raise RejectedEvidence(f"{label}: FCDA targets external IED '{fcda_ied}'")
                     fc = attr(fcda, "fc")
                     do = attr(fcda, "doName")
                     ln_cl = attr(fcda, "lnClass")
