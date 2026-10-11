@@ -42,7 +42,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Interval = TimeSpan.FromSeconds(8)
     };
     private Iec61850MonitorDevice? _selectedDevice;
-    private string _newDeviceIp = "192.168.1.10";
+    private string _newDeviceIp = string.Empty;
     private string _newDevicePort = "102";
     private int _pollingIntervalMs = 1000;
     private string _lastStatusText = "Ready. Add an IEC 61850 IED or open a saved ARSAS project.";
@@ -157,7 +157,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var initialIp = SelectedDevice?.IpAddress ?? NewDeviceIp;
         var initialPort = SelectedDevice?.Port ?? 102;
-        var wizard = new IpConnectWizardWindow(initialIp, initialPort) { Owner = this };
+        var wizard = new IpConnectWizardWindow(initialIp, initialPort, preferLastDiscoveryEndpoint: true) { Owner = this };
         if (wizard.ShowDialog() != true)
             return;
 
