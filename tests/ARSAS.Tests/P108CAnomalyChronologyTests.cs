@@ -95,7 +95,17 @@ public sealed class P108CAnomalyChronologyTests
     public void OnlyBoundedMetadataIsSavedNeverRawEntryIdOrProcessValues()
     {
         var state = new Iec61850ReportContinuityState { Buffered = true };
-        var frame = Frame(0, 1, true) with { EntryIdHex = "DEADBEEF12345678" };
+        var frame = new NativeReportFrameMetadata
+        {
+            SequenceNumber = 0,
+            EntryIdHex = "DEADBEEF12345678",
+            ReceivedAt = DateTimeOffset.Parse("2026-10-11T06:25:51Z"),
+            OptFldsRawHex = "7F80",
+            OptFldsSequenceNumber = true,
+            OptFldsEntryId = true,
+            OptFldsBufferOverflow = true,
+            BufferOverflow = true
+        };
         Iec61850ReportContinuityInspector.Observe(state, frame, true);
         var sb = new StringBuilder();
         DiagnosticReportBuilder.AppendReportContinuity(sb,
