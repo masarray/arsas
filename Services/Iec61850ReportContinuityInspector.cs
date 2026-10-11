@@ -44,6 +44,11 @@ internal sealed class Iec61850ReportContinuityState
     public Iec61850BrcbChronologyFrame[]? RecentChronology { get; set; }
     public int RecentChronologyCount { get; set; }
     public int RecentChronologyNext { get; set; }
+    // Retain the last eight anomalous BRCB frames even if they fall in the
+    // omitted middle of a long healthy stream. O(1) memory per buffered RCB.
+    public Iec61850BrcbChronologyFrame[]? AnomalyChronology { get; set; }
+    public int AnomalyChronologyCount { get; set; }
+    public int AnomalyChronologyNext { get; set; }
     public long SequenceDiscontinuities { get; set; }
     public long SequenceWithChangedEntryId { get; set; }
     public long SequenceWithRepeatedEntryId { get; set; }
@@ -115,6 +120,8 @@ public sealed record Iec61850ReportContinuityStreamSnapshot
     public int ChronologyInitialCount { get; init; }
     public int ChronologyRecentCount { get; init; }
     public long ChronologyOmittedFrames { get; init; }
+    public IReadOnlyList<Iec61850BrcbChronologyFrame> RecentAnomalies { get; init; } =
+        Array.Empty<Iec61850BrcbChronologyFrame>();
     public long SequenceDiscontinuities { get; init; }
     public long SequenceWithChangedEntryId { get; init; }
     public long SequenceWithRepeatedEntryId { get; init; }
@@ -172,6 +179,7 @@ internal static class Iec61850ReportContinuityInspector
     private const ulong MaxSequenceNumber = ushort.MaxValue;
     private const int InitialChronologyLimit = 32;
     private const int RecentChronologyLimit = 8;
+    private const int AnomalyChronologyLimit = 8;
 
     /// <summary>
     /// A gap/backward move is an OBSERVED discontinuity, not proof of a specific
@@ -432,7 +440,7 @@ internal static class Iec61850ReportContinuityInspector
                 priorEntryIdProven && hasOptFlds && frame.OptFldsEntryId == true;
             var relation = !entryIdPresent ? "absent" :
                 !comparableEntryId ? "unverified" : entryIdChanged ? "changed" : "repeated";
-            RecordChronology(state, new Iec61850BrcbChronologyFrame
+            var evidence = new Iec61850BrcbChronologyFrame
             {
                 FrameOrdinal = state.FramesSeen,
                 ReceivedAtUtc = frame.ReceivedAt == default ? null : frame.ReceivedAt,
@@ -441,7 +449,10 @@ internal static class Iec61850ReportContinuityInspector
                 BufferOverflow = frame.BufferOverflow,
                 EntryIdRelation = relation,
                 FindingCount = findings?.Count ?? 0
-            });
+            };
+            RecordChronology(state, evidence);
+            if (evidence.FindingCount > 0)
+                RecordAnomalyChronology(state, evidence);
         }
 
         if (findings is not null)
@@ -490,6 +501,7 @@ internal static class Iec61850ReportContinuityInspector
                 LastFrameReceivedAtUtc = state.LastFrameReceivedAtUtc,
                 LastFindingReceivedAtUtc = state.LastFindingReceivedAtUtc,
                 Chronology = CopyChronology(state),
+                RecentAnomalies = CopyAnomalyChronology(state),
                 ChronologyInitialCount = state.InitialChronologyCount,
                 ChronologyRecentCount = state.RecentChronologyCount,
                 ChronologyOmittedFrames = state.Buffered
@@ -559,6 +571,34 @@ internal static class Iec61850ReportContinuityInspector
             if (state.RecentChronologyCount < RecentChronologyLimit)
                 state.RecentChronologyCount++;
         }
+    }
+
+    private static void RecordAnomalyChronology(
+        Iec61850ReportContinuityState state, Iec61850BrcbChronologyFrame item)
+    {
+        var ring = state.AnomalyChronology ??=
+            new Iec61850BrcbChronologyFrame[AnomalyChronologyLimit];
+        ring[state.AnomalyChronologyNext] = item;
+        state.AnomalyChronologyNext =
+            (state.AnomalyChronologyNext + 1) % AnomalyChronologyLimit;
+        if (state.AnomalyChronologyCount < AnomalyChronologyLimit)
+            state.AnomalyChronologyCount++;
+    }
+
+    private static IReadOnlyList<Iec61850BrcbChronologyFrame> CopyAnomalyChronology(
+        Iec61850ReportContinuityState state)
+    {
+        var count = state.AnomalyChronologyCount;
+        if (count == 0)
+            return Array.Empty<Iec61850BrcbChronologyFrame>();
+        var copy = new Iec61850BrcbChronologyFrame[count];
+        for (var index = 0; index < count; index++)
+        {
+            var source = (state.AnomalyChronologyNext - count + index +
+                AnomalyChronologyLimit) % AnomalyChronologyLimit;
+            copy[index] = state.AnomalyChronology![source];
+        }
+        return copy;
     }
 
     private static IReadOnlyList<Iec61850BrcbChronologyFrame> CopyChronology(
