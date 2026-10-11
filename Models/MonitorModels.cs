@@ -54,6 +54,12 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     [JsonIgnore]
     public StaticAcquisitionParitySnapshot StaticAcquisitionParity { get; set; } = new();
 
+    // Association-scoped only. A fresh Discovery must re-verify the original IID
+    // SHA and full domain topology; no persisted IP or filename is identity proof.
+    [JsonIgnore]
+    public LiveIedIdentity? TrustedLiveIdentity { get; set; }
+
+
     // Snapshot publication is atomic across runtime/diagnostic threads, never a
     // mutable live ReportStreams dictionary. Association reset clears its scope.
     [JsonIgnore]
