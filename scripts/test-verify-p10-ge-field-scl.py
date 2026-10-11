@@ -149,6 +149,13 @@ class GeFieldEvidenceTests(unittest.TestCase):
         self.assertEqual("STRUCTURE_PASS_ONLY", result["structuralVerdict"])
         self.assertTrue(any("LN design/live scope differs" in s for s in result["review"]))
 
+    def test_external_ied_fcda_is_not_silently_treated_as_local(self):
+        root = ET.fromstring(example())
+        root.find(f".//{T('FCDA')}").set("iedName", "DIFFERENT_IED")
+        self.out.write_bytes(ET.tostring(root))
+        with self.assertRaisesRegex(gate.RejectedEvidence, "external IED"):
+            self.check()
+
     def test_dtd_and_entities_rejected(self):
         evil = b'<!DOCTYPE SCL [<!ENTITY x "abc">]><SCL xmlns="' + N.encode() + b'"/>'
         self.out.write_bytes(evil)
