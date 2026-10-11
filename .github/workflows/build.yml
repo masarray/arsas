@@ -440,14 +440,6 @@ jobs:
             ArIED61850Tester\TestResults\ci-canonical-authority.json
           if-no-files-found: error
 
-      - name: Upload P10 engine identity regression evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: ARSAS-p10-engine-identity-evidence
-          path: ArIED61850Tester\EngineTestResults\engine-p10-identity.trx
-          if-no-files-found: error
-
       - name: Build and test exact pinned ArdIrec native bridge once
         shell: powershell
         run: |
