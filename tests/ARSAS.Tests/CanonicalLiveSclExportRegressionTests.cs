@@ -126,7 +126,8 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Contains("File.Delete(path)", cleanup, StringComparison.Ordinal);
 
         Assert.Contains("workspaceService.Open(", validator, StringComparison.Ordinal);
-        Assert.Contains("IedName = canonical.IedName", validator, StringComparison.Ordinal);
+        Assert.Contains("IedName = effectiveIedName", validator, StringComparison.Ordinal);
+        Assert.Contains("verifiedIedName",validator,StringComparison.Ordinal);
         Assert.Contains("AccessPointName = canonical.AccessPointName", validator, StringComparison.Ordinal);
         Assert.Contains("endpoint.Port != 102", validator, StringComparison.Ordinal);
         Assert.Contains("reloadCoverage.LogicalDeviceCount != result.LogicalDeviceCount", validator, StringComparison.Ordinal);
@@ -416,9 +417,14 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.Equal(495, closure.GetProperty("issue").GetInt32());
         Assert.Equal("352c81e6a798635c6addcee0683235ca87ad416d",
             closure.GetProperty("baseEngineCommit").GetString());
+        var p10 = root.GetProperty("p10IdentityTrial");
         Assert.Equal(closure.GetProperty("exactCommit").GetString(),
+            p10.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal(p10.GetProperty("exactCommit").GetString(),
             root.GetProperty("commit").GetString());
-        Assert.Equal(157, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(161, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal("code-trial-not-physical",p10.GetProperty("status").GetString());
+        Assert.True(p10.GetProperty("physicalQualificationRequired").GetBoolean());
         Assert.True(closure.GetProperty("physicalQualificationRequired").GetBoolean());
         Assert.True(closure.GetProperty("fullNameListFallbackForbidden").GetBoolean());
         Assert.True(closure.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
