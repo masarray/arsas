@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using AR.Iec61850.Discovery;
+using AR.Iec61850.Scl.Workspace;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Services;
 
@@ -162,6 +163,26 @@ public sealed class P106RememberedTrustedDiscoveryIdentityTests
             device, plan, StaticAcquisitionIngressKind.LiveDiscovery);
         Assert.True(verified.IsComparable, verified.IncomparableReason);
         Assert.Equal("IED_192_16_1_33", device.LiveDiscoveryModel.IedName);
+
+        // A verified IED name is semantic metadata only; the exact same selected
+        // DataSet plan must now fingerprint identically to Open SCL.
+        device.SclWorkspace = new SclIedWorkspace
+        {
+            IedName = "BCUGE",
+            AccessPointName = "S1",
+            DesignModel = new LiveIedModelDiscoveryDocument
+            {
+                IedName = "BCUGE",
+                LogicalDevices = device.LiveDiscoveryModel.LogicalDevices,
+                DataSets = device.LiveDiscoveryModel.DataSets
+            }
+        };
+        var openScl = StaticAcquisitionParityTracker.BuildEvidence(
+            device, plan, StaticAcquisitionIngressKind.OpenScl);
+        Assert.True(openScl.IsComparable, openScl.IncomparableReason);
+        Assert.Equal(verified.SemanticFingerprint, openScl.SemanticFingerprint);
+        Assert.Equal(StaticAcquisitionParityStatus.Equivalent,
+            StaticAcquisitionParityTracker.Compare(verified, openScl).Status);
     }
 
     private static Iec61850MonitorDevice Device(string ip) => new()
