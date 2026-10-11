@@ -116,6 +116,8 @@ $publishArguments = @(
     "-p:UseAppHost=true",
     "-p:DebugType=None",
     "-p:DebugSymbols=false",
+    "-p:Deterministic=true",
+    "-p:ContinuousIntegrationBuild=true",
     "-p:Version=$normalizedVersion",
     "-p:AssemblyVersion=$numericVersion",
     "-p:FileVersion=$numericVersion",
@@ -161,7 +163,54 @@ if ($SingleFile) {
         throw "Versioned portable single EXE was not produced: $singleExePath"
     }
 
+    function Get-GitIdentity([string]$path) {
+        try {
+            $repoRoot = (& git -C $path rev-parse --show-toplevel 2>$null).Trim()
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($repoRoot)) { return $null }
+            $head = (& git -C $repoRoot rev-parse HEAD 2>$null).Trim().ToLowerInvariant()
+            if ($LASTEXITCODE -ne 0 -or $head -notmatch '^[0-9a-f]{40}$') { return $null }
+            return $head
+        }
+        catch {
+            return $null
+        }
+    }
+
+    $engineProjectDirectory = Split-Path -Parent ([System.IO.Path]::GetFullPath($EngineProject))
+    $sourceCommit = Get-GitIdentity $root
+    $engineCommit = Get-GitIdentity $engineProjectDirectory
+    $ardirecLockPath = Join-Path $root "engines\ARDIREC.lock.json"
+    $ardirecLockCommit = $null
+    if (Test-Path $ardirecLockPath -PathType Leaf) {
+        $ardirecLock = Get-Content $ardirecLockPath -Raw | ConvertFrom-Json
+        if ($ardirecLock.commit -match '^[0-9a-f]{40}$') {
+            $ardirecLockCommit = [string]$ardirecLock.commit
+        }
+    }
+
+    $bridgeHash = (Get-FileHash $ArdIrecBridgePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $portableHash = (Get-FileHash $singleExePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $identityPath = Join-Path $outputRoot "ARSAS-$normalizedVersion-$Runtime-portable-build-identity.json"
+    [ordered]@{
+        schemaVersion = 1
+        kind = "arsas-portable-build-identity"
+        version = $normalizedVersion
+        runtime = $Runtime
+        sourceCommit = $sourceCommit
+        engineCommit = $engineCommit
+        ardIrecLockCommit = $ardirecLockCommit
+        ardIrecBridgeSha256 = $bridgeHash
+        ardIrecBridgeSizeBytes = (Get-Item $ArdIrecBridgePath).Length
+        portableSha256 = $portableHash
+        portableSizeBytes = (Get-Item $singleExePath).Length
+        deterministicManagedBuild = $true
+        reproducibleNativeLinkRequested = $true
+    } | ConvertTo-Json -Depth 4 | Set-Content $identityPath -Encoding utf8
+
     Write-Host "==> Real portable single EXE with embedded ArdIrec bridge: $singleExePath"
+    Write-Host "==> Portable build identity: $identityPath"
+    Write-Host "==> Portable SHA256: $portableHash"
+    Write-Host "==> ArdIrec bridge SHA256: $bridgeHash"
     Write-Output $singleExePath
     exit 0
 }
