@@ -38,6 +38,12 @@ internal sealed class Iec61850ReportContinuityState
     public DateTimeOffset? FirstFrameReceivedAtUtc { get; set; }
     public DateTimeOffset? LastFrameReceivedAtUtc { get; set; }
     public DateTimeOffset? LastFindingReceivedAtUtc { get; set; }
+    // Head + tail chronology: fixed-size per BRCB and allocated only on demand.
+    public Iec61850BrcbChronologyFrame[]? InitialChronology { get; set; }
+    public int InitialChronologyCount { get; set; }
+    public Iec61850BrcbChronologyFrame[]? RecentChronology { get; set; }
+    public int RecentChronologyCount { get; set; }
+    public int RecentChronologyNext { get; set; }
     public long SequenceDiscontinuities { get; set; }
     public long SequenceWithChangedEntryId { get; set; }
     public long SequenceWithRepeatedEntryId { get; set; }
@@ -70,6 +76,21 @@ internal sealed class Iec61850ReportContinuityState
 }
 
 /// <summary>
+/// Decoder-metadata-only evidence: no raw EntryID, process values, or packet bodies.
+/// FrameOrdinal is receive order, not a server event sequence or TCP packet index.
+/// </summary>
+public sealed record Iec61850BrcbChronologyFrame
+{
+    public long FrameOrdinal { get; init; }
+    public DateTimeOffset? ReceivedAtUtc { get; init; }
+    public ulong? SequenceNumber { get; init; }
+    public bool? GiReason { get; init; }
+    public bool? BufferOverflow { get; init; }
+    public string EntryIdRelation { get; init; } = "unverified";
+    public int FindingCount { get; init; }
+}
+
+/// <summary>
 /// Immutable copyable diagnostic evidence. Counts describe decoded metadata,
 /// NOT completeness of SOE delivery or absence of lost events.
 /// </summary>
@@ -89,6 +110,11 @@ public sealed record Iec61850ReportContinuityStreamSnapshot
     public DateTimeOffset? FirstFrameReceivedAtUtc { get; init; }
     public DateTimeOffset? LastFrameReceivedAtUtc { get; init; }
     public DateTimeOffset? LastFindingReceivedAtUtc { get; init; }
+    public IReadOnlyList<Iec61850BrcbChronologyFrame> Chronology { get; init; } =
+        Array.Empty<Iec61850BrcbChronologyFrame>();
+    public int ChronologyInitialCount { get; init; }
+    public int ChronologyRecentCount { get; init; }
+    public long ChronologyOmittedFrames { get; init; }
     public long SequenceDiscontinuities { get; init; }
     public long SequenceWithChangedEntryId { get; init; }
     public long SequenceWithRepeatedEntryId { get; init; }
@@ -144,6 +170,8 @@ public sealed record Iec61850ReportContinuitySnapshot
 internal static class Iec61850ReportContinuityInspector
 {
     private const ulong MaxSequenceNumber = ushort.MaxValue;
+    private const int InitialChronologyLimit = 32;
+    private const int RecentChronologyLimit = 8;
 
     /// <summary>
     /// A gap/backward move is an OBSERVED discontinuity, not proof of a specific
@@ -395,6 +423,26 @@ internal static class Iec61850ReportContinuityInspector
             state.LastEntryIdProvenByOptFlds = false;
         }
 
+        if (buffered)
+        {
+            // Observational classification only. Both OptFlds must prove the
+            // opaque cursor to label successive values as changed or repeated.
+            var comparableEntryId = priorEntryIdPresent && entryIdPresent &&
+                state.LastEntryIdProvenByOptFlds && hasOptFlds && frame.OptFldsEntryId == true;
+            var relation = !entryIdPresent ? "absent" :
+                !comparableEntryId ? "unverified" : entryIdChanged ? "changed" : "repeated";
+            RecordChronology(state, new Iec61850BrcbChronologyFrame
+            {
+                FrameOrdinal = state.FramesSeen,
+                ReceivedAtUtc = frame.ReceivedAt == default ? null : frame.ReceivedAt,
+                SequenceNumber = frame.SequenceNumber,
+                GiReason = frame.GeneralInterrogationReasonSeen,
+                BufferOverflow = frame.BufferOverflow,
+                EntryIdRelation = relation,
+                FindingCount = findings?.Count ?? 0
+            });
+        }
+
         if (findings is not null)
         {
             if (state.AnomalousFrames < long.MaxValue)
@@ -440,6 +488,12 @@ internal static class Iec61850ReportContinuityInspector
                 FirstFrameReceivedAtUtc = state.FirstFrameReceivedAtUtc,
                 LastFrameReceivedAtUtc = state.LastFrameReceivedAtUtc,
                 LastFindingReceivedAtUtc = state.LastFindingReceivedAtUtc,
+                Chronology = CopyChronology(state),
+                ChronologyInitialCount = state.InitialChronologyCount,
+                ChronologyRecentCount = state.RecentChronologyCount,
+                ChronologyOmittedFrames = state.Buffered
+                    ? Math.Max(0, state.FramesSeen - state.InitialChronologyCount - state.RecentChronologyCount)
+                    : 0,
                 SequenceDiscontinuities = state.SequenceDiscontinuities,
                 SequenceWithChangedEntryId = state.SequenceWithChangedEntryId,
                 SequenceWithRepeatedEntryId = state.SequenceWithRepeatedEntryId,
@@ -486,6 +540,44 @@ internal static class Iec61850ReportContinuityInspector
             OptFldsUnknown = ordered.Sum(state => state.OptFldsUnknownFrames),
             Streams = shown
         };
+    }
+
+    private static void RecordChronology(
+        Iec61850ReportContinuityState state, Iec61850BrcbChronologyFrame item)
+    {
+        if (state.InitialChronologyCount < InitialChronologyLimit)
+        {
+            var initial = state.InitialChronology ??= new Iec61850BrcbChronologyFrame[InitialChronologyLimit];
+            initial[state.InitialChronologyCount++] = item;
+        }
+        else
+        {
+            var recent = state.RecentChronology ??= new Iec61850BrcbChronologyFrame[RecentChronologyLimit];
+            recent[state.RecentChronologyNext] = item;
+            state.RecentChronologyNext = (state.RecentChronologyNext + 1) % RecentChronologyLimit;
+            if (state.RecentChronologyCount < RecentChronologyLimit)
+                state.RecentChronologyCount++;
+        }
+    }
+
+    private static IReadOnlyList<Iec61850BrcbChronologyFrame> CopyChronology(
+        Iec61850ReportContinuityState state)
+    {
+        var initialCount = state.InitialChronologyCount;
+        var recentCount = state.RecentChronologyCount;
+        if (initialCount + recentCount == 0)
+            return Array.Empty<Iec61850BrcbChronologyFrame>();
+
+        var copy = new Iec61850BrcbChronologyFrame[initialCount + recentCount];
+        if (initialCount > 0)
+            Array.Copy(state.InitialChronology!, 0, copy, 0, initialCount);
+        for (var index = 0; index < recentCount; index++)
+        {
+            var source = (state.RecentChronologyNext - recentCount + index + RecentChronologyLimit)
+                % RecentChronologyLimit;
+            copy[initialCount + index] = state.RecentChronology![source];
+        }
+        return copy;
     }
 
     private static string WriteVerdict(bool? value)
