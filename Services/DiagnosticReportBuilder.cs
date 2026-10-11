@@ -344,6 +344,19 @@ internal static class DiagnosticReportBuilder
                         $"BufOvfl={Verdict(item.BufferOverflow)}, " +
                         $"EntryIDrelation={item.EntryIdRelation}, findings={item.FindingCount}");
             }
+            if (stream.Buffered && stream.RecentAnomalies.Count > 0)
+            {
+                builder.AppendLine($"    BRCB anomaly history: last={stream.RecentAnomalies.Count} " +
+                    $"of {stream.AnomalousFrames} anomalous frames; bounded decoder receive-order evidence. " +
+                    "Some entries may also appear in the first/recent chronology.");
+                foreach (var item in stream.RecentAnomalies)
+                    builder.AppendLine($"      anomalyFrame#{item.FrameOrdinal}: " +
+                        $"receivedUtc={item.ReceivedAtUtc?.ToString("O") ?? "unknown"}, " +
+                        $"SqNum={item.SequenceNumber?.ToString() ?? "unknown"}, " +
+                        $"GIreason={Verdict(item.GiReason)}, " +
+                        $"BufOvfl={Verdict(item.BufferOverflow)}, " +
+                        $"EntryIDrelation={item.EntryIdRelation}, findings={item.FindingCount}");
+            }
             builder.AppendLine($"    OptFlds       : decoded={stream.OptFldsDecoded}/{stream.Frames}, " +
                 $"unknown={stream.OptFldsUnknown}, lastMask={Safe(stream.LastOptFldsHex)}, " +
                 $"SqNum requested={stream.SqNumAdvertised}, omitted={stream.SqNumOmitted}, " +
