@@ -195,6 +195,39 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
             progress?.Report(new IedDiscoveryProgress(IedDiscoveryStage.PreparingWorkspace, "Filtering and ordering the discovered signal workspace…", 98d, 14, 15));
             var identity = session.Client.DetectedIdentity;
+            if (device.LiveDiscoveryModel is { } liveModel &&
+                !string.IsNullOrWhiteSpace(device.SclSourcePath) &&
+                !string.IsNullOrWhiteSpace(device.SclSourceSha256))
+            {
+                try
+                {
+                    var proof = await TrustedSclIdentityAuthority.TryMatchAsync(
+                        device,liveModel,cancellationToken).ConfigureAwait(false);
+                    if (proof is not null)
+                    {
+                        identity = TrustedSclIdentityAuthority.ToConsumerIdentity(
+                            proof,liveModel.LogicalDevices.Select(ld => ld.MmsDomain));
+                        Log("INFO",device.Name,
+                            $"Trusted SCL topology verified: IED={proof.IedName}; " +
+                            $"LD={string.Join(",",proof.LogicalDeviceAliases.Values)}; " +
+                            $"MMS domains preserved; source={proof.Source}.");
+                    }
+                    else
+                    {
+                        Log("WARN",device.Name,
+                            "Opened SCL did not uniquely match this endpoint's full MMS domain set. " +
+                            "Discovery identity remains provisional; no vendor-based rename.");
+                    }
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) when (ex is IOException or InvalidDataException or System.Xml.XmlException
+                    or ArgumentException or UnauthorizedAccessException)
+                {
+                    Log("WARN",device.Name,
+                        $"Trusted SCL identity verification was rejected: {ex.Message}. " +
+                        "Discovery can continue, but identity is provisional until SCL is re-opened.");
+                }
+            }
             if (!string.IsNullOrWhiteSpace(identity.IedName))
             {
                 var previousName = device.Name;

@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "8b0c0f7e695b016834e40a6f068994dcc945cb1a",
-  "sourcePullRequest": 157,
-  "purpose": "EXPERIMENTAL DISCOVERY DATASET TYPE CLOSURE, code qualification pending: exact engine PR #157, extends immutable P6.2 baseline without touching canonical command/RCB or cyclic polling invariants. Physical F650 parity required before promotion.",
+  "commit": "00ad2819b99ffe6b3f885e59aa24a6afb2b4d8e1",
+  "sourcePullRequest": 161,
+  "purpose": "P10 VERIFIED-SCL IDENTITY CODE TRIAL on exact PR #157 dataset-first Discovery baseline. Includes canonical live Save SCL propagation with original accepted association evidence and LD instance values, after PR #161 correction commit; physical BCUGE test pending. No change to existing MMS report/control/cyclic scheduler.",
   "previousTrialPin": {
-    "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
-    "sourcePullRequest": 134,
-    "purpose": "Previous P0-5b/P0-5c field-capture engine pin retained as the physical R5 baseline before canonical communication evidence, logical RCB SCL projection, and round-trip association validation were added."
+    "commit": "8b0c0f7e695b016834e40a6f068994dcc945cb1a",
+    "sourcePullRequest": 157,
+    "purpose": "Direct previous P9 pinned Smart Discovery DataSet type-closure baseline. P10 is a single ancestry-continuation identity-only patch."
   },
   "priorGoldenWirePin": {
     "commit": "0023ef9a4373855497464ed3979e359c4041c95d",

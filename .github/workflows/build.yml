@@ -353,6 +353,9 @@ jobs:
       - name: Build solution
         run: dotnet build .\ArIED61850Tester\ArIED61850Tester.sln -c Release --no-restore
 
+      - name: Run pinned engine P10 identity and canonical SCL regression
+        run: dotnet test .\ARIEC61850\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --filter "FullyQualifiedName~TrustedSclIedIdentityMatcherTests|FullyQualifiedName~CanonicalLiveIedSclExporterTests" --logger "trx;LogFileName=engine-p10-identity.trx" --results-directory .\ArIED61850Tester\TestResults
+
       - name: Run ARSAS application regression tests
         run: dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore --logger "trx;LogFileName=arsas-tests.trx" --results-directory .\ArIED61850Tester\TestResults
 

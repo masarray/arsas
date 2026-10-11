@@ -9,11 +9,17 @@ public static class CanonicalSclReloadValidator
     public static SclIedWorkspace Validate(
         SclWorkspaceService workspaceService,
         LiveIedCanonicalModel canonical,
-        LiveIedSclExportResult result)
+        LiveIedSclExportResult result,
+        string? verifiedIedName = null)
     {
         ArgumentNullException.ThrowIfNull(workspaceService);
         ArgumentNullException.ThrowIfNull(canonical);
         ArgumentNullException.ThrowIfNull(result);
+
+        // Only the engineering IED identity changes; verified MMS/ACSE endpoint
+        // and accepted association selectors remain owned by the live snapshot.
+        var effectiveIedName = string.IsNullOrWhiteSpace(verifiedIedName)
+            ? canonical.IedName : verifiedIedName.Trim();
 
         if (!string.Equals(result.Profile, "full-model", StringComparison.OrdinalIgnoreCase))
         {
@@ -31,19 +37,19 @@ public static class CanonicalSclReloadValidator
             result.SclPath,
             new SclWorkspaceOpenOptions
             {
-                IedName = canonical.IedName,
+                IedName = effectiveIedName,
                 AccessPointName = canonical.AccessPointName
             });
 
         var workspace = reloaded.Ieds.SingleOrDefault()
             ?? throw new InvalidOperationException(
-                $"Generated SCL could not be reopened as exactly one ARSAS workspace for '{canonical.IedName}/{canonical.AccessPointName}'.");
+                $"Generated SCL could not be reopened as exactly one ARSAS workspace for '{effectiveIedName}/{canonical.AccessPointName}'.");
 
-        if (!string.Equals(workspace.IedName, canonical.IedName, StringComparison.Ordinal) ||
+        if (!string.Equals(workspace.IedName, effectiveIedName, StringComparison.Ordinal) ||
             !string.Equals(workspace.AccessPointName, canonical.AccessPointName, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                $"Generated SCL reload identity drifted. Expected '{canonical.IedName}/{canonical.AccessPointName}', " +
+                $"Generated SCL reload identity drifted. Expected '{effectiveIedName}/{canonical.AccessPointName}', " +
                 $"reloaded '{workspace.IedName}/{workspace.AccessPointName}'.");
         }
 
@@ -80,7 +86,7 @@ public static class CanonicalSclReloadValidator
 
         var preparation = SclAssistedConnectionPreparationBuilder.Build(
             File.ReadAllText(result.SclPath),
-            canonical.IedName,
+            effectiveIedName,
             canonical.AccessPointName,
             canonical.Communication.Host,
             canonical.Communication.Port);
@@ -94,13 +100,13 @@ public static class CanonicalSclReloadValidator
         }
 
         var plan = preparation.AssociationPlan;
-        if (!string.Equals(plan.IedName, canonical.IedName, StringComparison.Ordinal) ||
+        if (!string.Equals(plan.IedName, effectiveIedName, StringComparison.Ordinal) ||
             !string.Equals(plan.AccessPointName, canonical.AccessPointName, StringComparison.Ordinal) ||
             !string.Equals(plan.Host, canonical.Communication.Host, StringComparison.OrdinalIgnoreCase) ||
             plan.Port != canonical.Communication.Port)
         {
             throw new InvalidOperationException(
-                $"Generated SCL reconnect plan identity drifted. Expected '{canonical.IedName}/{canonical.AccessPointName}' " +
+                $"Generated SCL reconnect plan identity drifted. Expected '{effectiveIedName}/{canonical.AccessPointName}' " +
                 $"at {canonical.Communication.Host}:{canonical.Communication.Port}, rebuilt " +
                 $"'{plan.IedName}/{plan.AccessPointName}' at {plan.Host}:{plan.Port}.");
         }

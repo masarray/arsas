@@ -1821,7 +1821,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 return;
             }
 
-            SaveTypedModelAsScl(device, model, sourceDescription, schema, dialog.FileName);
+            AR.Iec61850.Discovery.LiveIedIdentity? provenIdentity = null;
+            if (device.SclWorkspace == null)
+            {
+                provenIdentity = await TrustedSclIdentityAuthority.TryMatchAsync(
+                    device,model,_applicationCancellation.Token);
+                if (provenIdentity is not null)
+                    AddLog("INFO","SCL Export",
+                        $"{device.Name}: verified trusted SCL identity {provenIdentity.IedName} " +
+                        $"and {provenIdentity.LogicalDeviceAliases.Count} LD mappings; MMS domains unchanged.");
+                else if (device.IdentitySource.Contains("(Low)",StringComparison.OrdinalIgnoreCase))
+                    AddLog("WARN","SCL Export",
+                        $"{device.Name}: IED/LD naming is provisional (MMS domains alone do not prove the boundary). " +
+                        "Open and verify the original engineering SCL on this IED to generate an authoritative identity.");
+            }
+            SaveTypedModelAsScl(device, model, sourceDescription, schema, dialog.FileName, provenIdentity);
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or ArgumentException)
         {
@@ -1884,7 +1898,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         AR.Iec61850.Discovery.LiveIedModelDiscoveryDocument model,
         string sourceDescription,
         SclSchemaProfileDescriptor schema,
-        string outputPath)
+        string outputPath,
+        AR.Iec61850.Discovery.LiveIedIdentity? verifiedIdentity = null)
     {
         LiveIedSclExportResult result;
         AR.Iec61850.Discovery.LiveIedCanonicalModel? canonicalExportEvidence = null;
@@ -1905,7 +1920,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 canonical,
                 outputPath,
                 schema.Profile,
-                profile: "full-model");
+                profile: "full-model",
+                verifiedIdentity: verifiedIdentity);
             try
             {
                 var semanticPatch = SclExportSemanticParityPatch.ApplyForLiveModel(
@@ -1914,7 +1930,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 canonicalReloadWorkspace = CanonicalSclReloadValidator.Validate(
                     _sclWorkspaceService,
                     canonical,
-                    result);
+                    result,
+                    verifiedIdentity?.IedName);
 
                 if (semanticPatch.Changed)
                 {
