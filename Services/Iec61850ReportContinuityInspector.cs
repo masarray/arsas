@@ -28,6 +28,14 @@ internal sealed class Iec61850ReportContinuityState
     public long MissingSequenceFrames { get; set; }
     public long SegmentedFrames { get; set; }
     public long AnomalyFindings { get; set; }
+    // Frame counts stay independent of findings: one frame may carry multiple anomalies.
+    public long AnomalousFrames { get; set; }
+    public long SequenceDiscontinuities { get; set; }
+    public long SequenceWithChangedEntryId { get; set; }
+    public long SequenceWithRepeatedEntryId { get; set; }
+    public long SequenceWithoutComparableEntryId { get; set; }
+    public long SequenceWithGiReason { get; set; }
+    public long SequenceWithOverflow { get; set; }
     public long BufferOverflows { get; set; }
     public long ConfRevChanges { get; set; }
     public long EntryIdPresentFrames { get; set; }
@@ -68,6 +76,13 @@ public sealed record Iec61850ReportContinuityStreamSnapshot
     public long SequenceMissing { get; init; }
     public long Segmented { get; init; }
     public long Findings { get; init; }
+    public long AnomalousFrames { get; init; }
+    public long SequenceDiscontinuities { get; init; }
+    public long SequenceWithChangedEntryId { get; init; }
+    public long SequenceWithRepeatedEntryId { get; init; }
+    public long SequenceWithoutComparableEntryId { get; init; }
+    public long SequenceWithGiReason { get; init; }
+    public long SequenceWithOverflow { get; init; }
     public long Overflow { get; init; }
     public long ConfRevChanges { get; init; }
     public long EntryIdPresent { get; init; }
@@ -104,6 +119,8 @@ public sealed record Iec61850ReportContinuitySnapshot
     public long Frames { get; init; }
     public long Sequenced { get; init; }
     public long Findings { get; init; }
+    public long AnomalousFrames { get; init; }
+    public long SequenceDiscontinuities { get; init; }
     public long Overflows { get; init; }
     public long OptFldsDecoded { get; init; }
     public long OptFldsUnknown { get; init; }
@@ -175,6 +192,32 @@ internal static class Iec61850ReportContinuityInspector
             $"GIreason={WriteVerdict(frame.GeneralInterrogationReasonSeen)}, " +
             $"startReturnUtc={state.ActivationReturnedAtUtc?.ToString("O") ?? "unknown"}, " +
             $"frameReceivedUtc={frame.ReceivedAt:O}; GI correlation is not proof of a harmless reset";
+
+        // One causal classification per actually observed SqNum discontinuity.
+        // EntryID is an opaque octet string, never a numeric continuity proof.
+        void RecordSequenceCorrelation()
+        {
+            if (state.SequenceDiscontinuities < long.MaxValue)
+                state.SequenceDiscontinuities++;
+            if (buffered && priorEntryIdPresent && entryIdPresent)
+            {
+                if (entryIdChanged)
+                {
+                    if (state.SequenceWithChangedEntryId < long.MaxValue)
+                        state.SequenceWithChangedEntryId++;
+                }
+                else if (state.SequenceWithRepeatedEntryId < long.MaxValue)
+                    state.SequenceWithRepeatedEntryId++;
+            }
+            else if (state.SequenceWithoutComparableEntryId < long.MaxValue)
+                state.SequenceWithoutComparableEntryId++;
+
+            if (frame.GeneralInterrogationReasonSeen == true &&
+                state.SequenceWithGiReason < long.MaxValue)
+                state.SequenceWithGiReason++;
+            if (frame.BufferOverflow == true && state.SequenceWithOverflow < long.MaxValue)
+                state.SequenceWithOverflow++;
+        }
 
         // Raw OptFlds is authoritative decoder evidence. Unknown stays UNKNOWN;
         // a missing value cannot be interpreted as an omitted wire field.
@@ -278,6 +321,7 @@ internal static class Iec61850ReportContinuityInspector
                     if (discontinuity is not null)
                     {
                         CaptureAnomaly(state, frame);
+                        RecordSequenceCorrelation();
                         Warn(discontinuity + EntryContext() + CausalContext());
                     }
                 }
@@ -308,6 +352,7 @@ internal static class Iec61850ReportContinuityInspector
                 if (discontinuity is not null)
                 {
                     CaptureAnomaly(state, frame);
+                    RecordSequenceCorrelation();
                     Warn(discontinuity + EntryContext() + CausalContext());
                 }
                 state.LastSequenceNumber = current;
@@ -321,6 +366,8 @@ internal static class Iec61850ReportContinuityInspector
         if (entryIdPresent)
             state.LastEntryIdHex = frame.EntryIdHex;
 
+        if (findings is not null && state.AnomalousFrames < long.MaxValue)
+            state.AnomalousFrames++;
         return findings is null ? Array.Empty<string>() : findings;
     }
 
@@ -348,6 +395,13 @@ internal static class Iec61850ReportContinuityInspector
                 SequenceMissing = state.MissingSequenceFrames,
                 Segmented = state.SegmentedFrames,
                 Findings = state.AnomalyFindings,
+                AnomalousFrames = state.AnomalousFrames,
+                SequenceDiscontinuities = state.SequenceDiscontinuities,
+                SequenceWithChangedEntryId = state.SequenceWithChangedEntryId,
+                SequenceWithRepeatedEntryId = state.SequenceWithRepeatedEntryId,
+                SequenceWithoutComparableEntryId = state.SequenceWithoutComparableEntryId,
+                SequenceWithGiReason = state.SequenceWithGiReason,
+                SequenceWithOverflow = state.SequenceWithOverflow,
                 Overflow = state.BufferOverflows,
                 ConfRevChanges = state.ConfRevChanges,
                 EntryIdPresent = state.EntryIdPresentFrames,
@@ -381,6 +435,8 @@ internal static class Iec61850ReportContinuityInspector
             Frames = ordered.Sum(state => state.FramesSeen),
             Sequenced = ordered.Sum(state => state.SequencedFrames),
             Findings = ordered.Sum(state => state.AnomalyFindings),
+            AnomalousFrames = ordered.Sum(state => state.AnomalousFrames),
+            SequenceDiscontinuities = ordered.Sum(state => state.SequenceDiscontinuities),
             Overflows = ordered.Sum(state => state.BufferOverflows),
             OptFldsDecoded = ordered.Sum(state => state.OptFldsDecodedFrames),
             OptFldsUnknown = ordered.Sum(state => state.OptFldsUnknownFrames),
