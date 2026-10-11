@@ -108,6 +108,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Maintenance inventory tests failed." }
           python .\ArIED61850Tester\scripts\test-verify-p10-ge-field-scl.py
           if ($LASTEXITCODE -ne 0) { throw "P10 GE trusted-IID SCL field gate fixture regressions failed." }
+          python .\ArIED61850Tester\scripts\test-compare-p10-brcb-sessions.py
+          if ($LASTEXITCODE -ne 0) { throw "P10.8D exact-slot BRCB comparator regressions failed." }
           python .\ArIED61850Tester\scripts\audit-maintenance-dependencies.py --root .\ArIED61850Tester --output "$env:RUNNER_TEMP\arsas-maintenance-dependencies.json"
           if ($LASTEXITCODE -ne 0) { throw "Maintenance inventory generation failed." }
 
