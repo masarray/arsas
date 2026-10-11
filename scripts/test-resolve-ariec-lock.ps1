@@ -79,6 +79,39 @@ try {
     }
     Assert-Rejects $wrongAssociation 'physical-tested'
 
+    # Exact P10 lineage can be resolved as CODE TRIAL without converting
+    # the older physically accepted association head into a false runtime pin.
+    function New-TrackedP10Fixture {
+        $tracked = Join-Path $PSScriptRoot '..\engines\ARIEC61850.lock.json'
+        $source = Get-Content -LiteralPath $tracked -Raw -Encoding UTF8 |
+            ConvertFrom-Json -AsHashtable -Depth 40
+        $copy = @{}
+        foreach ($key in $source.Keys) { $copy[$key] = $source[$key] }
+        return $copy
+    }
+
+    Assert-Resolves (New-TrackedP10Fixture)
+
+    $wrongP10Parent = New-TrackedP10Fixture
+    $wrongP10Parent.p10IdentityTrial.baseEngineCommit = ('f' * 40)
+    Assert-Rejects $wrongP10Parent 'physical-tested'
+
+    $wrongP10Source = New-TrackedP10Fixture
+    $wrongP10Source.sourcePullRequest = 160
+    Assert-Rejects $wrongP10Source 'physical-tested'
+
+    $wrongP10Polling = New-TrackedP10Fixture
+    $wrongP10Polling.p10IdentityTrial.cyclicMmsProcessPollingForbidden = $false
+    Assert-Rejects $wrongP10Polling 'physical-tested'
+
+    $wrongP10History = New-TrackedP10Fixture
+    $wrongP10History.sclAssociationInteroperability.testedEngineCommit = ('f' * 40)
+    Assert-Rejects $wrongP10History 'physical-tested'
+
+    $wrongP10Pin = New-TrackedP10Fixture
+    $wrongP10Pin.commit = ('f' * 40)
+    Assert-Rejects $wrongP10Pin 'physical-tested'
+
     Write-Host "CI-P1 immutable engine resolver: $checks synthetic cases PASS."
 }
 finally {

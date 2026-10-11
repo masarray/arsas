@@ -138,7 +138,9 @@ public sealed class P10MainlinePolicyExecutionTests
         while (current is not null)
         {
             if (File.Exists(Path.Combine(current.FullName,
-                "engines", "ARIEC61850.lock.json")))
+                "engines", "ARIEC61850.lock.json")) &&
+                File.Exists(Path.Combine(current.FullName, ".github",
+                    "workflows", "smart-discovery-mainline-readiness.yml")))
                 return current.FullName;
             current = current.Parent;
         }

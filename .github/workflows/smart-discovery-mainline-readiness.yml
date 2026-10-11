@@ -178,7 +178,7 @@ jobs:
           "ENGINE_REPOSITORY=$($lock.repository)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           "ENGINE_COMMIT=$($lock.commit)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Checkout exact merged ARIEC61850 authority
+      - name: Checkout exact accepted ARIEC61850 integration authority
         shell: powershell
         run: |
           git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ENGINE_REPOSITORY.git" ..\ARIEC61850
@@ -194,7 +194,7 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Validate and test merged engine authority
+      - name: Validate and test accepted engine authority
         shell: powershell
         run: |
           dotnet restore ..\ARIEC61850\ARIEC61850.sln
