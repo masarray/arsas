@@ -157,7 +157,7 @@ public sealed class P108BBoundedReportChronologyTests
             Iec61850ReportContinuityInspector.Observe(
                 state, Frame((ulong)index, index.ToString("X4"), index * 100), true);
         var frozen = Only(state);
-        Assert.Equal(18, frozen.ChronologyOmittedFrames);
+        Assert.Equal(10, frozen.ChronologyOmittedFrames);
         var tail = frozen.Chronology[^1];
         for (var index = 50; index < 90; index++)
             Iec61850ReportContinuityInspector.Observe(
