@@ -21,8 +21,9 @@ Engine version  : 1.6.40+{engine}
   IED              : {ied}
     Discovery      : LiveDiscovery: fingerprint={fp}, requested=67
   stream[0]      : BRCB, rcb=BCUGEF650/LLN0.BR.{slot}, dataset={dataset}, rptId=BRB01, frames={frames}, SqNum=25, findings=2, BufOvfl={overflow}
-    RCB triage    : anomalousFrames=1, sqDiscontinuities=1, sqChangedEntryID=1
+    RCB triage    : anomalousFrames=1, sqDiscontinuities=1, sqChangedEntryID=1, sqWithGIreason=0
     RCB follow-up : receivedAfterLastFinding=3, firstFrameUtc=2026-10-11T06:25:51Z
+    RCB lifecycle : RptEnaWrite=YES, GIWrite=YES, startReturnUtc=2026-10-11T06:25:50Z, GIreasonFrames=1, lastAnomalyUtc=2026-10-11T06:25:51Z
     BRCB chronology: first=2, recent=0, omittedMiddle=0
 {("      frame#1: receivedUtc=unknown, SqNum=4, GIreason=NO, BufOvfl=NO, EntryIDrelation=unverified, findings=0" + chr(10)) if with_chronology else ""}    OptFlds       : decoded=25/25
   stream[1]      : URCB, rcb=BCUGEF650/LLN0.RP.URB01, dataset=MMXU, rptId=URB01, frames=1, SqNum=1, findings=0
@@ -95,6 +96,48 @@ class TestComparator(unittest.TestCase):
                              mod.parse_report(report(overflow=0)))
         self.assertEqual(0, result["slots"][0]["left_bufovfl_frames"])
         self.assertEqual(0, result["slots"][0]["right_bufovfl_frames"])
+
+    def test_independent_triage_different_real_slots_is_explicitly_unpaired(self):
+        data = mod.independent_triage(mod.parse_report(report(slot="GW01")),
+                                      mod.parse_report(report(slot="SOGI101", frames=43, overflow=3)))
+        self.assertEqual("INDEPENDENT_SESSIONS_OBSERVATION_ONLY", data["status"])
+        self.assertFalse(data["same_slot_dataset_scope"])
+        self.assertEqual("different BRCB slots or DataSets", data["paired_comparison_blocked_reason"])
+        self.assertNotIn("slots", data)
+        self.assertEqual(1, data["sessions"]["open_scl"][0]["bufovfl_true_frames"])
+        self.assertEqual(3, data["sessions"]["discovery"][0]["bufovfl_true_frames"])
+        self.assertIn("NOT_PAIRED_RELIABILITY_COMPARISON", data["qualification"])
+
+    def test_independent_triage_same_slots_does_not_establish_losslessness(self):
+        data = mod.independent_triage(mod.parse_report(report()), mod.parse_report(report()))
+        self.assertTrue(data["same_slot_dataset_scope"])
+        self.assertIn("NOT_SOE_LOSSLESS", data["qualification"])
+
+    def test_gi_context_and_monotonic_startup_delay_are_observational(self):
+        one = mod.independent_triage(mod.parse_report(report()), mod.parse_report(report()))
+        stream = one["sessions"]["open_scl"][0]
+        self.assertEqual(1, stream["sq_without_gi_reason"])
+        self.assertEqual(1, stream["gi_reason_frames"])
+        self.assertEqual(1000.0, stream["last_anomaly_ms_after_start_return"])
+        self.assertEqual(3, stream["received_after_last_finding"])
+
+    def test_missing_gi_and_lifecycle_are_unknown_not_zero(self):
+        data = report().replace(", sqWithGIreason=0", "")
+        data = "\n".join(x for x in data.splitlines() if "RCB lifecycle" not in x)
+        row = mod.independent_triage(mod.parse_report(data), mod.parse_report(data))["sessions"]["open_scl"][0]
+        self.assertIsNone(row["sq_with_gi_reason"])
+        self.assertIsNone(row["sq_without_gi_reason"])
+        self.assertIsNone(row["last_anomaly_ms_after_start_return"])
+
+    def test_impossible_gi_discontinuity_counts_are_rejected(self):
+        data = report().replace("sqWithGIreason=0", "sqWithGIreason=2")
+        with self.assertRaisesRegex(ValueError, "impossible BRCB diagnostic counts"):
+            mod.independent_triage(mod.parse_report(data), mod.parse_report(report()))
+
+    def test_independent_triage_mismatched_engine_still_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "different engine commits"):
+            mod.independent_triage(mod.parse_report(report()),
+                                   mod.parse_report(report(engine="f" * 40)))
 
     def test_empty_chronology_allowed_but_does_not_invent_events(self):
         result = mod.compare(mod.parse_report(report(with_chronology=False)),
