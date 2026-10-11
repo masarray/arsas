@@ -20,7 +20,7 @@ On the authorized local computer, use Python 3 already used by ARSAS CI (no addi
 \`\`\`powershell
 $iid = 'C:\field\BCU_GE.iid'
 $export = 'C:\field\BCUGE-discovery.icd'
-$sha = (Get-FileHash -Algorithm SHA256 $iid).Hash.ToLowerInvariant()
+$sha = '<64-character SHA256 copied from original independent intake record>'
 python .\scripts\verify-p10-ge-field-scl.py \`
   --trusted-iid $iid \`
   --trusted-sha256 $sha \`
@@ -31,7 +31,7 @@ python .\scripts\verify-p10-ge-field-scl.py \`
   --out 'C:\field\p10-ge-structural-evidence.json'
 \`\`\`
 
-Replace \`S1\` with the **actual trusted** AccessPoint if different. The observed-domain argument is an operator-supplied claim; save independent device logs/PCAP proving that claim. The tool hashes and checks both input files, is strictly offline, does not connect to a relay, and has no write path other than an explicitly requested JSON report. It fails closed on missing source SHA, ambiguous AP/IED, wrong IP, changed MMS wire-domain, missing LD/LN, or drift in ordered DataSet/FCDA members. It compares engineering-vs-export logical RCB and GOOSE definitions and reports them separately for review. It cannot infer unobserved MMS values, packet continuity, or physical certification.
+Replace \`S1\` with the **actual trusted** AccessPoint if different. Do not derive the expected trusted hash from the candidate file during the same verification run; compare with the independently recorded original intake hash. The observed-domain argument is an operator-supplied claim; save independent device logs/PCAP proving that claim. The tool hashes and checks both input files, is strictly offline, does not connect to a relay, and has no write path other than an explicitly requested JSON report. It fails closed on missing source SHA, ambiguous AP/IED, wrong IP, changed MMS wire-domain, missing LD/LN, or drift in ordered DataSet/FCDA members. It compares engineering-vs-export logical RCB and GOOSE definitions and reports them separately for review. It cannot infer unobserved MMS values, packet continuity, or physical certification.
 
 Possible structural outcomes: \`STRUCTURE_PASS_ONLY\`, \`FAIL\`, or \`REJECTED_INPUT\`. Even the passing case **always** has \`physicalQualification=NOT_VERIFIED\` and \`r10PromotionAllowed=false\`. It is **never** a substitute for actual IEC 61850 field evidence.
 
