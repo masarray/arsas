@@ -1033,11 +1033,17 @@ public sealed class Iec61850CachedSignalProfile
             var digitAt = 0;
             while (digitAt < logicalNode.Length && char.IsLetter(logicalNode[digitAt]))
                 digitAt++;
-            if (digitAt == 0 || digitAt == logicalNode.Length ||
-                !logicalNode.AsSpan(digitAt).ToString().All(char.IsDigit))
+            if (digitAt == 0 || digitAt == logicalNode.Length)
                 return signal;
+            for (var index = digitAt; index < logicalNode.Length; index++)
+            {
+                if (!char.IsDigit(logicalNode[index]))
+                    return signal;
+            }
 
-            if (signal.StartsWith(logicalNode, StringComparison.OrdinalIgnoreCase))
+            if (signal.StartsWith(logicalNode, StringComparison.OrdinalIgnoreCase) &&
+                (signal.Length == logicalNode.Length ||
+                 !char.IsDigit(signal[logicalNode.Length])))
                 return signal;
 
             var logicalNodeClass = logicalNode[..digitAt];
