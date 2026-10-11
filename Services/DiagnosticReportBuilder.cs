@@ -315,7 +315,7 @@ internal static class DiagnosticReportBuilder
                 $"EntryIDPresent={stream.EntryIdPresent}, firstSqNum={stream.FirstSqNum?.ToString() ?? "-"}, " +
                 $"lastSqNum={stream.LastSqNum?.ToString() ?? "-"}");
             if (stream.Findings > 0)
-                builder.AppendLine($"    BRCB triage   : anomalousFrames={stream.AnomalousFrames}, " +
+                builder.AppendLine($"    RCB triage    : anomalousFrames={stream.AnomalousFrames}, " +
                     $"sqDiscontinuities={stream.SequenceDiscontinuities}, " +
                     $"sqChangedEntryID={stream.SequenceWithChangedEntryId}, " +
                     $"sqRepeatedEntryID={stream.SequenceWithRepeatedEntryId}, " +
