@@ -1047,7 +1047,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 {
                     SclEndpointBindingStore.RecordVerified(
                         device.SclSourceSha256, device.SclIedName,
-                        device.SclAccessPointName, device.IpAddress, device.Port);
+                        device.SclAccessPointName, device.IpAddress, device.Port,
+                        device.SclSourcePath);
                     if (device.SclEndpointOrigin != "SCD-declared")
                         device.SclEndpointOrigin = "Verified exact SCD/IED/AP";
                 }
