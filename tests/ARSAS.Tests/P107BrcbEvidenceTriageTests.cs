@@ -17,6 +17,13 @@ public sealed class P107BrcbEvidenceTriageTests
         {
             SequenceNumber = sq,
             EntryIdHex = entry,
+            // Synthetic wire-grounded metadata: both decoded OptionFields and
+            // reported values must be present to compare EntryID cursors.
+            OptFldsRawHex = "7F80",
+            OptFldsSequenceNumber = true,
+            OptFldsEntryId = true,
+            OptFldsBufferOverflow = true,
+            OptFldsConfRev = true,
             GeneralInterrogationReasonSeen = giReason,
             BufferOverflow = overflow,
             SubSequenceNumber = sub,
@@ -66,6 +73,43 @@ public sealed class P107BrcbEvidenceTriageTests
         var state = new Iec61850ReportContinuityState();
         Iec61850ReportContinuityInspector.Observe(state, Frame(4, "CAFE"), true);
         Iec61850ReportContinuityInspector.Observe(state, Frame(1), true);
+        Assert.Equal(1, state.SequenceDiscontinuities);
+        Assert.Equal(1, state.SequenceWithoutComparableEntryId);
+        Assert.Equal(0, state.SequenceWithChangedEntryId);
+    }
+
+    [Fact]
+    public void DecodedEntryIdWithoutRawOptionFields_StaysUncomparable()
+    {
+        var noWireProvenance = new NativeReportFrameMetadata
+        {
+            SequenceNumber = 4,
+            EntryIdHex = "CAFE"
+        };
+        var state = new Iec61850ReportContinuityState();
+        Iec61850ReportContinuityInspector.Observe(state, noWireProvenance, true);
+        Iec61850ReportContinuityInspector.Observe(state, Frame(1, "BEEF"), true);
+        Assert.Equal(1, state.SequenceDiscontinuities);
+        Assert.Equal(1, state.SequenceWithoutComparableEntryId);
+        Assert.Equal(0, state.SequenceWithChangedEntryId);
+
+        var next = new NativeReportFrameMetadata
+        {
+            SequenceNumber = 0,
+            EntryIdHex = "DEAD"
+        };
+        Iec61850ReportContinuityInspector.Observe(state, next, true);
+        Assert.Equal(2, state.SequenceWithoutComparableEntryId);
+        Assert.Equal(0, state.SequenceWithChangedEntryId);
+    }
+
+    [Fact]
+    public void MissingIntermediateEntryId_CannotBridgeNonAdjacentResumeCursors()
+    {
+        var state = new Iec61850ReportContinuityState();
+        Iec61850ReportContinuityInspector.Observe(state, Frame(5, "AAAA"), true);
+        Iec61850ReportContinuityInspector.Observe(state, Frame(6), true);
+        Iec61850ReportContinuityInspector.Observe(state, Frame(1, "BBBB"), true);
         Assert.Equal(1, state.SequenceDiscontinuities);
         Assert.Equal(1, state.SequenceWithoutComparableEntryId);
         Assert.Equal(0, state.SequenceWithChangedEntryId);
