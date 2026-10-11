@@ -424,9 +424,15 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var coreTrial = root.GetProperty("coreReportRoutingTrial");
         Assert.Equal(p10.GetProperty("exactCommit").GetString(),
             coreTrial.GetProperty("baseEngineCommit").GetString());
+        var subscriptionTrial = root.GetProperty("reportSubscriberIntegrityTrial");
         Assert.Equal(coreTrial.GetProperty("exactCommit").GetString(),
+            subscriptionTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal(subscriptionTrial.GetProperty("exactCommit").GetString(),
             root.GetProperty("commit").GetString());
-        Assert.Equal(164, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal("code-verified-not-physical", subscriptionTrial.GetProperty("status").GetString());
+        Assert.True(subscriptionTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(subscriptionTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
+        Assert.Equal(165, root.GetProperty("sourcePullRequest").GetInt32());
         Assert.Equal("code-trial-not-physical",p10.GetProperty("status").GetString());
         Assert.True(p10.GetProperty("physicalQualificationRequired").GetBoolean());
         Assert.True(closure.GetProperty("physicalQualificationRequired").GetBoolean());

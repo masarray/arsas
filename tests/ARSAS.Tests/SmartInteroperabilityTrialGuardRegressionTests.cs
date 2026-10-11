@@ -73,12 +73,18 @@ public sealed class SmartInteroperabilityTrialGuardRegressionTests
         var codeTrial = root.GetProperty("coreReportRoutingTrial");
         Assert.Equal(p10.GetProperty("exactCommit").GetString(),
             codeTrial.GetProperty("baseEngineCommit").GetString());
+        var subscriberTrial = root.GetProperty("reportSubscriberIntegrityTrial");
+        Assert.Equal(codeTrial.GetProperty("exactCommit").GetString(),
+            subscriberTrial.GetProperty("baseEngineCommit").GetString());
         Assert.Equal(root.GetProperty("commit").GetString(),
-            codeTrial.GetProperty("exactCommit").GetString());
+            subscriberTrial.GetProperty("exactCommit").GetString());
         Assert.Equal("code-verified-not-physical", codeTrial.GetProperty("status").GetString());
+        Assert.Equal("code-verified-not-physical", subscriberTrial.GetProperty("status").GetString());
+        Assert.True(subscriberTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(subscriberTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
         Assert.True(codeTrial.GetProperty("physicalQualificationRequired").GetBoolean());
         Assert.True(codeTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
-        Assert.Equal(164,root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(165,root.GetProperty("sourcePullRequest").GetInt32());
         Assert.Equal("code-trial-not-physical",p10.GetProperty("status").GetString());
         Assert.True(p10.GetProperty("physicalQualificationRequired").GetBoolean());
         Assert.True(p10.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());

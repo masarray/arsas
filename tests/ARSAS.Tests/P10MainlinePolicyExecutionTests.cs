@@ -15,6 +15,11 @@ public sealed class P10MainlinePolicyExecutionTests
     [InlineData("core-trial-wrong-base-denied", false)]
     [InlineData("core-trial-wrong-ci-denied", false)]
     [InlineData("core-trial-physical-flag-denied", false)]
+    [InlineData("subscriber-trial-sha-denied", false)]
+    [InlineData("subscriber-trial-parent-denied", false)]
+    [InlineData("subscriber-trial-ci-denied", false)]
+    [InlineData("subscriber-trial-physical-flag-denied", false)]
+    [InlineData("subscriber-trial-mainline-flag-denied", false)]
     [InlineData("p10-pr-main-denied", false)]
     [InlineData("p10-source-main-denied", false)]
     [InlineData("p10-wrong-sha-denied", false)]
@@ -74,6 +79,16 @@ public sealed class P10MainlinePolicyExecutionTests
                     lockDoc["coreReportRoutingTrial"]!["coreCiRun"] = 0; break;
                 case "core-trial-physical-flag-denied":
                     lockDoc["coreReportRoutingTrial"]!["physicalQualificationRequired"] = false; break;
+                case "subscriber-trial-sha-denied":
+                    lockDoc["reportSubscriberIntegrityTrial"]!["exactCommit"] = new string('0', 40); break;
+                case "subscriber-trial-parent-denied":
+                    lockDoc["reportSubscriberIntegrityTrial"]!["baseEngineCommit"] = new string('0', 40); break;
+                case "subscriber-trial-ci-denied":
+                    lockDoc["reportSubscriberIntegrityTrial"]!["engineCiRun"] = 0; break;
+                case "subscriber-trial-physical-flag-denied":
+                    lockDoc["reportSubscriberIntegrityTrial"]!["physicalQualificationRequired"] = false; break;
+                case "subscriber-trial-mainline-flag-denied":
+                    lockDoc["reportSubscriberIntegrityTrial"]!["mainlinePromotionForbidden"] = false; break;
                 case "p10-source-main-denied": sourceRef = "main"; break;
                 case "p10-wrong-sha-denied":
                     lockDoc["p10IdentityTrial"]!["exactCommit"] = new string('0', 40); break;

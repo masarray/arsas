@@ -1,10 +1,31 @@
 # PowerShell 5.1/7 compatible. Code-verification does NOT grant physical acceptance.
-# Exactly one audited core routing candidate; no wildcard SHA, no runtime overrides.
+# Exact audited code-only candidates (P10.9F and P10.9G); no wildcard SHA, no runtime overrides.
 function Test-P109FCoreRoutingTrial {
     param([Parameter(Mandatory = $true)] [object] $Lock)
     $candidate = $Lock.coreReportRoutingTrial
-    if ([string]$Lock.commit -cne 'fa93c9fdc7cd98fd3624227ee21c3eefc68bcac7' -or
-        [int]$Lock.sourcePullRequest -ne 164 -or
+    $subscriber = $Lock.reportSubscriberIntegrityTrial
+    $previousHead = (
+        [string]$Lock.commit -ceq 'fa93c9fdc7cd98fd3624227ee21c3eefc68bcac7' -and
+        [int]$Lock.sourcePullRequest -eq 164
+    )
+    # P10.9G is a precisely scoped successor to the P10.9F code-only pin,
+    # NOT a promotion to physical or mainline acceptance.
+    $subscriberHead = (
+        [string]$Lock.commit -ceq 'd700b0df741b466afb8abe6cee1d70b1619d7b4d' -and
+        [int]$Lock.sourcePullRequest -eq 165 -and
+        $null -ne $subscriber -and
+        [string]$subscriber.status -ceq 'code-verified-not-physical' -and
+        [int]$subscriber.issue -eq 532 -and
+        [int]$subscriber.enginePullRequest -eq 165 -and
+        [string]$subscriber.baseEngineCommit -ceq 'fa93c9fdc7cd98fd3624227ee21c3eefc68bcac7' -and
+        [string]$subscriber.exactCommit -ceq 'd700b0df741b466afb8abe6cee1d70b1619d7b4d' -and
+        [long]$subscriber.engineCiRun -eq 38180732078 -and
+        [bool]$subscriber.physicalQualificationRequired -and
+        [bool]$subscriber.mainlinePromotionForbidden -and
+        [bool]$subscriber.fullDiscoveryFallbackForbidden -and
+        [bool]$subscriber.cyclicMmsProcessPollingForbidden
+    )
+    if (-not ($previousHead -or $subscriberHead) -or
         [string]$Lock.repository -cne 'masarray/ARIEC61850' -or
         [string]$Lock.ref -cne 'main' -or $null -eq $candidate) { return $false }
 

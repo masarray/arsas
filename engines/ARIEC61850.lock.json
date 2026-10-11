@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "fa93c9fdc7cd98fd3624227ee21c3eefc68bcac7",
-  "sourcePullRequest": 164,
-  "purpose": "P10.9E client MMS report-routing integrity lock: quarantine contradictory full DatSet/RptID before value projection (PR #164). Also includes P10.9D simulator-only FIFO emission and CI staging PR trigger (PR #163). Previous BCUGE static acquisition remains authority: zero cyclic polling and unchanged decoder, GI, controls and report activation. The simulator FIFO fix is not ARSAS client runtime and does not establish real BCUGE SOE continuity.",
+  "commit": "d700b0df741b466afb8abe6cee1d70b1619d7b4d",
+  "sourcePullRequest": 165,
+  "purpose": "P10.9G secondary MMS InformationReport subscriber overload is now fail-closed instead of silently DropOldest; bounded subscriber error leaves canonical static FIFO untouched (ARIEC PR #165). P10.9E client MMS report-routing integrity lock: quarantine contradictory full DatSet/RptID before value projection (PR #164). Also includes P10.9D simulator-only FIFO emission and CI staging PR trigger (PR #163). Previous BCUGE static acquisition remains authority: zero cyclic polling and unchanged decoder, GI, controls and report activation. The simulator FIFO fix is not ARSAS client runtime and does not establish real BCUGE SOE continuity.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
@@ -83,6 +83,18 @@
     "fullNameListFallbackForbidden": true,
     "cyclicMmsProcessPollingForbidden": true,
     "physicalQualificationRequired": true
+  },
+  "reportSubscriberIntegrityTrial": {
+    "status": "code-verified-not-physical",
+    "issue": 532,
+    "enginePullRequest": 165,
+    "baseEngineCommit": "fa93c9fdc7cd98fd3624227ee21c3eefc68bcac7",
+    "exactCommit": "d700b0df741b466afb8abe6cee1d70b1619d7b4d",
+    "engineCiRun": 38180732078,
+    "physicalQualificationRequired": true,
+    "mainlinePromotionForbidden": true,
+    "fullDiscoveryFallbackForbidden": true,
+    "cyclicMmsProcessPollingForbidden": true
   },
   "coreReportRoutingTrial": {
     "status": "code-verified-not-physical",
