@@ -427,12 +427,27 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var subscriptionTrial = root.GetProperty("reportSubscriberIntegrityTrial");
         Assert.Equal(coreTrial.GetProperty("exactCommit").GetString(),
             subscriptionTrial.GetProperty("baseEngineCommit").GetString());
-        Assert.Equal(subscriptionTrial.GetProperty("exactCommit").GetString(),
-            root.GetProperty("commit").GetString());
         Assert.Equal("code-verified-not-physical", subscriptionTrial.GetProperty("status").GetString());
         Assert.True(subscriptionTrial.GetProperty("physicalQualificationRequired").GetBoolean());
         Assert.True(subscriptionTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
-        Assert.Equal(165, root.GetProperty("sourcePullRequest").GetInt32());
+        // P10.9G remains the immutable CodeVerified ancestor of the current
+        // P10.9I consumer pin; do not treat the previous SHA as live head.
+        var canonicalTrial = root.GetProperty("canonicalReportIngressIntegrityTrial");
+        Assert.Equal(subscriptionTrial.GetProperty("exactCommit").GetString(),
+            canonicalTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal("9bd01908ebd6fdf50a74f0a421b4e79613b878d4",
+            canonicalTrial.GetProperty("exactCommit").GetString());
+        Assert.Equal(canonicalTrial.GetProperty("exactCommit").GetString(),
+            root.GetProperty("commit").GetString());
+        Assert.Equal("code-verified-not-physical", canonicalTrial.GetProperty("status").GetString());
+        Assert.Equal(166, canonicalTrial.GetProperty("enginePullRequest").GetInt32());
+        Assert.Equal(536, canonicalTrial.GetProperty("issue").GetInt32());
+        Assert.Equal(38214165576L, canonicalTrial.GetProperty("engineCiRun").GetInt64());
+        Assert.True(canonicalTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(canonicalTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
+        Assert.True(canonicalTrial.GetProperty("fullDiscoveryFallbackForbidden").GetBoolean());
+        Assert.True(canonicalTrial.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
+        Assert.Equal(166, root.GetProperty("sourcePullRequest").GetInt32());
         Assert.Equal("code-trial-not-physical",p10.GetProperty("status").GetString());
         Assert.True(p10.GetProperty("physicalQualificationRequired").GetBoolean());
         Assert.True(closure.GetProperty("physicalQualificationRequired").GetBoolean());
