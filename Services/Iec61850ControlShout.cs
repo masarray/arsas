@@ -21,6 +21,7 @@ internal static class Iec61850ControlShout
         var title = explanation.Confidence switch
         {
             "ConfirmedClient" => "Command not sent",
+            "LocalValidation" => "Command not sent — validation failed",
             "IEDExplicitAddCause" => explanation.Summary,
             "MmsServiceOnly" => "IED rejected command — reason unspecified",
             "TerminationOnly" => "IED reported negative command termination",

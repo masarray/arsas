@@ -16,6 +16,8 @@ public class SignalDefinition : ObservableObject
     private string _displayReference = string.Empty;
     private DateTime _timestamp = DateTime.MinValue;
     private string _controlCdc = string.Empty;
+    private string _verifiedLiveControlCdc = string.Empty;
+    private string _dataSetAdvisoryCdc = string.Empty;
     private string _controlModelReference = string.Empty;
     private string _controlStatusReference = string.Empty;
     private string _controlModelText = "Auto-detect";
@@ -92,14 +94,68 @@ public class SignalDefinition : ObservableObject
     public string Source { get; set; } = "Online";
     public bool IsControlSignal { get; set; }
     public bool IsValidControlObject => IsControlSignal && IsControlObjectReference(ObjectReference);
+    /// <summary>Association-scoped CDC proved by a typed live control descriptor.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string VerifiedLiveControlCdc => _verifiedLiveControlCdc;
+
+    /// <summary>Last advisory CDC from SCL/DataSet projection; not command authority.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string DataSetAdvisoryCdc => _dataSetAdvisoryCdc;
+
     public string ControlCdc
     {
         get => _controlCdc;
         set
         {
-            if (!Set(ref _controlCdc, value?.Trim() ?? string.Empty)) return;
+            var candidate = value?.Trim() ?? string.Empty;
+            // Existing callers can no longer overwrite a live-verified CDC using
+            // stale SCL, DataSet, or speculative discovery metadata.
+            if (_verifiedLiveControlCdc.Length > 0 &&
+                !candidate.Equals(_verifiedLiveControlCdc, StringComparison.OrdinalIgnoreCase))
+                return;
+            if (!Set(ref _controlCdc, candidate)) return;
             RaiseControlActionProperties();
         }
+    }
+
+    public void AcceptVerifiedLiveControlCdc(string cdc)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(cdc);
+        if (!IsValidControlObject)
+            throw new InvalidOperationException("Only a valid control DataObject can receive live CDC evidence.");
+        var validated = cdc.Trim().ToUpperInvariant();
+        // This method must only be called after the engine's typed live semantic
+        // resolver succeeded; it is not an SCL authority override.
+        _verifiedLiveControlCdc = validated;
+        Raise(nameof(VerifiedLiveControlCdc));
+        ControlCdc = validated;
+    }
+
+    public bool ApplyDataSetAdvisoryControlMetadata(string cdc, string? statusReference)
+    {
+        _dataSetAdvisoryCdc = cdc?.Trim().ToUpperInvariant() ?? string.Empty;
+        Raise(nameof(DataSetAdvisoryCdc));
+        if (_verifiedLiveControlCdc.Length > 0)
+        {
+            // Reporting membership is independent of the control plane. Do not
+            // rewrite validated CDC or live feedback binding during monitoring.
+            return _dataSetAdvisoryCdc.Equals(_verifiedLiveControlCdc, StringComparison.OrdinalIgnoreCase);
+        }
+        if (_dataSetAdvisoryCdc.Length > 0)
+            ControlCdc = _dataSetAdvisoryCdc;
+        if (!string.IsNullOrWhiteSpace(statusReference))
+            ControlStatusReference = statusReference;
+        return true;
+    }
+
+    public void ClearLiveControlAuthority()
+    {
+        // Called only at MMS association teardown/new association boundary.
+        _verifiedLiveControlCdc = string.Empty;
+        _dataSetAdvisoryCdc = string.Empty;
+        Raise(nameof(VerifiedLiveControlCdc));
+        Raise(nameof(DataSetAdvisoryCdc));
+        ControlSemanticVerified = false;
     }
     // Preserve exact read-only MMS proof independently of ControlLastResult,
     // whose operator-friendly StatusOnly normalization intentionally shortens text.

@@ -2133,7 +2133,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         foreach (var signal in device.Signals.Where(s => s.IsValidControlObject))
         {
             signal.ClearControlConfirmation();
-            signal.ControlSemanticVerified = false;
+            signal.ClearLiveControlAuthority();
             signal.ControlModelText = "Auto-detect";
             signal.ControlInspectionEvidence = "Inspection pending for the current MMS association.";
             signal.ControlLastResult = "Inspection pending for the current MMS association.";

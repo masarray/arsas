@@ -185,7 +185,7 @@ internal static class DiagnosticReportBuilder
                     var evidence = (command.ControlInspectionEvidence ?? string.Empty)
                         .Replace('\r', ' ').Replace('\n', ' ');
                     if (evidence.Length > 480) evidence = evidence[..480] + "…";
-                    builder.AppendLine($"  {command.ObjectReference} | CDC={command.ControlCdc} | model={command.ControlModelText} | canOperate={command.ControlSupportsOperate} | {evidence}");
+                    builder.AppendLine($"  {command.ObjectReference} | CDC={command.ControlCdc} | liveVerifiedCdc={command.VerifiedLiveControlCdc} | dataSetCdc={command.DataSetAdvisoryCdc} | model={command.ControlModelText} | canOperate={command.ControlSupportsOperate} | {evidence}");
                 }
                 builder.AppendLine($"Logical Devices  : {EmptyAsUnavailable(device.LogicalDeviceSummary)}");
                 builder.AppendLine($"Identity source  : {EmptyAsUnavailable(device.IdentitySource)}");

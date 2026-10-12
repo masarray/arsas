@@ -1116,6 +1116,11 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             signal.ControlModelReference = $"{signal.ObjectReference}.ctlModel";
             var reason = $"{probe.Detail} Descriptor not ready: {discoveryError.Message}";
             signal.ControlLastResult = reason;
+            signal.ControlInspectionEvidence =
+                $"{signal.ControlModelReference} | {probe.Detail} | " +
+                $"readSucceeded={probe.ReadSucceeded}, decoded={probe.Decoded}, " +
+                $"kind={probe.RawKind}, scalar={probe.RawScalar}, request={probe.RequestHexPreview}, " +
+                $"response={probe.ResponseHexPreview} | {discoveryError.Message}";
             return new Iec61850ControlCapabilities
             {
                 ObjectReference = signal.ObjectReference,
@@ -1176,13 +1181,21 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         var modelText = FriendlyControlModel(descriptor.ControlModel);
         var valueType = MapControlValueType(descriptor, effectiveCdc);
 
-        signal.ControlCdc = effectiveCdc;
+        if (semantic.IsCommandSafe)
+            signal.AcceptVerifiedLiveControlCdc(effectiveCdc);
+        else
+            signal.ControlCdc = effectiveCdc;
         signal.ControlSemanticVerified = semantic.IsCommandSafe;
         signal.ControlValueType = valueType;
         signal.ControlCurrentValue = currentValue;
         signal.ControlStatusReference = statusReference;
         signal.ControlModelReference = $"{descriptor.ObjectReference}.ctlModel";
         signal.ControlModelText = modelText;
+        signal.ControlInspectionEvidence =
+            $"{descriptor.ObjectReference}.ctlModel | {modelText} | " +
+            $"typedCdc={descriptor.Cdc}, effectiveCdc={effectiveCdc}, " +
+            $"ctlVal={descriptor.CtlValSpecification.Signature}, status={statusReference}, " +
+            $"semanticSafe={semantic.IsCommandSafe} | {semantic.Reason} | {descriptor.DiscoveryEvidence}";
 
         return new Iec61850ControlCapabilities
         {
@@ -1964,7 +1977,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             IsSuccess = false,
             ServiceAccepted = false,
             FeedbackConfirmed = false,
-            CompletionState = "Rejected",
+            CompletionState = "NotSent",
             Stage = stage,
             Message = message,
             ControlModelText = capabilities.ControlModelText,
