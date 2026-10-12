@@ -11,7 +11,7 @@ namespace ArIED61850Tester.Services;
 public static class Iec61850ControlModelWriteDispatcher
 {
     public static Task<Iec61850ControlModelConfigurationResult> ConfigureAsync(
-        Iec61850MonitorRuntime runtime, string deviceId, SignalDefinition signal,
+        global::ArIED61850Tester.Iec61850MonitorRuntime runtime, string deviceId, SignalDefinition signal,
         Iec61850ControlModelKind expected, Iec61850ControlModelKind requested,
         CancellationToken cancellationToken)
         => runtime.ConfigureControlModelAsync(deviceId, signal, expected, requested, cancellationToken);

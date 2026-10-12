@@ -80,6 +80,11 @@ public sealed class P109QCommandDockCommissioningRegressionTests
         var gateway = Read("Services/Iec61850ControlModelWriteDispatcher.cs");
         Assert.Contains("runtime.ConfigureControlModelAsync(deviceId, signal, expected, requested, cancellationToken)", gateway);
         Assert.DoesNotContain("GetMethod(", gateway);
+        Assert.Contains("global::ArIED61850Tester.Iec61850MonitorRuntime runtime", gateway);
+        var facade = Read("Services/UiResponsiveIec61850MonitorRuntimeFacade.cs");
+        Assert.Contains("public Task<AR.Iec61850.Control.Iec61850ControlModelConfigurationResult> ConfigureControlModelAsync(", facade);
+        Assert.Contains("_inner.ConfigureControlModelAsync(deviceId, signal, expected, requested, token)", facade);
+        Assert.Contains("RunDeviceOperationAsync(", facade);
         Assert.Contains("Background=\"#F4F7FB\"", ui);
         Assert.DoesNotContain("new ControlCommandWindow(", code);
     }

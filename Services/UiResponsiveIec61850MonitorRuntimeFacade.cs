@@ -127,6 +127,18 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             cancellationToken,
             token => _inner.InspectControlAsync(deviceId, signal, token));
 
+    // The UI and the inner MMS runtime intentionally have different types.
+    // ctlModel editing must cross this facade, just like inspection/Operate;
+    // bypassing it loses the per-device lifecycle/serialization authority.
+    public Task<AR.Iec61850.Control.Iec61850ControlModelConfigurationResult> ConfigureControlModelAsync(
+        string deviceId, SignalDefinition signal,
+        Iec61850ControlModelKind expected, Iec61850ControlModelKind requested,
+        CancellationToken cancellationToken)
+        => RunDeviceOperationAsync(
+            deviceId,
+            cancellationToken,
+            token => _inner.ConfigureControlModelAsync(deviceId, signal, expected, requested, token));
+
     public Task<Iec61850ControlCommandResult> ExecuteControlAsync(
         string deviceId,
         Iec61850ControlCommandRequest request,
