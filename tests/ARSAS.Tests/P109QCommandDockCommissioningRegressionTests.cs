@@ -48,6 +48,9 @@ public sealed class P109QCommandDockCommissioningRegressionTests
         Assert.DoesNotContain("CommandPanel_Collapsed", xaml);
         Assert.Contains("RowHeight=\"35\" MinRowHeight=\"34\"", xaml);
         Assert.Contains("Height=\"25\" MinHeight=\"25\"", xaml);
+        var styles = Read("App.xaml");
+        Assert.Contains("<Setter Property=\"Padding\" Value=\"8,1\"/>", styles);
+        Assert.Contains("<StackPanel Margin=\"0,1\" ToolTip=\"{Binding ControlInspectionEvidence}\"", xaml);
         Assert.Contains("ScrollViewer.VerticalScrollBarVisibility=\"Auto\"", xaml);
         Assert.Contains("Grid.Column=\"1\" Content=\"Model\"", xaml);
         Assert.Contains("Click=\"ControlDetails_Click\"", xaml);

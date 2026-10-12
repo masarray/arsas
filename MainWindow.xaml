@@ -682,7 +682,7 @@
                                                     <DataGridTemplateColumn Header="Control" Width="1.55*" MinWidth="245">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
-                                                                <StackPanel Margin="0,3" ToolTip="{Binding ControlInspectionEvidence}" ToolTipService.ShowOnDisabled="True">
+                                                                <StackPanel Margin="0,1" ToolTip="{Binding ControlInspectionEvidence}" ToolTipService.ShowOnDisabled="True">
                                                                     <Grid>
                                                                         <Grid.ColumnDefinitions>
                                                                             <ColumnDefinition Width="*"/>

@@ -1010,7 +1010,7 @@
         </Style>
 
         <Style x:Key="CommandDataGridCell" TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
-            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="Padding" Value="8,1"/>
             <Setter Property="BorderBrush" Value="#E5ECF5"/>
             <Setter Property="BorderThickness" Value="0,0,0,1"/>
         </Style>
