@@ -4,7 +4,7 @@
   "ref": "main",
   "commit": "d1dd8fc14e79c5de15fbc52d77aea48a14c7c02b",
   "sourcePullRequest": 169,
-  "purpose": "P10.9R focused consumer UX: restore Live Values layout; compact command buttons; IEDScout-like select & Write ctlModel 0-4. Engine preserves single typed CF Write with exact preflight/readback; field validation pending.",
+  "purpose": "P10.9R focused consumer UX: restore Live Values layout; compact command buttons; compact select & Write ctlModel 0-4. Engine preserves single typed CF Write with exact preflight/readback; field validation pending.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
