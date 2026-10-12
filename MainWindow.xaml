@@ -655,7 +655,7 @@
                                                     <DataGridTextColumn Header="Control model" Binding="{Binding ControlModelText}" Width="1.15*" MinWidth="130" IsReadOnly="True">
                                                         <DataGridTextColumn.ElementStyle>
                                                             <Style TargetType="TextBlock">
-                                                                <Setter Property="ToolTip" Value="{Binding ControlLastResult}"/>
+                                                                <Setter Property="ToolTip" Value="{Binding ControlInspectionEvidence}"/>
                                                                 <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
                                                             </Style>
                                                         </DataGridTextColumn.ElementStyle>
@@ -682,7 +682,7 @@
                                                     <DataGridTemplateColumn Header="Control" Width="1.55*" MinWidth="190">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
-                                                                <StackPanel Margin="0,3">
+                                                                <StackPanel Margin="0,3" ToolTip="{Binding ControlInspectionEvidence}" ToolTipService.ShowOnDisabled="True">
                                                                     <Grid>
                                                                         <StackPanel Orientation="Horizontal">
                                                                             <StackPanel.Style>
@@ -783,6 +783,19 @@
                                                                             <Button Content="Set" Tag="{Binding}" Click="ControlQuickAction_Click" Style="{StaticResource PrimaryButton}" Padding="14,6"
                                                                                     IsEnabled="{Binding ControlSupportsOperate}"/>
                                                                         </StackPanel>
+                                                                        <!-- Unknown/unsupported CDC never produces an empty action cell. -->
+                                                                        <TextBlock Text="No typed action" FontSize="11" Foreground="{StaticResource Muted}" VerticalAlignment="Center">
+                                                                            <TextBlock.Style>
+                                                                                <Style TargetType="TextBlock">
+                                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    <Style.Triggers>
+                                                                                        <DataTrigger Binding="{Binding IsGenericControl}" Value="True">
+                                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                                        </DataTrigger>
+                                                                                    </Style.Triggers>
+                                                                                </Style>
+                                                                            </TextBlock.Style>
+                                                                        </TextBlock>
                                                                     </Grid>
                                                                 </StackPanel>
                                                             </DataTemplate>

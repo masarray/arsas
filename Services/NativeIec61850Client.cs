@@ -2887,6 +2887,9 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
     {
         var expanded = signals.ToList();
         AddValidatedControlCandidatesFromStatus(expanded);
+        // Reconcile only exact typed ST evidence from this discovery model.
+        // Do not guess that a TapChg name alone proves BSC semantics.
+        Iec61850ControlStatusEvidence.ApplyExactStepStatus(expanded);
 
         return expanded
             .Where(s => s.DataType != "Directory")

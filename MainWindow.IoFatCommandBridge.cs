@@ -23,10 +23,9 @@ public partial class MainWindow
         if (device is null)
             return null;
 
-        // CommandSignals contains only controls whose live ctlModel has proved that
-        // operation is allowed and whose UI command semantics are supported. Keep an
-        // explicit owner mapping so a FAT command cannot accidentally fall back to the
-        // Engineering tab's currently selected IED in a multi-IED workspace.
+        // CommandSignals is the selected control-object catalog, including readonly
+        // objects. Only ControlSupportsOperate authorizes actions. Keep explicit IED
+        // owner mapping so FAT cannot fall back to another IED in the workspace.
         device.RefreshCommandSignalProjection();
         foreach (var signal in device.Signals.Where(signal => signal.IsControlSignal && signal.IsValidControlObject))
             _signalOwners[signal] = device;
@@ -40,8 +39,8 @@ public partial class MainWindow
         var stopwatch = Stopwatch.StartNew();
         var fallbackRead = false;
 
-        // Preload is the same serialized live ctlModel authority used by the Engineering
-        // Command Panel. StatusOnly stays read-only and never enters CommandSignals.
+        // Preload uses the same live ctlModel authority as Engineering. StatusOnly
+        // remains visible in the selected catalog but stays action-disabled.
         await PreloadControlModelsAsync();
         device.RefreshCommandSignalProjection();
 

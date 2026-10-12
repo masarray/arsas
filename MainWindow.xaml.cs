@@ -1397,7 +1397,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 if (!signal.ControlCommandBusy)
                 {
                     signal.ControlCurrentValue = capabilities.CurrentValue;
+                    signal.ControlInspectionEvidence =
+                        $"{capabilities.ControlModelReference} | {capabilities.ControlModelText} | " +
+                        $"{capabilities.EngineControlServiceStatus} | {capabilities.DiscoveryEvidence}";
                     signal.ControlLastResult = capabilities.EngineControlServiceStatus;
+                    if (!capabilities.SupportsOperate)
+                        AddLog("INFO", device.Name,
+                            $"Read-only control inspection {signal.ObjectReference}: " +
+                            signal.ControlInspectionEvidence);
                 }
             }
             catch (OperationCanceledException)
@@ -1407,7 +1414,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             catch (Exception ex)
             {
                 if (!signal.ControlCommandBusy)
+                {
+                    signal.ControlInspectionEvidence =
+                        $"{signal.ObjectReference}: inspection failed; {ex.GetType().Name}: {ex.Message}";
                     signal.ControlLastResult = $"Status read failed: {ex.Message}";
+                }
             }
             finally
             {
@@ -2124,6 +2135,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             signal.ClearControlConfirmation();
             signal.ControlSemanticVerified = false;
             signal.ControlModelText = "Auto-detect";
+            signal.ControlInspectionEvidence = "Inspection pending for the current MMS association.";
             signal.ControlLastResult = "Inspection pending for the current MMS association.";
         }
         device.RefreshCommandSignalProjection();

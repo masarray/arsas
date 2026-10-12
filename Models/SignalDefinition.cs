@@ -28,6 +28,7 @@ public class SignalDefinition : ObservableObject
     private string? _deferredControlCurrentValue;
     private string _controlSetPointText = string.Empty;
     private string _controlLastResult = string.Empty;
+    private string _controlInspectionEvidence = "Live ctlModel inspection pending.";
     private readonly object _controlCommandSync = new();
     private bool _controlInspectionBusy;
     private bool _controlCommandBusy;
@@ -99,6 +100,13 @@ public class SignalDefinition : ObservableObject
             if (!Set(ref _controlCdc, value?.Trim() ?? string.Empty)) return;
             RaiseControlActionProperties();
         }
+    }
+    // Preserve exact read-only MMS proof independently of ControlLastResult,
+    // whose operator-friendly StatusOnly normalization intentionally shortens text.
+    public string ControlInspectionEvidence
+    {
+        get => _controlInspectionEvidence;
+        set => Set(ref _controlInspectionEvidence, value?.Trim() ?? string.Empty);
     }
     public string ControlModelReference { get => _controlModelReference; set => Set(ref _controlModelReference, value?.Trim() ?? string.Empty); }
     public string ControlStatusReference { get => _controlStatusReference; set => Set(ref _controlStatusReference, value?.Trim() ?? string.Empty); }
@@ -437,7 +445,10 @@ public class SignalDefinition : ObservableObject
         Raise(nameof(ControlCanConfirm));
     }
 
-    private bool CanExposeControlActions => !_controlModelResolved || ControlSupportsOperate;
+    // Presentation classification is independent of live command authorization.
+    // A StatusOnly/unknown MMS ctlModel must NEVER hide a known CDC action family;
+    // ControlSupportsOperate still independently gates every staged/direct write.
+    private bool CanExposeControlActions => IsValidControlObject;
 
     private bool IsPositionSemanticControl
     {
