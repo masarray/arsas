@@ -47,6 +47,17 @@ public sealed class P109LControlDockDiscoveryRecoveryTests
     }
 
     [Fact]
+    public void StandardBscStepFeedbackRemainsNumeric_NotBoolean()
+    {
+        Assert.Equal("Int8", Iec61850StaticControlStatusProjectionService.ResolveDeclaredFeedbackDataType(
+            "BSC", "boolean", "BOOLEAN"));
+        Assert.Equal("Int8", Iec61850StaticControlStatusProjectionService.ResolveDeclaredFeedbackDataType(
+            "BSC", "integer", "INT8"));
+        Assert.Equal("Dbpos", Iec61850StaticControlStatusProjectionService.ResolveDeclaredFeedbackDataType(
+            "DPC", "bit-string", "Dbpos"));
+    }
+
+    [Fact]
     public void CommandDockDeduplicatesExactTargetsWithoutAdmittingStatusLeaves()
     {
         var device = new Iec61850MonitorDevice();

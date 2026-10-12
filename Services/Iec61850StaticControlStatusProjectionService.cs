@@ -361,6 +361,10 @@ public static class Iec61850StaticControlStatusProjectionService
         {
             "DPC" => "Dbpos",
             "SPC" => "Boolean",
+            // IEC BSC valWTr.posVal is a signed numeric tap position; the
+            // enclosing DataObject may also declare BOOLEAN CF attributes.
+            // Never derive the ST feedback type from a sibling's MMS primitive.
+            "BSC" => "Int8",
             "ENC" => "Enum",
             "INC" or "ISC" when string.IsNullOrWhiteSpace(declaredPrimitive) ||
                                 declaredPrimitive.Equals("Unknown", StringComparison.OrdinalIgnoreCase)
