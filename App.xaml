@@ -476,9 +476,9 @@
         <Style x:Key="CommandActionButtonBase" TargetType="Button">
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="15,7"/>
-            <Setter Property="MinWidth" Value="66"/>
-            <Setter Property="MinHeight" Value="33"/>
+            <Setter Property="Padding" Value="10,3"/>
+            <Setter Property="MinWidth" Value="58"/>
+            <Setter Property="MinHeight" Value="29"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="SnapsToDevicePixels" Value="True"/>
@@ -490,15 +490,12 @@
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="11">
-                                <Border.Effect>
-                                    <DropShadowEffect BlurRadius="11" ShadowDepth="3" Opacity="0.22" Color="#31445F"/>
-                                </Border.Effect>
+                                    CornerRadius="9">
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                                   Margin="{TemplateBinding Padding}"
                                                   TextElement.Foreground="{TemplateBinding Foreground}"/>
                             </Border>
-                            <Border x:Name="InteractionSurface" Background="Transparent" CornerRadius="11"
+                            <Border x:Name="InteractionSurface" Background="Transparent" CornerRadius="9"
                                     BorderBrush="Transparent" BorderThickness="1" IsHitTestVisible="False"/>
                         </Grid>
                         <ControlTemplate.Triggers>
@@ -524,6 +521,17 @@
             </Setter>
         </Style>
 
+        <Style x:Key="CommandDockPrimaryButton" TargetType="Button" BasedOn="{StaticResource CommandActionButtonBase}">
+            <Setter Property="Background" Value="{StaticResource AccentGradient}"/>
+            <Setter Property="BorderBrush" Value="#4B83DF"/>
+            <Setter Property="MinWidth" Value="56"/>
+        </Style>
+        <Style x:Key="CommandDockSoftButton" TargetType="Button" BasedOn="{StaticResource CommandActionButtonBase}">
+            <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+            <Setter Property="Background" Value="#F7F9FC"/>
+            <Setter Property="BorderBrush" Value="#CDD8E5"/>
+            <Setter Property="MinWidth" Value="56"/>
+        </Style>
         <Style x:Key="CommandOpenButton" TargetType="Button" BasedOn="{StaticResource CommandActionButtonBase}">
             <Setter Property="Background" Value="{StaticResource CommandOpenGradient}"/>
             <Setter Property="BorderBrush" Value="#69D2A1"/>
@@ -1010,7 +1018,7 @@
         </Style>
 
         <Style x:Key="CommandDataGridCell" TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
-            <Setter Property="Padding" Value="8,1"/>
+            <Setter Property="Padding" Value="8,2"/>
             <Setter Property="BorderBrush" Value="#E5ECF5"/>
             <Setter Property="BorderThickness" Value="0,0,0,1"/>
         </Style>

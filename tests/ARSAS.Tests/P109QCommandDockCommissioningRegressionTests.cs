@@ -46,11 +46,16 @@ public sealed class P109QCommandDockCommissioningRegressionTests
         var xaml = Read("MainWindow.xaml");
         Assert.DoesNotContain("ExplorerCommandRow", xaml);
         Assert.DoesNotContain("CommandPanel_Collapsed", xaml);
-        Assert.Contains("RowHeight=\"35\" MinRowHeight=\"34\"", xaml);
-        Assert.Contains("Height=\"25\" MinHeight=\"25\"", xaml);
+        Assert.Contains("RowHeight=\"43\" MinRowHeight=\"42\"", xaml);
+        Assert.Contains("Height=\"29\" MinHeight=\"29\"", xaml);
         var styles = Read("App.xaml");
-        Assert.Contains("<Setter Property=\"Padding\" Value=\"8,1\"/>", styles);
-        Assert.Contains("<StackPanel Margin=\"0,1\" ToolTip=\"{Binding ControlInspectionEvidence}\"", xaml);
+        Assert.Contains("x:Key=\"CommandDockPrimaryButton\"", styles);
+        Assert.Contains("x:Key=\"CommandDockSoftButton\"", styles);
+        var start = styles.IndexOf("x:Key=\"CommandActionButtonBase\"", StringComparison.Ordinal);
+        var end = styles.IndexOf("x:Key=\"CommandOpenButton\"", start, StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start);
+        Assert.DoesNotContain("DropShadowEffect", styles[start..end]);
+        Assert.Contains("<StackPanel Margin=\"0,0\" ToolTip=\"{Binding ControlInspectionEvidence}\"", xaml);
         Assert.Contains("ScrollViewer.VerticalScrollBarVisibility=\"Auto\"", xaml);
         Assert.Contains("Grid.Column=\"1\" Content=\"Model\"", xaml);
         Assert.Contains("Click=\"ControlDetails_Click\"", xaml);
@@ -70,6 +75,12 @@ public sealed class P109QCommandDockCommissioningRegressionTests
         Assert.Contains("Write_Click", ui);
         Assert.Contains("ReadbackVerified", handler);
         Assert.Contains("StatusOnly", handler);
+        Assert.DoesNotContain("GetMethod(", handler);
+        Assert.Contains("Iec61850ControlModelWriteDispatcher.ConfigureAsync(", handler);
+        var gateway = Read("Services/Iec61850ControlModelWriteDispatcher.cs");
+        Assert.Contains("runtime.ConfigureControlModelAsync(deviceId, signal, expected, requested, cancellationToken)", gateway);
+        Assert.DoesNotContain("GetMethod(", gateway);
+        Assert.Contains("Background=\"#F4F7FB\"", ui);
         Assert.DoesNotContain("new ControlCommandWindow(", code);
     }
 

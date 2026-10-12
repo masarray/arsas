@@ -1162,6 +1162,10 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         ArControl.Iec61850ControlObjectSession control;
         try
         {
+            // Explicit inspection must use a fresh, association-scoped descriptor.
+            // Another engineering client may have changed CF ctlModel since the
+            // previous inspection; cached control sessions are not authoritative.
+            await InvalidateCachedControlSessionAsync(signal.ObjectReference).ConfigureAwait(false);
             control = await GetOrOpenControlSessionAsync(signal, cancellationToken).ConfigureAwait(false);
         }
         catch (InvalidOperationException discoveryError) when (_session.IsMmsInitiated)

@@ -139,24 +139,12 @@ public partial class ControlModelWriteWindow : Window
         }
     }
 
-    // Exact API bridge for WPF temporary markup compilation: fail closed if
-    // the pinned runtime signature differs. No generic MMS writes or reflection
-    // over arbitrary method names.
-    private async Task<Iec61850ControlModelConfigurationResult> ConfigureExactModelAsync(
+    // Compile-time transport bridge; no reflection or ad-hoc MMS Write.
+    private Task<Iec61850ControlModelConfigurationResult> ConfigureExactModelAsync(
         Iec61850ControlModelKind expected, Iec61850ControlModelKind selected,
         CancellationToken cancellationToken)
-    {
-        var api = typeof(Iec61850MonitorRuntime).GetMethod("ConfigureControlModelAsync",
-            new[] { typeof(string), typeof(SignalDefinition), typeof(Iec61850ControlModelKind),
-                    typeof(Iec61850ControlModelKind), typeof(CancellationToken) });
-        if (api is null || api.ReturnType != typeof(Task<Iec61850ControlModelConfigurationResult>))
-            throw new InvalidOperationException("Exact ctlModel Write API unavailable; no Write sent.");
-        if (api.Invoke(_runtime,
-                new object[] { _device.DeviceId, _signal, expected, selected, cancellationToken })
-            is not Task<Iec61850ControlModelConfigurationResult> task)
-            throw new InvalidOperationException("Unexpected ctlModel API response.");
-        return await task;
-    }
+        => Iec61850ControlModelWriteDispatcher.ConfigureAsync(
+            _runtime, _device.DeviceId, _signal, expected, selected, cancellationToken);
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
     private void Window_Closing(object? sender, CancelEventArgs e) => _cancellation.Cancel();

@@ -1695,6 +1695,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             Owner = this
         };
         dialog.ShowDialog();
+        if (device.IsConnected)
+            await RefreshControlValuesAsync(device, force: true);
     }
 
     private void RemoveControlFeedbackIndex(string deviceId)
