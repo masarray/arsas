@@ -59,7 +59,9 @@ public sealed class P109QCommandDockCommissioningRegressionTests
         Assert.Contains("ConfigurationConfirmationText.Trim().Equals(_signal.ObjectReference, StringComparison.Ordinal)", code);
         Assert.Contains("ConfirmConfigurationAuthorization", code);
         Assert.Contains("MessageBoxButton.YesNo", code);
-        Assert.Contains("ConfigureControlModelAsync(", code);
+        Assert.Contains("GetMethod(", code);
+        Assert.Contains("\"ConfigureControlModelAsync\"", code);
+        Assert.Contains("ConfigureWithExactRuntimeSignatureAsync(", code);
         Assert.Contains("if (!CanConfigureModel || SelectedModelChoice == null)", code);
         Assert.Contains("Commissioning · ctlModel (CF Write)", xaml);
         Assert.Contains("Apply ctlModel (one Write)", xaml);

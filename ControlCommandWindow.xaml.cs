@@ -69,6 +69,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
     public string RequiredConfigurationConfirmation => _signal.ObjectReference;
     public bool CanConfigureModel => !IsBusy && _modelReadable && SelectedModelChoice != null &&
         SelectedModelChoice.Model != _signal.ControlModelKind &&
+        _signal.ControlModelKind != Iec61850ControlModelKind.Unknown && _device.IsConnected &&
         ConfirmConfigurationAuthorization &&
         ConfigurationConfirmationText.Trim().Equals(_signal.ObjectReference, StringComparison.Ordinal);
     public string DeviceSummary => $"{_device.Name} • {_device.EndpointText}";
@@ -218,12 +219,12 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
         // its single CF Write.
         var expected = _signal.ControlModelKind;
         var requested = SelectedModelChoice.Model;
-        var warning = $"Commissioning operation (NOT a test):\\n\\n" +
-            $"IED: {_device.Name} ({_device.EndpointText})\\n" +
-            $"Object: {_signal.ObjectReference}\\n" +
-            $"CF attribute: {_signal.ObjectReference}.ctlModel\\n" +
-            $"Expected live: {(int)expected} ({expected})\\n" +
-            $"Requested: {(int)requested} ({requested})\\n\\n" +
+        var warning = $"Commissioning operation (NOT a test):\n\n" +
+            $"IED: {_device.Name} ({_device.EndpointText})\n" +
+            $"Object: {_signal.ObjectReference}\n" +
+            $"CF attribute: {_signal.ObjectReference}.ctlModel\n" +
+            $"Expected live: {(int)expected} ({expected})\n" +
+            $"Requested: {(int)requested} ({requested})\n\n" +
             "This can change the control security mode of the IED. " +
             "No Operate is sent, but the change may affect other clients. Continue?";
         if (MessageBox.Show(this, warning, "Confirm ctlModel commissioning",
@@ -235,8 +236,8 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
         ConfigurationResultText = "Verifying live ctlModel before a single CF Write…";
         try
         {
-            var result = await _runtime.ConfigureControlModelAsync(
-                _device.DeviceId, _signal, expected, requested, _cancellation.Token);
+            var result = await ConfigureWithExactRuntimeSignatureAsync(
+                expected, requested, _cancellation.Token);
             ConfigurationResultText = result.Detail;
             if (result.ReadbackVerified)
             {
@@ -268,6 +269,32 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             ConfigurationConfirmationText = string.Empty;
             IsBusy = false;
         }
+    }
+
+    // WPF generates a temporary markup assembly before the final ARSAS assembly.
+    // The temp pass can resolve an older runtime metadata image. Bind explicitly
+    // to the exact public signature at runtime; never dispatch a generic MMS Write.
+    // Reflection happens only on explicit operator commissioning, not monitoring.
+    private async Task<AR.Iec61850.Control.Iec61850ControlModelConfigurationResult>
+        ConfigureWithExactRuntimeSignatureAsync(
+            Iec61850ControlModelKind expected,
+            Iec61850ControlModelKind requested,
+            CancellationToken cancellationToken)
+    {
+        var api = typeof(Iec61850MonitorRuntime).GetMethod(
+            "ConfigureControlModelAsync",
+            new[] {
+                typeof(string), typeof(SignalDefinition), typeof(Iec61850ControlModelKind),
+                typeof(Iec61850ControlModelKind), typeof(CancellationToken)
+            });
+        if (api is null || api.ReturnType != typeof(Task<AR.Iec61850.Control.Iec61850ControlModelConfigurationResult>))
+            throw new InvalidOperationException(
+                "The pinned ARSAS commissioning runtime is unavailable. No ctlModel Write was attempted.");
+        if (api.Invoke(_runtime,
+                new object[] { _device.DeviceId, _signal, expected, requested, cancellationToken })
+            is not Task<AR.Iec61850.Control.Iec61850ControlModelConfigurationResult> operation)
+            throw new InvalidOperationException("Commissioning API returned an incompatible result.");
+        return await operation;
     }
 
     private async void SendCommand_Click(object sender, RoutedEventArgs e)
