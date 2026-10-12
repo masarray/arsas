@@ -1086,6 +1086,69 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         return null;
     }
 
+    /// <summary>
+    /// Opt-in commissioning only. An exact ctlModel CF Write is allowed once
+    /// and only after engine preflight confirms the expected live model.
+    /// Serializes with normal control operations; never issues SBO/Operate.
+    /// </summary>
+    public async Task<AR.Iec61850.Control.Iec61850ControlModelConfigurationResult> ConfigureControlModelAsync(
+        SignalDefinition signal,
+        Iec61850ControlModelKind expected, Iec61850ControlModelKind target,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(signal);
+        if (!signal.IsValidControlObject || !_session.IsMmsInitiated)
+            throw new InvalidOperationException("A valid connected control DataObject is required.");
+        await _controlCommandGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            try
+            {
+                var service = new ArControl.Iec61850ControlService();
+                return await RunMmsOperationAsync(
+                    () => service.ConfigureControlModelAsync(_session, signal.ObjectReference,
+                        (ArControl.Iec61850ControlModel)(int)expected,
+                        (ArControl.Iec61850ControlModel)(int)target,
+                        cancellationToken),
+                    cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                // Even a partial/uncertain write invalidates the cached descriptor.
+                // A subsequent explicit read-only inspection must rebuild authority.
+                await InvalidateCachedControlSessionAsync(signal.ObjectReference)
+                    .ConfigureAwait(false);
+                signal.ClearControlConfirmation();
+                signal.ClearLiveControlAuthority();
+                signal.ControlModelText = "Auto-detect";
+                signal.ControlInspectionEvidence =
+                    "ctlModel configuration attempted: fresh typed live inspection required.";
+            }
+        }
+        finally
+        {
+            _controlCommandGate.Release();
+        }
+    }
+
+    private async Task InvalidateCachedControlSessionAsync(string objectReference)
+    {
+        ArControl.Iec61850ControlObjectSession? stale = null;
+        await _controlSessionGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var key = NormalizeControlObjectKey(objectReference);
+            if (_controlSessions.Remove(key, out var previous))
+                stale = previous;
+        }
+        finally
+        {
+            _controlSessionGate.Release();
+        }
+        if (stale != null)
+            await stale.DisposeAsync().ConfigureAwait(false);
+    }
+
     public async Task<Iec61850ControlCapabilities> InspectControlAsync(
         SignalDefinition signal,
         CancellationToken cancellationToken)

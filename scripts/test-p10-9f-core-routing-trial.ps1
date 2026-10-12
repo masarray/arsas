@@ -121,7 +121,37 @@ function Test-P109FCoreRoutingTrial {
         [bool]$probe.fullDiscoveryFallbackForbidden -and
         [bool]$probe.cyclicMmsProcessPollingForbidden
     )
-    if (-not ($previousHead -or $subscriberHead -or $canonicalHead -or $zivHead -or $genericHead -or $probeHead) -or
+    # P10.9Q preserves the read-only probe gate; explicit commissioning requires
+    # live compare, one CF write and readback, never an Operate service.
+    $commission = $Lock.p109QControlModelCommissioningTrial
+    $commissionHead = (
+        [string]$Lock.commit -ceq 'f7a4e3ba2f9771e34e04073c0db0900112aa55fa' -and
+        [int]$Lock.sourcePullRequest -eq 169 -and
+        $probeHead -eq $false -and $null -ne $probe -and $null -ne $commission -and
+        $zivIntegrityValid -and
+        [string]$probe.exactCommit -ceq '5e17da5f673eedce125b5c66e7dc2fa0abef2851' -and
+        [long]$probe.engineCiRun -eq 38239451501 -and
+        [bool]$probe.noControlWriteOnProbe -and
+        [bool]$probe.physicalQualificationRequired -and
+        [bool]$probe.mainlinePromotionForbidden -and
+        [bool]$probe.fullDiscoveryFallbackForbidden -and
+        [bool]$probe.cyclicMmsProcessPollingForbidden -and
+        [string]$commission.status -ceq 'code-trial-not-physical' -and
+        [int]$commission.enginePullRequest -eq 169 -and
+        [long]$commission.engineCiRun -eq 38257606517 -and
+        [string]$commission.baseEngineCommit -ceq [string]$probe.exactCommit -and
+        [string]$commission.exactCommit -ceq 'f7a4e3ba2f9771e34e04073c0db0900112aa55fa' -and
+        [bool]$commission.authorizedConfirmationRequired -and
+        [bool]$commission.exactLiveCompareRequired -and
+        [bool]$commission.singleWriteNoRetry -and
+        [bool]$commission.verifiedReadbackRequired -and
+        [bool]$commission.commandOperateForbidden -and
+        [bool]$commission.physicalQualificationRequired -and
+        [bool]$commission.mainlinePromotionForbidden -and
+        [bool]$commission.fullDiscoveryFallbackForbidden -and
+        [bool]$commission.cyclicMmsProcessPollingForbidden
+    )
+    if (-not ($previousHead -or $subscriberHead -or $canonicalHead -or $zivHead -or $genericHead -or $probeHead -or $commissionHead) -or
         [string]$Lock.repository -cne 'masarray/ARIEC61850' -or
         [string]$Lock.ref -cne 'main' -or $null -eq $candidate) { return $false }
 

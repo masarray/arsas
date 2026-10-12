@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "5e17da5f673eedce125b5c66e7dc2fa0abef2851",
+  "commit": "f7a4e3ba2f9771e34e04073c0db0900112aa55fa",
   "sourcePullRequest": 169,
-  "purpose": "P10.9L code-verified-not-physical: exact read-only ctlModel diagnosis and selected control catalog visibility. ARIEC PR #169 CI 38239451501 verified engine SHA 5e17da5f673eedce125b5c66e7dc2fa0abef2851; no physical command acceptance, no discovery/reporting authority change.",
+  "purpose": "P10.9Q code-trial / physically unqualified: explicit one-shot CF ctlModel Write with readback and operator consent; no automatic mode guessing or command dispatch. Engine CI #38257606517.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
@@ -175,5 +175,21 @@
     "fullDiscoveryFallbackForbidden": true,
     "cyclicMmsProcessPollingForbidden": true,
     "engineCiRun": 38239451501
+  },
+  "p109QControlModelCommissioningTrial": {
+    "status": "code-trial-not-physical",
+    "enginePullRequest": 169,
+    "engineCiRun": 38257606517,
+    "baseEngineCommit": "5e17da5f673eedce125b5c66e7dc2fa0abef2851",
+    "exactCommit": "f7a4e3ba2f9771e34e04073c0db0900112aa55fa",
+    "authorizedConfirmationRequired": true,
+    "exactLiveCompareRequired": true,
+    "singleWriteNoRetry": true,
+    "verifiedReadbackRequired": true,
+    "commandOperateForbidden": true,
+    "physicalQualificationRequired": true,
+    "mainlinePromotionForbidden": true,
+    "fullDiscoveryFallbackForbidden": true,
+    "cyclicMmsProcessPollingForbidden": true
   }
 }

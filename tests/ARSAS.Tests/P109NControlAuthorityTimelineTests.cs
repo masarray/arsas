@@ -119,6 +119,47 @@ public sealed class P109NControlAuthorityTimelineTests
     }
 
     [Fact]
+    public void DirectionalActionsStageConfirmationInsteadOfDirectMmsDispatch()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "MainWindow.xaml")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+        var xaml = File.ReadAllText(Path.Combine(dir!.FullName, "MainWindow.xaml"));
+        var code = File.ReadAllText(Path.Combine(dir.FullName, "MainWindow.xaml.cs"));
+        Assert.DoesNotContain("CommandParameter=\"Raise\" Click=\"ControlQuickAction_Click\"", xaml);
+        Assert.DoesNotContain("CommandParameter=\"Lower\" Click=\"ControlQuickAction_Click\"", xaml);
+        Assert.Contains("CommandParameter=\"Raise\" Click=\"ControlStageAction_Click\"", xaml);
+        Assert.Contains("CommandParameter=\"Lower\" Click=\"ControlStageAction_Click\"", xaml);
+        Assert.Contains("Binding ControlConfirmationPending", xaml);
+        Assert.Contains("Click=\"ControlConfirmAction_Click\"", xaml);
+        Assert.Contains("Grid.Column=\"1\" Content=\"Model\"", xaml);
+        Assert.Contains("CommandPanel_Collapsed", xaml);
+        Assert.Contains("ExplorerCommandRow.Height = new GridLength(2, GridUnitType.Star);", code);
+    }
+
+    [Fact]
+    public void ZivRaiseLowerRequiresExplicitConfirmBeforeCommandClaim()
+    {
+        var tap = Control("ZIVAVRLD1/ATCC1.TapChg", "BSC");
+        tap.ControlModelText = "Select Before Operate (SBO) • Normal security";
+        tap.AcceptVerifiedLiveControlCdc("BSC");
+        tap.ControlSemanticVerified = true;
+        Assert.True(tap.TryStageControlConfirmation("Raise", "Raise", out _));
+        Assert.True(tap.ControlConfirmationPending);
+        Assert.Equal("Confirm Raise", tap.ControlPendingConfirmationLabel);
+        Assert.False(tap.ControlCommandBusy);
+        tap.ClearControlConfirmation();
+        Assert.False(tap.ControlConfirmationPending);
+        Assert.False(tap.TryClaimControlConfirmation(out _, out _));
+        Assert.True(tap.TryStageControlConfirmation("Lower", "Lower", out _));
+        Assert.True(tap.TryClaimControlConfirmation(out var claim, out _));
+        Assert.NotNull(claim);
+        Assert.True(tap.ControlCommandBusy);
+        Assert.True(tap.CompleteControlCommand(claim!));
+    }
+
+    [Fact]
     public void ProjectionProducerUsesAdvisoryApi_NotDirectCdcAssignment()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

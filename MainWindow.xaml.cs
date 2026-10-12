@@ -1351,8 +1351,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void CommandPanel_Expanded(object sender, RoutedEventArgs e)
     {
+        // Allocate a bounded share to Command Dock. Its DataGrid scrolls inside
+        // the available viewport; the last control can never be clipped below
+        // the status bar at normal laptop resolutions.
+        ExplorerLiveRow.Height = new GridLength(3, GridUnitType.Star);
+        ExplorerCommandRow.Height = new GridLength(2, GridUnitType.Star);
         if (SelectedDevice != null)
             await RefreshControlValuesAsync(SelectedDevice, force: true);
+    }
+
+    private void CommandPanel_Collapsed(object sender, RoutedEventArgs e)
+    {
+        ExplorerLiveRow.Height = new GridLength(1, GridUnitType.Star);
+        ExplorerCommandRow.Height = GridLength.Auto;
     }
 
     private async void RefreshCommandValues_Click(object sender, RoutedEventArgs e)
@@ -1435,7 +1446,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void ControlStageAction_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button button || button.Tag is not SignalDefinition signal || !signal.IsPositionControl)
+        if (sender is not Button button || button.Tag is not SignalDefinition signal ||
+            !(signal.IsPositionControl || signal.IsRaiseLowerControl ||
+              signal.IsRaiseOnlyControl || signal.IsLowerOnlyControl))
             return;
 
         var device = _signalOwners.TryGetValue(signal, out var owner) ? owner : SelectedDevice;
@@ -1674,7 +1687,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (sender is not Button button || button.Tag is not SignalDefinition signal || !signal.IsControlSignal)
             return;
 
-        var device = SelectedDevice;
+        var device = _signalOwners.TryGetValue(signal, out var owner) ? owner : SelectedDevice;
         if (device == null)
             return;
 

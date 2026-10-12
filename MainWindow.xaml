@@ -456,8 +456,8 @@
 
                         <Grid Visibility="{Binding SelectedExplorerVisibility}">
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="*"/>
-                                <RowDefinition Height="Auto"/>
+                                <RowDefinition x:Name="ExplorerLiveRow" Height="*"/>
+                                <RowDefinition x:Name="ExplorerCommandRow" Height="Auto"/>
                             </Grid.RowDefinitions>
 
                             <Border Grid.Row="0" Style="{StaticResource WorkspaceCard}" Padding="10">
@@ -611,7 +611,7 @@
                                 </Grid>
                             </Border>
 
-                            <Expander x:Name="CommandPanelExpander" Grid.Row="1" Margin="0,10,0,0" IsExpanded="False">
+                            <Expander x:Name="CommandPanelExpander" Grid.Row="1" Margin="0,10,0,0" IsExpanded="False" Expanded="CommandPanel_Expanded" Collapsed="CommandPanel_Collapsed">
                                 <Expander.Header>
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <Border Width="28" Height="28" CornerRadius="9" Background="#E7F0FF" BorderBrush="#C9DBF7" BorderThickness="1" Margin="0,0,9,0">
@@ -625,7 +625,7 @@
                                 <Border Style="{StaticResource WorkspaceCard}" Background="{StaticResource CommandPanelSurface}" Padding="6" BorderBrush="#BFD0E5">
                                     <Grid>
                                         <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
 
@@ -636,7 +636,7 @@
                                                       AutoGenerateColumns="False" MaxHeight="320" MinHeight="56" RowHeight="48" MinRowHeight="46" FrozenColumnCount="1"
                                                       EnableRowVirtualization="True" EnableColumnVirtualization="True"
                                                       VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
-                                                      ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                      ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                                       CanUserResizeColumns="False" ClipToBounds="True">
                                                 <DataGrid.Columns>
                                                     <DataGridTextColumn Header="IEC Telegram" Binding="{Binding DisplayReference}" Width="1.9*" MinWidth="145" IsReadOnly="True"/>
@@ -679,11 +679,15 @@
                                                             </DataTemplate>
                                                         </DataGridTemplateColumn.CellTemplate>
                                                     </DataGridTemplateColumn>
-                                                    <DataGridTemplateColumn Header="Control" Width="1.55*" MinWidth="190">
+                                                    <DataGridTemplateColumn Header="Control" Width="1.55*" MinWidth="222">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
                                                                 <StackPanel Margin="0,3" ToolTip="{Binding ControlInspectionEvidence}" ToolTipService.ShowOnDisabled="True">
                                                                     <Grid>
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                            <ColumnDefinition Width="Auto"/>
+                                                                        </Grid.ColumnDefinitions>
                                                                         <StackPanel Orientation="Horizontal">
                                                                             <StackPanel.Style>
                                                                                 <Style TargetType="StackPanel">
@@ -714,7 +718,6 @@
                                                                                     <Style.Triggers>
                                                                                         <MultiDataTrigger>
                                                                                             <MultiDataTrigger.Conditions>
-                                                                                                <Condition Binding="{Binding IsPositionControl}" Value="True"/>
                                                                                                 <Condition Binding="{Binding ControlConfirmationPending}" Value="True"/>
                                                                                             </MultiDataTrigger.Conditions>
                                                                                             <Setter Property="Visibility" Value="Visible"/>
@@ -732,32 +735,32 @@
                                                                         <StackPanel Orientation="Horizontal">
                                                                             <StackPanel.Style>
                                                                                 <Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/>
-                                                                                    <Style.Triggers><DataTrigger Binding="{Binding IsRaiseOnlyControl}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                                                                    <Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsRaiseOnlyControl}" Value="True"/><Condition Binding="{Binding ControlConfirmationPending}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers>
                                                                                 </Style>
                                                                             </StackPanel.Style>
-                                                                            <Button Content="Raise" Tag="{Binding}" CommandParameter="Raise" Click="ControlQuickAction_Click" Style="{StaticResource PrimaryButton}" Padding="14,6"
+                                                                            <Button Content="Raise" Tag="{Binding}" CommandParameter="Raise" Click="ControlStageAction_Click" Style="{StaticResource PrimaryButton}" Padding="14,6"
                                                                                     IsEnabled="{Binding ControlSupportsOperate}"/>
                                                                         </StackPanel>
 
                                                                         <StackPanel Orientation="Horizontal">
                                                                             <StackPanel.Style>
                                                                                 <Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/>
-                                                                                    <Style.Triggers><DataTrigger Binding="{Binding IsLowerOnlyControl}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                                                                    <Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsLowerOnlyControl}" Value="True"/><Condition Binding="{Binding ControlConfirmationPending}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers>
                                                                                 </Style>
                                                                             </StackPanel.Style>
-                                                                            <Button Content="Lower" Tag="{Binding}" CommandParameter="Lower" Click="ControlQuickAction_Click" Style="{StaticResource SoftButton}" Padding="14,6"
+                                                                            <Button Content="Lower" Tag="{Binding}" CommandParameter="Lower" Click="ControlStageAction_Click" Style="{StaticResource SoftButton}" Padding="14,6"
                                                                                     IsEnabled="{Binding ControlSupportsOperate}"/>
                                                                         </StackPanel>
 
                                                                         <StackPanel Orientation="Horizontal">
                                                                             <StackPanel.Style>
                                                                                 <Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/>
-                                                                                    <Style.Triggers><DataTrigger Binding="{Binding IsRaiseLowerControl}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                                                                    <Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsRaiseLowerControl}" Value="True"/><Condition Binding="{Binding ControlConfirmationPending}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers>
                                                                                 </Style>
                                                                             </StackPanel.Style>
-                                                                            <Button Content="Raise" Tag="{Binding}" CommandParameter="Raise" Click="ControlQuickAction_Click" Style="{StaticResource PrimaryButton}" Padding="14,6" Margin="0,0,7,0"
+                                                                            <Button Content="Raise" Tag="{Binding}" CommandParameter="Raise" Click="ControlStageAction_Click" Style="{StaticResource PrimaryButton}" Padding="14,6" Margin="0,0,7,0"
                                                                                     IsEnabled="{Binding ControlSupportsOperate}"/>
-                                                                            <Button Content="Lower" Tag="{Binding}" CommandParameter="Lower" Click="ControlQuickAction_Click" Style="{StaticResource SoftButton}" Padding="14,6"
+                                                                            <Button Content="Lower" Tag="{Binding}" CommandParameter="Lower" Click="ControlStageAction_Click" Style="{StaticResource SoftButton}" Padding="14,6"
                                                                                     IsEnabled="{Binding ControlSupportsOperate}"/>
                                                                         </StackPanel>
 
@@ -783,6 +786,10 @@
                                                                             <Button Content="Set" Tag="{Binding}" Click="ControlQuickAction_Click" Style="{StaticResource PrimaryButton}" Padding="14,6"
                                                                                     IsEnabled="{Binding ControlSupportsOperate}"/>
                                                                         </StackPanel>
+                                                                        <Button Grid.Column="1" Content="Model" Tag="{Binding}" Click="ControlDetails_Click"
+                                                                                Style="{StaticResource SoftButton}" Padding="7,4" Margin="6,0,1,0"
+                                                                                MinWidth="48" MinHeight="29"
+                                                                                ToolTip="Inspect live ctlModel and open explicit commissioning settings"/>
                                                                         <!-- Unknown/unsupported CDC never produces an empty action cell. -->
                                                                         <TextBlock Text="No typed action" FontSize="11" Foreground="{StaticResource Muted}" VerticalAlignment="Center">
                                                                             <TextBlock.Style>

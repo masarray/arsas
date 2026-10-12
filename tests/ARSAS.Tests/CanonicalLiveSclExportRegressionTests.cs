@@ -448,8 +448,13 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var recovery = root.GetProperty("p109LControlRecoveryTrial");
         Assert.Equal(genericTrial.GetProperty("exactCommit").GetString(),
             recovery.GetProperty("baseEngineCommit").GetString());
+        var commissioning = root.GetProperty("p109QControlModelCommissioningTrial");
         Assert.Equal(recovery.GetProperty("exactCommit").GetString(),
+            commissioning.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal(commissioning.GetProperty("exactCommit").GetString(),
             root.GetProperty("commit").GetString());
+        Assert.True(commissioning.GetProperty("singleWriteNoRetry").GetBoolean());
+        Assert.True(commissioning.GetProperty("commandOperateForbidden").GetBoolean());
         Assert.True(recovery.GetProperty("noControlWriteOnProbe").GetBoolean());
         Assert.Equal("a43b9b4864a9565c02f544d4135fe157c2fac577",
             genericTrial.GetProperty("exactCommit").GetString());

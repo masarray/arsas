@@ -15,6 +15,11 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
     private readonly SignalDefinition _signal;
     private readonly CancellationTokenSource _cancellation = new();
     private string _controlModelText = "Reading ctlModel…";
+    private bool _modelReadable;
+    private bool _confirmConfigurationAuthorization;
+    private string _configurationConfirmationText = string.Empty;
+    private string _configurationResultText = "Read-only inspection first. No configuration is written automatically.";
+    private ControlModelChoice? _selectedModelChoice;
     private string _controlCdcText = "CONTROL";
     private string _currentValue = "-";
     private string _engineStatusText = "Checking ARIEC61850 Smart Control capability…";
@@ -32,7 +37,40 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
+    public sealed record ControlModelChoice(Iec61850ControlModelKind Model, string Label);
     public ObservableCollection<string> ValueOptions { get; } = new();
+    public ObservableCollection<ControlModelChoice> AvailableControlModels { get; } = new()
+    {
+        new(Iec61850ControlModelKind.DirectNormal, "1 · Direct · Normal"),
+        new(Iec61850ControlModelKind.SboNormal, "2 · SBO · Normal"),
+        new(Iec61850ControlModelKind.DirectEnhanced, "3 · Direct · Enhanced"),
+        new(Iec61850ControlModelKind.SboEnhanced, "4 · SBO · Enhanced")
+    };
+    public ControlModelChoice? SelectedModelChoice
+    {
+        get => _selectedModelChoice;
+        set { if (Set(ref _selectedModelChoice, value)) Raise(nameof(CanConfigureModel)); }
+    }
+    public bool ConfirmConfigurationAuthorization
+    {
+        get => _confirmConfigurationAuthorization;
+        set { if (Set(ref _confirmConfigurationAuthorization, value)) Raise(nameof(CanConfigureModel)); }
+    }
+    public string ConfigurationConfirmationText
+    {
+        get => _configurationConfirmationText;
+        set { if (Set(ref _configurationConfirmationText, value)) Raise(nameof(CanConfigureModel)); }
+    }
+    public string ConfigurationResultText
+    {
+        get => _configurationResultText;
+        private set => Set(ref _configurationResultText, value);
+    }
+    public string RequiredConfigurationConfirmation => _signal.ObjectReference;
+    public bool CanConfigureModel => !IsBusy && _modelReadable && SelectedModelChoice != null &&
+        SelectedModelChoice.Model != _signal.ControlModelKind &&
+        ConfirmConfigurationAuthorization &&
+        ConfigurationConfirmationText.Trim().Equals(_signal.ObjectReference, StringComparison.Ordinal);
     public string DeviceSummary => $"{_device.Name} • {_device.EndpointText}";
     public string SignalName => _signal.Name;
     public string Telegram => Iec61850MonitorPoint.StripIedNamePrefix(_signal.ObjectReference, _device.Name);
@@ -72,6 +110,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             if (!Set(ref _isBusy, value)) return;
             Raise(nameof(CanSend));
             Raise(nameof(SendButtonText));
+            Raise(nameof(CanConfigureModel));
         }
     }
     public bool IsReady
@@ -109,6 +148,9 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
 
     private async Task InspectAsync()
     {
+        _modelReadable = false;
+        ConfirmConfigurationAuthorization = false;
+        ConfigurationConfirmationText = string.Empty;
         IsBusy = true;
         CommandStage = "Inspecting control";
         CommandStatus = "Reading ctlModel and current status from the IED…";
@@ -121,6 +163,9 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
                 _cancellation.Token);
 
             ControlModelText = capabilities.ControlModelText;
+            _modelReadable = _signal.ControlModelKind != Iec61850ControlModelKind.Unknown &&
+                capabilities.EngineControlServiceAvailable;
+            Raise(nameof(CanConfigureModel));
             ControlCdcText = string.IsNullOrWhiteSpace(capabilities.ControlCdc) ? "CONTROL" : capabilities.ControlCdc;
             CurrentValue = capabilities.CurrentValue;
             EngineStatusText = capabilities.EngineControlServiceStatus;
@@ -157,6 +202,70 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
         }
         finally
         {
+            IsBusy = false;
+        }
+    }
+
+    private async void RefreshControlModel_Click(object sender, RoutedEventArgs e)
+        => await InspectAsync();
+
+    private async void ConfigureControlModel_Click(object sender, RoutedEventArgs e)
+    {
+        if (!CanConfigureModel || SelectedModelChoice == null)
+            return;
+        // Snapshots are never refreshed silently after the operator confirms
+        // a target. Engine still re-reads and compares exact live ctlModel before
+        // its single CF Write.
+        var expected = _signal.ControlModelKind;
+        var requested = SelectedModelChoice.Model;
+        var warning = $"Commissioning operation (NOT a test):\\n\\n" +
+            $"IED: {_device.Name} ({_device.EndpointText})\\n" +
+            $"Object: {_signal.ObjectReference}\\n" +
+            $"CF attribute: {_signal.ObjectReference}.ctlModel\\n" +
+            $"Expected live: {(int)expected} ({expected})\\n" +
+            $"Requested: {(int)requested} ({requested})\\n\\n" +
+            "This can change the control security mode of the IED. " +
+            "No Operate is sent, but the change may affect other clients. Continue?";
+        if (MessageBox.Show(this, warning, "Confirm ctlModel commissioning",
+                MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No)
+            != MessageBoxResult.Yes)
+            return;
+        IsBusy = true;
+        IsReady = false;
+        ConfigurationResultText = "Verifying live ctlModel before a single CF Write…";
+        try
+        {
+            var result = await _runtime.ConfigureControlModelAsync(
+                _device.DeviceId, _signal, expected, requested, _cancellation.Token);
+            ConfigurationResultText = result.Detail;
+            if (result.ReadbackVerified)
+            {
+                await InspectAsync(); // fresh typed descriptor, not stale readiness
+                ConfigurationResultText = result.Detail +
+                    " Fresh control inspection completed; verify the operating procedure.";
+            }
+            else
+            {
+                CommandStage = "Commissioning not verified";
+                CommandStatus = result.Detail;
+                SetResultTone("Warning");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            ConfigurationResultText = "Cancelled. Read back ctlModel before any future operation.";
+            CommandStage = "Commissioning uncertain";
+        }
+        catch (Exception ex)
+        {
+            ConfigurationResultText = $"{ex.GetType().Name}: {ex.Message} Readback and reinspection required.";
+            CommandStage = "Commissioning failed or uncertain";
+            SetResultTone("Error");
+        }
+        finally
+        {
+            ConfirmConfigurationAuthorization = false;
+            ConfigurationConfirmationText = string.Empty;
             IsBusy = false;
         }
     }

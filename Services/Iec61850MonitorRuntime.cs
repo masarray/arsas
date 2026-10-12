@@ -659,6 +659,49 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             .ToList();
     }
 
+    public async Task<AR.Iec61850.Control.Iec61850ControlModelConfigurationResult> ConfigureControlModelAsync(
+        string deviceId, SignalDefinition signal,
+        Iec61850ControlModelKind expected, Iec61850ControlModelKind target,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(deviceId);
+        ArgumentNullException.ThrowIfNull(signal);
+        if (!_sessions.TryGetValue(deviceId, out var session) || !session.Client.IsConnected)
+            throw new InvalidOperationException("The IED is not associated. ctlModel Write is forbidden.");
+        if (expected == Iec61850ControlModelKind.Unknown ||
+            target is not (Iec61850ControlModelKind.DirectNormal or
+                           Iec61850ControlModelKind.DirectEnhanced or
+                           Iec61850ControlModelKind.SboNormal or
+                           Iec61850ControlModelKind.SboEnhanced))
+            throw new ArgumentException("A valid expected live ctlModel and target 1-4 are required.");
+
+        var targetKey = deviceId + "|" + Iec61850ControlIdentity.Normalize(signal.ObjectReference);
+        if (!_activeControlTargets.TryAdd(targetKey, 0))
+            throw new InvalidOperationException("A command is already running for this object.");
+
+        Interlocked.Increment(ref session.ControlCommandActive);
+        try
+        {
+            if (Volatile.Read(ref session.ControlCommandActive) != 1)
+                throw new InvalidOperationException("Another IED command is in progress. ctlModel configuration was not started.");
+            Log("WARN", session.Device.Name,
+                $"OPERATOR_CTL_MODEL_CONFIGURATION: {signal.ObjectReference}; expected={expected}; requested={target}; " +
+                "explicit commissioning confirmed; one CF Write maximum, never Operate.");
+            var result = await session.Client.ConfigureControlModelAsync(
+                signal, expected, target, cancellationToken).ConfigureAwait(false);
+            Log(result.ReadbackVerified ? "INFO" : "WARN", session.Device.Name,
+                $"CTL_MODEL_CONFIGURATION_RESULT: {signal.ObjectReference}; " +
+                $"writeAccepted={result.WriteAccepted}; readbackVerified={result.ReadbackVerified}; " +
+                $"before={result.BeforeModel}; after={result.AfterModel}; {result.Detail}");
+            return result;
+        }
+        finally
+        {
+            Interlocked.Decrement(ref session.ControlCommandActive);
+            _activeControlTargets.TryRemove(targetKey, out _);
+        }
+    }
+
     public async Task<Iec61850ControlCapabilities> InspectControlAsync(
         string deviceId,
         SignalDefinition signal,

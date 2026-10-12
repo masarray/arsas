@@ -92,8 +92,13 @@ public sealed class SmartInteroperabilityTrialGuardRegressionTests
         var recovery = root.GetProperty("p109LControlRecoveryTrial");
         Assert.Equal(genericTrial.GetProperty("exactCommit").GetString(),
             recovery.GetProperty("baseEngineCommit").GetString());
+        var commissioning = root.GetProperty("p109QControlModelCommissioningTrial");
+        Assert.Equal(recovery.GetProperty("exactCommit").GetString(),
+            commissioning.GetProperty("baseEngineCommit").GetString());
         Assert.Equal(root.GetProperty("commit").GetString(),
-            recovery.GetProperty("exactCommit").GetString());
+            commissioning.GetProperty("exactCommit").GetString());
+        Assert.True(commissioning.GetProperty("singleWriteNoRetry").GetBoolean());
+        Assert.True(commissioning.GetProperty("commandOperateForbidden").GetBoolean());
         Assert.Equal("code-trial-not-physical", recovery.GetProperty("status").GetString());
         Assert.True(recovery.GetProperty("noControlWriteOnProbe").GetBoolean());
         Assert.Equal("code-verified-not-physical", codeTrial.GetProperty("status").GetString());
