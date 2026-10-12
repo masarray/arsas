@@ -432,13 +432,13 @@ public partial class MainWindow
                 "SelectedDevice.CommandSignals",
                 StringComparison.Ordinal));
         var legacyEmptyLabel = P1LogicalDescendants<TextBlock>(CommandPanelExpander)
-            .FirstOrDefault(text => string.Equals(text.Text, "No operable commands", StringComparison.Ordinal));
+            .FirstOrDefault(text => string.Equals(text.Text, "No selected controls", StringComparison.Ordinal));
         if (commandGrid == null || legacyEmptyLabel?.Parent is not Border emptyState)
             return;
 
         var title = new TextBlock
         {
-            Text = "No operable commands",
+            Text = "No selected controls",
             Style = TryFindResource("SectionTitle") as Style,
             FontSize = 12.6,
             VerticalAlignment = VerticalAlignment.Center
@@ -517,9 +517,9 @@ public partial class MainWindow
         if (selected == null || state.CommandEmptyTitle == null || state.CommandEmptyBody == null)
             return;
 
-        state.CommandEmptyTitle.Text = "No operable commands";
+        state.CommandEmptyTitle.Text = "No selected controls";
         state.CommandEmptyBody.Text =
-            $"{selected.Name} has no validated control objects in the current signal selection. Use Edit signals to add supported control objects.";
+            $"{selected.Name} has no control DataObjects selected. Use Edit signals to add a CSWI.Pos, ATCC.TapChg or another IEC 61850 control object; command actions remain disabled until live semantic validation.";
     }
 
     private void P1LiveAll_Click(object sender, RoutedEventArgs e)

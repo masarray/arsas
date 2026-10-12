@@ -595,10 +595,11 @@ public sealed class Iec61850MonitorDevice : ObservableObject
 
     private void RefreshCommandSignals()
     {
-        // The Command Panel is an operating surface, not a second signal browser.
-        // Keep unresolved, StatusOnly, unsupported, and feedback-only objects out so
-        // the panel contains only actions the connected IED has proven executable.
-        var selected = Iec61850ControlIdentity.DistinctOperable(Signals)
+        // Preserve exact selected CO DataObjects in the dock even if live ctlModel
+        // inspection has not succeeded (or the peer reports StatusOnly). The dock
+        // must not hide the very objects it is supposed to inspect. WPF action
+        // buttons and native MMS Write remain independently fail-closed.
+        var selected = Iec61850ControlIdentity.DistinctSelectedForInspection(Signals)
             .OrderBy(signal => signal.SortPriority)
             .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
             .ThenBy(signal => signal.Name, StringComparer.OrdinalIgnoreCase)

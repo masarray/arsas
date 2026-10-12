@@ -676,7 +676,7 @@
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
                                                                 <StackPanel Margin="0,3">
-                                                                    <Grid>
+                                                                    <Grid ToolTip="{Binding ControlLastResult}">
                                                                         <StackPanel Orientation="Horizontal">
                                                                             <StackPanel.Style>
                                                                                 <Style TargetType="StackPanel">
@@ -776,6 +776,9 @@
                                                                             <Button Content="Set" Tag="{Binding}" Click="ControlQuickAction_Click" Style="{StaticResource PrimaryButton}" Padding="14,6"
                                                                                     IsEnabled="{Binding ControlSupportsOperate}"/>
                                                                         </StackPanel>
+                                                                        <TextBlock Text="Read-only (live ctlModel) • inspect diagnostics" FontSize="11" Foreground="{StaticResource Muted}" VerticalAlignment="Center">
+                                                                            <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsReadOnlyControl}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                                                                        </TextBlock>
                                                                     </Grid>
                                                                 </StackPanel>
                                                             </DataTemplate>
@@ -793,7 +796,7 @@
                                                         </Style.Triggers>
                                                     </Style>
                                                 </Border.Style>
-                                                <TextBlock Text="No operable commands" FontWeight="SemiBold"
+                                                <TextBlock Text="No selected controls" FontWeight="SemiBold"
                                                            Foreground="{StaticResource Muted}" HorizontalAlignment="Center"/>
                                             </Border>
                                         </Grid>

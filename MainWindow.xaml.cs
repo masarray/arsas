@@ -1371,8 +1371,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!device.IsConnected || device.CommandSignals.Count == 0)
             return;
 
+        // Pending, read-only and failed inspections remain visible and can be
+        // re-inspected. Discovery of control identity is not control authorization.
         var candidates = device.CommandSignals
-            .Where(signal => force || signal.ControlCurrentValue == "-" || signal.ControlModelText == "Auto-detect")
+            .Where(signal => force || !signal.ControlModelResolved ||
+                             signal.ControlCurrentValue == "-" || signal.ControlModelText == "Auto-detect")
             .ToArray();
         if (candidates.Length == 0)
         {
@@ -1396,7 +1399,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     signal.ControlCurrentValue = capabilities.CurrentValue;
                     signal.ControlLastResult = capabilities.SupportsOperate
                         ? capabilities.ControlModelText
-                        : "Control unavailable";
+                        : $"Command disabled: {capabilities.EngineControlServiceStatus}";
                 }
             }
             catch (OperationCanceledException)

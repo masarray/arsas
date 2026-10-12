@@ -16,6 +16,19 @@ public static class Iec61850ControlIdentity
             .Select(s => Normalize(s.ObjectReference))
             .Where(s => s.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).Count();
 
+    // The dock is also the entry point for live control inspection. A selected
+    // CO DataObject must remain visible while its ctlModel and CDC are unresolved
+    // or read-only; only the action buttons are gated by ControlSupportsOperate.
+    // Never use operability as the condition for discovering operability.
+    public static SignalDefinition[] DistinctSelectedForInspection(IEnumerable<SignalDefinition> signals)
+        => signals.Where(s => s.IsSelected && s.IsValidControlObject)
+            .GroupBy(s => Normalize(s.ObjectReference), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.OrderByDescending(s => s.ControlCommandBusy)
+                .ThenByDescending(s => s.ControlSupportsOperate)
+                .ThenByDescending(s => s.ControlModelResolved)
+                .ThenByDescending(s => s.ControlConfirmationPending)
+                .First()).ToArray();
+
     public static SignalDefinition[] DistinctOperable(IEnumerable<SignalDefinition> signals)
         => signals.Where(s => s.IsSelected && s.IsValidControlObject &&
                               s.ControlModelResolved && s.ControlSupportsOperate && !s.IsGenericControl)
