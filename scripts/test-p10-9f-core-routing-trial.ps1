@@ -1,5 +1,5 @@
 # PowerShell 5.1/7 compatible. Code-verification does NOT grant physical acceptance.
-# Exact audited code-only candidates (P10.9F and P10.9G); no wildcard SHA, no runtime overrides.
+# Exact audited code-only candidates (P10.9F/G/I); no wildcard SHA or runtime overrides.
 function Test-P109FCoreRoutingTrial {
     param([Parameter(Mandatory = $true)] [object] $Lock)
     $candidate = $Lock.coreReportRoutingTrial
@@ -10,9 +10,7 @@ function Test-P109FCoreRoutingTrial {
     )
     # P10.9G is a precisely scoped successor to the P10.9F code-only pin,
     # NOT a promotion to physical or mainline acceptance.
-    $subscriberHead = (
-        [string]$Lock.commit -ceq 'd700b0df741b466afb8abe6cee1d70b1619d7b4d' -and
-        [int]$Lock.sourcePullRequest -eq 165 -and
+    $subscriberIntegrityValid = (
         $null -ne $subscriber -and
         [string]$subscriber.status -ceq 'code-verified-not-physical' -and
         [int]$subscriber.issue -eq 532 -and
@@ -25,7 +23,30 @@ function Test-P109FCoreRoutingTrial {
         [bool]$subscriber.fullDiscoveryFallbackForbidden -and
         [bool]$subscriber.cyclicMmsProcessPollingForbidden
     )
-    if (-not ($previousHead -or $subscriberHead) -or
+    $subscriberHead = (
+        [string]$Lock.commit -ceq 'd700b0df741b466afb8abe6cee1d70b1619d7b4d' -and
+        [int]$Lock.sourcePullRequest -eq 165 -and $subscriberIntegrityValid
+    )
+    # P10.9I is allowed only as the exact successor to the independently
+    # qualified P10.9G engine record; neither entry grants physical authority.
+    $canonical = $Lock.canonicalReportIngressIntegrityTrial
+    $canonicalHead = (
+        [string]$Lock.commit -ceq '9bd01908ebd6fdf50a74f0a421b4e79613b878d4' -and
+        [int]$Lock.sourcePullRequest -eq 166 -and
+        $subscriberIntegrityValid -and
+        $null -ne $canonical -and
+        [string]$canonical.status -ceq 'code-verified-not-physical' -and
+        [int]$canonical.issue -eq 536 -and
+        [int]$canonical.enginePullRequest -eq 166 -and
+        [string]$canonical.baseEngineCommit -ceq 'd700b0df741b466afb8abe6cee1d70b1619d7b4d' -and
+        [string]$canonical.exactCommit -ceq '9bd01908ebd6fdf50a74f0a421b4e79613b878d4' -and
+        [long]$canonical.engineCiRun -eq 38214165576 -and
+        [bool]$canonical.physicalQualificationRequired -and
+        [bool]$canonical.mainlinePromotionForbidden -and
+        [bool]$canonical.fullDiscoveryFallbackForbidden -and
+        [bool]$canonical.cyclicMmsProcessPollingForbidden
+    )
+    if (-not ($previousHead -or $subscriberHead -or $canonicalHead) -or
         [string]$Lock.repository -cne 'masarray/ARIEC61850' -or
         [string]$Lock.ref -cne 'main' -or $null -eq $candidate) { return $false }
 

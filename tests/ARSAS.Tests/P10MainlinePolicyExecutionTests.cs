@@ -20,6 +20,12 @@ public sealed class P10MainlinePolicyExecutionTests
     [InlineData("subscriber-trial-ci-denied", false)]
     [InlineData("subscriber-trial-physical-flag-denied", false)]
     [InlineData("subscriber-trial-mainline-flag-denied", false)]
+    [InlineData("canonical-trial-sha-denied", false)]
+    [InlineData("canonical-trial-parent-denied", false)]
+    [InlineData("canonical-trial-ci-denied", false)]
+    [InlineData("canonical-trial-physical-flag-denied", false)]
+    [InlineData("canonical-trial-mainline-flag-denied", false)]
+    [InlineData("canonical-trial-polling-flag-denied", false)]
     [InlineData("p10-pr-main-denied", false)]
     [InlineData("p10-source-main-denied", false)]
     [InlineData("p10-wrong-sha-denied", false)]
@@ -89,6 +95,18 @@ public sealed class P10MainlinePolicyExecutionTests
                     lockDoc["reportSubscriberIntegrityTrial"]!["physicalQualificationRequired"] = false; break;
                 case "subscriber-trial-mainline-flag-denied":
                     lockDoc["reportSubscriberIntegrityTrial"]!["mainlinePromotionForbidden"] = false; break;
+                case "canonical-trial-sha-denied":
+                    lockDoc["canonicalReportIngressIntegrityTrial"]!["exactCommit"] = new string('0', 40); break;
+                case "canonical-trial-parent-denied":
+                    lockDoc["canonicalReportIngressIntegrityTrial"]!["baseEngineCommit"] = new string('0', 40); break;
+                case "canonical-trial-ci-denied":
+                    lockDoc["canonicalReportIngressIntegrityTrial"]!["engineCiRun"] = 0; break;
+                case "canonical-trial-physical-flag-denied":
+                    lockDoc["canonicalReportIngressIntegrityTrial"]!["physicalQualificationRequired"] = false; break;
+                case "canonical-trial-mainline-flag-denied":
+                    lockDoc["canonicalReportIngressIntegrityTrial"]!["mainlinePromotionForbidden"] = false; break;
+                case "canonical-trial-polling-flag-denied":
+                    lockDoc["canonicalReportIngressIntegrityTrial"]!["cyclicMmsProcessPollingForbidden"] = false; break;
                 case "p10-source-main-denied": sourceRef = "main"; break;
                 case "p10-wrong-sha-denied":
                     lockDoc["p10IdentityTrial"]!["exactCommit"] = new string('0', 40); break;

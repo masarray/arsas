@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "d700b0df741b466afb8abe6cee1d70b1619d7b4d",
-  "sourcePullRequest": 165,
-  "purpose": "P10.9G secondary MMS InformationReport subscriber overload is now fail-closed instead of silently DropOldest; bounded subscriber error leaves canonical static FIFO untouched (ARIEC PR #165). P10.9E client MMS report-routing integrity lock: quarantine contradictory full DatSet/RptID before value projection (PR #164). Also includes P10.9D simulator-only FIFO emission and CI staging PR trigger (PR #163). Previous BCUGE static acquisition remains authority: zero cyclic polling and unchanged decoder, GI, controls and report activation. The simulator FIFO fix is not ARSAS client runtime and does not establish real BCUGE SOE continuity.",
+  "commit": "9bd01908ebd6fdf50a74f0a421b4e79613b878d4",
+  "sourcePullRequest": 166,
+  "purpose": "P10.9I CodeVerified-only canonical InformationReport FIFO ingress protection (ARIEC PR #166, CI #38214165576): bounded by 2048 report envelopes and 32 MiB queued PDU payload, fail closed on saturation or terminal receive pump error while retaining queued FIFO originals. Original P10.9G subscriber isolation and P10.9F RptID/DataSet integrity remain intact. Static configured RCB/GI, decoder, cyclic-polling prohibition, physical R7/R10 authority and unresolved BCUGE SqNum/BufOvfl causality are unchanged.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
@@ -83,6 +83,18 @@
     "fullNameListFallbackForbidden": true,
     "cyclicMmsProcessPollingForbidden": true,
     "physicalQualificationRequired": true
+  },
+  "canonicalReportIngressIntegrityTrial": {
+    "status": "code-verified-not-physical",
+    "issue": 536,
+    "enginePullRequest": 166,
+    "baseEngineCommit": "d700b0df741b466afb8abe6cee1d70b1619d7b4d",
+    "exactCommit": "9bd01908ebd6fdf50a74f0a421b4e79613b878d4",
+    "engineCiRun": 38214165576,
+    "physicalQualificationRequired": true,
+    "mainlinePromotionForbidden": true,
+    "fullDiscoveryFallbackForbidden": true,
+    "cyclicMmsProcessPollingForbidden": true
   },
   "reportSubscriberIntegrityTrial": {
     "status": "code-verified-not-physical",

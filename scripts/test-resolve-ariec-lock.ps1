@@ -92,6 +92,18 @@ try {
 
     Assert-Resolves (New-TrackedP10Fixture)
 
+    $wrongCanonicalCi = New-TrackedP10Fixture
+    $wrongCanonicalCi.canonicalReportIngressIntegrityTrial.engineCiRun = 0
+    Assert-Rejects $wrongCanonicalCi 'physical-tested'
+
+    $wrongCanonicalParent = New-TrackedP10Fixture
+    $wrongCanonicalParent.canonicalReportIngressIntegrityTrial.baseEngineCommit = ('f' * 40)
+    Assert-Rejects $wrongCanonicalParent 'physical-tested'
+
+    $wrongCanonicalSafety = New-TrackedP10Fixture
+    $wrongCanonicalSafety.canonicalReportIngressIntegrityTrial.mainlinePromotionForbidden = $false
+    Assert-Rejects $wrongCanonicalSafety 'physical-tested'
+
     $wrongP10Parent = New-TrackedP10Fixture
     $wrongP10Parent.p10IdentityTrial.baseEngineCommit = ('f' * 40)
     Assert-Rejects $wrongP10Parent 'physical-tested'
