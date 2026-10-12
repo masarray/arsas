@@ -1,0 +1,163 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Windows;
+using System.Windows.Controls;
+using ArIED61850Tester.Models;
+using ArIED61850Tester.Services;
+using AR.Iec61850.Control;
+
+namespace ArIED61850Tester;
+
+/// <summary>
+/// One CF value editor. Read → select → Write → exact readback.
+/// No typed phrases, extra checkboxes, command-service Operate, or retries.
+/// </summary>
+public partial class ControlModelWriteWindow : Window
+{
+    public sealed record ModelChoice(Iec61850ControlModelKind Model, string Label);
+    private readonly Iec61850MonitorRuntime _runtime;
+    private readonly Iec61850MonitorDevice _device;
+    private readonly SignalDefinition _signal;
+    private readonly CancellationTokenSource _cancellation = new();
+    private bool _busy;
+    private bool _liveModelReady;
+    private Iec61850ControlModelKind _liveModel = Iec61850ControlModelKind.Unknown;
+
+    public ObservableCollection<ModelChoice> Choices { get; } = new()
+    {
+        new(Iec61850ControlModelKind.StatusOnly, "0  [status-only]"),
+        new(Iec61850ControlModelKind.DirectNormal, "1  [direct-with-normal-security]"),
+        new(Iec61850ControlModelKind.SboNormal, "2  [sbo-with-normal-security]"),
+        new(Iec61850ControlModelKind.DirectEnhanced, "3  [direct-with-enhanced-security]"),
+        new(Iec61850ControlModelKind.SboEnhanced, "4  [sbo-with-enhanced-security]")
+    };
+
+    public ControlModelWriteWindow(
+        Iec61850MonitorRuntime runtime, Iec61850MonitorDevice device, SignalDefinition signal)
+    {
+        _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+        _device = device ?? throw new ArgumentNullException(nameof(device));
+        _signal = signal ?? throw new ArgumentNullException(nameof(signal));
+        InitializeComponent();
+        DataContext = this;
+        ReferenceLabel.Text = _signal.ObjectReference + ".ctlModel";
+    }
+
+    private async void Window_Loaded(object sender, RoutedEventArgs e)
+        => await ReadModelAsync();
+
+    private void ModelPicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        => UpdateWriteButton();
+
+    private void UpdateWriteButton()
+    {
+        WriteButton.IsEnabled = !_busy && _device.IsConnected && _liveModelReady &&
+            ModelPicker.SelectedItem is ModelChoice choice && choice.Model != _liveModel;
+    }
+
+    private async Task ReadModelAsync()
+    {
+        _busy = true;
+        _liveModelReady = false;
+        ModelPicker.IsEnabled = false;
+        UpdateWriteButton();
+        StatusLabel.Text = "Reading current ctlModel…";
+        try
+        {
+            var capabilities = await _runtime.InspectControlAsync(
+                _device.DeviceId, _signal, _cancellation.Token);
+            _liveModel = capabilities.ControlModel;
+            _liveModelReady = _liveModel != Iec61850ControlModelKind.Unknown &&
+                capabilities.EngineControlServiceAvailable;
+            if (_liveModelReady)
+            {
+                ModelPicker.SelectedItem = Choices.FirstOrDefault(x => x.Model == _liveModel);
+                ModelPicker.IsEnabled = true;
+                StatusLabel.Text = $"Current: {(int)_liveModel} · {capabilities.ControlModelText}";
+            }
+            else
+            {
+                StatusLabel.Text = "ctlModel could not be read. Write disabled; check Diagnostics.";
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            StatusLabel.Text = "Read cancelled.";
+        }
+        catch (Exception ex)
+        {
+            StatusLabel.Text = $"Read failed: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+            UpdateWriteButton();
+        }
+    }
+
+    private async void Read_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_busy) await ReadModelAsync();
+    }
+
+    private async void Write_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || !_liveModelReady || !_device.IsConnected ||
+            ModelPicker.SelectedItem is not ModelChoice selected || selected.Model == _liveModel)
+            return;
+        // Exact expected value is confirmed again by ARIEC immediately before
+        // the one permitted CF Write. No automatic mode trials.
+        var expected = _liveModel;
+        _busy = true;
+        _liveModelReady = false;
+        ModelPicker.IsEnabled = false;
+        UpdateWriteButton();
+        StatusLabel.Text = "Writing ctlModel and checking readback…";
+        try
+        {
+            var result = await ConfigureExactModelAsync(expected, selected.Model, _cancellation.Token);
+            if (!result.ReadbackVerified)
+            {
+                StatusLabel.Text = result.Detail + " Use Read to inspect before another change.";
+                return;
+            }
+            await ReadModelAsync();
+            StatusLabel.Text = $"Write successful · ctlModel={(int)result.AfterModel} verified by MMS readback.";
+        }
+        catch (OperationCanceledException)
+        {
+            StatusLabel.Text = "Write interrupted. Read actual ctlModel before retrying.";
+        }
+        catch (Exception ex)
+        {
+            StatusLabel.Text = $"Write not verified: {ex.Message}. Read actual ctlModel.";
+        }
+        finally
+        {
+            _busy = false;
+            UpdateWriteButton();
+        }
+    }
+
+    // Exact API bridge for WPF temporary markup compilation: fail closed if
+    // the pinned runtime signature differs. No generic MMS writes or reflection
+    // over arbitrary method names.
+    private async Task<Iec61850ControlModelConfigurationResult> ConfigureExactModelAsync(
+        Iec61850ControlModelKind expected, Iec61850ControlModelKind selected,
+        CancellationToken cancellationToken)
+    {
+        var api = typeof(Iec61850MonitorRuntime).GetMethod("ConfigureControlModelAsync",
+            new[] { typeof(string), typeof(SignalDefinition), typeof(Iec61850ControlModelKind),
+                    typeof(Iec61850ControlModelKind), typeof(CancellationToken) });
+        if (api is null || api.ReturnType != typeof(Task<Iec61850ControlModelConfigurationResult>))
+            throw new InvalidOperationException("Exact ctlModel Write API unavailable; no Write sent.");
+        if (api.Invoke(_runtime,
+                new object[] { _device.DeviceId, _signal, expected, selected, cancellationToken })
+            is not Task<Iec61850ControlModelConfigurationResult> task)
+            throw new InvalidOperationException("Unexpected ctlModel API response.");
+        return await task;
+    }
+
+    private void Close_Click(object sender, RoutedEventArgs e) => Close();
+    private void Window_Closing(object? sender, CancelEventArgs e) => _cancellation.Cancel();
+}

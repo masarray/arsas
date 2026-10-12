@@ -167,7 +167,70 @@ function Test-P109FCoreRoutingTrial {
         [bool]$commission.fullDiscoveryFallbackForbidden -and
         [bool]$commission.cyclicMmsProcessPollingForbidden
     )
-    if (-not ($previousHead -or $subscriberHead -or $canonicalHead -or $zivHead -or $genericHead -or $probeHead -or $commissionHead) -or
+    # P10.9R retains all Q lineage checks and adds explicit StatusOnly=0
+    # usability without promoting commissioning to physical qualification.
+    $simple = $Lock.p109RSimpleCtlModelEditorTrial
+    $simpleHead = (
+        [string]$Lock.commit -ceq 'd1dd8fc14e79c5de15fbc52d77aea48a14c7c02b' -and
+        [int]$Lock.sourcePullRequest -eq 169 -and
+        $zivIntegrityValid -and $null -ne $generic -and
+        [string]$generic.exactCommit -ceq 'a43b9b4864a9565c02f544d4135fe157c2fac577' -and
+        [string]$generic.baseEngineCommit -ceq [string]$ziv.exactCommit -and
+        [int]$generic.enginePullRequest -eq 168 -and
+        [long]$generic.engineCiRun -eq 38231327892 -and
+        [bool]$generic.typedSemanticGateRequired -and
+        [bool]$generic.associationScopedInventoryRequired -and
+        [bool]$generic.vendorDispatchForbidden -and
+        [bool]$generic.physicalQualificationRequired -and
+        [bool]$generic.mainlinePromotionForbidden -and
+        [bool]$generic.fullDiscoveryFallbackForbidden -and
+        [bool]$generic.cyclicMmsProcessPollingForbidden -and
+        $null -ne $probe -and
+        [string]$probe.status -ceq 'code-trial-not-physical' -and
+        [int]$probe.issue -eq 525 -and
+        [int]$probe.enginePullRequest -eq 169 -and
+        [string]$probe.baseEngineCommit -ceq [string]$generic.exactCommit -and
+        [string]$probe.exactCommit -ceq '5e17da5f673eedce125b5c66e7dc2fa0abef2851' -and
+        [long]$probe.engineCiRun -eq 38239451501 -and
+        [bool]$probe.readOnlyCtlModelProbeRequired -and
+        [bool]$probe.noControlWriteOnProbe -and
+        [bool]$probe.physicalQualificationRequired -and
+        [bool]$probe.mainlinePromotionForbidden -and
+        [bool]$probe.fullDiscoveryFallbackForbidden -and
+        [bool]$probe.cyclicMmsProcessPollingForbidden -and
+        $null -ne $commission -and
+        [string]$commission.status -ceq 'code-trial-not-physical' -and
+        [int]$commission.enginePullRequest -eq 169 -and
+        [string]$commission.baseEngineCommit -ceq [string]$probe.exactCommit -and
+        [string]$commission.exactCommit -ceq 'f7a4e3ba2f9771e34e04073c0db0900112aa55fa' -and
+        [long]$commission.engineCiRun -eq 38257606517 -and
+        [bool]$commission.authorizedConfirmationRequired -and
+        [bool]$commission.exactLiveCompareRequired -and
+        [bool]$commission.singleWriteNoRetry -and
+        [bool]$commission.verifiedReadbackRequired -and
+        [bool]$commission.commandOperateForbidden -and
+        [bool]$commission.physicalQualificationRequired -and
+        [bool]$commission.mainlinePromotionForbidden -and
+        [bool]$commission.fullDiscoveryFallbackForbidden -and
+        [bool]$commission.cyclicMmsProcessPollingForbidden -and
+        $null -ne $simple -and
+        [string]$simple.status -ceq 'code-trial-not-physical' -and
+        [int]$simple.enginePullRequest -eq 169 -and
+        [long]$simple.engineCiRun -eq 38311424952 -and
+        [string]$simple.baseEngineCommit -ceq [string]$commission.exactCommit -and
+        [string]$simple.exactCommit -ceq 'd1dd8fc14e79c5de15fbc52d77aea48a14c7c02b' -and
+        [bool]$simple.simpleSelectWriteUi -and
+        [bool]$simple.statusOnlyZeroSupported -and
+        [bool]$simple.exactLiveCompareRequired -and
+        [bool]$simple.singleWriteNoRetry -and
+        [bool]$simple.verifiedReadbackRequired -and
+        [bool]$simple.commandOperateForbidden -and
+        [bool]$simple.physicalQualificationRequired -and
+        [bool]$simple.mainlinePromotionForbidden -and
+        [bool]$simple.fullDiscoveryFallbackForbidden -and
+        [bool]$simple.cyclicMmsProcessPollingForbidden
+    )
+    if (-not ($previousHead -or $subscriberHead -or $canonicalHead -or $zivHead -or $genericHead -or $probeHead -or $commissionHead -or $simpleHead) -or
         [string]$Lock.repository -cne 'masarray/ARIEC61850' -or
         [string]$Lock.ref -cne 'main' -or $null -eq $candidate) { return $false }
 

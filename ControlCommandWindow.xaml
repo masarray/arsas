@@ -146,39 +146,6 @@
                         </Border>
                     </Expander>
 
-                    <Expander Header="Commissioning · ctlModel (CF Write)" Margin="0,13,0,0" Foreground="#475467"
-                              ToolTip="Explicit authorized engineering change only. No automatic writes or Operate.">
-                        <Border Background="#FFF9F0" BorderBrush="#E6CCA3" BorderThickness="1"
-                                CornerRadius="10" Padding="12" Margin="0,6,0,0">
-                            <StackPanel>
-                                <TextBlock Text="Change the IED control model only during authorized commissioning. A write is attempted once, then verified by a fresh MMS read."
-                                           FontSize="11.5" TextWrapping="Wrap" Foreground="#87500C"/>
-                                <TextBlock Text="{Binding RequiredConfigurationConfirmation}" Margin="0,8,0,5"
-                                           FontFamily="{StaticResource AppCodeFontFamily}" FontSize="10.5"
-                                           Foreground="{StaticResource Ink}"/>
-                                <StackPanel Orientation="Horizontal">
-                                    <ComboBox Width="210" ItemsSource="{Binding AvailableControlModels}"
-                                              SelectedItem="{Binding SelectedModelChoice, Mode=TwoWay}"
-                                              DisplayMemberPath="Label"
-                                              Height="32" Margin="0,0,8,0"/>
-                                    <Button Content="Read again" Click="RefreshControlModel_Click"
-                                            Style="{StaticResource SoftButton}" Padding="10,5"/>
-                                </StackPanel>
-                                <CheckBox Content="I am authorized to change this IED configuration"
-                                          IsChecked="{Binding ConfirmConfigurationAuthorization, Mode=TwoWay}" Margin="0,11,0,5"/>
-                                <TextBlock Text="Type the exact object reference shown above to confirm:" FontSize="10.5" Foreground="#475467"/>
-                                <TextBox Text="{Binding ConfigurationConfirmationText, UpdateSourceTrigger=PropertyChanged}"
-                                         Margin="0,4,0,8" Height="30" Padding="8,4" FontFamily="{StaticResource AppCodeFontFamily}"
-                                         FontSize="10.5"/>
-                                <Button Content="Apply ctlModel (one Write)" Click="ConfigureControlModel_Click"
-                                        Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left"
-                                        IsEnabled="{Binding CanConfigureModel}" Padding="12,6"/>
-                                <TextBlock Text="{Binding ConfigurationResultText}" FontSize="10.5"
-                                           Foreground="#87500C" TextWrapping="Wrap" Margin="0,8,0,0"/>
-                            </StackPanel>
-                        </Border>
-                    </Expander>
-
                     <Border x:Name="ResultPanel" Background="#F8FAFC" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="12" Margin="0,13,0,0">
                         <StackPanel>
                             <TextBlock Text="{Binding CommandStage}" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>

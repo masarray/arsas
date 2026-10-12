@@ -1351,19 +1351,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void CommandPanel_Expanded(object sender, RoutedEventArgs e)
     {
-        // Allocate a bounded share to Command Dock. Its DataGrid scrolls inside
-        // the available viewport; the last control can never be clipped below
-        // the status bar at normal laptop resolutions.
-        ExplorerLiveRow.Height = new GridLength(3, GridUnitType.Star);
-        ExplorerCommandRow.Height = new GridLength(2, GridUnitType.Star);
         if (SelectedDevice != null)
             await RefreshControlValuesAsync(SelectedDevice, force: true);
-    }
-
-    private void CommandPanel_Collapsed(object sender, RoutedEventArgs e)
-    {
-        ExplorerLiveRow.Height = new GridLength(1, GridUnitType.Star);
-        ExplorerCommandRow.Height = GridLength.Auto;
     }
 
     private async void RefreshCommandValues_Click(object sender, RoutedEventArgs e)
@@ -1693,7 +1682,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (!device.IsConnected)
         {
-            SetStatus($"{device.Name}: connecting before opening technical control details…");
+            SetStatus($"{device.Name}: connecting before opening ctlModel editor…");
             var connected = device.HasDiscoveryCache && device.Signals.Count > 0
                 ? await ConnectUsingSavedModelAsync(device)
                 : await ConnectAndConfigureDeviceAsync(device, openWizard: false);
@@ -1701,7 +1690,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 return;
         }
 
-        var dialog = new ControlCommandWindow(_runtime, device, signal)
+        var dialog = new ControlModelWriteWindow(_runtime, device, signal)
         {
             Owner = this
         };

@@ -456,8 +456,8 @@
 
                         <Grid Visibility="{Binding SelectedExplorerVisibility}">
                             <Grid.RowDefinitions>
-                                <RowDefinition x:Name="ExplorerLiveRow" Height="*"/>
-                                <RowDefinition x:Name="ExplorerCommandRow" Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
                             <Border Grid.Row="0" Style="{StaticResource WorkspaceCard}" Padding="10">
@@ -611,7 +611,7 @@
                                 </Grid>
                             </Border>
 
-                            <Expander x:Name="CommandPanelExpander" Grid.Row="1" Margin="0,10,0,0" IsExpanded="False" Expanded="CommandPanel_Expanded" Collapsed="CommandPanel_Collapsed">
+                            <Expander x:Name="CommandPanelExpander" Grid.Row="1" Margin="0,10,0,0" IsExpanded="False" Expanded="CommandPanel_Expanded">
                                 <Expander.Header>
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <Border Width="28" Height="28" CornerRadius="9" Background="#E7F0FF" BorderBrush="#C9DBF7" BorderThickness="1" Margin="0,0,9,0">
@@ -625,7 +625,7 @@
                                 <Border Style="{StaticResource WorkspaceCard}" Background="{StaticResource CommandPanelSurface}" Padding="6" BorderBrush="#BFD0E5">
                                     <Grid>
                                         <Grid.RowDefinitions>
-                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
 
@@ -633,7 +633,7 @@
                                             <DataGrid ItemsSource="{Binding SelectedDevice.CommandSignals}" Loaded="CommandGrid_Loaded" IsReadOnly="False" CanUserAddRows="False" CanUserDeleteRows="False"
                                                       Style="{StaticResource CommandDataGrid}" RowStyle="{StaticResource CommandDataGridRow}"
                                                       CellStyle="{StaticResource CommandDataGridCell}" ColumnHeaderStyle="{StaticResource CommandDataGridHeader}"
-                                                      AutoGenerateColumns="False" MaxHeight="320" MinHeight="56" RowHeight="48" MinRowHeight="46" FrozenColumnCount="1"
+                                                      AutoGenerateColumns="False" MaxHeight="255" MinHeight="56" RowHeight="35" MinRowHeight="34" ColumnHeaderHeight="32" FrozenColumnCount="1"
                                                       EnableRowVirtualization="True" EnableColumnVirtualization="True"
                                                       VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                                                       ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -679,7 +679,7 @@
                                                             </DataTemplate>
                                                         </DataGridTemplateColumn.CellTemplate>
                                                     </DataGridTemplateColumn>
-                                                    <DataGridTemplateColumn Header="Control" Width="1.55*" MinWidth="222">
+                                                    <DataGridTemplateColumn Header="Control" Width="1.55*" MinWidth="245">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
                                                                 <StackPanel Margin="0,3" ToolTip="{Binding ControlInspectionEvidence}" ToolTipService.ShowOnDisabled="True">
@@ -705,10 +705,10 @@
                                                                             </StackPanel.Style>
                                                                             <Button Content="Open" Tag="{Binding}" CommandParameter="Open [01]" Click="ControlStageAction_Click"
                                                                                     Style="{StaticResource CommandOpenButton}" Margin="0,0,7,0"
-                                                                                    IsEnabled="{Binding ControlSupportsOperate}"/>
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="25" MinHeight="25" Padding="8,2"/>
                                                                             <Button Content="Close" Tag="{Binding}" CommandParameter="Closed [10]" Click="ControlStageAction_Click"
                                                                                     Style="{StaticResource CommandCloseButton}" Margin="0,0,7,0"
-                                                                                    IsEnabled="{Binding ControlSupportsOperate}"/>
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="25" MinHeight="25" Padding="8,2"/>
                                                                         </StackPanel>
 
                                                                         <StackPanel Orientation="Horizontal">
@@ -727,9 +727,9 @@
                                                                             </StackPanel.Style>
                                                                             <Button Content="{Binding ControlPendingConfirmationLabel}" Tag="{Binding}" Click="ControlConfirmAction_Click"
                                                                                     Style="{StaticResource CommandConfirmButton}"
-                                                                                    IsEnabled="{Binding ControlCanConfirm}" Margin="0,0,7,0"/>
+                                                                                    IsEnabled="{Binding ControlCanConfirm}" Margin="0,0,7,0" Height="25" MinHeight="25" Padding="8,2"/>
                                                                             <Button Content="Cancel" Tag="{Binding}" Click="ControlCancelAction_Click"
-                                                                                    Style="{StaticResource SoftButton}" Padding="12,6"/>
+                                                                                    Style="{StaticResource SoftButton}" Height="25" MinHeight="25" Padding="8,2"/>
                                                                         </StackPanel>
 
                                                                         <StackPanel Orientation="Horizontal">
@@ -738,8 +738,8 @@
                                                                                     <Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsRaiseOnlyControl}" Value="True"/><Condition Binding="{Binding ControlConfirmationPending}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers>
                                                                                 </Style>
                                                                             </StackPanel.Style>
-                                                                            <Button Content="Raise" Tag="{Binding}" CommandParameter="Raise" Click="ControlStageAction_Click" Style="{StaticResource PrimaryButton}" Padding="14,6"
-                                                                                    IsEnabled="{Binding ControlSupportsOperate}"/>
+                                                                            <Button Content="Raise" Tag="{Binding}" CommandParameter="Raise" Click="ControlStageAction_Click" Style="{StaticResource PrimaryButton}"
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="25" MinHeight="25" Padding="8,2"/>
                                                                         </StackPanel>
 
                                                                         <StackPanel Orientation="Horizontal">
@@ -748,8 +748,8 @@
                                                                                     <Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsLowerOnlyControl}" Value="True"/><Condition Binding="{Binding ControlConfirmationPending}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers>
                                                                                 </Style>
                                                                             </StackPanel.Style>
-                                                                            <Button Content="Lower" Tag="{Binding}" CommandParameter="Lower" Click="ControlStageAction_Click" Style="{StaticResource SoftButton}" Padding="14,6"
-                                                                                    IsEnabled="{Binding ControlSupportsOperate}"/>
+                                                                            <Button Content="Lower" Tag="{Binding}" CommandParameter="Lower" Click="ControlStageAction_Click" Style="{StaticResource SoftButton}"
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="25" MinHeight="25" Padding="8,2"/>
                                                                         </StackPanel>
 
                                                                         <StackPanel Orientation="Horizontal">
@@ -758,10 +758,10 @@
                                                                                     <Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsRaiseLowerControl}" Value="True"/><Condition Binding="{Binding ControlConfirmationPending}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers>
                                                                                 </Style>
                                                                             </StackPanel.Style>
-                                                                            <Button Content="Raise" Tag="{Binding}" CommandParameter="Raise" Click="ControlStageAction_Click" Style="{StaticResource PrimaryButton}" Padding="14,6" Margin="0,0,7,0"
-                                                                                    IsEnabled="{Binding ControlSupportsOperate}"/>
-                                                                            <Button Content="Lower" Tag="{Binding}" CommandParameter="Lower" Click="ControlStageAction_Click" Style="{StaticResource SoftButton}" Padding="14,6"
-                                                                                    IsEnabled="{Binding ControlSupportsOperate}"/>
+                                                                            <Button Content="Raise" Tag="{Binding}" CommandParameter="Raise" Click="ControlStageAction_Click" Style="{StaticResource PrimaryButton}" Margin="0,0,7,0"
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="25" MinHeight="25" Padding="8,2"/>
+                                                                            <Button Content="Lower" Tag="{Binding}" CommandParameter="Lower" Click="ControlStageAction_Click" Style="{StaticResource SoftButton}"
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="25" MinHeight="25" Padding="8,2"/>
                                                                         </StackPanel>
 
                                                                         <StackPanel Orientation="Horizontal">
@@ -771,9 +771,9 @@
                                                                                 </Style>
                                                                             </StackPanel.Style>
                                                                             <Button Content="True" Tag="{Binding}" CommandParameter="True" Click="ControlQuickAction_Click" Style="{StaticResource CommandCloseButton}" Margin="0,0,7,0"
-                                                                                    IsEnabled="{Binding ControlSupportsOperate}"/>
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="25" MinHeight="25" Padding="8,2"/>
                                                                             <Button Content="False" Tag="{Binding}" CommandParameter="False" Click="ControlQuickAction_Click" Style="{StaticResource CommandOpenButton}"
-                                                                                    IsEnabled="{Binding ControlSupportsOperate}"/>
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="25" MinHeight="25" Padding="8,2"/>
                                                                         </StackPanel>
 
                                                                         <StackPanel Orientation="Horizontal">
@@ -783,13 +783,13 @@
                                                                                 </Style>
                                                                             </StackPanel.Style>
                                                                             <TextBox Text="{Binding ControlSetPointText, UpdateSourceTrigger=PropertyChanged}" Width="105" Height="31" Padding="8,4" Margin="0,0,7,0" ToolTip="Target value"/>
-                                                                            <Button Content="Set" Tag="{Binding}" Click="ControlQuickAction_Click" Style="{StaticResource PrimaryButton}" Padding="14,6"
-                                                                                    IsEnabled="{Binding ControlSupportsOperate}"/>
+                                                                            <Button Content="Set" Tag="{Binding}" Click="ControlQuickAction_Click" Style="{StaticResource PrimaryButton}"
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="25" MinHeight="25" Padding="8,2"/>
                                                                         </StackPanel>
                                                                         <Button Grid.Column="1" Content="Model" Tag="{Binding}" Click="ControlDetails_Click"
-                                                                                Style="{StaticResource SoftButton}" Padding="7,4" Margin="6,0,1,0"
+                                                                                Style="{StaticResource SoftButton}" Margin="6,0,1,0"
                                                                                 MinWidth="48" MinHeight="29"
-                                                                                ToolTip="Inspect live ctlModel and open explicit commissioning settings"/>
+                                                                                ToolTip="Read or write ctlModel (CF) on the connected IED" Height="25" MinHeight="25" Padding="8,2"/>
                                                                         <!-- Unknown/unsupported CDC never produces an empty action cell. -->
                                                                         <TextBlock Text="No typed action" FontSize="11" Foreground="{StaticResource Muted}" VerticalAlignment="Center">
                                                                             <TextBlock.Style>

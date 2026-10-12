@@ -44,29 +44,30 @@ public sealed class P109QCommandDockCommissioningRegressionTests
     public void CommandDockHasConstrainedResponsiveViewportAndInspector()
     {
         var xaml = Read("MainWindow.xaml");
-        Assert.Contains("ExplorerCommandRow", xaml);
-        Assert.Contains("CommandPanel_Collapsed", xaml);
+        Assert.DoesNotContain("ExplorerCommandRow", xaml);
+        Assert.DoesNotContain("CommandPanel_Collapsed", xaml);
+        Assert.Contains("RowHeight=\"35\" MinRowHeight=\"34\"", xaml);
+        Assert.Contains("Height=\"25\" MinHeight=\"25\"", xaml);
         Assert.Contains("ScrollViewer.VerticalScrollBarVisibility=\"Auto\"", xaml);
         Assert.Contains("Grid.Column=\"1\" Content=\"Model\"", xaml);
         Assert.Contains("Click=\"ControlDetails_Click\"", xaml);
     }
 
     [Fact]
-    public void ConfigurationCannotBeSentWithoutTypedExactReferenceAndUserConfirmation()
+    public void ModelButtonOpensSimplePickAndWriteDialog()
     {
-        var code = Read("ControlCommandWindow.xaml.cs");
-        var xaml = Read("ControlCommandWindow.xaml");
-        Assert.Contains("ConfigurationConfirmationText.Trim().Equals(_signal.ObjectReference, StringComparison.Ordinal)", code);
-        Assert.Contains("ConfirmConfigurationAuthorization", code);
-        Assert.Contains("MessageBoxButton.YesNo", code);
-        Assert.Contains("GetMethod(", code);
-        Assert.Contains("\"ConfigureControlModelAsync\"", code);
-        Assert.Contains("ConfigureWithExactRuntimeSignatureAsync(", code);
-        Assert.Contains("if (!CanConfigureModel || SelectedModelChoice == null)", code);
-        Assert.Contains("Commissioning · ctlModel (CF Write)", xaml);
-        Assert.Contains("Apply ctlModel (one Write)", xaml);
-        Assert.Contains("IsEnabled=\"{Binding CanConfigureModel}\"", xaml);
-        Assert.DoesNotContain("Click=\"ConfigureControlModel_Click\" CommandParameter=\"Operate\"", xaml);
+        var code = Read("MainWindow.xaml.cs");
+        var ui = Read("ControlModelWriteWindow.xaml");
+        var handler = Read("ControlModelWriteWindow.xaml.cs");
+        Assert.Contains("new ControlModelWriteWindow(", code);
+        Assert.Contains("Content=\"Write\"", ui);
+        Assert.Contains("ItemsSource=\"{Binding Choices}\"", ui);
+        Assert.DoesNotContain("Type the exact object reference", ui);
+        Assert.DoesNotContain("I am authorized to change", ui);
+        Assert.Contains("Write_Click", ui);
+        Assert.Contains("ReadbackVerified", handler);
+        Assert.Contains("StatusOnly", handler);
+        Assert.DoesNotContain("new ControlCommandWindow(", code);
     }
 
     [Fact]

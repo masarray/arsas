@@ -119,7 +119,7 @@ public sealed class P109NControlAuthorityTimelineTests
     }
 
     [Fact]
-    public void DirectionalActionsStageConfirmationInsteadOfDirectMmsDispatch()
+    public void CompactDockKeepsFullLiveAreaAndActionButtonsWithinRows()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !File.Exists(Path.Combine(dir.FullName, "MainWindow.xaml")))
@@ -127,15 +127,14 @@ public sealed class P109NControlAuthorityTimelineTests
         Assert.NotNull(dir);
         var xaml = File.ReadAllText(Path.Combine(dir!.FullName, "MainWindow.xaml"));
         var code = File.ReadAllText(Path.Combine(dir.FullName, "MainWindow.xaml.cs"));
-        Assert.DoesNotContain("CommandParameter=\"Raise\" Click=\"ControlQuickAction_Click\"", xaml);
-        Assert.DoesNotContain("CommandParameter=\"Lower\" Click=\"ControlQuickAction_Click\"", xaml);
+        Assert.DoesNotContain("ExplorerLiveRow", xaml);
+        Assert.DoesNotContain("ExplorerCommandRow", xaml);
+        Assert.DoesNotContain("ExplorerLiveRow.Height", code);
+        Assert.Contains("RowHeight=\"35\" MinRowHeight=\"34\"", xaml);
+        Assert.Contains("Height=\"25\" MinHeight=\"25\" Padding=\"8,2\"", xaml);
+        Assert.Contains("Content=\"Model\"", xaml);
         Assert.Contains("CommandParameter=\"Raise\" Click=\"ControlStageAction_Click\"", xaml);
         Assert.Contains("CommandParameter=\"Lower\" Click=\"ControlStageAction_Click\"", xaml);
-        Assert.Contains("Binding ControlConfirmationPending", xaml);
-        Assert.Contains("Click=\"ControlConfirmAction_Click\"", xaml);
-        Assert.Contains("Grid.Column=\"1\" Content=\"Model\"", xaml);
-        Assert.Contains("CommandPanel_Collapsed", xaml);
-        Assert.Contains("ExplorerCommandRow.Height = new GridLength(2, GridUnitType.Star);", code);
     }
 
     [Fact]
