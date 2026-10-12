@@ -442,8 +442,13 @@ public sealed class CanonicalLiveSclExportRegressionTests
             zivTrial.GetProperty("baseEngineCommit").GetString());
         Assert.Equal("67c6635b7e16139c0661e559a2e6946527c1442a",
             zivTrial.GetProperty("exactCommit").GetString());
+        var genericTrial = root.GetProperty("genericControlInteroperabilityTrial");
         Assert.Equal(zivTrial.GetProperty("exactCommit").GetString(),
+            genericTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal(genericTrial.GetProperty("exactCommit").GetString(),
             root.GetProperty("commit").GetString());
+        Assert.Equal("a43b9b4864a9565c02f544d4135fe157c2fac577",
+            genericTrial.GetProperty("exactCommit").GetString());
         Assert.Equal("code-verified-not-physical", canonicalTrial.GetProperty("status").GetString());
         Assert.Equal(166, canonicalTrial.GetProperty("enginePullRequest").GetInt32());
         Assert.Equal(536, canonicalTrial.GetProperty("issue").GetInt32());
@@ -462,7 +467,11 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.True(zivTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
         Assert.True(zivTrial.GetProperty("fullDiscoveryFallbackForbidden").GetBoolean());
         Assert.True(zivTrial.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
-        Assert.Equal(167, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(168, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.True(genericTrial.GetProperty("typedSemanticGateRequired").GetBoolean());
+        Assert.True(genericTrial.GetProperty("associationScopedInventoryRequired").GetBoolean());
+        Assert.True(genericTrial.GetProperty("vendorDispatchForbidden").GetBoolean());
+        Assert.True(genericTrial.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
         Assert.Equal("code-trial-not-physical",p10.GetProperty("status").GetString());
         Assert.True(p10.GetProperty("physicalQualificationRequired").GetBoolean());
         Assert.True(closure.GetProperty("physicalQualificationRequired").GetBoolean());

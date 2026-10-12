@@ -14,6 +14,9 @@ public sealed class F650CanonicalCommandFailureTests
             DataSetReference = dataset, IsControlSignal = true, IsSelected = true
         };
         signal.ControlModelText = "Direct Operate (DO) • Normal security";
+        // F650 tests canonical identity of already-qualified command objects.
+        // Production authority is granted only after ARIEC live semantic verification.
+        signal.ControlSemanticVerified = true;
         return signal;
     }
 
