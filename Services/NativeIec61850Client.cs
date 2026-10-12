@@ -1135,7 +1135,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
 
         var model = MapControlModel(descriptor.ControlModel);
         var modelText = FriendlyControlModel(descriptor.ControlModel);
-        var valueType = MapControlValueType(descriptor);
+        var valueType = MapControlValueType(descriptor, effectiveCdc);
 
         signal.ControlCdc = effectiveCdc;
         signal.ControlValueType = valueType;
@@ -1390,7 +1390,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             ControlModel = MapControlModel(descriptor.ControlModel),
             ControlModelText = FriendlyControlModel(descriptor.ControlModel),
             ControlCdc = string.IsNullOrWhiteSpace(effectiveCdc) ? ResolveControlSemanticCdc(descriptor, signal) : effectiveCdc,
-            ControlValueType = MapControlValueType(descriptor),
+            ControlValueType = MapControlValueType(descriptor, effectiveCdc),
             CtlValSignature = descriptor.CtlValSpecification.Signature,
             CurrentValue = currentValue,
             CurrentState = "Unknown",
@@ -1494,7 +1494,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             return false;
         }
 
-        var cdc = (descriptor.Cdc ?? string.Empty).Trim().ToUpperInvariant();
+        var cdc = ResolveControlSemanticCdc(descriptor, signal).Trim().ToUpperInvariant();
         var mmsType = (descriptor.CtlValSpecification.MmsType ?? string.Empty).Trim().ToLowerInvariant();
         var normalized = expected.ToLowerInvariant();
         var signalText = $"{signal.Name} {signal.ObjectReference}";
@@ -1505,6 +1505,13 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                              (ctlChildNames.Contains("posval") || ctlChildNames.Contains("transind"));
         var isApcStructure = mmsType == "structure" &&
                              (ctlChildNames.Contains("f") || ctlChildNames.Contains("i"));
+
+        // BSC ctlVal is directional Tcmd, never a tap-position setpoint
+        // and never a DPC Open/Close command. Validate live encoding first.
+        if (cdc == "BSC")
+            return Iec61850BscStepControlPolicy.TryBind(
+                mmsType, descriptor.CtlValSpecification.Size,
+                normalized, out value, out expected, out error);
 
         // Some vendor IEDs expose CSWI/XCBR/XSWI.Pos with a Boolean ctlVal while
         // the process feedback remains the standard double-point Pos.stVal. Preserve
@@ -1665,6 +1672,8 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
     private static bool ControlFeedbackMatches(string cdc, string expected, string initial, string actual)
     {
         var normalizedCdc = (cdc ?? string.Empty).Trim().ToUpperInvariant();
+        if (normalizedCdc == "BSC")
+            return Iec61850BscStepControlPolicy.MovementConfirmed(expected, initial, actual);
         if (normalizedCdc == "DPC")
         {
             return Iec61850ValueFormatter.TryNormalizeDbpos(expected, out var expectedCode) &&
@@ -1737,14 +1746,14 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             _ => "No safe command sequence available"
         };
 
-    private static string MapControlValueType(ArControl.Iec61850ControlObjectDescriptor descriptor)
+    private static string MapControlValueType(ArControl.Iec61850ControlObjectDescriptor descriptor, string? semanticCdc = null)
     {
-        var cdc = (descriptor.Cdc ?? string.Empty).Trim().ToUpperInvariant();
+        var cdc = (semanticCdc ?? descriptor.Cdc ?? string.Empty).Trim().ToUpperInvariant();
         return cdc switch
         {
             "DPC" => "Dbpos",
             "SPC" => "Boolean",
-            "BSC" => "ValWithTrans",
+            "BSC" => "Int8", // ST valWTr.posVal is feedback, not an Oper target
             "APC" => descriptor.CtlValSpecification.MmsType,
             _ when cdc.Contains("INC", StringComparison.OrdinalIgnoreCase) || cdc.Contains("ISC", StringComparison.OrdinalIgnoreCase)
                 => descriptor.CtlValSpecification.MmsType,
@@ -1853,8 +1862,11 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         if (objectName.Contains("TAPOPR") || objectName.Contains("TAPOPL") ||
             objectName.Contains("RAISE") || objectName.Contains("LOWER"))
             return "SPC";
-        if (objectName.Contains("TAPCHG") || objectName.Contains("STEP"))
-            return "INC";
+        // Exact live ValWithTrans status beats name-derived heuristics.
+        if (hasControlOperation && attributes.Any(attribute =>
+                (attribute.AttributePath ?? string.Empty).EndsWith("valWTr.posVal", StringComparison.OrdinalIgnoreCase) ||
+                (attribute.ObjectReference ?? string.Empty).EndsWith(".valWTr.posVal", StringComparison.OrdinalIgnoreCase)))
+            return "BSC";
 
         var ctlVal = attributes.FirstOrDefault(attribute =>
             (attribute.AttributePath ?? string.Empty).EndsWith("ctlVal", StringComparison.OrdinalIgnoreCase) ||
@@ -2053,7 +2065,11 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
     private static string ResolveControlSemanticCdc(
         ArControl.Iec61850ControlObjectDescriptor descriptor,
         SignalDefinition signal)
-        => signal.IsPositionControl ? "DPC" : descriptor.Cdc;
+        => signal.IsPositionControl ? "DPC"
+            : string.Equals(signal.ControlCdc, "BSC", StringComparison.OrdinalIgnoreCase) &&
+              (signal.ControlStatusReference ?? string.Empty).EndsWith(".valWTr.posVal", StringComparison.OrdinalIgnoreCase)
+                ? "BSC"
+                : descriptor.Cdc;
 
     private static (string Value, ArControl.Iec61850ControlStatusState State) NormalizeControlFeedback(
         string cdc,

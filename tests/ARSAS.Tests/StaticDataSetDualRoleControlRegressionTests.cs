@@ -50,7 +50,7 @@ public sealed class StaticDataSetDualRoleControlRegressionTests
     [InlineData("ISC", "IEDCTRL/ATCC1.StepCmd", "regulating")]
     [InlineData("APC", "IEDCTRL/AVCO1.VRef", "setpoint")]
     [InlineData("BAC", "IEDCTRL/GAPC1.AnCtl", "setpoint")]
-    [InlineData("BSC", "IEDCTRL/ATCC1.TapPos", "setpoint")]
+    [InlineData("BSC", "IEDCTRL/ATCC1.TapPos", "regulating")]
     public void ExistingCommandSurface_CoversStandardControlFamilies(
         string cdc,
         string reference,

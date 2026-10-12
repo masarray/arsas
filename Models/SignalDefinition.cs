@@ -449,7 +449,7 @@ public class SignalDefinition : ObservableObject
         {
             if (!CanExposeControlActions || IsPositionControl || IsRaiseOnlyControl || IsLowerOnlyControl) return false;
             var cdc = (ControlCdc ?? string.Empty).Trim().ToUpperInvariant();
-            return cdc is "INC" or "ISC" or "INC/ISC";
+            return cdc is "INC" or "ISC" or "INC/ISC" or "BSC";
         }
     }
     public bool IsBooleanControl => CanExposeControlActions && !IsPositionControl && !IsRaiseOnlyControl && !IsLowerOnlyControl && !IsRaiseLowerControl &&
@@ -460,7 +460,7 @@ public class SignalDefinition : ObservableObject
         {
             if (!CanExposeControlActions || IsPositionControl || IsRaiseOnlyControl || IsLowerOnlyControl || IsRaiseLowerControl || IsBooleanControl) return false;
             var cdc = (ControlCdc ?? string.Empty).Trim().ToUpperInvariant();
-            return cdc is "APC" or "BAC" or "BSC";
+            return cdc is "APC" or "BAC";
         }
     }
     public bool IsGenericControl => !CanExposeControlActions ||
@@ -478,7 +478,7 @@ public class SignalDefinition : ObservableObject
             var cdc = (ControlCdc ?? string.Empty).Trim().ToUpperInvariant();
             if (cdc == "DPC") return "Open / Close";
             if (cdc is "INC" or "ISC") return "Raise / Lower";
-            if (cdc == "BSC") return "Tap / step position";
+            if (cdc == "BSC") return "Raise / Lower tap";
             if (cdc == "SPC")
             {
                 var commandText = $"{Name} {ObjectReference}";
