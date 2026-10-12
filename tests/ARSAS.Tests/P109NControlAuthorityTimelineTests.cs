@@ -98,6 +98,27 @@ public sealed class P109NControlAuthorityTimelineTests
     }
 
     [Fact]
+    public void AutomaticReconnectAlsoRevokesAllAssociationScopedControlAuthority()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(
+            dir.FullName, "Services", "Iec61850MonitorRuntime.cs")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+        var source = File.ReadAllText(Path.Combine(
+            dir!.FullName, "Services", "Iec61850MonitorRuntime.cs"));
+        Assert.Contains("ResetAssociationControlAuthority(session.Device);", source);
+        var start = source.IndexOf("private async Task TryReconnectAsync(", StringComparison.Ordinal);
+        var end = source.IndexOf("private void ScheduleReconnectRetry(", start, StringComparison.Ordinal);
+        Assert.True(start > 0 && end > start);
+        var body = source[start..end];
+        Assert.True(body.IndexOf("ResetAssociationControlAuthority(session.Device);", StringComparison.Ordinal) <
+                    body.IndexOf("ConnectUsingSelectedFastPathAsync(", StringComparison.Ordinal));
+        Assert.Contains("signal.ClearLiveControlAuthority();", source);
+        Assert.Contains("signal.ControlModelText = \"Auto-detect\";", source);
+    }
+
+    [Fact]
     public void ProjectionProducerUsesAdvisoryApi_NotDirectCdcAssignment()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

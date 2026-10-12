@@ -845,6 +845,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
         await StopMonitoringSessionAsync(session, preservePointDefinitions: false).ConfigureAwait(false);
         await session.Client.DisposeAsync().ConfigureAwait(false);
+        // No control qualification may outlive its MMS association.
+        ResetAssociationControlAuthority(session.Device);
         session.MonitorCancellation.Dispose();
         session.Device.IsMonitoring = false;
         session.Device.IsConnected = false;
@@ -1812,6 +1814,19 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         }
     }
 
+    private static void ResetAssociationControlAuthority(Iec61850MonitorDevice device)
+    {
+        foreach (var signal in device.Signals.Where(s => s.IsValidControlObject))
+        {
+            signal.ClearControlConfirmation();
+            signal.ClearLiveControlAuthority();
+            signal.ControlModelText = "Auto-detect";
+            signal.ControlInspectionEvidence =
+                "New MMS association: live CDC, ctlModel and typed ctlVal require reinspection.";
+        }
+        device.RefreshCommandSignalProjection();
+    }
+
     private async Task TryReconnectAsync(DeviceSession session, CancellationToken cancellationToken)
     {
         var nowUtc = DateTime.UtcNow;
@@ -1827,6 +1842,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         Log("WARN", session.Device.Name,
             $"Smart reconnect attempt #{attempt} started. Transport recovery is bounded independently from report re-arming.");
 
+        // Automatic reconnection must revoke all previously verified control
+        // semantics BEFORE the fresh association is opened, even if the UI
+        // never visits its normal manual Disconnect/Connect path.
+        ResetAssociationControlAuthority(session.Device);
         var staleClient = session.Client;
         await DisposeClientForReconnectAsync(
             staleClient,
