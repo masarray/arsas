@@ -669,7 +669,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         if (!_sessions.TryGetValue(deviceId, out var session) || !session.Client.IsConnected)
             throw new InvalidOperationException("The IED is not associated. ctlModel Write is forbidden.");
         if (expected == Iec61850ControlModelKind.Unknown ||
-            target is not (Iec61850ControlModelKind.DirectNormal or
+            target is not (Iec61850ControlModelKind.StatusOnly or
+                           Iec61850ControlModelKind.DirectNormal or
                            Iec61850ControlModelKind.DirectEnhanced or
                            Iec61850ControlModelKind.SboNormal or
                            Iec61850ControlModelKind.SboEnhanced))

@@ -71,6 +71,15 @@ public sealed class P109QCommandDockCommissioningRegressionTests
     }
 
     [Fact]
+    public void StatusOnlyZeroIsAnExplicitWritableControlModel()
+    {
+        var runtime = Read("Services/Iec61850MonitorRuntime.cs");
+        var editor = Read("ControlModelWriteWindow.xaml.cs");
+        Assert.Contains("target is not (Iec61850ControlModelKind.StatusOnly or", runtime);
+        Assert.Contains("new(Iec61850ControlModelKind.StatusOnly, \"0  [status-only]\")", editor);
+    }
+
+    [Fact]
     public void OnlyEngineOwnsSingleControlModelWriteAndInvalidatesOldDescriptor()
     {
         var client = Read("Services/NativeIec61850Client.cs");
