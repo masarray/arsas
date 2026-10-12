@@ -57,6 +57,13 @@ public sealed class P10MainlinePolicyExecutionTests
     [InlineData("position-model-probe-denied", false)]
     [InlineData("position-model-cancel-denied", false)]
     [InlineData("position-model-polling-denied", false)]
+    [InlineData("position-status-sha-denied", false)]
+    [InlineData("position-status-parent-denied", false)]
+    [InlineData("position-status-ci-denied", false)]
+    [InlineData("position-status-readonly-denied", false)]
+    [InlineData("position-status-width-denied", false)]
+    [InlineData("position-status-confirm-denied", false)]
+    [InlineData("position-status-polling-denied", false)]
     [InlineData("p10-pr-main-denied", false)]
     [InlineData("p10-source-main-denied", false)]
     [InlineData("p10-wrong-sha-denied", false)]
@@ -200,6 +207,20 @@ public sealed class P10MainlinePolicyExecutionTests
                     lockDoc["p109TPositionControlInteroperabilityTrial"]!["optionalCancelNotRequiredForNormalSbo"] = false; break;
                 case "position-model-polling-denied":
                     lockDoc["p109TPositionControlInteroperabilityTrial"]!["cyclicMmsProcessPollingForbidden"] = false; break;
+                case "position-status-sha-denied":
+                    lockDoc["p109UPositionStatusNameListRecoveryTrial"]!["exactCommit"] = new string('0', 40); break;
+                case "position-status-parent-denied":
+                    lockDoc["p109UPositionStatusNameListRecoveryTrial"]!["baseEngineCommit"] = new string('0', 40); break;
+                case "position-status-ci-denied":
+                    lockDoc["p109UPositionStatusNameListRecoveryTrial"]!["engineCiRun"] = 0; break;
+                case "position-status-readonly-denied":
+                    lockDoc["p109UPositionStatusNameListRecoveryTrial"]!["singleScalarReadOnly"] = false; break;
+                case "position-status-width-denied":
+                    lockDoc["p109UPositionStatusNameListRecoveryTrial"]!["bitStringWidthTwoRequired"] = false; break;
+                case "position-status-confirm-denied":
+                    lockDoc["p109UPositionStatusNameListRecoveryTrial"]!["operateRequiresExplicitConfirmation"] = false; break;
+                case "position-status-polling-denied":
+                    lockDoc["p109UPositionStatusNameListRecoveryTrial"]!["cyclicMmsProcessPollingForbidden"] = false; break;
                 case "p10-source-main-denied": sourceRef = "main"; break;
                 case "p10-wrong-sha-denied":
                     lockDoc["p10IdentityTrial"]!["exactCommit"] = new string('0', 40); break;

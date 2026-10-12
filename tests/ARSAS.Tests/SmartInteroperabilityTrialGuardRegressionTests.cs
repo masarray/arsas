@@ -101,8 +101,13 @@ public sealed class SmartInteroperabilityTrialGuardRegressionTests
         var position = root.GetProperty("p109TPositionControlInteroperabilityTrial");
         Assert.Equal(simpleEditor.GetProperty("exactCommit").GetString(),
             position.GetProperty("baseEngineCommit").GetString());
+        var positionStatus = root.GetProperty("p109UPositionStatusNameListRecoveryTrial");
+        Assert.Equal(position.GetProperty("exactCommit").GetString(),
+            positionStatus.GetProperty("baseEngineCommit").GetString());
         Assert.Equal(root.GetProperty("commit").GetString(),
-            position.GetProperty("exactCommit").GetString());
+            positionStatus.GetProperty("exactCommit").GetString());
+        Assert.True(positionStatus.GetProperty("standardPositionOnlyProbe").GetBoolean());
+        Assert.True(positionStatus.GetProperty("operateRequiresExplicitConfirmation").GetBoolean());
         Assert.True(position.GetProperty("structuredStatusRequiresTypedMmsRead").GetBoolean());
         Assert.True(simpleEditor.GetProperty("simpleSelectWriteUi").GetBoolean());
         Assert.True(commissioning.GetProperty("singleWriteNoRetry").GetBoolean());

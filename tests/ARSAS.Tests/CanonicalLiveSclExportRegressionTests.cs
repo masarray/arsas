@@ -457,8 +457,13 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var position = root.GetProperty("p109TPositionControlInteroperabilityTrial");
         Assert.Equal(simpleEditor.GetProperty("exactCommit").GetString(),
             position.GetProperty("baseEngineCommit").GetString());
+        var positionStatus = root.GetProperty("p109UPositionStatusNameListRecoveryTrial");
         Assert.Equal(position.GetProperty("exactCommit").GetString(),
+            positionStatus.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal(positionStatus.GetProperty("exactCommit").GetString(),
             root.GetProperty("commit").GetString());
+        Assert.True(positionStatus.GetProperty("singleScalarReadOnly").GetBoolean());
+        Assert.True(positionStatus.GetProperty("bitStringWidthTwoRequired").GetBoolean());
         Assert.True(position.GetProperty("structuredStatusRequiresTypedMmsRead").GetBoolean());
         Assert.True(position.GetProperty("liveTypedControlVerificationRequired").GetBoolean());
         Assert.True(simpleEditor.GetProperty("statusOnlyZeroSupported").GetBoolean());
