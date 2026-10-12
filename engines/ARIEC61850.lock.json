@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "67c6635b7e16139c0661e559a2e6946527c1442a",
-  "sourcePullRequest": 167,
-  "purpose": "P10.9J CodeVerified-only: trusted SCL 41-packed AP-Title compatibility and exact BSC TapChg control classification (ARIEC PR #167, CI 38219429896). Consumer BSC Tcmd Raise/Lower is explicitly typed and fail-closed; no unverified physical control acceptance. Preserves immutable P10.9I canonical MMS FIFO protection, no SCL discovery fallback, no cyclic polling, and historical R7/R10 authority.",
+  "commit": "a43b9b4864a9565c02f544d4135fe157c2fac577",
+  "sourcePullRequest": 168,
+  "purpose": "P10.9K CodeVerified-only: vendor-neutral control CDC fail-closed semantics with live ctlVal/status evidence plus association-scoped NameList single-flight reuse; ARIEC PR #168 CI #38231327892. Retains P10.9J exact OID/BSC interoperability, P10.9I FIFO protection, physical R7/R10 baseline and no-automatic-dynamic reporting. Physical ZIV control still NOT accepted.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
@@ -146,5 +146,20 @@
     "fullNameListFallbackForbidden": true,
     "cyclicMmsProcessPollingForbidden": true,
     "identitySource": "TrustedSclExactDomainMatch"
+  },
+  "genericControlInteroperabilityTrial": {
+    "status": "code-verified-not-physical",
+    "issue": 540,
+    "enginePullRequest": 168,
+    "baseEngineCommit": "67c6635b7e16139c0661e559a2e6946527c1442a",
+    "exactCommit": "a43b9b4864a9565c02f544d4135fe157c2fac577",
+    "engineCiRun": 38231327892,
+    "typedSemanticGateRequired": true,
+    "associationScopedInventoryRequired": true,
+    "vendorDispatchForbidden": true,
+    "physicalQualificationRequired": true,
+    "mainlinePromotionForbidden": true,
+    "fullDiscoveryFallbackForbidden": true,
+    "cyclicMmsProcessPollingForbidden": true
   }
 }

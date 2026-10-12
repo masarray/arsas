@@ -1,5 +1,5 @@
 # PowerShell 5.1/7 compatible. Code-verification does NOT grant physical acceptance.
-# Exact audited code-only candidates (P10.9F/G/I/J); no wildcard SHA or runtime overrides.
+# Exact audited code-only candidates (P10.9F/G/I/J/K); no wildcard SHA or runtime overrides.
 function Test-P109FCoreRoutingTrial {
     param([Parameter(Mandatory = $true)] [object] $Lock)
     $candidate = $Lock.coreReportRoutingTrial
@@ -52,9 +52,7 @@ function Test-P109FCoreRoutingTrial {
     # historical guard; neither the valid OID notation nor BSC metadata
     # grants production/physical authority.
     $ziv = $Lock.zivSclBscInteroperabilityTrial
-    $zivHead = (
-        [string]$Lock.commit -ceq '67c6635b7e16139c0661e559a2e6946527c1442a' -and
-        [int]$Lock.sourcePullRequest -eq 167 -and
+    $zivIntegrityValid = (
         $canonicalIntegrityValid -and $null -ne $ziv -and
         [string]$ziv.status -ceq 'code-verified-not-physical' -and
         [int]$ziv.issue -eq 538 -and
@@ -69,7 +67,31 @@ function Test-P109FCoreRoutingTrial {
         [bool]$ziv.fullDiscoveryFallbackForbidden -and
         [bool]$ziv.cyclicMmsProcessPollingForbidden
     )
-    if (-not ($previousHead -or $subscriberHead -or $canonicalHead -or $zivHead) -or
+    $zivHead = (
+        [string]$Lock.commit -ceq '67c6635b7e16139c0661e559a2e6946527c1442a' -and
+        [int]$Lock.sourcePullRequest -eq 167 -and $zivIntegrityValid
+    )
+    # P10.9K does not replace any earlier physical/provenance gate.
+    $generic = $Lock.genericControlInteroperabilityTrial
+    $genericHead = (
+        [string]$Lock.commit -ceq 'a43b9b4864a9565c02f544d4135fe157c2fac577' -and
+        [int]$Lock.sourcePullRequest -eq 168 -and
+        $zivIntegrityValid -and $null -ne $generic -and
+        [string]$generic.status -ceq 'code-verified-not-physical' -and
+        [int]$generic.issue -eq 540 -and
+        [int]$generic.enginePullRequest -eq 168 -and
+        [string]$generic.baseEngineCommit -ceq [string]$ziv.exactCommit -and
+        [string]$generic.exactCommit -ceq 'a43b9b4864a9565c02f544d4135fe157c2fac577' -and
+        [long]$generic.engineCiRun -eq 38231327892 -and
+        [bool]$generic.typedSemanticGateRequired -and
+        [bool]$generic.associationScopedInventoryRequired -and
+        [bool]$generic.vendorDispatchForbidden -and
+        [bool]$generic.physicalQualificationRequired -and
+        [bool]$generic.mainlinePromotionForbidden -and
+        [bool]$generic.fullDiscoveryFallbackForbidden -and
+        [bool]$generic.cyclicMmsProcessPollingForbidden
+    )
+    if (-not ($previousHead -or $subscriberHead -or $canonicalHead -or $zivHead -or $genericHead) -or
         [string]$Lock.repository -cne 'masarray/ARIEC61850' -or
         [string]$Lock.ref -cne 'main' -or $null -eq $candidate) { return $false }
 

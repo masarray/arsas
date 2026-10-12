@@ -33,6 +33,12 @@ public sealed class P10MainlinePolicyExecutionTests
     [InlineData("ziv-trial-mainline-denied", false)]
     [InlineData("ziv-trial-polling-denied", false)]
     [InlineData("ziv-trial-bsc-gate-denied", false)]
+    [InlineData("generic-trial-sha-denied", false)]
+    [InlineData("generic-trial-parent-denied", false)]
+    [InlineData("generic-trial-ci-denied", false)]
+    [InlineData("generic-trial-semantic-gate-denied", false)]
+    [InlineData("generic-trial-inventory-gate-denied", false)]
+    [InlineData("generic-trial-vendor-denied", false)]
     [InlineData("p10-pr-main-denied", false)]
     [InlineData("p10-source-main-denied", false)]
     [InlineData("p10-wrong-sha-denied", false)]
@@ -128,6 +134,18 @@ public sealed class P10MainlinePolicyExecutionTests
                     lockDoc["zivSclBscInteroperabilityTrial"]!["cyclicMmsProcessPollingForbidden"] = false; break;
                 case "ziv-trial-bsc-gate-denied":
                     lockDoc["zivSclBscInteroperabilityTrial"]!["bscLiveSemanticGateRequired"] = false; break;
+                case "generic-trial-sha-denied":
+                    lockDoc["genericControlInteroperabilityTrial"]!["exactCommit"] = new string('0', 40); break;
+                case "generic-trial-parent-denied":
+                    lockDoc["genericControlInteroperabilityTrial"]!["baseEngineCommit"] = new string('0', 40); break;
+                case "generic-trial-ci-denied":
+                    lockDoc["genericControlInteroperabilityTrial"]!["engineCiRun"] = 0; break;
+                case "generic-trial-semantic-gate-denied":
+                    lockDoc["genericControlInteroperabilityTrial"]!["typedSemanticGateRequired"] = false; break;
+                case "generic-trial-inventory-gate-denied":
+                    lockDoc["genericControlInteroperabilityTrial"]!["associationScopedInventoryRequired"] = false; break;
+                case "generic-trial-vendor-denied":
+                    lockDoc["genericControlInteroperabilityTrial"]!["vendorDispatchForbidden"] = false; break;
                 case "p10-source-main-denied": sourceRef = "main"; break;
                 case "p10-wrong-sha-denied":
                     lockDoc["p10IdentityTrial"]!["exactCommit"] = new string('0', 40); break;

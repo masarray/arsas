@@ -120,6 +120,30 @@ try {
     $wrongZivScl.zivSclBscInteroperabilityTrial.sclApTitlePackedPrefixOnly = $false
     Assert-Rejects $wrongZivScl 'physical-tested'
 
+    $wrongGenericSha = New-TrackedP10Fixture
+    $wrongGenericSha.genericControlInteroperabilityTrial.exactCommit = ('f' * 40)
+    Assert-Rejects $wrongGenericSha 'physical-tested'
+
+    $wrongGenericCi = New-TrackedP10Fixture
+    $wrongGenericCi.genericControlInteroperabilityTrial.engineCiRun = 0
+    Assert-Rejects $wrongGenericCi 'physical-tested'
+
+    $wrongGenericParent = New-TrackedP10Fixture
+    $wrongGenericParent.genericControlInteroperabilityTrial.baseEngineCommit = ('f' * 40)
+    Assert-Rejects $wrongGenericParent 'physical-tested'
+
+    $wrongGenericSafety = New-TrackedP10Fixture
+    $wrongGenericSafety.genericControlInteroperabilityTrial.typedSemanticGateRequired = $false
+    Assert-Rejects $wrongGenericSafety 'physical-tested'
+
+    $wrongGenericInventory = New-TrackedP10Fixture
+    $wrongGenericInventory.genericControlInteroperabilityTrial.associationScopedInventoryRequired = $false
+    Assert-Rejects $wrongGenericInventory 'physical-tested'
+
+    $wrongGenericVendor = New-TrackedP10Fixture
+    $wrongGenericVendor.genericControlInteroperabilityTrial.vendorDispatchForbidden = $false
+    Assert-Rejects $wrongGenericVendor 'physical-tested'
+
     $wrongP10Parent = New-TrackedP10Fixture
     $wrongP10Parent.p10IdentityTrial.baseEngineCommit = ('f' * 40)
     Assert-Rejects $wrongP10Parent 'physical-tested'
