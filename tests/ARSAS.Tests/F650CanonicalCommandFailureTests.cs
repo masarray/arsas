@@ -99,7 +99,8 @@ public sealed class F650CanonicalCommandFailureTests
         var projection = Read("Services/Iec61850StaticControlStatusProjectionService.cs");
         Assert.Contains("Full DataObject is command identity", projection, StringComparison.Ordinal);
         var model = Read("Models/MonitorModels.cs");
-        Assert.Contains("DistinctOperable(Signals)", model, StringComparison.Ordinal);
+        Assert.Contains("DistinctSelected(Signals)", model, StringComparison.Ordinal);
+        Assert.Contains("ControlSupportsOperate", model, StringComparison.Ordinal);
         var runtime = Read("Services/Iec61850MonitorRuntime.cs");
         Assert.Contains("_activeControlTargets.TryAdd(targetKey, 0)", runtime, StringComparison.Ordinal);
         Assert.Contains("_activeControlTargets.TryRemove(targetKey, out _)", runtime, StringComparison.Ordinal);

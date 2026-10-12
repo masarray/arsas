@@ -94,7 +94,7 @@ function Test-P109FCoreRoutingTrial {
     # Exact P10.9L read-only engine candidate, preserving every historical gate.
     $probe = $Lock.p109LControlRecoveryTrial
     $probeHead = (
-        [string]$Lock.commit -ceq '55fa34cef9a4abee589b9a6d94be1d0361375d71' -and
+        [string]$Lock.commit -ceq '5e17da5f673eedce125b5c66e7dc2fa0abef2851' -and
         [int]$Lock.sourcePullRequest -eq 169 -and
         $zivIntegrityValid -and $null -ne $generic -and $null -ne $probe -and
         [string]$generic.exactCommit -ceq 'a43b9b4864a9565c02f544d4135fe157c2fac577' -and
