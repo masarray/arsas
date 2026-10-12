@@ -191,9 +191,9 @@ function Test-P109FCoreRoutingTrial {
         $null -ne $positionStatus -and
         [string]$positionStatus.status -ceq 'code-trial-not-physical' -and
         [int]$positionStatus.enginePullRequest -eq 169 -and
-        [long]$positionStatus.engineCiRun -eq 38323459780 -and
+        [long]$positionStatus.engineCiRun -eq 38324547203 -and
         [string]$positionStatus.baseEngineCommit -ceq '9d82523978c29dcbf38f60cbfb384c3b050eae7c' -and
-        [string]$positionStatus.exactCommit -ceq '0ae297c85885b7e0cb9bbd9e02334d6c4f8a1a12' -and
+        [string]$positionStatus.exactCommit -ceq 'ad43399ed411cc72e6eb68b67e198db5e7b95381' -and
         [bool]$positionStatus.truncatedNameListSupported -and
         [bool]$positionStatus.standardPositionOnlyProbe -and
         [bool]$positionStatus.singleScalarReadOnly -and
@@ -209,7 +209,7 @@ function Test-P109FCoreRoutingTrial {
     $simpleHead = (
         ([string]$Lock.commit -ceq 'd1dd8fc14e79c5de15fbc52d77aea48a14c7c02b' -or
          ([string]$Lock.commit -ceq '9d82523978c29dcbf38f60cbfb384c3b050eae7c' -and $positionHead) -or
-         ([string]$Lock.commit -ceq '0ae297c85885b7e0cb9bbd9e02334d6c4f8a1a12' -and $positionHead -and $positionStatusHead)) -and
+         ([string]$Lock.commit -ceq 'ad43399ed411cc72e6eb68b67e198db5e7b95381' -and $positionHead -and $positionStatusHead)) -and
         [int]$Lock.sourcePullRequest -eq 169 -and
         $zivIntegrityValid -and $null -ne $generic -and
         [string]$generic.exactCommit -ceq 'a43b9b4864a9565c02f544d4135fe157c2fac577' -and
