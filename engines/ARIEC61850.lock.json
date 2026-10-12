@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "55fa34cef9a4abee589b9a6d94be1d0361375d71",
+  "commit": "5e17da5f673eedce125b5c66e7dc2fa0abef2851",
   "sourcePullRequest": 169,
-  "purpose": "P10.9L code-trial only: exact read-only ctlModel diagnosis and selected control catalog visibility. ARIEC PR #169; no physical command acceptance, no discovery/reporting authority change.",
+  "purpose": "P10.9L code-verified-not-physical: exact read-only ctlModel diagnosis and selected control catalog visibility. ARIEC PR #169 CI 38239451501 verified engine SHA 5e17da5f673eedce125b5c66e7dc2fa0abef2851; no physical command acceptance, no discovery/reporting authority change.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
@@ -167,12 +167,13 @@
     "issue": 525,
     "enginePullRequest": 169,
     "baseEngineCommit": "a43b9b4864a9565c02f544d4135fe157c2fac577",
-    "exactCommit": "55fa34cef9a4abee589b9a6d94be1d0361375d71",
+    "exactCommit": "5e17da5f673eedce125b5c66e7dc2fa0abef2851",
     "readOnlyCtlModelProbeRequired": true,
     "noControlWriteOnProbe": true,
     "physicalQualificationRequired": true,
     "mainlinePromotionForbidden": true,
     "fullDiscoveryFallbackForbidden": true,
-    "cyclicMmsProcessPollingForbidden": true
+    "cyclicMmsProcessPollingForbidden": true,
+    "engineCiRun": 38239451501
   }
 }

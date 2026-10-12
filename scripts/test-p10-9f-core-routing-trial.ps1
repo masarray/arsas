@@ -112,7 +112,8 @@ function Test-P109FCoreRoutingTrial {
         [int]$probe.issue -eq 525 -and
         [int]$probe.enginePullRequest -eq 169 -and
         [string]$probe.baseEngineCommit -ceq [string]$generic.exactCommit -and
-        [string]$probe.exactCommit -ceq '55fa34cef9a4abee589b9a6d94be1d0361375d71' -and
+        [string]$probe.exactCommit -ceq '5e17da5f673eedce125b5c66e7dc2fa0abef2851' -and
+        [long]$probe.engineCiRun -eq 38239451501 -and
         [bool]$probe.readOnlyCtlModelProbeRequired -and
         [bool]$probe.noControlWriteOnProbe -and
         [bool]$probe.physicalQualificationRequired -and
