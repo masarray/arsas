@@ -562,7 +562,7 @@ internal static class DiagnosticReportBuilder
                 "Check the local MMS listener and actual OS route if connection fails.";
         if (distinctInterfaces.Length == 0)
             return $"No directly matching IPv4 subnet for {target}; a gateway or static route can still provide connectivity. " +
-                "Check the Windows routing table rather than assuming the endpoint is unreachable.";
+                "Check the Windows routing table before drawing a connectivity conclusion.";
         if (distinctInterfaces.Length == 1)
             return $"One network interface ({distinctInterfaces[0]}) matches {target}, across " +
                 $"{matchedAddresses.Count} IPv4 address(es). IP aliases are not competing adapters; " +
