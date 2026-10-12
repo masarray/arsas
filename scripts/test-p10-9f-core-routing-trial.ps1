@@ -1,5 +1,5 @@
 # PowerShell 5.1/7 compatible. Code-verification does NOT grant physical acceptance.
-# Exact audited code-only candidates (P10.9F/G/I); no wildcard SHA or runtime overrides.
+# Exact audited code-only candidates (P10.9F/G/I/J); no wildcard SHA or runtime overrides.
 function Test-P109FCoreRoutingTrial {
     param([Parameter(Mandatory = $true)] [object] $Lock)
     $candidate = $Lock.coreReportRoutingTrial
@@ -30,9 +30,7 @@ function Test-P109FCoreRoutingTrial {
     # P10.9I is allowed only as the exact successor to the independently
     # qualified P10.9G engine record; neither entry grants physical authority.
     $canonical = $Lock.canonicalReportIngressIntegrityTrial
-    $canonicalHead = (
-        [string]$Lock.commit -ceq '9bd01908ebd6fdf50a74f0a421b4e79613b878d4' -and
-        [int]$Lock.sourcePullRequest -eq 166 -and
+    $canonicalIntegrityValid = (
         $subscriberIntegrityValid -and
         $null -ne $canonical -and
         [string]$canonical.status -ceq 'code-verified-not-physical' -and
@@ -46,7 +44,32 @@ function Test-P109FCoreRoutingTrial {
         [bool]$canonical.fullDiscoveryFallbackForbidden -and
         [bool]$canonical.cyclicMmsProcessPollingForbidden
     )
-    if (-not ($previousHead -or $subscriberHead -or $canonicalHead) -or
+    $canonicalHead = (
+        [string]$Lock.commit -ceq '9bd01908ebd6fdf50a74f0a421b4e79613b878d4' -and
+        [int]$Lock.sourcePullRequest -eq 166 -and $canonicalIntegrityValid
+    )
+    # P10.9J is admitted only if P10.9I still satisfies *every* explicit
+    # historical guard; neither the valid OID notation nor BSC metadata
+    # grants production/physical authority.
+    $ziv = $Lock.zivSclBscInteroperabilityTrial
+    $zivHead = (
+        [string]$Lock.commit -ceq '67c6635b7e16139c0661e559a2e6946527c1442a' -and
+        [int]$Lock.sourcePullRequest -eq 167 -and
+        $canonicalIntegrityValid -and $null -ne $ziv -and
+        [string]$ziv.status -ceq 'code-verified-not-physical' -and
+        [int]$ziv.issue -eq 538 -and
+        [int]$ziv.enginePullRequest -eq 167 -and
+        [string]$ziv.baseEngineCommit -ceq '9bd01908ebd6fdf50a74f0a421b4e79613b878d4' -and
+        [string]$ziv.exactCommit -ceq '67c6635b7e16139c0661e559a2e6946527c1442a' -and
+        [long]$ziv.engineCiRun -eq 38219429896 -and
+        [bool]$ziv.sclApTitlePackedPrefixOnly -and
+        [bool]$ziv.bscLiveSemanticGateRequired -and
+        [bool]$ziv.physicalQualificationRequired -and
+        [bool]$ziv.mainlinePromotionForbidden -and
+        [bool]$ziv.fullDiscoveryFallbackForbidden -and
+        [bool]$ziv.cyclicMmsProcessPollingForbidden
+    )
+    if (-not ($previousHead -or $subscriberHead -or $canonicalHead -or $zivHead) -or
         [string]$Lock.repository -cne 'masarray/ARIEC61850' -or
         [string]$Lock.ref -cne 'main' -or $null -eq $candidate) { return $false }
 

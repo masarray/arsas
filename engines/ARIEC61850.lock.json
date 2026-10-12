@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "9bd01908ebd6fdf50a74f0a421b4e79613b878d4",
-  "sourcePullRequest": 166,
-  "purpose": "P10.9I CodeVerified-only canonical InformationReport FIFO ingress protection (ARIEC PR #166, CI #38214165576): bounded by 2048 report envelopes and 32 MiB queued PDU payload, fail closed on saturation or terminal receive pump error while retaining queued FIFO originals. Original P10.9G subscriber isolation and P10.9F RptID/DataSet integrity remain intact. Static configured RCB/GI, decoder, cyclic-polling prohibition, physical R7/R10 authority and unresolved BCUGE SqNum/BufOvfl causality are unchanged.",
+  "commit": "67c6635b7e16139c0661e559a2e6946527c1442a",
+  "sourcePullRequest": 167,
+  "purpose": "P10.9J CodeVerified-only: trusted SCL 41-packed AP-Title compatibility and exact BSC TapChg control classification (ARIEC PR #167, CI 38219429896). Consumer BSC Tcmd Raise/Lower is explicitly typed and fail-closed; no unverified physical control acceptance. Preserves immutable P10.9I canonical MMS FIFO protection, no SCL discovery fallback, no cyclic polling, and historical R7/R10 authority.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
@@ -83,6 +83,20 @@
     "fullNameListFallbackForbidden": true,
     "cyclicMmsProcessPollingForbidden": true,
     "physicalQualificationRequired": true
+  },
+  "zivSclBscInteroperabilityTrial": {
+    "status": "code-verified-not-physical",
+    "issue": 538,
+    "enginePullRequest": 167,
+    "baseEngineCommit": "9bd01908ebd6fdf50a74f0a421b4e79613b878d4",
+    "exactCommit": "67c6635b7e16139c0661e559a2e6946527c1442a",
+    "engineCiRun": 38219429896,
+    "sclApTitlePackedPrefixOnly": true,
+    "bscLiveSemanticGateRequired": true,
+    "physicalQualificationRequired": true,
+    "mainlinePromotionForbidden": true,
+    "fullDiscoveryFallbackForbidden": true,
+    "cyclicMmsProcessPollingForbidden": true
   },
   "canonicalReportIngressIntegrityTrial": {
     "status": "code-verified-not-physical",

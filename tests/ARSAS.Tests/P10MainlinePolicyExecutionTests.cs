@@ -26,6 +26,13 @@ public sealed class P10MainlinePolicyExecutionTests
     [InlineData("canonical-trial-physical-flag-denied", false)]
     [InlineData("canonical-trial-mainline-flag-denied", false)]
     [InlineData("canonical-trial-polling-flag-denied", false)]
+    [InlineData("ziv-trial-sha-denied", false)]
+    [InlineData("ziv-trial-base-denied", false)]
+    [InlineData("ziv-trial-ci-denied", false)]
+    [InlineData("ziv-trial-physical-denied", false)]
+    [InlineData("ziv-trial-mainline-denied", false)]
+    [InlineData("ziv-trial-polling-denied", false)]
+    [InlineData("ziv-trial-bsc-gate-denied", false)]
     [InlineData("p10-pr-main-denied", false)]
     [InlineData("p10-source-main-denied", false)]
     [InlineData("p10-wrong-sha-denied", false)]
@@ -107,6 +114,20 @@ public sealed class P10MainlinePolicyExecutionTests
                     lockDoc["canonicalReportIngressIntegrityTrial"]!["mainlinePromotionForbidden"] = false; break;
                 case "canonical-trial-polling-flag-denied":
                     lockDoc["canonicalReportIngressIntegrityTrial"]!["cyclicMmsProcessPollingForbidden"] = false; break;
+                case "ziv-trial-sha-denied":
+                    lockDoc["zivSclBscInteroperabilityTrial"]!["exactCommit"] = new string('0', 40); break;
+                case "ziv-trial-base-denied":
+                    lockDoc["zivSclBscInteroperabilityTrial"]!["baseEngineCommit"] = new string('0', 40); break;
+                case "ziv-trial-ci-denied":
+                    lockDoc["zivSclBscInteroperabilityTrial"]!["engineCiRun"] = 0; break;
+                case "ziv-trial-physical-denied":
+                    lockDoc["zivSclBscInteroperabilityTrial"]!["physicalQualificationRequired"] = false; break;
+                case "ziv-trial-mainline-denied":
+                    lockDoc["zivSclBscInteroperabilityTrial"]!["mainlinePromotionForbidden"] = false; break;
+                case "ziv-trial-polling-denied":
+                    lockDoc["zivSclBscInteroperabilityTrial"]!["cyclicMmsProcessPollingForbidden"] = false; break;
+                case "ziv-trial-bsc-gate-denied":
+                    lockDoc["zivSclBscInteroperabilityTrial"]!["bscLiveSemanticGateRequired"] = false; break;
                 case "p10-source-main-denied": sourceRef = "main"; break;
                 case "p10-wrong-sha-denied":
                     lockDoc["p10IdentityTrial"]!["exactCommit"] = new string('0', 40); break;

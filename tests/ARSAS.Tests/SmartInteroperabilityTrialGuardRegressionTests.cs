@@ -81,8 +81,11 @@ public sealed class SmartInteroperabilityTrialGuardRegressionTests
             canonicalTrial.GetProperty("baseEngineCommit").GetString());
         Assert.Equal("9bd01908ebd6fdf50a74f0a421b4e79613b878d4",
             canonicalTrial.GetProperty("exactCommit").GetString());
+        var zivTrial = root.GetProperty("zivSclBscInteroperabilityTrial");
+        Assert.Equal(canonicalTrial.GetProperty("exactCommit").GetString(),
+            zivTrial.GetProperty("baseEngineCommit").GetString());
         Assert.Equal(root.GetProperty("commit").GetString(),
-            canonicalTrial.GetProperty("exactCommit").GetString());
+            zivTrial.GetProperty("exactCommit").GetString());
         Assert.Equal("code-verified-not-physical", codeTrial.GetProperty("status").GetString());
         Assert.Equal("code-verified-not-physical", subscriberTrial.GetProperty("status").GetString());
         Assert.True(subscriberTrial.GetProperty("physicalQualificationRequired").GetBoolean());
@@ -97,7 +100,17 @@ public sealed class SmartInteroperabilityTrialGuardRegressionTests
         Assert.True(canonicalTrial.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
         Assert.True(codeTrial.GetProperty("physicalQualificationRequired").GetBoolean());
         Assert.True(codeTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
-        Assert.Equal(166,root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal("code-verified-not-physical", zivTrial.GetProperty("status").GetString());
+        Assert.Equal(538, zivTrial.GetProperty("issue").GetInt32());
+        Assert.Equal(167, zivTrial.GetProperty("enginePullRequest").GetInt32());
+        Assert.Equal(38219429896L, zivTrial.GetProperty("engineCiRun").GetInt64());
+        Assert.True(zivTrial.GetProperty("sclApTitlePackedPrefixOnly").GetBoolean());
+        Assert.True(zivTrial.GetProperty("bscLiveSemanticGateRequired").GetBoolean());
+        Assert.True(zivTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(zivTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
+        Assert.True(zivTrial.GetProperty("fullDiscoveryFallbackForbidden").GetBoolean());
+        Assert.True(zivTrial.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
+        Assert.Equal(167,root.GetProperty("sourcePullRequest").GetInt32());
         Assert.Equal("code-trial-not-physical",p10.GetProperty("status").GetString());
         Assert.True(p10.GetProperty("physicalQualificationRequired").GetBoolean());
         Assert.True(p10.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());

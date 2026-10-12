@@ -104,6 +104,22 @@ try {
     $wrongCanonicalSafety.canonicalReportIngressIntegrityTrial.mainlinePromotionForbidden = $false
     Assert-Rejects $wrongCanonicalSafety 'physical-tested'
 
+    $wrongZivSha = New-TrackedP10Fixture
+    $wrongZivSha.zivSclBscInteroperabilityTrial.exactCommit = ('f' * 40)
+    Assert-Rejects $wrongZivSha 'physical-tested'
+
+    $wrongZivCi = New-TrackedP10Fixture
+    $wrongZivCi.zivSclBscInteroperabilityTrial.engineCiRun = 0
+    Assert-Rejects $wrongZivCi 'physical-tested'
+
+    $wrongZivBase = New-TrackedP10Fixture
+    $wrongZivBase.zivSclBscInteroperabilityTrial.baseEngineCommit = ('f' * 40)
+    Assert-Rejects $wrongZivBase 'physical-tested'
+
+    $wrongZivScl = New-TrackedP10Fixture
+    $wrongZivScl.zivSclBscInteroperabilityTrial.sclApTitlePackedPrefixOnly = $false
+    Assert-Rejects $wrongZivScl 'physical-tested'
+
     $wrongP10Parent = New-TrackedP10Fixture
     $wrongP10Parent.p10IdentityTrial.baseEngineCommit = ('f' * 40)
     Assert-Rejects $wrongP10Parent 'physical-tested'
