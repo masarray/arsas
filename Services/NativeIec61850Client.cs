@@ -1098,7 +1098,9 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
 
         var control = await GetOrOpenControlSessionAsync(signal, cancellationToken).ConfigureAwait(false);
         var descriptor = control.Descriptor;
-        var effectiveCdc = ResolveControlSemanticCdc(descriptor, signal);
+        var semantic = ArControl.Iec61850ControlSemanticResolver.Resolve(
+            descriptor, signal.ControlCdc, signal.ControlStatusReference);
+        var effectiveCdc = semantic.Cdc;
         var status = await RunMmsOperationAsync(
             () => control.ReadStatusAsync(cancellationToken),
             cancellationToken).ConfigureAwait(false);
@@ -1138,6 +1140,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         var valueType = MapControlValueType(descriptor, effectiveCdc);
 
         signal.ControlCdc = effectiveCdc;
+        signal.ControlSemanticVerified = semantic.IsCommandSafe;
         signal.ControlValueType = valueType;
         signal.ControlCurrentValue = currentValue;
         signal.ControlStatusReference = statusReference;
@@ -1157,16 +1160,16 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             CurrentValue = currentValue,
             CurrentState = currentState,
             EngineControlServiceAvailable = true,
-            IsOperationallyReady = descriptor.IsOperationallyReady,
+            IsOperationallyReady = descriptor.IsOperationallyReady && semantic.IsCommandSafe,
             SupportsCommandTermination = descriptor.SupportsCommandTermination,
             SupportsTimeActivatedOperate = descriptor.SupportsTimeActivatedOperate,
             SboTimeoutText = FormatControlTimeout(descriptor.SboTimeout),
             OperTimeoutText = FormatControlTimeout(descriptor.OperTimeout),
             SequenceText = FriendlyControlSequence(descriptor.ControlModel),
             DiscoveryEvidence = descriptor.DiscoveryEvidence,
-            EngineControlServiceStatus = descriptor.IsOperationallyReady
-                ? "ARIEC61850 Smart Control is ready. Exact live ctlVal typing and the required Direct/SBO sequence were validated."
-                : "ARIEC61850 found the control object, but the live descriptor is incomplete and command execution remains blocked."
+            EngineControlServiceStatus = semantic.IsCommandSafe
+                ? "ARIEC61850 Smart Control is ready. CDC, live ctlVal, status and Direct/SBO semantics agree."
+                : semantic.Reason
         };
     }
 
@@ -1198,8 +1201,15 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         var totalStopwatch = Stopwatch.StartNew();
         var control = await GetOrOpenControlSessionAsync(request.Signal, cancellationToken).ConfigureAwait(false);
         var descriptor = control.Descriptor;
-        var effectiveCdc = ResolveControlSemanticCdc(descriptor, request.Signal);
+        var semantic = ArControl.Iec61850ControlSemanticResolver.Resolve(
+            descriptor, request.Signal.ControlCdc, request.Signal.ControlStatusReference);
+        var effectiveCdc = semantic.Cdc;
+        request.Signal.ControlSemanticVerified = semantic.IsCommandSafe;
         var capabilities = BuildControlCapabilities(descriptor, request.Signal, "-", effectiveCdc);
+        if (!semantic.IsCommandSafe)
+            return ControlFailure("Validation",
+                "Unsafe or ambiguous IEC 61850 control semantics: " + semantic.Reason,
+                capabilities, request.ValueText);
         if (!descriptor.IsOperationallyReady)
         {
             return ControlFailure(
@@ -1379,6 +1389,8 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         string currentValue,
         string? effectiveCdc = null)
     {
+        var semantic = ArControl.Iec61850ControlSemanticResolver.Resolve(
+            descriptor, signal.ControlCdc, signal.ControlStatusReference);
         var statusReference = !string.IsNullOrWhiteSpace(signal.ControlStatusReference)
             ? signal.ControlStatusReference
             : descriptor.StatusReference;
@@ -1395,16 +1407,16 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             CurrentValue = currentValue,
             CurrentState = "Unknown",
             EngineControlServiceAvailable = true,
-            IsOperationallyReady = descriptor.IsOperationallyReady,
+            IsOperationallyReady = descriptor.IsOperationallyReady && semantic.IsCommandSafe,
             SupportsCommandTermination = descriptor.SupportsCommandTermination,
             SupportsTimeActivatedOperate = descriptor.SupportsTimeActivatedOperate,
             SboTimeoutText = FormatControlTimeout(descriptor.SboTimeout),
             OperTimeoutText = FormatControlTimeout(descriptor.OperTimeout),
             SequenceText = FriendlyControlSequence(descriptor.ControlModel),
             DiscoveryEvidence = descriptor.DiscoveryEvidence,
-            EngineControlServiceStatus = descriptor.IsOperationallyReady
+            EngineControlServiceStatus = semantic.IsCommandSafe
                 ? "ARIEC61850 Smart Control is ready."
-                : "The native Smart Control descriptor is incomplete."
+                : semantic.Reason
         };
     }
 
@@ -1501,8 +1513,6 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         var ctlChildNames = descriptor.CtlValSpecification.Children
             .Select(child => new string((child.Name ?? string.Empty).Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray()))
             .ToArray();
-        var isBscStructure = mmsType == "structure" &&
-                             (ctlChildNames.Contains("posval") || ctlChildNames.Contains("transind"));
         var isApcStructure = mmsType == "structure" &&
                              (ctlChildNames.Contains("f") || ctlChildNames.Contains("i"));
 
@@ -1516,16 +1526,16 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         // Some vendor IEDs expose CSWI/XCBR/XSWI.Pos with a Boolean ctlVal while
         // the process feedback remains the standard double-point Pos.stVal. Preserve
         // Open/Closed semantics for the user and only adapt the wire value here.
-        if (signal.IsPositionControl && mmsType == "boolean")
+        if (cdc == "DPC" && signal.IsPositionControl && mmsType == "boolean")
         {
-            if (normalized.Contains("open") || normalized is "off" or "false" or "0" or "01")
+            if (normalized is "open" or "open [01]" or "off" or "false" or "0" or "01")
             {
                 value = ArControl.Iec61850ControlValue.Boolean(false);
                 expected = "Open [01]";
                 expectedState = ArControl.Iec61850ControlStatusState.Open;
                 return true;
             }
-            if (normalized.Contains("close") || normalized.Contains("closed") || normalized is "on" or "true" or "1" or "10")
+            if (normalized is "close" or "closed" or "closed [10]" or "on" or "true" or "1" or "10")
             {
                 value = ArControl.Iec61850ControlValue.Boolean(true);
                 expected = "Closed [10]";
@@ -1536,16 +1546,16 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             return false;
         }
 
-        if (cdc == "DPC" || (mmsType == "bit-string" && descriptor.CtlValSpecification.Size == 2))
+        if (cdc == "DPC" && mmsType == "bit-string" && descriptor.CtlValSpecification.Size == 2)
         {
-            if (normalized.Contains("open") || normalized is "off" or "1" or "01")
+            if (normalized is "open" or "open [01]" or "off" or "1" or "01")
             {
                 value = ArControl.Iec61850ControlValue.Open();
                 expected = "Open [01]";
                 expectedState = ArControl.Iec61850ControlStatusState.Open;
                 return true;
             }
-            if (normalized.Contains("close") || normalized.Contains("closed") || normalized is "on" or "2" or "10")
+            if (normalized is "close" or "closed" or "closed [10]" or "on" or "2" or "10")
             {
                 value = ArControl.Iec61850ControlValue.Close();
                 expected = "Closed [10]";
@@ -1556,19 +1566,19 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             return false;
         }
 
-        if (cdc == "SPC" || mmsType == "boolean")
+        if (cdc == "SPC" && mmsType == "boolean")
         {
             var isPulseRaise = signalText.Contains("TapOpR", StringComparison.OrdinalIgnoreCase) ||
                                signalText.Contains("Raise", StringComparison.OrdinalIgnoreCase);
             var isPulseLower = signalText.Contains("TapOpL", StringComparison.OrdinalIgnoreCase) ||
                                signalText.Contains("Lower", StringComparison.OrdinalIgnoreCase);
-            if (normalized is "raise" or "up" || isPulseRaise)
+            if ((normalized is "raise" or "up") && isPulseRaise)
             {
                 value = ArControl.Iec61850ControlValue.On();
                 expected = "Raise";
                 return true;
             }
-            if (normalized is "lower" or "down" || isPulseLower)
+            if ((normalized is "lower" or "down") && isPulseLower)
             {
                 value = ArControl.Iec61850ControlValue.On();
                 expected = "Lower";
@@ -1587,22 +1597,8 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             return false;
         }
 
-        if (cdc.Contains("INC", StringComparison.OrdinalIgnoreCase) ||
-            cdc.Contains("ISC", StringComparison.OrdinalIgnoreCase) ||
-            mmsType is "integer" or "unsigned" or "bcd")
+        if ((cdc is "INC" or "ISC") && (mmsType is "integer" or "unsigned" or "bcd"))
         {
-            if (normalized is "raise" or "up")
-            {
-                value = ArControl.Iec61850ControlValue.Raise();
-                expected = "Raise";
-                return true;
-            }
-            if (normalized is "lower" or "down")
-            {
-                value = ArControl.Iec61850ControlValue.Lower();
-                expected = "Lower";
-                return true;
-            }
             if (long.TryParse(normalized, NumberStyles.Integer, CultureInfo.InvariantCulture, out var integer))
             {
                 if (mmsType == "unsigned")
@@ -1621,23 +1617,11 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 expected = integer.ToString(CultureInfo.InvariantCulture);
                 return true;
             }
-            error = "Integer control requires Raise, Lower, or a whole-number target.";
+            error = "Integer control requires an explicitly selected whole-number target.";
             return false;
         }
 
-        if (cdc == "BSC" || isBscStructure)
-        {
-            if (long.TryParse(normalized, NumberStyles.Integer, CultureInfo.InvariantCulture, out var position))
-            {
-                value = ArControl.Iec61850ControlValue.StepPosition(position);
-                expected = position.ToString(CultureInfo.InvariantCulture);
-                return true;
-            }
-            error = "BSC command requires a numeric target position.";
-            return false;
-        }
-
-        if (cdc == "APC" || mmsType == "floating-point" || isApcStructure)
+        if (cdc == "APC" && (mmsType == "floating-point" || isApcStructure))
         {
             var numeric = normalized.Replace(',', '.');
             if (double.TryParse(numeric, NumberStyles.Float, CultureInfo.InvariantCulture, out var analogue))
@@ -1686,7 +1670,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         {
             if (TryExtractNumber(initial, out var before) && TryExtractNumber(actual, out var after))
                 return expectedText is "raise" or "up" ? after > before : after < before;
-            return !string.Equals(initial?.Trim(), actual?.Trim(), StringComparison.OrdinalIgnoreCase);
+            return false; // Arbitrary changed text is not directional evidence.
         }
 
         if (normalizedCdc == "SPC")
@@ -2065,11 +2049,8 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
     private static string ResolveControlSemanticCdc(
         ArControl.Iec61850ControlObjectDescriptor descriptor,
         SignalDefinition signal)
-        => signal.IsPositionControl ? "DPC"
-            : string.Equals(signal.ControlCdc, "BSC", StringComparison.OrdinalIgnoreCase) &&
-              (signal.ControlStatusReference ?? string.Empty).EndsWith(".valWTr.posVal", StringComparison.OrdinalIgnoreCase)
-                ? "BSC"
-                : descriptor.Cdc;
+        => ArControl.Iec61850ControlSemanticResolver.Resolve(
+            descriptor, signal.ControlCdc, signal.ControlStatusReference).Cdc;
 
     private static (string Value, ArControl.Iec61850ControlStatusState State) NormalizeControlFeedback(
         string cdc,

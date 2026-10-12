@@ -139,7 +139,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
                 CommandStage = capabilities.SupportsOperate ? "Ready" : "Control unavailable";
                 CommandStatus = capabilities.SupportsOperate
                     ? $"{capabilities.ControlModelText}. {capabilities.SequenceText}. Select a command value and required check flags."
-                    : "The IED reports status-only or an unknown ctlModel. ArIED will not guess an operating sequence.";
+                    : capabilities.EngineControlServiceStatus;
                 SetResultTone(capabilities.SupportsOperate ? "Ready" : "Error");
             }
         }
@@ -243,19 +243,13 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             case "INC":
             case "ISC":
             case "INC/ISC":
-                ValueOptions.Add("Raise");
-                ValueOptions.Add("Lower");
+                if (long.TryParse(currentValue, System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out var numericValue))
+                    ValueOptions.Add(numericValue.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 break;
             case "BSC":
-                if (TryExtractNumber(currentValue, out var step))
-                {
-                    ValueOptions.Add(Math.Round(step - 1d).ToString(System.Globalization.CultureInfo.InvariantCulture));
-                    ValueOptions.Add(Math.Round(step + 1d).ToString(System.Globalization.CultureInfo.InvariantCulture));
-                }
-                else
-                {
-                    ValueOptions.Add("0");
-                }
+                ValueOptions.Add("Raise");
+                ValueOptions.Add("Lower");
                 break;
             case "APC":
                 ValueOptions.Add(TryExtractNumber(currentValue, out var analogue)
