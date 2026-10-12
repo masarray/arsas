@@ -84,7 +84,14 @@ public sealed class P109MControlDockPresentationTests
         Assert.Contains("Binding IsPositionControl", xaml);
         Assert.Contains("Binding IsRaiseLowerControl", xaml);
         Assert.Contains("IsEnabled=\"{Binding ControlSupportsOperate}\"", xaml);
-        Assert.Contains("ToolTip=\"{Binding ControlInspectionEvidence}\"", xaml);
+        // Detailed diagnostics belong to the model/evidence column and
+        // Diagnostic Report, never to a large hover popover over buttons.
+        Assert.Contains("<Setter Property=\"ToolTip\" Value=\"{Binding ControlInspectionEvidence}\"/>", xaml);
+        var controlStart = xaml.IndexOf("<DataGridTemplateColumn Header=\"Control\"", StringComparison.Ordinal);
+        var controlEnd = xaml.IndexOf("</DataGridTemplateColumn>", controlStart, StringComparison.Ordinal);
+        Assert.True(controlStart >= 0 && controlEnd > controlStart);
+        Assert.DoesNotContain("ToolTip=\"{Binding ControlInspectionEvidence}\"",
+            xaml[controlStart..controlEnd]);
         Assert.Contains("No typed action", xaml);
         Assert.Contains("Control catalog  : selected=", diagnostics);
         Assert.Contains("ControlInspectionEvidence", diagnostics);

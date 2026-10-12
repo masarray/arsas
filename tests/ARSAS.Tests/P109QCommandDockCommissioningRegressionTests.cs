@@ -55,7 +55,8 @@ public sealed class P109QCommandDockCommissioningRegressionTests
         var end = styles.IndexOf("x:Key=\"CommandOpenButton\"", start, StringComparison.Ordinal);
         Assert.True(start >= 0 && end > start);
         Assert.DoesNotContain("DropShadowEffect", styles[start..end]);
-        Assert.Contains("<StackPanel Margin=\"0,0\" ToolTip=\"{Binding ControlInspectionEvidence}\"", xaml);
+        Assert.Contains("<StackPanel Margin=\"0,0\">", xaml);
+        Assert.DoesNotContain("<StackPanel Margin=\"0,0\" ToolTip=\"{Binding ControlInspectionEvidence}\"", xaml);
         Assert.Contains("ScrollViewer.VerticalScrollBarVisibility=\"Auto\"", xaml);
         Assert.Contains("Grid.Column=\"1\" Content=\"Model\"", xaml);
         Assert.Contains("Click=\"ControlDetails_Click\"", xaml);
