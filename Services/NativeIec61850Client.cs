@@ -1153,6 +1153,23 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         SignalDefinition signal,
         CancellationToken cancellationToken)
     {
+        // Rebuilding an MMS control descriptor can dispose a session currently
+        // used by Operate. Serialize inspection, configuration and control.
+        await _controlCommandGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await InspectControlCoreAsync(signal, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _controlCommandGate.Release();
+        }
+    }
+
+    private async Task<Iec61850ControlCapabilities> InspectControlCoreAsync(
+        SignalDefinition signal,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(signal);
         if (!signal.IsControlSignal || !signal.IsValidControlObject)
             throw new InvalidOperationException($"{signal.Name} is not a valid IEC 61850 control Data Object root.");
@@ -1165,6 +1182,9 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             // Explicit inspection must use a fresh, association-scoped descriptor.
             // Another engineering client may have changed CF ctlModel since the
             // previous inspection; cached control sessions are not authoritative.
+            signal.ClearControlConfirmation();
+            signal.ClearLiveControlAuthority();
+            signal.ControlModelText = "Auto-detect";
             await InvalidateCachedControlSessionAsync(signal.ObjectReference).ConfigureAwait(false);
             control = await GetOrOpenControlSessionAsync(signal, cancellationToken).ConfigureAwait(false);
         }

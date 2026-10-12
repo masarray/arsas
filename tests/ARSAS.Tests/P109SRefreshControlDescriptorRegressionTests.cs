@@ -13,8 +13,12 @@ public sealed class P109SRefreshControlDescriptorRegressionTests
             root = root.Parent;
         Assert.NotNull(root);
         var code=File.ReadAllText(Path.Combine(root!.FullName,"Services","NativeIec61850Client.cs"));
-        var start=code.IndexOf("public async Task<Iec61850ControlCapabilities> InspectControlAsync(",StringComparison.Ordinal);
+        var start=code.IndexOf("private async Task<Iec61850ControlCapabilities> InspectControlCoreAsync(",StringComparison.Ordinal);
         var inspect=code[start..code.IndexOf("public async Task<Iec61850ControlCommandResult> ExecuteControlAsync(",start,StringComparison.Ordinal)];
+        var wrapper=code[code.IndexOf("public async Task<Iec61850ControlCapabilities> InspectControlAsync(",StringComparison.Ordinal)..start];
+        Assert.Contains("await _controlCommandGate.WaitAsync(cancellationToken)",wrapper);
+        Assert.Contains("_controlCommandGate.Release();",wrapper);
+        Assert.Contains("signal.ClearLiveControlAuthority();",inspect);
         var opened=inspect.IndexOf("control = await GetOrOpenControlSessionAsync(",StringComparison.Ordinal);
         var invalidated=inspect.IndexOf("await InvalidateCachedControlSessionAsync(signal.ObjectReference)",StringComparison.Ordinal);
         Assert.True(invalidated>=0 && opened>invalidated);
