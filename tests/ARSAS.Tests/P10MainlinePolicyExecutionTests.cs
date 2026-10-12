@@ -39,6 +39,13 @@ public sealed class P10MainlinePolicyExecutionTests
     [InlineData("generic-trial-semantic-gate-denied", false)]
     [InlineData("generic-trial-inventory-gate-denied", false)]
     [InlineData("generic-trial-vendor-denied", false)]
+    [InlineData("commission-exact-sha-denied", false)]
+    [InlineData("commission-parent-sha-denied", false)]
+    [InlineData("commission-ci-denied", false)]
+    [InlineData("commission-authorization-denied", false)]
+    [InlineData("commission-no-retry-denied", false)]
+    [InlineData("commission-operate-denied", false)]
+    [InlineData("commission-polling-denied", false)]
     [InlineData("p10-pr-main-denied", false)]
     [InlineData("p10-source-main-denied", false)]
     [InlineData("p10-wrong-sha-denied", false)]
@@ -146,6 +153,20 @@ public sealed class P10MainlinePolicyExecutionTests
                     lockDoc["genericControlInteroperabilityTrial"]!["associationScopedInventoryRequired"] = false; break;
                 case "generic-trial-vendor-denied":
                     lockDoc["genericControlInteroperabilityTrial"]!["vendorDispatchForbidden"] = false; break;
+                case "commission-exact-sha-denied":
+                    lockDoc["p109QControlModelCommissioningTrial"]!["exactCommit"] = new string('0', 40); break;
+                case "commission-parent-sha-denied":
+                    lockDoc["p109QControlModelCommissioningTrial"]!["baseEngineCommit"] = new string('0', 40); break;
+                case "commission-ci-denied":
+                    lockDoc["p109QControlModelCommissioningTrial"]!["engineCiRun"] = 0; break;
+                case "commission-authorization-denied":
+                    lockDoc["p109QControlModelCommissioningTrial"]!["authorizedConfirmationRequired"] = false; break;
+                case "commission-no-retry-denied":
+                    lockDoc["p109QControlModelCommissioningTrial"]!["singleWriteNoRetry"] = false; break;
+                case "commission-operate-denied":
+                    lockDoc["p109QControlModelCommissioningTrial"]!["commandOperateForbidden"] = false; break;
+                case "commission-polling-denied":
+                    lockDoc["p109QControlModelCommissioningTrial"]!["cyclicMmsProcessPollingForbidden"] = false; break;
                 case "p10-source-main-denied": sourceRef = "main"; break;
                 case "p10-wrong-sha-denied":
                     lockDoc["p10IdentityTrial"]!["exactCommit"] = new string('0', 40); break;

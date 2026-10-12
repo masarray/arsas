@@ -128,7 +128,23 @@ function Test-P109FCoreRoutingTrial {
         [string]$Lock.commit -ceq 'f7a4e3ba2f9771e34e04073c0db0900112aa55fa' -and
         [int]$Lock.sourcePullRequest -eq 169 -and
         $probeHead -eq $false -and $null -ne $probe -and $null -ne $commission -and
-        $zivIntegrityValid -and
+        $zivIntegrityValid -and $null -ne $generic -and
+        [string]$generic.exactCommit -ceq 'a43b9b4864a9565c02f544d4135fe157c2fac577' -and
+        [string]$generic.baseEngineCommit -ceq [string]$ziv.exactCommit -and
+        [int]$generic.enginePullRequest -eq 168 -and
+        [long]$generic.engineCiRun -eq 38231327892 -and
+        [bool]$generic.typedSemanticGateRequired -and
+        [bool]$generic.associationScopedInventoryRequired -and
+        [bool]$generic.vendorDispatchForbidden -and
+        [bool]$generic.physicalQualificationRequired -and
+        [bool]$generic.mainlinePromotionForbidden -and
+        [bool]$generic.fullDiscoveryFallbackForbidden -and
+        [bool]$generic.cyclicMmsProcessPollingForbidden -and
+        [string]$probe.status -ceq 'code-trial-not-physical' -and
+        [int]$probe.issue -eq 525 -and
+        [int]$probe.enginePullRequest -eq 169 -and
+        [string]$probe.baseEngineCommit -ceq [string]$generic.exactCommit -and
+        [bool]$probe.readOnlyCtlModelProbeRequired -and
         [string]$probe.exactCommit -ceq '5e17da5f673eedce125b5c66e7dc2fa0abef2851' -and
         [long]$probe.engineCiRun -eq 38239451501 -and
         [bool]$probe.noControlWriteOnProbe -and
