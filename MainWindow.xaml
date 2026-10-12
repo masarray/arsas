@@ -788,7 +788,7 @@
                                                                         </StackPanel>
                                                                         <Button Grid.Column="1" Content="Model" Tag="{Binding}" Click="ControlDetails_Click"
                                                                                 Style="{StaticResource SoftButton}" Margin="6,0,1,0"
-                                                                                MinWidth="48" MinHeight="29"
+                                                                                MinWidth="48"
                                                                                 ToolTip="Read or write ctlModel (CF) on the connected IED" Height="25" MinHeight="25" Padding="8,2"/>
                                                                         <!-- Unknown/unsupported CDC never produces an empty action cell. -->
                                                                         <TextBlock Text="No typed action" FontSize="11" Foreground="{StaticResource Muted}" VerticalAlignment="Center">
