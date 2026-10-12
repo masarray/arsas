@@ -682,7 +682,7 @@
                                                     <DataGridTemplateColumn Header="Control" Width="1.55*" MinWidth="245">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
-                                                                <StackPanel Margin="0,0" ToolTip="{Binding ControlInspectionEvidence}" ToolTipService.ShowOnDisabled="True">
+                                                                <StackPanel Margin="0,0">
                                                                     <Grid>
                                                                         <Grid.ColumnDefinitions>
                                                                             <ColumnDefinition Width="*"/>
@@ -705,10 +705,10 @@
                                                                             </StackPanel.Style>
                                                                             <Button Content="Open" Tag="{Binding}" CommandParameter="Open [01]" Click="ControlStageAction_Click"
                                                                                     Style="{StaticResource CommandOpenButton}" Margin="0,0,7,0"
-                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
+                                                                                    IsEnabled="{Binding ControlCanInspectPosition}" Height="29" MinHeight="29" Padding="10,3"/>
                                                                             <Button Content="Close" Tag="{Binding}" CommandParameter="Closed [10]" Click="ControlStageAction_Click"
                                                                                     Style="{StaticResource CommandCloseButton}" Margin="0,0,7,0"
-                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
+                                                                                    IsEnabled="{Binding ControlCanInspectPosition}" Height="29" MinHeight="29" Padding="10,3"/>
                                                                         </StackPanel>
 
                                                                         <StackPanel Orientation="Horizontal">
@@ -789,7 +789,7 @@
                                                                         <Button Grid.Column="1" Content="Model" Tag="{Binding}" Click="ControlDetails_Click"
                                                                                 Style="{StaticResource CommandDockSoftButton}" Margin="6,0,1,0"
                                                                                 MinWidth="48"
-                                                                                ToolTip="Read or write ctlModel (CF) on the connected IED" Height="29" MinHeight="29" Padding="10,3"/>
+                                                                                Height="29" MinHeight="29" Padding="10,3"/>
                                                                         <!-- Unknown/unsupported CDC never produces an empty action cell. -->
                                                                         <TextBlock Text="No typed action" FontSize="11" Foreground="{StaticResource Muted}" VerticalAlignment="Center">
                                                                             <TextBlock.Style>

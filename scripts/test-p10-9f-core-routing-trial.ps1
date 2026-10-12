@@ -169,9 +169,27 @@ function Test-P109FCoreRoutingTrial {
     )
     # P10.9R retains all Q lineage checks and adds explicit StatusOnly=0
     # usability without promoting commissioning to physical qualification.
+    $position = $Lock.p109TPositionControlInteroperabilityTrial
+    $positionHead = (
+        $null -ne $position -and
+        [string]$position.status -ceq 'code-trial-not-physical' -and
+        [int]$position.enginePullRequest -eq 169 -and
+        [long]$position.engineCiRun -eq 38320987660 -and
+        [string]$position.baseEngineCommit -ceq 'd1dd8fc14e79c5de15fbc52d77aea48a14c7c02b' -and
+        [string]$position.exactCommit -ceq '9d82523978c29dcbf38f60cbfb384c3b050eae7c' -and
+        [bool]$position.structuredStatusRequiresTypedMmsRead -and
+        [bool]$position.optionalCancelNotRequiredForNormalSbo -and
+        [bool]$position.liveTypedControlVerificationRequired -and
+        [bool]$position.commandOperateNeverAutoDispatched -and
+        [bool]$position.physicalQualificationRequired -and
+        [bool]$position.mainlinePromotionForbidden -and
+        [bool]$position.fullDiscoveryFallbackForbidden -and
+        [bool]$position.cyclicMmsProcessPollingForbidden
+    )
     $simple = $Lock.p109RSimpleCtlModelEditorTrial
     $simpleHead = (
-        [string]$Lock.commit -ceq 'd1dd8fc14e79c5de15fbc52d77aea48a14c7c02b' -and
+        ([string]$Lock.commit -ceq 'd1dd8fc14e79c5de15fbc52d77aea48a14c7c02b' -or
+         ([string]$Lock.commit -ceq '9d82523978c29dcbf38f60cbfb384c3b050eae7c' -and $positionHead)) -and
         [int]$Lock.sourcePullRequest -eq 169 -and
         $zivIntegrityValid -and $null -ne $generic -and
         [string]$generic.exactCommit -ceq 'a43b9b4864a9565c02f544d4135fe157c2fac577' -and

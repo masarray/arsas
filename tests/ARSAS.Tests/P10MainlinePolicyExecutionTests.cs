@@ -51,6 +51,12 @@ public sealed class P10MainlinePolicyExecutionTests
     [InlineData("simple-model-ci-denied", false)]
     [InlineData("simple-model-zero-denied", false)]
     [InlineData("simple-model-polling-denied", false)]
+    [InlineData("position-model-sha-denied", false)]
+    [InlineData("position-model-parent-denied", false)]
+    [InlineData("position-model-ci-denied", false)]
+    [InlineData("position-model-probe-denied", false)]
+    [InlineData("position-model-cancel-denied", false)]
+    [InlineData("position-model-polling-denied", false)]
     [InlineData("p10-pr-main-denied", false)]
     [InlineData("p10-source-main-denied", false)]
     [InlineData("p10-wrong-sha-denied", false)]
@@ -182,6 +188,18 @@ public sealed class P10MainlinePolicyExecutionTests
                     lockDoc["p109RSimpleCtlModelEditorTrial"]!["statusOnlyZeroSupported"] = false; break;
                 case "simple-model-polling-denied":
                     lockDoc["p109RSimpleCtlModelEditorTrial"]!["cyclicMmsProcessPollingForbidden"] = false; break;
+                case "position-model-sha-denied":
+                    lockDoc["p109TPositionControlInteroperabilityTrial"]!["exactCommit"] = new string('0', 40); break;
+                case "position-model-parent-denied":
+                    lockDoc["p109TPositionControlInteroperabilityTrial"]!["baseEngineCommit"] = new string('0', 40); break;
+                case "position-model-ci-denied":
+                    lockDoc["p109TPositionControlInteroperabilityTrial"]!["engineCiRun"] = 0; break;
+                case "position-model-probe-denied":
+                    lockDoc["p109TPositionControlInteroperabilityTrial"]!["structuredStatusRequiresTypedMmsRead"] = false; break;
+                case "position-model-cancel-denied":
+                    lockDoc["p109TPositionControlInteroperabilityTrial"]!["optionalCancelNotRequiredForNormalSbo"] = false; break;
+                case "position-model-polling-denied":
+                    lockDoc["p109TPositionControlInteroperabilityTrial"]!["cyclicMmsProcessPollingForbidden"] = false; break;
                 case "p10-source-main-denied": sourceRef = "main"; break;
                 case "p10-wrong-sha-denied":
                     lockDoc["p10IdentityTrial"]!["exactCommit"] = new string('0', 40); break;

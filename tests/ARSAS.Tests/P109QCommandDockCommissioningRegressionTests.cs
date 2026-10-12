@@ -62,6 +62,26 @@ public sealed class P109QCommandDockCommissioningRegressionTests
     }
 
     [Fact]
+    public void PositionButtonsRequestTypedPreflightInsteadOfBeingPermanentlyDisabled()
+    {
+        var xaml = Read("MainWindow.xaml");
+        var code = Read("MainWindow.xaml.cs");
+        Assert.Contains("IsEnabled=\"{Binding ControlCanInspectPosition}\"", xaml);
+        Assert.Contains("private async void ControlStageAction_Click(", code);
+        Assert.Contains("if (signal.IsPositionControl && !signal.ControlSemanticVerified)", code);
+        Assert.Contains("var capabilities = await _runtime.InspectControlAsync(", code);
+        Assert.Contains("!capabilities.IsOperationallyReady || !signal.ControlSupportsOperate", code);
+        Assert.Contains("signal.TryStageControlConfirmation(", code);
+        var start = xaml.IndexOf("<DataGridTemplateColumn Header=\"Control\"", StringComparison.Ordinal);
+        var end = xaml.IndexOf("</DataGridTemplateColumn>", start, StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start);
+        var control = xaml[start..end];
+        Assert.DoesNotContain("ToolTip=\"{Binding ControlInspectionEvidence}\"", control);
+        Assert.DoesNotContain("ToolTipService.ShowOnDisabled", control);
+        Assert.DoesNotContain("ToolTip=\"Read or write ctlModel", control);
+    }
+
+    [Fact]
     public void ModelButtonOpensSimplePickAndWriteDialog()
     {
         var code = Read("MainWindow.xaml.cs");

@@ -202,6 +202,14 @@ public class SignalDefinition : ObservableObject
         Iec61850ControlModelKind.SboNormal or
         Iec61850ControlModelKind.DirectEnhanced or
         Iec61850ControlModelKind.SboEnhanced;
+    // Direct/SBO makes an Open/Close preflight clickable; actual Select/Operate
+    // still requires live, typed CDC/status/ctlVal semantic verification.
+    public bool ControlCanInspectPosition => _controlModelResolved &&
+        _controlModelKind is (Iec61850ControlModelKind.DirectNormal or
+                              Iec61850ControlModelKind.SboNormal or
+                              Iec61850ControlModelKind.DirectEnhanced or
+                              Iec61850ControlModelKind.SboEnhanced) &&
+        !_controlInspectionBusy && !_controlCommandBusy;
     public bool IsReadOnlyControl => _controlModelResolved && !ControlSupportsOperate;
     public string ControlValueType
     {
@@ -298,6 +306,7 @@ public class SignalDefinition : ObservableObject
             if (!Set(ref _controlInspectionBusy, value))
                 return;
             Raise(nameof(ControlIsBusy));
+            Raise(nameof(ControlCanInspectPosition));
         }
     }
 
@@ -467,6 +476,7 @@ public class SignalDefinition : ObservableObject
 
         Raise(nameof(ControlCommandBusy));
         Raise(nameof(ControlIsBusy));
+        Raise(nameof(ControlCanInspectPosition));
         Raise(nameof(ControlCanConfirm));
         if (deferred != null)
             ApplyControlCurrentValue(deferred);
@@ -498,6 +508,7 @@ public class SignalDefinition : ObservableObject
         Raise(nameof(ControlConfirmationPending));
         Raise(nameof(ControlCommandBusy));
         Raise(nameof(ControlIsBusy));
+        Raise(nameof(ControlCanInspectPosition));
         Raise(nameof(ControlCanConfirm));
     }
 
@@ -614,6 +625,7 @@ public class SignalDefinition : ObservableObject
 
         Raise(nameof(ControlModelKind));
         Raise(nameof(ControlModelResolved));
+        Raise(nameof(ControlCanInspectPosition));
         Raise(nameof(ControlSupportsOperate));
         Raise(nameof(ControlCanConfirm));
         Raise(nameof(IsReadOnlyControl));

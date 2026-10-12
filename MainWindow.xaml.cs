@@ -1433,7 +1433,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         SetStatus($"{device.Name}: refreshed {candidates.Length} control value(s).");
     }
 
-    private void ControlStageAction_Click(object sender, RoutedEventArgs e)
+    private async void ControlStageAction_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button button || button.Tag is not SignalDefinition signal ||
             !(signal.IsPositionControl || signal.IsRaiseLowerControl ||
@@ -1441,6 +1441,43 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
 
         var device = _signalOwners.TryGetValue(signal, out var owner) ? owner : SelectedDevice;
+        if (device is null || !device.IsConnected || signal.ControlInspectionBusy || signal.ControlCommandBusy)
+            return;
+
+        // A live Direct/SBO model permits a preflight inspection, not an
+        // unqualified Operate. Only a verified live descriptor may be staged.
+        if (signal.IsPositionControl && !signal.ControlSemanticVerified)
+        {
+            signal.ControlInspectionBusy = true;
+            try
+            {
+                var capabilities = await _runtime.InspectControlAsync(
+                    device.DeviceId, signal, _applicationCancellation.Token);
+                signal.ControlCurrentValue = capabilities.CurrentValue;
+                signal.ControlLastResult = capabilities.EngineControlServiceStatus;
+                if (!capabilities.IsOperationallyReady || !signal.ControlSupportsOperate)
+                {
+                    AddLog("WARN", device.Name,
+                        $"Position preflight not ready: {signal.ObjectReference}; {signal.ControlInspectionEvidence}");
+                    SetStatus($"{device.Name}: {signal.Name} cannot operate — check Diagnostics.");
+                    return;
+                }
+            }
+            catch (OperationCanceledException) { return; }
+            catch (Exception ex)
+            {
+                signal.ControlLastResult = $"Live control inspection failed: {ex.Message}";
+                AddLog("WARN", device.Name,
+                    $"Position preflight failed: {signal.ObjectReference}; {ex.GetType().Name}: {ex.Message}");
+                SetStatus($"{device.Name}: {signal.Name} verification failed — check Diagnostics.");
+                return;
+            }
+            finally
+            {
+                signal.ControlInspectionBusy = false;
+            }
+        }
+
         var requestedValue = button.CommandParameter?.ToString()?.Trim() ?? string.Empty;
         var actionLabel = button.Content?.ToString()?.Trim() ?? string.Empty;
         AddLog("INFO", device?.Name ?? "IED",
