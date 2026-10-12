@@ -79,7 +79,10 @@ public sealed class IoListFatCommandPanelRegressionTests
         var identity = File.ReadAllText(FindRepoFile("Services/Iec61850ControlIdentity.cs"));
 
         Assert.Contains("live ctlModel", bridge, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("StatusOnly stays read-only", bridge, StringComparison.Ordinal);
+        // The selected catalog may contain StatusOnly rows; runtime authorization,
+        // not catalog membership, must remain the write-safety boundary.
+        Assert.Contains("ControlSupportsOperate", bridge, StringComparison.Ordinal);
+        Assert.Contains("StatusOnly", bridge, StringComparison.Ordinal);
         Assert.Contains("device.CommandSignals", bridge, StringComparison.Ordinal);
         // Selected control objects remain visible for diagnosis; operating safety
         // is separately enforced by the per-object gate and FAT command dispatch.
