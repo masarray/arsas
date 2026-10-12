@@ -281,39 +281,52 @@
                         <RowDefinition Height="7"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-                    <Grid>
+                    <!-- Compact, single-baseline event toolbar. Fixed-height count
+                         prevents the old badge from stretching into a vertical pill. -->
+                    <Grid x:Name="GooseEventHeader" MinHeight="30" SnapsToDevicePixels="True">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*" MinWidth="10"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Messages" FontSize="13" FontWeight="SemiBold"
-                                       Foreground="{StaticResource Ink}"/>
-                            <Border Margin="8,0,0,0" Background="#EEF4FF" BorderBrush="#C9D9F1"
-                                    BorderThickness="1" CornerRadius="9" Padding="7,2">
-                                <TextBlock Text="{Binding GooseEventCountText}" FontSize="9.4"
-                                           FontWeight="SemiBold" Foreground="#45648E"/>
+
+                        <StackPanel Grid.Column="0" Orientation="Horizontal"
+                                    VerticalAlignment="Center">
+                            <TextBlock Text="GOOSE Events" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{StaticResource Ink}"
+                                       VerticalAlignment="Center" TextWrapping="NoWrap"/>
+                            <Border x:Name="GooseEventCountBadge" Height="21" MinWidth="26"
+                                    Margin="7,0,0,0" Padding="6,0" VerticalAlignment="Center"
+                                    Background="#EEF4FF" BorderBrush="#C9D9F1"
+                                    BorderThickness="1" CornerRadius="10">
+                                <TextBlock Text="{Binding GooseEventCountText}"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           Foreground="#45648E" TextAlignment="Center"
+                                           VerticalAlignment="Center" TextWrapping="NoWrap"/>
                             </Border>
                         </StackPanel>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            <ComboBox Width="188" Height="27" Margin="0,0,12,0"
+
+                        <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                    VerticalAlignment="Center">
+                            <ComboBox x:Name="GooseEventScope" Width="165" Height="28"
+                                      Margin="0,0,11,0" Padding="8,3"
                                       SelectedIndex="{Binding GooseIedScopeIndex, Mode=TwoWay}"
                                       Style="{StaticResource ModernComboBox}"
                                       ToolTip="{Binding GooseSelectedScopeHint}"
-                                      FontSize="10.5">
+                                      VerticalAlignment="Center" FontSize="10.5">
                                 <ComboBoxItem Content="Selected IED only"/>
                                 <ComboBoxItem Content="All IED GOOSE signals"/>
                             </ComboBox>
-                            <CheckBox Content="Follow latest" Margin="0,0,14,0"
+                            <CheckBox Content="Follow latest" Height="28" Margin="0,0,11,0"
+                                      VerticalAlignment="Center" VerticalContentAlignment="Center"
                                       IsChecked="{Binding FollowLatestGooseEvents, Mode=TwoWay}"
-                                      FontSize="10" Foreground="{StaticResource Muted}"
-                                      VerticalAlignment="Center"
-                                      ToolTip="Follow the newest change; deselect to inspect an immutable historical frame."/>
-                            <CheckBox Content="Show retransmissions"
+                                      FontSize="10.5" Foreground="{StaticResource Muted}"
+                                      ToolTip="Follow the newest change; uncheck to inspect an immutable historical frame."/>
+                            <CheckBox Content="Retransmissions" Height="28"
+                                      VerticalAlignment="Center" VerticalContentAlignment="Center"
                                       IsChecked="{Binding ShowGooseRetransmissions, Mode=TwoWay}"
-                                      FontSize="10" Foreground="{StaticResource Muted}"
-                                      VerticalAlignment="Center"
-                                      ToolTip="Display every received frame in Messages, including retransmissions. Raw capture remains available when off."/>
+                                      FontSize="10.5" Foreground="{StaticResource Muted}"
+                                      ToolTip="Show every received GOOSE frame including retransmissions. Unchecked: show changes only; raw capture is preserved."/>
                         </StackPanel>
                     </Grid>
 

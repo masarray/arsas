@@ -42,7 +42,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Interval = TimeSpan.FromSeconds(8)
     };
     private Iec61850MonitorDevice? _selectedDevice;
-    private string _newDeviceIp = "192.168.1.10";
+    private string _newDeviceIp = string.Empty;
     private string _newDevicePort = "102";
     private int _pollingIntervalMs = 1000;
     private string _lastStatusText = "Ready. Add an IEC 61850 IED or open a saved ARSAS project.";
@@ -157,7 +157,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var initialIp = SelectedDevice?.IpAddress ?? NewDeviceIp;
         var initialPort = SelectedDevice?.Port ?? 102;
-        var wizard = new IpConnectWizardWindow(initialIp, initialPort) { Owner = this };
+        var wizard = new IpConnectWizardWindow(initialIp, initialPort, preferLastDiscoveryEndpoint: true) { Owner = this };
         if (wizard.ShowDialog() != true)
             return;
 
@@ -1047,7 +1047,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 {
                     SclEndpointBindingStore.RecordVerified(
                         device.SclSourceSha256, device.SclIedName,
-                        device.SclAccessPointName, device.IpAddress, device.Port);
+                        device.SclAccessPointName, device.IpAddress, device.Port,
+                        device.SclSourcePath);
                     if (device.SclEndpointOrigin != "SCD-declared")
                         device.SclEndpointOrigin = "Verified exact SCD/IED/AP";
                 }
@@ -1821,7 +1822,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 return;
             }
 
-            SaveTypedModelAsScl(device, model, sourceDescription, schema, dialog.FileName);
+            AR.Iec61850.Discovery.LiveIedIdentity? provenIdentity = null;
+            if (device.SclWorkspace == null)
+            {
+                provenIdentity = await TrustedSclIdentityAuthority.TryMatchAsync(
+                    device,model,_applicationCancellation.Token);
+                if (provenIdentity is not null)
+                    AddLog("INFO","SCL Export",
+                        $"{device.Name}: verified trusted SCL identity {provenIdentity.IedName} " +
+                        $"and {provenIdentity.LogicalDeviceAliases.Count} LD mappings; MMS domains unchanged.");
+                else if (device.IdentitySource.Contains("(Low)",StringComparison.OrdinalIgnoreCase))
+                    AddLog("WARN","SCL Export",
+                        $"{device.Name}: IED/LD naming is provisional (MMS domains alone do not prove the boundary). " +
+                        "Open and verify the original engineering SCL on this IED to generate an authoritative identity.");
+            }
+            SaveTypedModelAsScl(device, model, sourceDescription, schema, dialog.FileName, provenIdentity);
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or ArgumentException)
         {
@@ -1884,7 +1899,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         AR.Iec61850.Discovery.LiveIedModelDiscoveryDocument model,
         string sourceDescription,
         SclSchemaProfileDescriptor schema,
-        string outputPath)
+        string outputPath,
+        AR.Iec61850.Discovery.LiveIedIdentity? verifiedIdentity = null)
     {
         LiveIedSclExportResult result;
         AR.Iec61850.Discovery.LiveIedCanonicalModel? canonicalExportEvidence = null;
@@ -1905,7 +1921,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 canonical,
                 outputPath,
                 schema.Profile,
-                profile: "full-model");
+                profile: "full-model",
+                verifiedIdentity: verifiedIdentity);
             try
             {
                 var semanticPatch = SclExportSemanticParityPatch.ApplyForLiveModel(
@@ -1914,7 +1931,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 canonicalReloadWorkspace = CanonicalSclReloadValidator.Validate(
                     _sclWorkspaceService,
                     canonical,
-                    result);
+                    result,
+                    verifiedIdentity?.IedName);
 
                 if (semanticPatch.Changed)
                 {

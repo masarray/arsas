@@ -54,6 +54,12 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     [JsonIgnore]
     public StaticAcquisitionParitySnapshot StaticAcquisitionParity { get; set; } = new();
 
+    // Association-scoped only. A fresh Discovery must re-verify the original IID
+    // SHA and full domain topology; no persisted IP or filename is identity proof.
+    [JsonIgnore]
+    public LiveIedIdentity? TrustedLiveIdentity { get; set; }
+
+
     // Snapshot publication is atomic across runtime/diagnostic threads, never a
     // mutable live ReportStreams dictionary. Association reset clears its scope.
     [JsonIgnore]
@@ -670,6 +676,47 @@ public sealed class Iec61850MonitorPoint : ObservableObject
 
     public string PointKey => $"{DeviceId}|{NormalizeReference(IecReference)}";
     public string IecTelegram => StripIedNamePrefix(IecReference, DeviceName);
+
+    // Explorer-only label: preserve every original IEC/MMS reference and signal name.
+    // "CSWI Pos" is ambiguous across CSWI1..CSWI16; wire references are not.
+    public string ExplorerSignalName
+    {
+        get
+        {
+            var signal = SignalName ?? string.Empty;
+            var reference = IecReference ?? string.Empty;
+            var slash = reference.IndexOf('/');
+            if (slash < 0)
+                return signal;
+
+            var start = slash + 1;
+            var relativeEnd = reference.AsSpan(start).IndexOfAny('.', '$');
+            if (relativeEnd <= 0)
+                return signal;
+
+            var logicalNode = reference.Substring(start, relativeEnd);
+            var digitAt = 0;
+            while (digitAt < logicalNode.Length && char.IsLetter(logicalNode[digitAt]))
+                digitAt++;
+            if (digitAt == 0 || digitAt == logicalNode.Length)
+                return signal;
+            for (var index = digitAt; index < logicalNode.Length; index++)
+            {
+                if (!char.IsDigit(logicalNode[index]))
+                    return signal;
+            }
+
+            if (signal.StartsWith(logicalNode, StringComparison.OrdinalIgnoreCase) &&
+                (signal.Length == logicalNode.Length ||
+                 !char.IsDigit(signal[logicalNode.Length])))
+                return signal;
+
+            var logicalNodeClass = logicalNode[..digitAt];
+            return signal.StartsWith(logicalNodeClass + " ", StringComparison.OrdinalIgnoreCase)
+                ? logicalNode + signal[logicalNodeClass.Length..]
+                : logicalNode + " · " + signal;
+        }
+    }
     public string Value
     {
         get => _value;

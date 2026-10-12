@@ -120,8 +120,8 @@ internal static class StaticAcquisitionParityTracker
             evidenceIssues.Add("no engine-authoritative static report plans");
         if (model is null)
             evidenceIssues.Add("ingress model missing");
-        else if (string.IsNullOrWhiteSpace(model.IedName) ||
-                 !string.Equals(model.IedName.Trim(), device.Name.Trim(), StringComparison.OrdinalIgnoreCase))
+        else if (!string.Equals(model.IedName?.Trim(), device.Name.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                 !HasVerifiedIngressIdentity(device, model, ingress))
             evidenceIssues.Add($"ingress model IED identity '{model.IedName}' does not match selected IED '{device.Name}'");
 
         // Comparing equal hashes is not meaningful if two independently malformed or
@@ -136,8 +136,12 @@ internal static class StaticAcquisitionParityTracker
         if (brcbBindings != planning.StaticBrcbSignalCount ||
             urcbBindings != planning.StaticUrcbSignalCount)
             evidenceIssues.Add("static plan bindings do not match engine coverage counters");
-        if (brcbBindings + urcbBindings + planning.UncoveredSignalCount != planning.RequestedPointCount)
-            evidenceIssues.Add("static plan coverage does not account for all requested runtime points");
+        // Binding counters measure report membership incidences. One IEC point can
+        // legitimately appear in several configured DataSets / RCBs (GE F650:
+        // 166 binding incidences across 6 RCBs represent 67 unique runtime points).
+        // Do not compare incidence sum against distinct requested signal count.
+        // Check unique exact IEC reference + FC below, after collecting all plans.
+        var uniqueSelectedPoints = new HashSet<string>(StringComparer.Ordinal);
 
         var semanticLines = new List<string>
         {
@@ -217,6 +221,7 @@ internal static class StaticAcquisitionParityTracker
                 .OrderBy(value => value, StringComparer.Ordinal)
                 .ToArray();
 
+            uniqueSelectedPoints.UnionWith(selected);
             if (selected.Length == 0)
                 evidenceIssues.Add($"DataSet {dataSetReference} has no selected point bindings");
             if (plan.Bindings.Any(point =>
@@ -230,6 +235,13 @@ internal static class StaticAcquisitionParityTracker
 
             runtimeTargets.Add(BuildRuntimeTarget(plan));
         }
+
+        // Fail closed on genuinely incomplete coverage, while preserving the
+        // existing per-family raw binding counter consistency guards above.
+        if ((long)uniqueSelectedPoints.Count + planning.UncoveredSignalCount != planning.RequestedPointCount)
+            evidenceIssues.Add(
+                $"unique static plan coverage does not account for requested runtime points " +
+                $"(unique={uniqueSelectedPoints.Count}, uncovered={planning.UncoveredSignalCount}, requested={planning.RequestedPointCount})");
 
         var canonicalText = string.Join("\n", semanticLines);
         var fingerprint = Convert.ToHexString(
@@ -317,6 +329,32 @@ internal static class StaticAcquisitionParityTracker
             Status = StaticAcquisitionParityStatus.Mismatch,
             Differences = differences
         };
+    }
+
+    // The live MMS document may retain its original IP-based name as immutable
+    // wire provenance. A fresh, association-scoped, full-domain SHA-verified SCL
+    // identity is sufficient to compare semantic evidence under the real IED name.
+    // Never allow an arbitrary manual card rename to satisfy this parity gate.
+    private static bool HasVerifiedIngressIdentity(
+        Iec61850MonitorDevice device,
+        LiveIedModelDiscoveryDocument model,
+        StaticAcquisitionIngressKind ingress)
+    {
+        if (ingress != StaticAcquisitionIngressKind.LiveDiscovery ||
+            device.TrustedLiveIdentity is not { } proof ||
+            proof.Source != "TrustedSclExactDomainMatch" ||
+            proof.Confidence != LiveIedDiscoveryConfidenceLevel.High ||
+            !string.Equals(proof.IedName, device.Name, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var domains = model.LogicalDevices
+            .Select(ld => ld.MmsDomain)
+            .Where(domain => !string.IsNullOrWhiteSpace(domain))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return domains.Length > 0 &&
+            domains.Length == proof.LogicalDeviceAliases.Count &&
+            domains.All(domain => proof.LogicalDeviceAliases.ContainsKey(domain));
     }
 
     private static string BuildRuntimeTarget(ReportControlPlan plan)

@@ -76,6 +76,15 @@ def main() -> int:
         "actions/attest@v4", "subject-path: ArIED61850Tester/dist/ARSAS-Windows-x64-Setup.exe",
         "sbom-path: ArIED61850Tester/dist/ARSAS-Windows-x64-SBOM.spdx.json",
         "supplyChain = [ordered]@{", "attestationWorkflow = \"release-windows.yml\"",
+        "Promote exact sealed canonical Windows package for release",
+        "verify-ci-package-reuse.py", "--head-branch main", "--event-name push",
+        "RELEASE_PACKAGE_AUTHORITY=sealed-build-arsas:",
+        "Promote exact validated Windows installer for release",
+        "verify-ci-installer-reuse.py",
+        "RELEASE_INSTALLER_AUTHORITY=validated-installer:",
+        "validatedInstallerArtifactSha256", "validatedInstallerSha256",
+        "-PublishedDirectory $env:RELEASE_INSTALLER_INPUT_DIR",
+        "canonicalPackageArtifactSha256", "canonicalPortableSha256",
     )
     for value in primary_contract:
         if value not in primary:

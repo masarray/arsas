@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net;
 using System.Text.Json;
 
 namespace ArIED61850Tester.Services;
@@ -26,14 +27,58 @@ public static class UserPreferenceStore
         "user-preferences.json");
 
 
+    /// <summary>
+    /// Remembers the operator's last valid Discovery submission independently
+    /// of connection success and the per-IED signal selection history.
+    /// </summary>
+    public static bool TryLoadLastDiscoveryEndpoint(out string ipAddress, out int port)
+        => TryLoadLastDiscoveryEndpoint(PreferencesPath, out ipAddress, out port);
+
+    // Tests use a temp path; no test writes to the real Windows profile.
+    internal static bool TryLoadLastDiscoveryEndpoint(string path, out string ipAddress, out int port)
+    {
+        ipAddress = string.Empty;
+        port = 102;
+        var prefs = ReadPreferencesFile(path);
+        if (prefs is null || !IPAddress.TryParse(prefs.LastDiscoveryIpAddress, out _) ||
+            prefs.LastDiscoveryMmsPort is <= 0 or > 65535)
+            return false;
+        ipAddress = prefs.LastDiscoveryIpAddress.Trim();
+        port = prefs.LastDiscoveryMmsPort;
+        return true;
+    }
+
+    public static void RecordLastDiscoveryEndpoint(string ipAddress, int port)
+        => RecordLastDiscoveryEndpoint(PreferencesPath, ipAddress, port);
+
+    internal static void RecordLastDiscoveryEndpoint(string path, string ipAddress, int port)
+    {
+        var ip = ipAddress?.Trim() ?? string.Empty;
+        if (!IPAddress.TryParse(ip, out _) || port is <= 0 or > 65535)
+            throw new ArgumentException("Discovery requires a valid IP address and MMS port.");
+
+        // Keep legacy migration on the production path and preserve every
+        // existing saved signal profile and successful IED endpoint.
+        var prefs = string.Equals(path, PreferencesPath, StringComparison.Ordinal)
+            ? LoadPreferences()
+            : ReadPreferencesFile(path) ?? new UserPreferences();
+        prefs.LastDiscoveryIpAddress = ip;
+        prefs.LastDiscoveryMmsPort = port;
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, JsonSerializer.Serialize(prefs, Options));
+    }
+
     public static IReadOnlyList<string> LoadRecentEndpoints(int maximum = 20)
     {
         maximum = Math.Clamp(maximum, 1, 100);
         var prefs = LoadPreferences();
-        return prefs.SuccessfulRelays
+        return new[] { prefs.LastDiscoveryIpAddress }
+            .Where(ip => !string.IsNullOrWhiteSpace(ip) && IPAddress.TryParse(ip.Trim(), out _))
+            .Select(ip => ip.Trim())
+            .Concat(prefs.SuccessfulRelays
             .Where(item => !string.IsNullOrWhiteSpace(item.IpAddress))
             .OrderByDescending(item => item.LastConnectedUtc)
-            .Select(item => item.IpAddress.Trim())
+            .Select(item => item.IpAddress.Trim()))
             .Concat(prefs.SignalSelectionProfiles
                 .Where(item => !string.IsNullOrWhiteSpace(item.IpAddress))
                 .OrderByDescending(item => item.LastSavedUtc)
@@ -285,6 +330,8 @@ public static class UserPreferenceStore
     {
         // Keep the original ArServer fields so successful endpoints migrate without
         // requiring the user to type the IP address again after upgrading.
+        public string LastDiscoveryIpAddress { get; set; } = string.Empty;
+        public int LastDiscoveryMmsPort { get; set; } = 102;
         public List<string> RecentRelayIps { get; set; } = new();
         public List<SuccessfulRelayEndpoint> SuccessfulRelays { get; set; } = new();
         public List<SignalSelectionProfile> SignalSelectionProfiles { get; set; } = new();

@@ -25,6 +25,8 @@ internal static class SclEndpointBindingStore
         public string SourceSha256 { get; set; } = string.Empty;
         public string IedName { get; set; } = string.Empty;
         public string AccessPointName { get; set; } = string.Empty;
+        // Original operator-opened, SHA-pinned SCL source; absent in legacy records.
+        public string SourcePath { get; set; } = string.Empty;
         public string IpAddress { get; set; } = string.Empty;
         public int Port { get; set; } = 102;
         public DateTime LastVerifiedUtc { get; set; }
@@ -57,12 +59,12 @@ internal static class SclEndpointBindingStore
 
     public static void RecordVerified(
         string sourceSha256, string iedName, string accessPointName,
-        string ipAddress, int port)
-        => RecordVerifiedAtPath(DefaultPath, sourceSha256, iedName, accessPointName, ipAddress, port);
+        string ipAddress, int port, string? sourcePath = null)
+        => RecordVerifiedAtPath(DefaultPath, sourceSha256, iedName, accessPointName, ipAddress, port, sourcePath);
 
     internal static void RecordVerifiedAtPath(
         string path, string sourceSha256, string iedName, string accessPointName,
-        string ipAddress, int port)
+        string ipAddress, int port, string? sourcePath = null)
     {
         if (!ValidIdentity(sourceSha256, iedName, accessPointName) || !ValidAddress(ipAddress, port))
             throw new ArgumentException("An exact SCL source, IED, AP and valid MMS IP:port are required.");
@@ -76,6 +78,7 @@ internal static class SclEndpointBindingStore
                 SourceSha256 = sourceSha256.Trim(),
                 IedName = iedName.Trim(),
                 AccessPointName = accessPointName.Trim(),
+                SourcePath = string.IsNullOrWhiteSpace(sourcePath) ? string.Empty : Path.GetFullPath(sourcePath),
                 IpAddress = ipAddress.Trim(),
                 Port = port,
                 LastVerifiedUtc = DateTime.UtcNow
@@ -99,6 +102,30 @@ internal static class SclEndpointBindingStore
             {
                 if (File.Exists(tmp)) File.Delete(tmp);
             }
+        }
+    }
+
+    // A previously successful SCL-assisted MMS association is an operator-authorized
+    // identity candidate, not proof by itself. Every source is re-hashed and matched
+    // against the current full live MMS domain topology before name promotion.
+    internal static IReadOnlyList<Binding> FindVerifiedSourcesForEndpoint(
+        string ipAddress, int port)
+        => FindVerifiedSourcesForEndpointAtPath(DefaultPath, ipAddress, port);
+
+    internal static IReadOnlyList<Binding> FindVerifiedSourcesForEndpointAtPath(
+        string path, string ipAddress, int port)
+    {
+        if (!ValidAddress(ipAddress, port)) return Array.Empty<Binding>();
+        lock (Gate)
+        {
+            return Load(path)
+                .Where(binding =>
+                    ValidIdentity(binding.SourceSha256, binding.IedName, binding.AccessPointName) &&
+                    ValidAddress(binding.IpAddress, binding.Port) &&
+                    string.Equals(binding.IpAddress, ipAddress, StringComparison.OrdinalIgnoreCase) &&
+                    binding.Port == port &&
+                    !string.IsNullOrWhiteSpace(binding.SourcePath))
+                .ToArray();
         }
     }
 

@@ -21,6 +21,7 @@ public class SignalDefinition : ObservableObject
     private string _controlModelText = "Auto-detect";
     private Iec61850ControlModelKind _controlModelKind = Iec61850ControlModelKind.Unknown;
     private bool _controlModelResolved;
+    private bool _controlSemanticVerified;
     private string _controlValueType = string.Empty;
     private string _controlCurrentValue = "-";
     private Iec61850ProcessValueBadge? _controlProcessValue;
@@ -120,7 +121,19 @@ public class SignalDefinition : ObservableObject
     }
     public Iec61850ControlModelKind ControlModelKind => _controlModelKind;
     public bool ControlModelResolved => _controlModelResolved;
-    public bool ControlSupportsOperate => _controlModelResolved && _controlModelKind is
+    public bool ControlSemanticVerified
+    {
+        get => _controlSemanticVerified;
+        set
+        {
+            if (!Set(ref _controlSemanticVerified, value)) return;
+            Raise(nameof(ControlSupportsOperate));
+            Raise(nameof(ControlCanConfirm));
+            Raise(nameof(IsReadOnlyControl));
+            RaiseControlActionProperties();
+        }
+    }
+    public bool ControlSupportsOperate => _controlModelResolved && _controlSemanticVerified && _controlModelKind is
         Iec61850ControlModelKind.DirectNormal or
         Iec61850ControlModelKind.SboNormal or
         Iec61850ControlModelKind.DirectEnhanced or
@@ -449,7 +462,7 @@ public class SignalDefinition : ObservableObject
         {
             if (!CanExposeControlActions || IsPositionControl || IsRaiseOnlyControl || IsLowerOnlyControl) return false;
             var cdc = (ControlCdc ?? string.Empty).Trim().ToUpperInvariant();
-            return cdc is "INC" or "ISC" or "INC/ISC";
+            return cdc == "BSC";
         }
     }
     public bool IsBooleanControl => CanExposeControlActions && !IsPositionControl && !IsRaiseOnlyControl && !IsLowerOnlyControl && !IsRaiseLowerControl &&
@@ -460,7 +473,7 @@ public class SignalDefinition : ObservableObject
         {
             if (!CanExposeControlActions || IsPositionControl || IsRaiseOnlyControl || IsLowerOnlyControl || IsRaiseLowerControl || IsBooleanControl) return false;
             var cdc = (ControlCdc ?? string.Empty).Trim().ToUpperInvariant();
-            return cdc is "APC" or "BAC" or "BSC";
+            return cdc is "APC" or "BAC" or "INC" or "ISC";
         }
     }
     public bool IsGenericControl => !CanExposeControlActions ||
@@ -477,8 +490,8 @@ public class SignalDefinition : ObservableObject
             if (IsLowerOnlyControl) return "Lower";
             var cdc = (ControlCdc ?? string.Empty).Trim().ToUpperInvariant();
             if (cdc == "DPC") return "Open / Close";
-            if (cdc is "INC" or "ISC") return "Raise / Lower";
-            if (cdc == "BSC") return "Tap / step position";
+            if (cdc is "INC" or "ISC") return "Numeric control";
+            if (cdc == "BSC") return "Raise / Lower tap";
             if (cdc == "SPC")
             {
                 var commandText = $"{Name} {ObjectReference}";

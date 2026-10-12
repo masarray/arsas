@@ -142,6 +142,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
         progress?.Report(new IedDiscoveryProgress(IedDiscoveryStage.PreparingSession, "Preparing an independent IEC 61850 session…", 2d, 1, 15));
         await StopDeviceAsync(device.DeviceId).ConfigureAwait(false);
+        // Previous sessions cannot authorize another endpoint or association.
+        device.TrustedLiveIdentity = null;
 
         var session = new DeviceSession
         {
@@ -195,6 +197,69 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
             progress?.Report(new IedDiscoveryProgress(IedDiscoveryStage.PreparingWorkspace, "Filtering and ordering the discovered signal workspace…", 98d, 14, 15));
             var identity = session.Client.DetectedIdentity;
+            if (device.LiveDiscoveryModel is { } liveModel)
+            {
+                if (!string.IsNullOrWhiteSpace(device.SclSourcePath) &&
+                    !string.IsNullOrWhiteSpace(device.SclSourceSha256))
+                {
+                    try
+                    {
+                        var proof = await TrustedSclIdentityAuthority.TryMatchAsync(
+                            device, liveModel, cancellationToken).ConfigureAwait(false);
+                        if (proof is not null)
+                        {
+                            identity = TrustedSclIdentityAuthority.ToConsumerIdentity(
+                                proof, liveModel.LogicalDevices.Select(ld => ld.MmsDomain));
+                            device.TrustedLiveIdentity = proof;
+                            Log("INFO", device.Name,
+                                $"Trusted SCL topology verified: IED={proof.IedName}; " +
+                                $"LD={string.Join(",", proof.LogicalDeviceAliases.Values)}; " +
+                                $"MMS domains preserved; source={proof.Source}.");
+                        }
+                        else
+                        {
+                            Log("WARN", device.Name,
+                                "Opened SCL did not uniquely match this endpoint's full MMS domain set. " +
+                                "Discovery identity remains provisional; no vendor-based rename.");
+                        }
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception ex) when (ex is IOException or InvalidDataException or System.Xml.XmlException
+                        or ArgumentException or UnauthorizedAccessException)
+                    {
+                        Log("WARN", device.Name,
+                            $"Trusted SCL identity verification was rejected: {ex.Message}. " +
+                            "Discovery can continue, but identity is provisional until SCL is re-opened.");
+                    }
+                }
+                else
+                {
+                    // Discovery by IP only: reuse only a *previously successful*
+                    // SCL-assisted endpoint whose unchanged IID bytes and full live
+                    // MMS domain topology are freshly matched. Never attach the
+                    // SCL workspace or change report/GOOSE acquisition authority.
+                    var remembered = await TrustedSclIdentityAuthority.TryMatchRememberedAsync(
+                        device, liveModel, cancellationToken).ConfigureAwait(false);
+                    if (remembered is not null)
+                    {
+                        identity = TrustedSclIdentityAuthority.ToConsumerIdentity(
+                            remembered.Identity, liveModel.LogicalDevices.Select(ld => ld.MmsDomain));
+                        device.TrustedLiveIdentity = remembered.Identity;
+                        Log("INFO", device.Name,
+                            $"IP Discovery identity independently verified: " +
+                            $"IED={remembered.Identity.IedName}; AP={remembered.AccessPointName}; " +
+                            $"IID SHA-256={remembered.SourceSha256}; source=prior verified SCL-assisted association. " +
+                            "Live MMS discovery and static DataSet authority remain unchanged.");
+                    }
+                    else
+                    {
+                        Log("INFO", device.Name,
+                            "IP Discovery IEDName remains provisional: no unique, unchanged " +
+                            "previously verified SCL identity matched this endpoint and full MMS domain set. " +
+                            "Open the original engineering IID and connect once to establish a reusable identity proof.");
+                    }
+                }
+            }
             if (!string.IsNullOrWhiteSpace(identity.IedName))
             {
                 var previousName = device.Name;

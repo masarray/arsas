@@ -572,7 +572,7 @@
                                             </Style>
                                         </DataGrid.CellStyle>
                                         <DataGrid.Columns>
-                                            <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="1.05*" MinWidth="145"/>
+                                            <DataGridTextColumn Header="Signal" Binding="{Binding ExplorerSignalName}" Width="1.05*" MinWidth="145"/>
                                             <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="1.55*" MinWidth="205"/>
                                             <DataGridTemplateColumn Header="Value" Width="0.8*" MinWidth="125" CellTemplate="{StaticResource ProcessValueBadgeTemplate}"/>
                                             <DataGridTemplateColumn Header="Alarm" Width="72" MinWidth="68">

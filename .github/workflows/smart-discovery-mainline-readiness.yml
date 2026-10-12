@@ -34,6 +34,14 @@ on:
       - ".github/workflows/smart-discovery-*.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   mainline-readiness:
     name: Require R10 physical authority before mainline review
@@ -48,6 +56,7 @@ jobs:
         shell: powershell
         env:
           PR_BASE_REF: ${{ github.base_ref }}
+          SOURCE_REF_NAME: ${{ github.ref_name }}
         run: |
           $target = Get-Content .\evidence\interoperability-reference-target.json -Raw | ConvertFrom-Json
           $lock = Get-Content .\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
@@ -98,36 +107,74 @@ jobs:
             throw 'Post-baseline SCL association acceptance is missing or inconsistent.'
           }
 
+          # P10.1: exact, bounded and ancestry-checked code-trial allowlist.
+          # This never grants field acceptance or mainline promotion.
+          . .\scripts\test-p10-9f-core-routing-trial.ps1
+          $coreRoutingTrialValid = Test-P109FCoreRoutingTrial -Lock $lock
           $trial = $lock.smartInteroperabilityCodeTrial
           $serverAt = $lock.sclServerAtTrial
-          $originalTrial = $lock.commit -eq $trial.exactCommit -and
-                           [int]$lock.sourcePullRequest -eq 148
-          $serverAtTrial = $null -ne $serverAt -and
-                           $lock.commit -eq $serverAt.exactCommit -and
-                           $lock.commit -eq '352c81e6a798635c6addcee0683235ca87ad416d' -and
-                           $serverAt.baseEngineCommit -eq $trial.exactCommit -and
-                           [int]$lock.sourcePullRequest -eq 153 -and
+          $closure = $lock.datasetFirstDiscoveryTrial
+          $p10 = $lock.p10IdentityTrial
+
+          $historicalTrialValid = $null -ne $trial -and
+                                  $trial.status -eq 'code-verified-not-physical' -and
+                                  [int]$trial.issue -eq 144 -and
+                                  [int]$trial.integrationPullRequest -eq 148 -and
+                                  [bool]$trial.physicalPromotionRequired -and
+                                  [bool]$trial.fullDiscoveryFallbackForbidden -and
+                                  [bool]$trial.vendorBranchingForbidden
+          $serverAtValid = $null -ne $serverAt -and
+                           $serverAt.exactCommit -eq '352c81e6a798635c6addcee0683235ca87ad416d' -and
                            [int]$serverAt.sourcePullRequest -eq 153 -and
+                           $serverAt.baseEngineCommit -eq $trial.exactCommit -and
                            $serverAt.status -eq 'code-verified-candidate-not-physical' -and
                            [bool]$serverAt.physicalQualificationRequired -and
                            [bool]$serverAt.noAutomaticMmsFailover
-          if ($null -ne $trial -and ($originalTrial -or $serverAtTrial)) {
-            if ($trial.status -ne 'code-verified-not-physical' -or
-                [int]$trial.issue -ne 144 -or
-                [int]$trial.integrationPullRequest -ne 148 -or
-                -not [bool]$trial.physicalPromotionRequired) {
-              throw 'Smart interoperability code-trial metadata is inconsistent.'
-            }
+          $closureValid = $null -ne $closure -and
+                          $closure.status -eq 'code-trial-not-physical' -and
+                          [int]$closure.issue -eq 495 -and
+                          [int]$closure.enginePullRequest -eq 157 -and
+                          [int]$closure.consumerPullRequest -eq 497 -and
+                          $closure.exactCommit -eq '8b0c0f7e695b016834e40a6f068994dcc945cb1a' -and
+                          $closure.baseEngineCommit -eq $serverAt.exactCommit -and
+                          [bool]$closure.fullNameListFallbackForbidden -and
+                          [bool]$closure.cyclicMmsProcessPollingForbidden -and
+                          [bool]$closure.physicalQualificationRequired
+          $p10Valid = $null -ne $p10 -and
+                      $p10.status -eq 'code-trial-not-physical' -and
+                      [int]$p10.enginePullRequest -eq 161 -and
+                      $p10.exactCommit -eq '00ad2819b99ffe6b3f885e59aa24a6afb2b4d8e1' -and
+                      $p10.baseEngineCommit -eq $closure.exactCommit -and
+                      $p10.identitySource -eq 'TrustedSclExactDomainMatch' -and
+                      [bool]$p10.physicalQualificationRequired -and
+                      [bool]$p10.fullNameListFallbackForbidden -and
+                      [bool]$p10.cyclicMmsProcessPollingForbidden
 
-            if ($env:PR_BASE_REF -eq 'main') {
+          $originalTrial = $lock.commit -eq $trial.exactCommit -and
+                           [int]$lock.sourcePullRequest -eq 148
+          $serverAtTrial = $serverAtValid -and
+                           $lock.commit -eq $serverAt.exactCommit -and
+                           [int]$lock.sourcePullRequest -eq 153
+          $datasetTrial = $serverAtValid -and $closureValid -and
+                          $lock.commit -eq $closure.exactCommit -and
+                          [int]$lock.sourcePullRequest -eq 157
+          $p10Trial = $serverAtValid -and $closureValid -and $p10Valid -and
+                      $lock.commit -eq $p10.exactCommit -and
+                      [int]$lock.sourcePullRequest -eq 161
+
+          if ($originalTrial -or $serverAtTrial -or $datasetTrial -or $p10Trial -or $coreRoutingTrialValid) {
+            if (-not $historicalTrialValid -or
+                $lock.ref -ne 'main') {
+              throw 'Stacked trial identity or ancestor authority is inconsistent.'
+            }
+            if ($env:PR_BASE_REF -eq 'main' -or $env:SOURCE_REF_NAME -eq 'main') {
               throw 'Unqualified P6.1/P6.2 trial cannot pass mainline readiness before fresh physical qualification.'
             }
-
-            Write-Host "Stacked consumer trial accepted for CI against $($lock.commit); historical physical authority remains $($association.engine.testedHead)."
+            Write-Host "Stacked consumer trial accepted for CI against $($lock.commit); no mainline physical promotion."
           }
           elseif ($lock.commit -ne $association.engine.testedHead -or
                   [int]$lock.sourcePullRequest -ne 143) {
-            throw 'Runtime engine pin is neither the physically accepted authority nor an explicit stacked CodeVerified trial.'
+            throw 'Runtime engine pin is neither the physically accepted authority nor an exact ancestry-bound stacked CodeVerified trial.'
           }
 
           "ENGINE_REPOSITORY=$($lock.repository)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
@@ -141,7 +188,7 @@ jobs:
           git -C ..\ARIEC61850 checkout --quiet --detach $env:ENGINE_COMMIT
           $actual = (git -C ..\ARIEC61850 rev-parse HEAD).Trim().ToLowerInvariant()
           if ($actual -ne $env:ENGINE_COMMIT) {
-            throw "Accepted engine authority mismatch. Expected $env:ENGINE_COMMIT, got $actual."
+            throw "R10 engine authority mismatch. Expected $env:ENGINE_COMMIT, got $actual."
           }
 
       - name: Setup .NET 8
@@ -156,9 +203,62 @@ jobs:
           dotnet build ..\ARIEC61850\ARIEC61850.sln -c Release --no-restore
           dotnet test ..\ARIEC61850\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --no-build --no-restore
 
-      - name: Build and test ARSAS candidate
+      - name: Set up Python for canonical regression evidence verification
+        if: github.event_name == 'pull_request'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Require successful canonical Build ARSAS for same PR merge and engine
+        if: github.event_name == 'pull_request'
+        shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_MERGE_SHA: ${{ github.sha }}
+        run: |
+          python .\scripts\verify-ci-canonical-reuse.py `
+            --repository $env:GITHUB_REPOSITORY `
+            --head-branch $env:PR_HEAD_BRANCH `
+            --head-sha $env:PR_HEAD_SHA `
+            --merge-sha $env:PR_MERGE_SHA `
+            --engine-sha $env:ENGINE_COMMIT `
+            --wait-seconds 960 `
+            --allow-in-progress-artifact `
+            --output (Join-Path $env:RUNNER_TEMP 'ci-r10-canonical-reuse.json')
+          if ($LASTEXITCODE -ne 0) {
+            throw 'R10 Mainline Readiness cannot reuse canonical ARSAS regression evidence.'
+          }
+
+      - name: Report independent engine test plus exact ARSAS regression reuse
+        if: github.event_name == 'pull_request'
         shell: powershell
         run: |
-          dotnet restore .\ArIED61850Tester.sln
-          dotnet build .\ArIED61850Tester.sln -c Release --no-restore
-          dotnet test .\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore
+          $proof = Get-Content (Join-Path $env:RUNNER_TEMP 'ci-r10-canonical-reuse.json') -Raw | ConvertFrom-Json
+          if ([int]$proof.failed -ne 0 -or [int]$proof.notExecuted -ne 0 -or
+              [int]$proof.passed -lt 1 -or $proof.engineSha -ne $env:ENGINE_COMMIT) {
+            throw 'R10 accepted engine/regression evidence is incomplete.'
+          }
+          @(
+            '## R10 Mainline Readiness — independent engine + canonical ARSAS tests',
+            '',
+            "- R10 engine integration SHA: $env:ENGINE_COMMIT",
+            "- canonical Build ARSAS run: $($proof.canonicalRunId)",
+            "- exact ARSAS PR merge SHA: $($proof.mergeSha)",
+            "- full ARSAS regression: $($proof.passed) passed, $($proof.failed) failed",
+            "- canonical proof stage: $($proof.proofStage)",
+            "- canonical workflow completed: $($proof.workflowCompleted)",
+            "- packaging/smoke proven here: $($proof.packagingSmokeProven)",
+            '- Build ARSAS remains the independent packaging/smoke check',
+            '- Historical physical authority validated independently before this reuse'
+          ) | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+
+  manual-regression:
+    name: Manual exact-SHA ARSAS regression for R10 readiness
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/_ci-p1-windows-build-test.yml
+    with:
+      source_sha: ${{ github.sha }}
+      shadow_mode: true
+    secrets: {}

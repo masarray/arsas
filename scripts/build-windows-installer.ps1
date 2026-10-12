@@ -5,7 +5,10 @@ param(
     [string]$Runtime = "win-x64",
     [string]$PublishedDirectory = "",
     [string]$OutputDirectory = "",
-    [string]$InnoCompiler = ""
+    [string]$InnoCompiler = "",
+    [string]$TestAssemblyPath = "",
+    [string]$FixtureCfg = "",
+    [string]$LocusFixtureCfg = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -97,29 +100,42 @@ foreach ($file in $forbiddenRuntimeFiles) {
 }
 
 # Run the managed -> C ABI -> ardirec_core smoke on the exact bridge that is about to be
-# packaged. The fixture belongs to ARSAS, so release validation does not depend on an external
-# test-data path after the engine has been staged.
-$testProject = Join-Path $root "tests\ARSAS.Tests\ARSAS.Tests.csproj"
-$testAssembly = Join-Path $root "tests\ARSAS.Tests\bin\Release\net8.0-windows\ARSAS.Tests.dll"
-$fixtureCfg = Join-Path $root "tests\fixtures\comtrade\p1-release-smoke.cfg"
+# packaged. CI-P3 can supply a prebuilt canonical test runtime so installer validation does
+# not need to compile the application again. The defaults preserve the historical local/release path.
+if ([string]::IsNullOrWhiteSpace($TestAssemblyPath)) {
+    $TestAssemblyPath = Join-Path $root "tests\ARSAS.Tests\bin\Release\net8.0-windows\ARSAS.Tests.dll"
+}
+if ([string]::IsNullOrWhiteSpace($FixtureCfg)) {
+    $FixtureCfg = Join-Path $root "tests\fixtures\comtrade\p1-release-smoke.cfg"
+}
+
+$TestAssemblyPath = [System.IO.Path]::GetFullPath($TestAssemblyPath)
+$FixtureCfg = [System.IO.Path]::GetFullPath($FixtureCfg)
+if (-not [string]::IsNullOrWhiteSpace($LocusFixtureCfg)) {
+    $LocusFixtureCfg = [System.IO.Path]::GetFullPath($LocusFixtureCfg)
+}
+
 $bridgePath = Join-Path $PublishedDirectory "Tools\ArdIrec\ardirec_bridge.dll"
-if (-not (Test-Path $testProject -PathType Leaf) -or
-    -not (Test-Path $testAssembly -PathType Leaf) -or
-    -not (Test-Path $fixtureCfg -PathType Leaf)) {
-    throw "Native managed bridge smoke prerequisites are missing. Build the Release test project before packaging the installer."
+if (-not (Test-Path $TestAssemblyPath -PathType Leaf) -or
+    -not (Test-Path $FixtureCfg -PathType Leaf) -or
+    -not (Test-Path $bridgePath -PathType Leaf)) {
+    throw "Native managed bridge smoke prerequisites are missing. Supply the tested assembly, fixture and packaged bridge."
+}
+if (-not [string]::IsNullOrWhiteSpace($LocusFixtureCfg) -and
+    -not (Test-Path $LocusFixtureCfg -PathType Leaf)) {
+    throw "Native locus fixture was not found: $LocusFixtureCfg"
 }
 
 $previousBridgePath = $env:ARSAS_ARDIREC_BRIDGE_PATH
 $previousFixtureCfg = $env:ARSAS_NATIVE_COMTRADE_TEST_CFG
+$previousLocusCfg = $env:ARSAS_NATIVE_LOCUS_TEST_CFG
 try {
     $env:ARSAS_ARDIREC_BRIDGE_PATH = $bridgePath
-    $env:ARSAS_NATIVE_COMTRADE_TEST_CFG = $fixtureCfg
-    Write-Host "==> Validating native COMTRADE bridge and Locus session through ARSAS managed interop"
-    & dotnet test $testProject `
-        -c Release `
-        --no-build `
-        --no-restore `
-        --filter "FullyQualifiedName~ArdIrecNativeBridgeIntegrationTests|FullyQualifiedName~ArdIrecLocusNativeSessionIntegrationTests"
+    $env:ARSAS_NATIVE_COMTRADE_TEST_CFG = $FixtureCfg
+    $env:ARSAS_NATIVE_LOCUS_TEST_CFG = $LocusFixtureCfg
+    Write-Host "==> Validating exact packaged native COMTRADE bridge through canonical prebuilt tests"
+    & dotnet vstest $TestAssemblyPath `
+        "--TestCaseFilter:FullyQualifiedName~ArdIrecNativeBridgeIntegrationTests|FullyQualifiedName~ArdIrecLocusNativeSessionIntegrationTests"
     if ($LASTEXITCODE -ne 0) {
         throw "Staged native COMTRADE bridge failed the managed bridge/Locus integration smoke test."
     }
@@ -127,6 +143,7 @@ try {
 finally {
     $env:ARSAS_ARDIREC_BRIDGE_PATH = $previousBridgePath
     $env:ARSAS_NATIVE_COMTRADE_TEST_CFG = $previousFixtureCfg
+    $env:ARSAS_NATIVE_LOCUS_TEST_CFG = $previousLocusCfg
 }
 
 if ([string]::IsNullOrWhiteSpace($InnoCompiler)) {

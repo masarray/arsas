@@ -499,6 +499,8 @@ public partial class MainWindow
         }
 
         var filteredModel = SclReportControlFilter.FilterLiveModel(exportModel, row.Reference);
+        var verifiedIdentity = await TrustedSclIdentityAuthority.TryMatchAsync(
+            device,filteredModel,cancellationToken);
         var liveResult = await Task.Run(() => AuthoritativeLiveIedSclExporter.WriteFiles(
             filteredModel,
             outputPath,
@@ -507,7 +509,8 @@ public partial class MainWindow
                 Profile = "full-model",
                 SchemaProfile = schema,
                 IpAddress = device.IpAddress,
-                IedNameOverride = device.Name,
+                IedNameOverride = verifiedIdentity?.IedName ?? device.Name,
+                VerifiedIdentity = verifiedIdentity,
                 IncludeLowConfidenceTypes = true,
                 IncludeRuntimeStateComment = false
             }), cancellationToken);

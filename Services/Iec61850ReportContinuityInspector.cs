@@ -16,6 +16,9 @@ internal sealed class Iec61850ReportContinuityState
     public bool AwaitingMoreSegments { get; set; }
     public ulong? ConfigurationRevision { get; set; }
     public string LastEntryIdHex { get; set; } = string.Empty;
+    // A decoded value without raw OptionFields provenance cannot certify that
+    // the prior wire report advertised an EntryID. Do not treat it as comparable.
+    public bool LastEntryIdProvenByOptFlds { get; set; }
 
     // All counts belong to this exact report stream within the current
     // association. No static state, no process/control-plane side effects.
@@ -28,6 +31,30 @@ internal sealed class Iec61850ReportContinuityState
     public long MissingSequenceFrames { get; set; }
     public long SegmentedFrames { get; set; }
     public long AnomalyFindings { get; set; }
+    // Frame counts stay independent of findings: one frame may carry multiple anomalies.
+    public long AnomalousFrames { get; set; }
+    // Bounded per-association receive-order evidence. No raw event history or timers.
+    public long FramesAfterLastFinding { get; set; }
+    public DateTimeOffset? FirstFrameReceivedAtUtc { get; set; }
+    public DateTimeOffset? LastFrameReceivedAtUtc { get; set; }
+    public DateTimeOffset? LastFindingReceivedAtUtc { get; set; }
+    // Head + tail chronology: fixed-size per BRCB and allocated only on demand.
+    public Iec61850BrcbChronologyFrame[]? InitialChronology { get; set; }
+    public int InitialChronologyCount { get; set; }
+    public Iec61850BrcbChronologyFrame[]? RecentChronology { get; set; }
+    public int RecentChronologyCount { get; set; }
+    public int RecentChronologyNext { get; set; }
+    // Retain the last eight anomalous BRCB frames even if they fall in the
+    // omitted middle of a long healthy stream. O(1) memory per buffered RCB.
+    public Iec61850BrcbChronologyFrame[]? AnomalyChronology { get; set; }
+    public int AnomalyChronologyCount { get; set; }
+    public int AnomalyChronologyNext { get; set; }
+    public long SequenceDiscontinuities { get; set; }
+    public long SequenceWithChangedEntryId { get; set; }
+    public long SequenceWithRepeatedEntryId { get; set; }
+    public long SequenceWithoutComparableEntryId { get; set; }
+    public long SequenceWithGiReason { get; set; }
+    public long SequenceWithOverflow { get; set; }
     public long BufferOverflows { get; set; }
     public long ConfRevChanges { get; set; }
     public long EntryIdPresentFrames { get; set; }
@@ -54,6 +81,21 @@ internal sealed class Iec61850ReportContinuityState
 }
 
 /// <summary>
+/// Decoder-metadata-only evidence: no raw EntryID, process values, or packet bodies.
+/// FrameOrdinal is receive order, not a server event sequence or TCP packet index.
+/// </summary>
+public readonly record struct Iec61850BrcbChronologyFrame
+{
+    public long FrameOrdinal { get; init; }
+    public DateTimeOffset? ReceivedAtUtc { get; init; }
+    public ulong? SequenceNumber { get; init; }
+    public bool? GiReason { get; init; }
+    public bool? BufferOverflow { get; init; }
+    public string? EntryIdRelation { get; init; }
+    public int FindingCount { get; init; }
+}
+
+/// <summary>
 /// Immutable copyable diagnostic evidence. Counts describe decoded metadata,
 /// NOT completeness of SOE delivery or absence of lost events.
 /// </summary>
@@ -68,6 +110,24 @@ public sealed record Iec61850ReportContinuityStreamSnapshot
     public long SequenceMissing { get; init; }
     public long Segmented { get; init; }
     public long Findings { get; init; }
+    public long AnomalousFrames { get; init; }
+    public long FramesAfterLastFinding { get; init; }
+    public DateTimeOffset? FirstFrameReceivedAtUtc { get; init; }
+    public DateTimeOffset? LastFrameReceivedAtUtc { get; init; }
+    public DateTimeOffset? LastFindingReceivedAtUtc { get; init; }
+    public IReadOnlyList<Iec61850BrcbChronologyFrame> Chronology { get; init; } =
+        Array.Empty<Iec61850BrcbChronologyFrame>();
+    public int ChronologyInitialCount { get; init; }
+    public int ChronologyRecentCount { get; init; }
+    public long ChronologyOmittedFrames { get; init; }
+    public IReadOnlyList<Iec61850BrcbChronologyFrame> RecentAnomalies { get; init; } =
+        Array.Empty<Iec61850BrcbChronologyFrame>();
+    public long SequenceDiscontinuities { get; init; }
+    public long SequenceWithChangedEntryId { get; init; }
+    public long SequenceWithRepeatedEntryId { get; init; }
+    public long SequenceWithoutComparableEntryId { get; init; }
+    public long SequenceWithGiReason { get; init; }
+    public long SequenceWithOverflow { get; init; }
     public long Overflow { get; init; }
     public long ConfRevChanges { get; init; }
     public long EntryIdPresent { get; init; }
@@ -104,6 +164,8 @@ public sealed record Iec61850ReportContinuitySnapshot
     public long Frames { get; init; }
     public long Sequenced { get; init; }
     public long Findings { get; init; }
+    public long AnomalousFrames { get; init; }
+    public long SequenceDiscontinuities { get; init; }
     public long Overflows { get; init; }
     public long OptFldsDecoded { get; init; }
     public long OptFldsUnknown { get; init; }
@@ -115,6 +177,9 @@ public sealed record Iec61850ReportContinuitySnapshot
 internal static class Iec61850ReportContinuityInspector
 {
     private const ulong MaxSequenceNumber = ushort.MaxValue;
+    private const int InitialChronologyLimit = 32;
+    private const int RecentChronologyLimit = 8;
+    private const int AnomalyChronologyLimit = 8;
 
     /// <summary>
     /// A gap/backward move is an OBSERVED discontinuity, not proof of a specific
@@ -130,6 +195,11 @@ internal static class Iec61850ReportContinuityInspector
         ArgumentNullException.ThrowIfNull(frame);
 
         if (state.FramesSeen < long.MaxValue) state.FramesSeen++;
+        if (frame.ReceivedAt != default)
+        {
+            state.FirstFrameReceivedAtUtc ??= frame.ReceivedAt;
+            state.LastFrameReceivedAtUtc = frame.ReceivedAt;
+        }
         if (frame.SequenceNumber.HasValue)
         {
             if (state.SequencedFrames < long.MaxValue) state.SequencedFrames++;
@@ -158,6 +228,7 @@ internal static class Iec61850ReportContinuityInspector
         }
 
         var priorEntryIdPresent = !string.IsNullOrEmpty(state.LastEntryIdHex);
+        var priorEntryIdProven = state.LastEntryIdProvenByOptFlds;
         var entryIdPresent = !string.IsNullOrEmpty(frame.EntryIdHex);
         var entryIdChanged = priorEntryIdPresent && entryIdPresent &&
             !string.Equals(state.LastEntryIdHex, frame.EntryIdHex, StringComparison.OrdinalIgnoreCase);
@@ -175,6 +246,34 @@ internal static class Iec61850ReportContinuityInspector
             $"GIreason={WriteVerdict(frame.GeneralInterrogationReasonSeen)}, " +
             $"startReturnUtc={state.ActivationReturnedAtUtc?.ToString("O") ?? "unknown"}, " +
             $"frameReceivedUtc={frame.ReceivedAt:O}; GI correlation is not proof of a harmless reset";
+
+        // One causal classification per actually observed SqNum discontinuity.
+        // EntryID is an opaque octet string, never a numeric continuity proof.
+        void RecordSequenceCorrelation()
+        {
+            if (state.SequenceDiscontinuities < long.MaxValue)
+                state.SequenceDiscontinuities++;
+            if (buffered && priorEntryIdPresent && entryIdPresent &&
+                state.LastEntryIdProvenByOptFlds && frame.OptFldsEntryId == true &&
+                IsBoundedHex(frame.OptFldsRawHex))
+            {
+                if (entryIdChanged)
+                {
+                    if (state.SequenceWithChangedEntryId < long.MaxValue)
+                        state.SequenceWithChangedEntryId++;
+                }
+                else if (state.SequenceWithRepeatedEntryId < long.MaxValue)
+                    state.SequenceWithRepeatedEntryId++;
+            }
+            else if (state.SequenceWithoutComparableEntryId < long.MaxValue)
+                state.SequenceWithoutComparableEntryId++;
+
+            if (frame.GeneralInterrogationReasonSeen == true &&
+                state.SequenceWithGiReason < long.MaxValue)
+                state.SequenceWithGiReason++;
+            if (frame.BufferOverflow == true && state.SequenceWithOverflow < long.MaxValue)
+                state.SequenceWithOverflow++;
+        }
 
         // Raw OptFlds is authoritative decoder evidence. Unknown stays UNKNOWN;
         // a missing value cannot be interpreted as an omitted wire field.
@@ -278,6 +377,7 @@ internal static class Iec61850ReportContinuityInspector
                     if (discontinuity is not null)
                     {
                         CaptureAnomaly(state, frame);
+                        RecordSequenceCorrelation();
                         Warn(discontinuity + EntryContext() + CausalContext());
                     }
                 }
@@ -308,6 +408,7 @@ internal static class Iec61850ReportContinuityInspector
                 if (discontinuity is not null)
                 {
                     CaptureAnomaly(state, frame);
+                    RecordSequenceCorrelation();
                     Warn(discontinuity + EntryContext() + CausalContext());
                 }
                 state.LastSequenceNumber = current;
@@ -319,8 +420,54 @@ internal static class Iec61850ReportContinuityInspector
         }
 
         if (entryIdPresent)
+        {
             state.LastEntryIdHex = frame.EntryIdHex;
+            state.LastEntryIdProvenByOptFlds = hasOptFlds && frame.OptFldsEntryId == true;
+        }
+        else
+        {
+            // Missing current EntryID invalidates comparisons with future frames;
+            // never compare across an opaque, unobserved resume cursor.
+            state.LastEntryIdHex = string.Empty;
+            state.LastEntryIdProvenByOptFlds = false;
+        }
 
+        if (buffered)
+        {
+            // Observational classification only. Both OptFlds must prove the
+            // opaque cursor to label successive values as changed or repeated.
+            var comparableEntryId = priorEntryIdPresent && entryIdPresent &&
+                priorEntryIdProven && hasOptFlds && frame.OptFldsEntryId == true;
+            var relation = !entryIdPresent ? "absent" :
+                !comparableEntryId ? "unverified" : entryIdChanged ? "changed" : "repeated";
+            var evidence = new Iec61850BrcbChronologyFrame
+            {
+                FrameOrdinal = state.FramesSeen,
+                ReceivedAtUtc = frame.ReceivedAt == default ? null : frame.ReceivedAt,
+                SequenceNumber = frame.SequenceNumber,
+                GiReason = frame.GeneralInterrogationReasonSeen,
+                BufferOverflow = frame.BufferOverflow,
+                EntryIdRelation = relation,
+                FindingCount = findings?.Count ?? 0
+            };
+            RecordChronology(state, evidence);
+            if (evidence.FindingCount > 0)
+                RecordAnomalyChronology(state, evidence);
+        }
+
+        if (findings is not null)
+        {
+            if (state.AnomalousFrames < long.MaxValue)
+                state.AnomalousFrames++;
+            state.FramesAfterLastFinding = 0;
+            // Missing decoder timestamps remain unknown; do not reuse older time.
+            state.LastFindingReceivedAtUtc = frame.ReceivedAt == default ? null : frame.ReceivedAt;
+        }
+        else if (state.AnomalousFrames > 0 && state.FramesAfterLastFinding < long.MaxValue)
+        {
+            // Receive-order observation only; no claim of event delivery completeness.
+            state.FramesAfterLastFinding++;
+        }
         return findings is null ? Array.Empty<string>() : findings;
     }
 
@@ -348,6 +495,24 @@ internal static class Iec61850ReportContinuityInspector
                 SequenceMissing = state.MissingSequenceFrames,
                 Segmented = state.SegmentedFrames,
                 Findings = state.AnomalyFindings,
+                AnomalousFrames = state.AnomalousFrames,
+                FramesAfterLastFinding = state.FramesAfterLastFinding,
+                FirstFrameReceivedAtUtc = state.FirstFrameReceivedAtUtc,
+                LastFrameReceivedAtUtc = state.LastFrameReceivedAtUtc,
+                LastFindingReceivedAtUtc = state.LastFindingReceivedAtUtc,
+                Chronology = CopyChronology(state),
+                RecentAnomalies = CopyAnomalyChronology(state),
+                ChronologyInitialCount = state.InitialChronologyCount,
+                ChronologyRecentCount = state.RecentChronologyCount,
+                ChronologyOmittedFrames = state.Buffered
+                    ? Math.Max(0, state.FramesSeen - state.InitialChronologyCount - state.RecentChronologyCount)
+                    : 0,
+                SequenceDiscontinuities = state.SequenceDiscontinuities,
+                SequenceWithChangedEntryId = state.SequenceWithChangedEntryId,
+                SequenceWithRepeatedEntryId = state.SequenceWithRepeatedEntryId,
+                SequenceWithoutComparableEntryId = state.SequenceWithoutComparableEntryId,
+                SequenceWithGiReason = state.SequenceWithGiReason,
+                SequenceWithOverflow = state.SequenceWithOverflow,
                 Overflow = state.BufferOverflows,
                 ConfRevChanges = state.ConfRevChanges,
                 EntryIdPresent = state.EntryIdPresentFrames,
@@ -381,11 +546,79 @@ internal static class Iec61850ReportContinuityInspector
             Frames = ordered.Sum(state => state.FramesSeen),
             Sequenced = ordered.Sum(state => state.SequencedFrames),
             Findings = ordered.Sum(state => state.AnomalyFindings),
+            AnomalousFrames = ordered.Sum(state => state.AnomalousFrames),
+            SequenceDiscontinuities = ordered.Sum(state => state.SequenceDiscontinuities),
             Overflows = ordered.Sum(state => state.BufferOverflows),
             OptFldsDecoded = ordered.Sum(state => state.OptFldsDecodedFrames),
             OptFldsUnknown = ordered.Sum(state => state.OptFldsUnknownFrames),
             Streams = shown
         };
+    }
+
+    private static void RecordChronology(
+        Iec61850ReportContinuityState state, Iec61850BrcbChronologyFrame item)
+    {
+        if (state.InitialChronologyCount < InitialChronologyLimit)
+        {
+            var initial = state.InitialChronology ??= new Iec61850BrcbChronologyFrame[InitialChronologyLimit];
+            initial[state.InitialChronologyCount++] = item;
+        }
+        else
+        {
+            var recent = state.RecentChronology ??= new Iec61850BrcbChronologyFrame[RecentChronologyLimit];
+            recent[state.RecentChronologyNext] = item;
+            state.RecentChronologyNext = (state.RecentChronologyNext + 1) % RecentChronologyLimit;
+            if (state.RecentChronologyCount < RecentChronologyLimit)
+                state.RecentChronologyCount++;
+        }
+    }
+
+    private static void RecordAnomalyChronology(
+        Iec61850ReportContinuityState state, Iec61850BrcbChronologyFrame item)
+    {
+        var ring = state.AnomalyChronology ??=
+            new Iec61850BrcbChronologyFrame[AnomalyChronologyLimit];
+        ring[state.AnomalyChronologyNext] = item;
+        state.AnomalyChronologyNext =
+            (state.AnomalyChronologyNext + 1) % AnomalyChronologyLimit;
+        if (state.AnomalyChronologyCount < AnomalyChronologyLimit)
+            state.AnomalyChronologyCount++;
+    }
+
+    private static IReadOnlyList<Iec61850BrcbChronologyFrame> CopyAnomalyChronology(
+        Iec61850ReportContinuityState state)
+    {
+        var count = state.AnomalyChronologyCount;
+        if (count == 0)
+            return Array.Empty<Iec61850BrcbChronologyFrame>();
+        var copy = new Iec61850BrcbChronologyFrame[count];
+        for (var index = 0; index < count; index++)
+        {
+            var source = (state.AnomalyChronologyNext - count + index +
+                AnomalyChronologyLimit) % AnomalyChronologyLimit;
+            copy[index] = state.AnomalyChronology![source];
+        }
+        return copy;
+    }
+
+    private static IReadOnlyList<Iec61850BrcbChronologyFrame> CopyChronology(
+        Iec61850ReportContinuityState state)
+    {
+        var initialCount = state.InitialChronologyCount;
+        var recentCount = state.RecentChronologyCount;
+        if (initialCount + recentCount == 0)
+            return Array.Empty<Iec61850BrcbChronologyFrame>();
+
+        var copy = new Iec61850BrcbChronologyFrame[initialCount + recentCount];
+        if (initialCount > 0)
+            Array.Copy(state.InitialChronology!, 0, copy, 0, initialCount);
+        for (var index = 0; index < recentCount; index++)
+        {
+            var source = (state.RecentChronologyNext - recentCount + index + RecentChronologyLimit)
+                % RecentChronologyLimit;
+            copy[initialCount + index] = state.RecentChronology![source];
+        }
+        return copy;
     }
 
     private static string WriteVerdict(bool? value)
