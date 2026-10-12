@@ -12,7 +12,7 @@ namespace ArIED61850Tester.Services;
 internal static class DiagnosticReportBuilder
 {
     private sealed record TcpProbeResult(string DeviceId, string Endpoint, string Result, string Detail);
-    private sealed record AdapterIpv4(string Name, NetworkInterfaceType Type, IPAddress Address, int PrefixLength);
+    private sealed record AdapterIpv4(string InterfaceId, string Name, NetworkInterfaceType Type, IPAddress Address, int PrefixLength);
     private sealed record RouteAnalysis(string Source, string MatchingAdapters, string AdapterMatrix, string Note);
 
     public static string BuildEmergency(
@@ -323,6 +323,8 @@ internal static class DiagnosticReportBuilder
                     $"sqWithGIreason={stream.SequenceWithGiReason}, " +
                     $"sqWithBufOvfl={stream.SequenceWithOverflow}; " +
                     "EntryID difference/identical is not an event-loss or harmless-replay conclusion.");
+            if (stream.Buffered && stream.Findings > 0)
+                builder.AppendLine($"    BRCB context  : {ExplainBrcbContinuity(stream)}");
             if (stream.AnomalousFrames > 0)
                 builder.AppendLine($"    RCB follow-up : receivedAfterLastFinding={stream.FramesAfterLastFinding}, " +
                     $"firstFrameUtc={stream.FirstFrameReceivedAtUtc?.ToString("O") ?? "-"}, " +
@@ -382,6 +384,41 @@ internal static class DiagnosticReportBuilder
         }
         if (snapshot.StreamCount > snapshot.Streams.Count)
             builder.AppendLine($"  stream list     : TRUNCATED • shown={snapshot.Streams.Count}, total={snapshot.StreamCount}");
+    }
+
+    /// <summary>
+    /// IEC 61850-aware interpretation of already observed RCB metadata:
+    /// temporal context and GI reason are correlations, never proof of lost
+    /// buffered entries, a server reset, or that a sequence gap is harmless.
+    /// No extra MMS traffic, raw event retention or timer.
+    /// </summary>
+    internal static string ExplainBrcbContinuity(Iec61850ReportContinuityStreamSnapshot stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        var withoutProvenGi = Math.Max(0, stream.SequenceDiscontinuities - stream.SequenceWithGiReason);
+        var context = $"sequenceDiscontinuities={stream.SequenceDiscontinuities}, " +
+            $"GI-tagged={stream.SequenceWithGiReason}, withoutConfirmedGI={withoutProvenGi}, " +
+            $"BufOvflAdvertised={stream.Overflow}";
+
+        if (stream.ActivationReturnedAtUtc is { } activation &&
+            stream.LastAnomalyReceivedAtUtc is { } anomaly &&
+            anomaly >= activation)
+        {
+            var delta = anomaly - activation;
+            var elapsed = delta.TotalMilliseconds;
+            if (double.IsFinite(elapsed))
+            {
+                context += $", lastAnomalyAfterStartMs={elapsed:0}";
+                if (delta >= TimeSpan.FromSeconds(5))
+                    context += "; late recurrence observed beyond 5s of RCB activation (NOT startup-only)";
+            }
+        }
+        else
+        {
+            context += "; timing=UNKNOWN (insufficient RCB lifecycle evidence)";
+        }
+
+        return context + "; received-frame order only, not TCP wire order, event-loss or GI causality proof";
     }
 
     private static string Verdict(bool? value) =>
@@ -457,8 +494,10 @@ internal static class DiagnosticReportBuilder
             return new RouteAnalysis("unavailable", "unavailable", "unavailable", "Route analysis currently supports IPv4 endpoints.");
 
         var adapters = GetActiveIpv4Adapters();
-        var matching = adapters
+        var matchingAddresses = adapters
             .Where(item => IsInSameSubnet(item.Address, target, item.PrefixLength))
+            .ToArray();
+        var matching = matchingAddresses
             .Select(item => $"{item.Name}={item.Address}/{item.PrefixLength}")
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -486,25 +525,51 @@ internal static class DiagnosticReportBuilder
             source = $"unavailable ({ex.GetType().Name}: {ex.Message})";
         }
 
-        string note;
-        if (matching.Length == 0)
-        {
-            note = $"No active IPv4 adapter is in the same subnet as {target}. Check the PC adapter address, prefix length, VLAN, and static route.";
-        }
-        else if (matching.Length == 1)
-        {
-            note = $"{target} is directly reachable only through {matching[0]}. Ensure the IED is physically connected to that network.";
-        }
-        else
-        {
-            note = $"Multiple adapters match {target}; Windows route priority can select the wrong interface. Disable unused adapters or configure interface metrics/static routes.";
-        }
+        // Do not confuse multiple IP aliases on ONE KM-TEST interface with
+        // competing network adapters. Exact local IP means same-host endpoint;
+        // neither condition warrants telling operators to disable interfaces.
+        var note = ExplainIpv4Route(target,
+            matchingAddresses.Select(item => (item.InterfaceId, item.Name)).ToArray(),
+            adapters.Any(item => item.Address.Equals(target)));
 
         return new RouteAnalysis(
             source,
             matching.Length == 0 ? "none" : string.Join(", ", matching),
             matrix,
             note);
+    }
+
+    /// <summary>
+    /// Pure, testable interface-aware route advice. The interface ID, not the
+    /// number of matching IPv4 addresses, defines routing ambiguity. This is
+    /// descriptive only: the actual OS routing table remains authoritative.
+    /// </summary>
+    internal static string ExplainIpv4Route(
+        IPAddress target,
+        IReadOnlyList<(string InterfaceId, string AdapterName)> matchedAddresses,
+        bool targetAssignedLocally)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(matchedAddresses);
+        var distinctInterfaces = matchedAddresses
+            .GroupBy(item => item.InterfaceId, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First().AdapterName)
+            .ToArray();
+        if (targetAssignedLocally)
+            return $"Target {target} is assigned to this PC on " +
+                $"{(distinctInterfaces.Length == 0 ? "a local interface" : string.Join(", ", distinctInterfaces))}; " +
+                "this can be a same-host IED simulator. Do not infer a competing NIC from IPv4 aliases. " +
+                "Check the local MMS listener and actual OS route if connection fails.";
+        if (distinctInterfaces.Length == 0)
+            return $"No directly matching IPv4 subnet for {target}; a gateway or static route can still provide connectivity. " +
+                "Check the Windows routing table rather than assuming the endpoint is unreachable.";
+        if (distinctInterfaces.Length == 1)
+            return $"One network interface ({distinctInterfaces[0]}) matches {target}, across " +
+                $"{matchedAddresses.Count} IPv4 address(es). IP aliases are not competing adapters; " +
+                "confirm actual OS routing and physical/virtual IED connection if needed.";
+        return $"{distinctInterfaces.Length} distinct network interfaces match {target} " +
+            $"({string.Join(", ", distinctInterfaces)}); Windows interface metrics/routing table may select " +
+            "a different path. Check the OS route before changing adapter configuration.";
     }
 
     private static AdapterIpv4[] GetActiveIpv4Adapters()
@@ -517,6 +582,7 @@ internal static class DiagnosticReportBuilder
                 .SelectMany(adapter => adapter.GetIPProperties().UnicastAddresses
                     .Where(address => address.Address.AddressFamily == AddressFamily.InterNetwork)
                     .Select(address => new AdapterIpv4(
+                        adapter.Id,
                         adapter.Name,
                         adapter.NetworkInterfaceType,
                         address.Address,
