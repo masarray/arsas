@@ -652,7 +652,14 @@
                                                         </DataGridTemplateColumn.CellTemplate>
                                                     </DataGridTemplateColumn>
                                                     <DataGridTextColumn Header="CDC / Type" Binding="{Binding ControlCdc}" Width="0.7*" MinWidth="74" IsReadOnly="True"/>
-                                                    <DataGridTextColumn Header="Control model" Binding="{Binding ControlModelText}" Width="1.15*" MinWidth="130" IsReadOnly="True"/>
+                                                    <DataGridTextColumn Header="Control model" Binding="{Binding ControlModelText}" Width="1.15*" MinWidth="130" IsReadOnly="True">
+                                                        <DataGridTextColumn.ElementStyle>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="ToolTip" Value="{Binding ControlLastResult}"/>
+                                                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                                            </Style>
+                                                        </DataGridTextColumn.ElementStyle>
+                                                    </DataGridTextColumn>
                                                     <DataGridTemplateColumn Header="Checks" Width="1.22*" MinWidth="165">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
@@ -793,7 +800,7 @@
                                                         </Style.Triggers>
                                                     </Style>
                                                 </Border.Style>
-                                                <TextBlock Text="No operable commands" FontWeight="SemiBold"
+                                                <TextBlock Text="No selected control objects" FontWeight="SemiBold"
                                                            Foreground="{StaticResource Muted}" HorizontalAlignment="Center"/>
                                             </Border>
                                         </Grid>

@@ -1096,7 +1096,44 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         if (!_session.IsMmsInitiated)
             throw new InvalidOperationException("The IEC 61850 MMS association is not active.");
 
-        var control = await GetOrOpenControlSessionAsync(signal, cancellationToken).ConfigureAwait(false);
+        ArControl.Iec61850ControlObjectSession control;
+        try
+        {
+            control = await GetOrOpenControlSessionAsync(signal, cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException discoveryError) when (_session.IsMmsInitiated)
+        {
+            // Distinguish an exact StatusOnly read from a failed/unsupported
+            // ctlModel read without a service write or full NameList discovery.
+            var probe = await RunMmsOperationAsync(
+                () => new ArControl.Iec61850ControlService().ProbeControlModelAsync(
+                    _session, signal.ObjectReference, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+            signal.ControlSemanticVerified = false;
+            signal.ControlModelText = probe.Decoded
+                ? FriendlyControlModel(probe.ControlModel)
+                : "Unknown";
+            signal.ControlModelReference = $"{signal.ObjectReference}.ctlModel";
+            var reason = $"{probe.Detail} Descriptor not ready: {discoveryError.Message}";
+            signal.ControlLastResult = reason;
+            return new Iec61850ControlCapabilities
+            {
+                ObjectReference = signal.ObjectReference,
+                StatusReference = signal.ControlStatusReference,
+                ControlModelReference = signal.ControlModelReference,
+                ControlModel = probe.Decoded
+                    ? MapControlModel(probe.ControlModel)
+                    : Iec61850ControlModelKind.Unknown,
+                ControlModelText = signal.ControlModelText,
+                ControlCdc = signal.ControlCdc,
+                ControlValueType = signal.ControlValueType,
+                CurrentValue = signal.ControlCurrentValue,
+                EngineControlServiceAvailable = probe.ReadSucceeded,
+                IsOperationallyReady = false,
+                DiscoveryEvidence = $"Read-only {probe.MmsReference}; kind={probe.RawKind}; scalar={probe.RawScalar}; request={probe.RequestHexPreview}; response={probe.ResponseHexPreview}",
+                EngineControlServiceStatus = reason
+            };
+        }
         var descriptor = control.Descriptor;
         var semantic = ArControl.Iec61850ControlSemanticResolver.Resolve(
             descriptor, signal.ControlCdc, signal.ControlStatusReference);

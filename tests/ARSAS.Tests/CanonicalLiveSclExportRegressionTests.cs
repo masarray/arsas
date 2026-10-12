@@ -445,8 +445,12 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var genericTrial = root.GetProperty("genericControlInteroperabilityTrial");
         Assert.Equal(zivTrial.GetProperty("exactCommit").GetString(),
             genericTrial.GetProperty("baseEngineCommit").GetString());
+        var recovery = root.GetProperty("p109LControlRecoveryTrial");
         Assert.Equal(genericTrial.GetProperty("exactCommit").GetString(),
+            recovery.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal(recovery.GetProperty("exactCommit").GetString(),
             root.GetProperty("commit").GetString());
+        Assert.True(recovery.GetProperty("noControlWriteOnProbe").GetBoolean());
         Assert.Equal("a43b9b4864a9565c02f544d4135fe157c2fac577",
             genericTrial.GetProperty("exactCommit").GetString());
         Assert.Equal("code-verified-not-physical", canonicalTrial.GetProperty("status").GetString());
@@ -467,7 +471,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.True(zivTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
         Assert.True(zivTrial.GetProperty("fullDiscoveryFallbackForbidden").GetBoolean());
         Assert.True(zivTrial.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
-        Assert.Equal(168, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(169, root.GetProperty("sourcePullRequest").GetInt32());
         Assert.True(genericTrial.GetProperty("typedSemanticGateRequired").GetBoolean());
         Assert.True(genericTrial.GetProperty("associationScopedInventoryRequired").GetBoolean());
         Assert.True(genericTrial.GetProperty("vendorDispatchForbidden").GetBoolean());

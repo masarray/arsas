@@ -1018,6 +1018,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!device.HasDiscoveryCache || device.Signals.Count == 0)
             return await ConnectAndConfigureDeviceAsync(device, openWizard: true, selectDevice: selectDevice);
 
+        ResetControlReadinessForNewAssociation(device);
         RemoveDevicePoints(device.DeviceId);
         device.Points.Clear();
         device.RefreshComputed();
@@ -1368,11 +1369,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 signal.ControlLastResult = "Ready • live feedback available";
             return;
         }
-        if (!device.IsConnected || device.CommandSignals.Count == 0)
+        if (!device.IsConnected)
             return;
 
-        var candidates = device.CommandSignals
-            .Where(signal => force || signal.ControlCurrentValue == "-" || signal.ControlModelText == "Auto-detect")
+        // Never gate inspection on an operable-only UI projection.
+        var candidates = Iec61850ControlIdentity.DistinctSelected(device.Signals)
+            .Where(signal => force || !signal.ControlModelResolved ||
+                             signal.ControlCurrentValue == "-")
             .ToArray();
         if (candidates.Length == 0)
         {
@@ -1394,9 +1397,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 if (!signal.ControlCommandBusy)
                 {
                     signal.ControlCurrentValue = capabilities.CurrentValue;
-                    signal.ControlLastResult = capabilities.SupportsOperate
-                        ? capabilities.ControlModelText
-                        : "Control unavailable";
+                    signal.ControlLastResult = capabilities.EngineControlServiceStatus;
                 }
             }
             catch (OperationCanceledException)
@@ -2116,9 +2117,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         SetStatus($"{device.Name}: monitoring stopped; MMS connection remains available.");
     }
 
+    private static void ResetControlReadinessForNewAssociation(Iec61850MonitorDevice device)
+    {
+        foreach (var signal in device.Signals.Where(s => s.IsValidControlObject))
+        {
+            signal.ClearControlConfirmation();
+            signal.ControlSemanticVerified = false;
+            signal.ControlModelText = "Auto-detect";
+            signal.ControlLastResult = "Inspection pending for the current MMS association.";
+        }
+        device.RefreshCommandSignalProjection();
+    }
+
     private async Task StopDeviceConnectionAsync(Iec61850MonitorDevice device)
     {
         await _runtime.StopDeviceAsync(device.DeviceId);
+        ResetControlReadinessForNewAssociation(device);
         device.HasReportStream = false;
         device.ReportPulseActive = false;
         _reportPulseUntil.Remove(device.DeviceId);

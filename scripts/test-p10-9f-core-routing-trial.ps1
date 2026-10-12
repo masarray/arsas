@@ -91,7 +91,36 @@ function Test-P109FCoreRoutingTrial {
         [bool]$generic.fullDiscoveryFallbackForbidden -and
         [bool]$generic.cyclicMmsProcessPollingForbidden
     )
-    if (-not ($previousHead -or $subscriberHead -or $canonicalHead -or $zivHead -or $genericHead) -or
+    # Exact P10.9L read-only engine candidate, preserving every historical gate.
+    $probe = $Lock.p109LControlRecoveryTrial
+    $probeHead = (
+        [string]$Lock.commit -ceq '55fa34cef9a4abee589b9a6d94be1d0361375d71' -and
+        [int]$Lock.sourcePullRequest -eq 169 -and
+        $zivIntegrityValid -and $null -ne $generic -and $null -ne $probe -and
+        [string]$generic.exactCommit -ceq 'a43b9b4864a9565c02f544d4135fe157c2fac577' -and
+        [string]$generic.baseEngineCommit -ceq [string]$ziv.exactCommit -and
+        [int]$generic.enginePullRequest -eq 168 -and
+        [long]$generic.engineCiRun -eq 38231327892 -and
+        [bool]$generic.typedSemanticGateRequired -and
+        [bool]$generic.associationScopedInventoryRequired -and
+        [bool]$generic.vendorDispatchForbidden -and
+        [bool]$generic.physicalQualificationRequired -and
+        [bool]$generic.mainlinePromotionForbidden -and
+        [bool]$generic.fullDiscoveryFallbackForbidden -and
+        [bool]$generic.cyclicMmsProcessPollingForbidden -and
+        [string]$probe.status -ceq 'code-trial-not-physical' -and
+        [int]$probe.issue -eq 525 -and
+        [int]$probe.enginePullRequest -eq 169 -and
+        [string]$probe.baseEngineCommit -ceq [string]$generic.exactCommit -and
+        [string]$probe.exactCommit -ceq '55fa34cef9a4abee589b9a6d94be1d0361375d71' -and
+        [bool]$probe.readOnlyCtlModelProbeRequired -and
+        [bool]$probe.noControlWriteOnProbe -and
+        [bool]$probe.physicalQualificationRequired -and
+        [bool]$probe.mainlinePromotionForbidden -and
+        [bool]$probe.fullDiscoveryFallbackForbidden -and
+        [bool]$probe.cyclicMmsProcessPollingForbidden
+    )
+    if (-not ($previousHead -or $subscriberHead -or $canonicalHead -or $zivHead -or $genericHead -or $probeHead) -or
         [string]$Lock.repository -cne 'masarray/ARIEC61850' -or
         [string]$Lock.ref -cne 'main' -or $null -eq $candidate) { return $false }
 

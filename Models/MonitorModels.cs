@@ -595,10 +595,9 @@ public sealed class Iec61850MonitorDevice : ObservableObject
 
     private void RefreshCommandSignals()
     {
-        // The Command Panel is an operating surface, not a second signal browser.
-        // Keep unresolved, StatusOnly, unsupported, and feedback-only objects out so
-        // the panel contains only actions the connected IED has proven executable.
-        var selected = Iec61850ControlIdentity.DistinctOperable(Signals)
+        // Show every selected valid control DataObject. Operate authorization remains
+        // independently gated by ControlSupportsOperate on each command action.
+        var selected = Iec61850ControlIdentity.DistinctSelected(Signals)
             .OrderBy(signal => signal.SortPriority)
             .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
             .ThenBy(signal => signal.Name, StringComparer.OrdinalIgnoreCase)
