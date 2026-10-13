@@ -44,6 +44,27 @@ public sealed class IedBrowserTreeRow : ObservableObject
         _ => "·"
     };
 
+    public System.Windows.Media.Brush GlyphBrush => Payload is RcbExportRow report
+        ? report.Buffered ? System.Windows.Media.Brushes.SeaGreen
+            : System.Windows.Media.Brushes.RoyalBlue
+        : System.Windows.Media.Brushes.SteelBlue;
+    public string RcbUsageGlyph => Payload is RcbExportRow report
+        ? report.Availability switch
+        {
+            AR.Iec61850.Mms.MmsRcbOperationalAvailability.UsedByCaller => "●",
+            AR.Iec61850.Mms.MmsRcbOperationalAvailability.InUse => "◆",
+            _ => ""
+        } : "";
+    public string RcbUsageTooltip => Payload is RcbExportRow report
+        ? report.Availability switch
+        {
+            AR.Iec61850.Mms.MmsRcbOperationalAvailability.UsedByCaller =>
+                "Active in the current ARSAS monitoring session",
+            AR.Iec61850.Mms.MmsRcbOperationalAvailability.InUse =>
+                "RCB in use by another client (read-only RCB status)",
+            _ => report.Reason
+        } : "";
+
     private bool _isExpanded;
     public bool IsExpanded
     {
@@ -162,6 +183,11 @@ public sealed record IedBrowserDetailRow(
     public IReadOnlyList<IedBrowserFlagOption> Flags { get; init; } = Array.Empty<IedBrowserFlagOption>();
     public string SecondaryText { get; init; } = "";
     public string Glyph => NavigateTo?.Glyph ?? (Kind == "Data" ? "DA" : "");
+    public System.Windows.Media.Brush GlyphBrush => NavigateTo?.GlyphBrush ??
+        System.Windows.Media.Brushes.SteelBlue;
+    public string RcbUsageGlyph => NavigateTo?.RcbUsageGlyph ?? "";
+    public string RcbUsageTooltip => NavigateTo?.RcbUsageTooltip ?? "";
+
     public bool HasChildren => LoadChildren is not null;
     public Visibility ChevronVisibility => HasChildren ? Visibility.Visible : Visibility.Hidden;
     public bool IsExpanded { get; internal set; }
