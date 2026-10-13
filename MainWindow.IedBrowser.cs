@@ -33,6 +33,10 @@ public partial class MainWindow
     private DateTime _iedBrowserCachedSourceStamp;
     private Iec61850MonitorDevice? _iedBrowserObservedDevice;
     private MmsRcbAvailabilityResult? _iedBrowserSnapshot;
+    private IReadOnlyList<IedBrowserRemoteFile> _iedBrowserRemoteFiles = Array.Empty<IedBrowserRemoteFile>();
+    private Iec61850MonitorDevice? _iedBrowserFileOwner;
+    private bool _iedBrowserFilesLoaded;
+    private bool _iedBrowserFilesLoading;
     private CancellationTokenSource? _iedBrowserReadOperation;
 
     internal void OpenIedBrowserRcb(Iec61850MonitorDevice device)
@@ -41,6 +45,57 @@ public partial class MainWindow
         SelectedDevice = device;
         MainTabs.SelectedIndex = IedBrowserWorkspaceIndex;
         RefreshIedBrowser();
+    }
+
+    private async Task BrowseIedBrowserFilesAsync(Iec61850MonitorDevice device)
+    {
+        if (_iedBrowserFilesLoading || _iedBrowserReadOperation != null)
+            return;
+        _iedBrowserFilesLoading = true;
+        var source = device;
+        IedBrowserDetailStatus.Text = "Reading IEC 61850 FileDirectory…";
+        try
+        {
+            // Reuse the exact service in Fault Records / COMTRADE.
+            // The service owns its own association and bounded traversal.
+            var files = await Task.Run(async () =>
+            {
+                await using var transfer = new ArIED61850Tester.Services.FaultRecordTransferClient();
+                await transfer.ConnectAsync(source.IpAddress, source.Port);
+                var catalog = await transfer.DiscoverAsync(remoteDirectory: null);
+                return catalog.Records.SelectMany(record => record.Files)
+                    .Select(file => new IedBrowserRemoteFile(file.Name, file.RemotePath,
+                        file.SizeBytes, file.LastModifiedUtc))
+                    .DistinctBy(file => file.RemotePath, StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(file => file.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+            }).ConfigureAwait(true);
+            if (!ReferenceEquals(source, SelectedDevice) ||
+                !ReferenceEquals(source, _iedBrowserFileOwner) || !source.IsConnected)
+                return;
+            _iedBrowserRemoteFiles = files;
+            _iedBrowserFilesLoaded = true;
+            _iedBrowserForceRefresh = true;
+            RefreshIedBrowser();
+            IedBrowserDetailStatus.Text = $"FileDirectory · {files.Length:N0} remote record file(s)";
+        }
+        catch (Exception ex)
+        {
+            if (ReferenceEquals(source, SelectedDevice))
+                IedBrowserDetailStatus.Text = "FileDirectory read failed: " + ex.Message;
+        }
+        finally { _iedBrowserFilesLoading = false; }
+    }
+
+    private void IedBrowserBrowseFiles_Click(object sender, RoutedEventArgs e)
+    {
+        if (SelectedDevice is not { IsConnected: true } device ||
+            _iedBrowserFilesLoading || _iedBrowserReadOperation != null)
+        {
+            IedBrowserDetailStatus.Text = "Connect this IED to browse remote files.";
+            return;
+        }
+        _iedBrowserFilesLoaded = false;
+        _ = BrowseIedBrowserFilesAsync(device);
     }
 
     private void IedBrowserRefresh_Click(object sender, RoutedEventArgs e)
@@ -254,6 +309,9 @@ public partial class MainWindow
             _iedBrowserObservedDevice.PropertyChanged -= IedBrowserDevice_PropertyChanged;
         _iedBrowserObservedDevice = device;
         _iedBrowserSnapshot = null;
+        _iedBrowserFileOwner = device;
+        _iedBrowserRemoteFiles = Array.Empty<IedBrowserRemoteFile>();
+        _iedBrowserFilesLoaded = false;
         if (device != null)
             device.PropertyChanged += IedBrowserDevice_PropertyChanged;
     }
@@ -276,6 +334,12 @@ public partial class MainWindow
         // A disconnected/replaced association can never supply "live" inspector values.
         if (_iedBrowserObservedDevice?.IsConnected != true)
         {
+            if (_iedBrowserFilesLoaded)
+            {
+                _iedBrowserFilesLoaded = false;
+                _iedBrowserRemoteFiles = Array.Empty<IedBrowserRemoteFile>();
+                _iedBrowserForceRefresh = true;
+            }
             CancelIedBrowserRead();
             _iedBrowserSnapshot = null;
         }
@@ -371,7 +435,8 @@ public partial class MainWindow
             _iedBrowserCachedSourcePath = sourcePath;
             _iedBrowserCachedSourceStamp = stamp;
 
-            var roots = IedBrowserPresentation.Roots(model, _iedBrowserCachedRcbRows);
+            var roots = IedBrowserPresentation.Roots(model, _iedBrowserCachedRcbRows,
+                _iedBrowserRemoteFiles);
             _iedBrowserTree.Reset(roots, expandedKeys);
             // Reports is the familiar entry point; selecting the category shows its
             // full RCB list on the right. Preserve explicit expansion on same-IED refresh.
@@ -426,6 +491,10 @@ public partial class MainWindow
         var model = SelectedDevice?.LiveDiscoveryModel ?? SelectedDevice?.SclWorkspace?.DesignModel;
         RenderIedBrowserSelection(_iedBrowserNavigation.Current,
             model, SelectedDevice?.IsConnected == true);
+        if (_iedBrowserNavigation.Current?.Key == "category/files" &&
+            SelectedDevice is { IsConnected: true } fileDevice &&
+            !_iedBrowserFilesLoaded && !_iedBrowserFilesLoading)
+            _ = BrowseIedBrowserFilesAsync(fileDevice);
     }
     private void IedBrowserDetailToggle_Click(object sender, RoutedEventArgs e)
     {
