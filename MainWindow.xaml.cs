@@ -1284,7 +1284,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private async void IedStopAction_Click(object sender, RoutedEventArgs e)
     {
         // Stop is a preemptive safety lane even while Connect/Start is busy.
-        if (!TryGetDeviceFromButton(sender, out var device)) return;
+        if (!TryGetDeviceFromButton(sender, out var device) || device.IsStopping) return;
         SelectedDevice = device;
         if (device.IsDemo)
         {
@@ -2227,6 +2227,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async Task StopDeviceConnectionAsync(Iec61850MonitorDevice device)
     {
+        // The button and every alternate Stop caller share this UI flight.
+        // A repeat click must not initiate another MMS teardown or consume
+        // a newly opened association while the first disconnect is in flight.
+        if (device.IsStopping) return;
+        device.IsStopping = true;
+        device.Status = "Disconnecting";
         try
         {
             await _runtime.StopDeviceAsync(device.DeviceId);
@@ -2255,6 +2261,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 device.AcquisitionMode = "Saved model • offline";
             }
             device.RefreshComputed();
+            device.IsStopping = false;
             RaiseWorkspaceCounts();
             SetStatus($"{device.Name}: disconnected; values retained as offline. Press Play to reconnect.");
         }
