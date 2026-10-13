@@ -80,7 +80,9 @@ public static class IedBrowserStructuredDetails
             if (descendants.Length > 0)
                 children = () => BuildAt(descendants, pathIndex + 1, depth + 1);
             else if (name is "q" or "t" && hasDirect)
-                children = () => name == "q" ? QualityChildren(depth + 1) : TimeChildren(depth + 1);
+                children = () => name == "q"
+                    ? QualityChildren(depth + 1, attr.MmsReference, attr.FunctionalConstraint)
+                    : TimeChildren(depth + 1, attr.MmsReference, attr.FunctionalConstraint);
 
             result.Add(new IedBrowserDetailRow("Data",
                 $"{name} [{attr.FunctionalConstraint}]", "Not read", depth,
@@ -109,26 +111,45 @@ public static class IedBrowserStructuredDetails
         return path.StartsWith(prefix, StringComparison.Ordinal) ? path[prefix.Length..] : path;
     }
 
-    private static IReadOnlyList<IedBrowserDetailRow> QualityChildren(int depth)
+    private static IReadOnlyList<IedBrowserDetailRow> QualityChildren(
+        int depth, string qualityReference, string fc)
     {
-        var details = new[] { "Overflow", "OutOfRange", "BadReference", "Oscillatory",
-            "Failure", "OldData", "Inconsistent", "Inaccurate" };
-        var rows = new List<IedBrowserDetailRow>
-        {
-            new("Data", "Validity", "Not read", depth),
+        IedBrowserDetailRow QualityField(string name, string evidence)
+            => new("Data", name, "Not read", depth)
+            {
+                ValueReference = qualityReference,
+                FunctionalConstraint = fc,
+                EvidenceField = evidence
+            };
+        var details = new[] { "Overflow", "OutOfRange", "BadReference",
+            "Oscillatory", "Failure", "OldData", "Inconsistent", "Inaccurate" };
+        return
+        [
+            QualityField("Validity", "Validity"),
             new("Data", "Quality Details", "", depth)
             {
                 LoadChildren = () => details.Select(name =>
-                    new IedBrowserDetailRow("Data", name, "Not read", depth + 1)).ToArray()
+                    new IedBrowserDetailRow("Data", name, "Not read", depth + 1)
+                    {
+                        ValueReference = qualityReference,
+                        FunctionalConstraint = fc,
+                        EvidenceField = name
+                    }).ToArray()
             },
-            new("Data", "Source", "Not read", depth),
-            new("Data", "Test", "Not read", depth),
-            new("Data", "OperatorBlocked", "Not read", depth)
-        };
-        return rows;
+            QualityField("Source", "Source"),
+            QualityField("Test", "Test"),
+            QualityField("OperatorBlocked", "OperatorBlocked")
+        ];
     }
 
-    private static IReadOnlyList<IedBrowserDetailRow> TimeChildren(int depth)
-        => new[] { "LeapSecondsKnown", "ClockFailure", "ClockNotSynchronized", "TimeAccuracy" }
-            .Select(name => new IedBrowserDetailRow("Data", name, "Not read", depth)).ToArray();
+    private static IReadOnlyList<IedBrowserDetailRow> TimeChildren(
+        int depth, string timestampReference, string fc)
+        => new[] { "LeapSecondsKnown", "ClockFailure", "ClockNotSynchronized",
+                   "TimeAccuracy" }
+            .Select(name => new IedBrowserDetailRow("Data", name, "Not read", depth)
+            {
+                ValueReference = timestampReference,
+                FunctionalConstraint = fc,
+                EvidenceField = name
+            }).ToArray();
 }
