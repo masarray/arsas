@@ -1900,6 +1900,9 @@
                                         Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         IsEnabled="False" Click="IedBrowserCancelRead_Click"
                                         ToolTip="Cancel the active read-only MMS sweep"/>
+                                <Button Content="Browse Files" Click="IedBrowserBrowseFiles_Click"
+                                        Style="{StaticResource SoftButton}" Margin="0,0,6,0"
+                                        ToolTip="Refresh remote COMTRADE fault-record files through IEC 61850 FileDirectory"/>
                                 <Button x:Name="IedBrowserReadRcbButton" Content="Check live RCB" Style="{StaticResource SoftButton}"
                                         Margin="0,0,6,0" Click="IedBrowserReadRcb_Click"
                                         ToolTip="Explicit read-only availability check; does not enable reporting"/>
