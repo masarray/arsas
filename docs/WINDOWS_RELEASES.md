@@ -5,7 +5,7 @@ ARSAS publishes two Windows x64 deliverables from the same reviewed source revis
 - `ARSAS-Windows-x64-Portable.exe` — a real self-contained single EXE for approved no-install use.
 - `ARSAS-Windows-x64-Setup.exe` — the Inno Setup installer with Start Menu integration, uninstall support, and the same pinned ARIEC61850 and ArdIrec native-analysis revisions used by the release build.
 
-The current stable application version is **1.6.40**. Public download metadata remains authoritative only after the corresponding tagged GitHub Release has been published and its checksums/provenance are visible. See the [v1.6.40 installed-release field acceptance](V1-6-40_INSTALLED_RELEASE_FIELD_ACCEPTANCE.md) for the exact physical Smart Discovery/static-reporting evidence, and the [v1.6.39 rejection record](../evidence/v1.6.39-physical-rejection.json) for the superseded release regression.
+The current public stable version is **[1.6.41](https://github.com/masarray/arsas/releases/tag/v1.6.41)** (source `e581a26dea5545034378adbeed5b78fc80aab773`, pinned ARIEC61850 `036e2c00d83a0815b6160147b14ea05975057965`). Public installer/portable, SHA-256, SBOM and provenance refer to that exact tag. The [v1.6.40 physical acceptance](V1-6-40_INSTALLED_RELEASE_FIELD_ACCEPTANCE.md) applies only to its historical app/engine pair and does not automatically qualify this new pin. See the [v1.6.39 rejection](../evidence/v1.6.39-physical-rejection.json) for older release regressions.
 
 ## Official stable release path
 
