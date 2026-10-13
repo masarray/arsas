@@ -15,13 +15,13 @@ public sealed class P0FieldBenchRound2RegressionTests
     }
 
     [Fact]
-    public void RcbProductionPointer_OpensMultiExporterAndUsesOneIndependentSelectionAuthority()
+    public void RcbProductionPointer_LeavesLegacyClickAuthorityAndPreservesMultiExportSelection()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.RcbMultiSelectPointerAuthority.cs"));
 
         Assert.Contains("PreviewMouseLeftButtonDownEvent", source, StringComparison.Ordinal);
         Assert.Contains("PreviewKeyDownEvent", source, StringComparison.Ordinal);
-        Assert.Contains("window.IedEditRcbMulti_Click(button, e)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("window.IedEditRcbMulti_Click(button, e)", source, StringComparison.Ordinal);
         Assert.Contains("Window.GetWindow(grid) is not RcbMultiExportWindow", source, StringComparison.Ordinal);
         Assert.Contains("ApplyRcbPointerSelection(", source, StringComparison.Ordinal);
         Assert.Contains("ApplyRcbSelectionForTest(", source, StringComparison.Ordinal);
