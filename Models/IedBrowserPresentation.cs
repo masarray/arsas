@@ -129,13 +129,60 @@ public sealed class IedBrowserTreeProjection
     }
 }
 
+public sealed record IedBrowserFlagOption(string Label, bool? IsEnabled)
+{
+    public string Status => IsEnabled is null ? "Unknown" : IsEnabled.Value ? "Enabled" : "Disabled";
+}
+
 public sealed record IedBrowserDetailRow(
     string Kind, string Name, string Value = "", int Depth = 0, string Source = "")
 {
+    private IReadOnlyList<IedBrowserDetailRow>? _children;
     public IedBrowserTreeRow? NavigateTo { get; init; }
-    public string Glyph => NavigateTo?.Glyph ?? "";
-    public double IndentWidth => Depth * 16d;
+    public Func<IReadOnlyList<IedBrowserDetailRow>>? LoadChildren { get; init; }
+    public IReadOnlyList<IedBrowserFlagOption> Flags { get; init; } = Array.Empty<IedBrowserFlagOption>();
+    public string Glyph => NavigateTo?.Glyph ?? (Kind == "Data" ? "DA" : "");
+    public bool HasChildren => LoadChildren is not null;
+    public Visibility ChevronVisibility => HasChildren ? Visibility.Visible : Visibility.Hidden;
+    public bool IsExpanded { get; internal set; }
+    public string ToggleGlyph => IsExpanded ? "▾" : "▸";
+    public double IndentWidth => Depth * 15d;
     public string Tooltip => string.IsNullOrWhiteSpace(Source) ? Name : $"{Name} · {Source}";
+    internal IReadOnlyList<IedBrowserDetailRow> GetChildren()
+        => _children ??= LoadChildren?.Invoke() ?? Array.Empty<IedBrowserDetailRow>();
+}
+
+/// <summary>Virtualized flat detail projection; a collapsed model attribute never creates WPF rows.</summary>
+public sealed class IedBrowserDetailProjection
+{
+    public BulkObservableCollection<IedBrowserDetailRow> Rows { get; } = new();
+
+    public void Reset(IReadOnlyList<IedBrowserDetailRow> rows) => Rows.ReplaceAll(rows);
+
+    public void Toggle(IedBrowserDetailRow row)
+    {
+        if (!row.HasChildren) return;
+        var position = Rows.IndexOf(row);
+        if (position < 0) return;
+        var updated = Rows.ToList();
+        if (row.IsExpanded)
+        {
+            var end = position + 1;
+            while (end < updated.Count && updated[end].Depth > row.Depth)
+            {
+                updated[end].IsExpanded = false;
+                end++;
+            }
+            updated.RemoveRange(position + 1, end - position - 1);
+            row.IsExpanded = false;
+        }
+        else
+        {
+            row.IsExpanded = true;
+            updated.InsertRange(position + 1, row.GetChildren());
+        }
+        Rows.ReplaceAll(updated);
+    }
 }
 
 /// <summary>
