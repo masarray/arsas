@@ -14,6 +14,8 @@ public sealed class P109ScopedReleaseNoBrowserRegressionTests
         Assert.Contains("Math.Clamp(tabs.SelectedIndex, 0, 6)", nav);
         Assert.DoesNotContain("_inspectorPanel", exporter);
         Assert.DoesNotContain("Report ID", exporter);
+        Assert.Contains("VerifiedIdentity = verifiedIdentity", Read("MainWindow.RcbExport.cs"));
+        Assert.Contains("TrustedSclIdentityAuthority.TryMatchAsync", Read("MainWindow.RcbExport.cs"));
         Assert.Contains("IedEditRcb_Click", Read("MainWindow.RcbCapability.cs"));
         Assert.Contains("IedEditRcbMulti_Click(button, e)", Read("MainWindow.RcbExportClickAuthority.cs"));
         Assert.False(File.Exists(Find("MainWindow.IedBrowser.cs")));
