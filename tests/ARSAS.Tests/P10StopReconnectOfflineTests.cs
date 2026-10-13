@@ -38,6 +38,37 @@ public sealed class P10StopReconnectOfflineTests
     }
 
     [Fact]
+    public async Task RepeatedStopWithoutASessionIsIdempotent()
+    {
+        await using var runtime = new ArIED61850Tester.Iec61850MonitorRuntime();
+        await runtime.StopDeviceAsync("never-connected");
+        await runtime.StopDeviceAsync("never-connected");
+        // Concurrent double-clicks also must not create a faulty session.
+        await Task.WhenAll(Enumerable.Range(0, 12).Select(
+            _ => runtime.StopDeviceAsync("never-connected")));
+        Assert.Equal(0, runtime.ConnectedDeviceCount);
+        Assert.Equal(0, runtime.MonitoringDeviceCount);
+    }
+
+    [Fact]
+    public void DisconnectFlightDisablesBothButtonsAndRecoversPlay()
+    {
+        var device = new Iec61850MonitorDevice
+        {
+            IsConnected = true,
+            HasDiscoveryCache = true,
+            IsStopping = true
+        };
+        Assert.False(device.CanPlayAction);
+        Assert.False(device.CanStopAction);
+        device.IsMonitoring = false;
+        device.IsConnected = false;
+        device.IsStopping = false;
+        Assert.True(device.CanPlayAction);
+        Assert.False(device.CanStopAction);
+    }
+
+    [Fact]
     public void ControlProjectionRefreshIsDispatchedBeforeTheStopGateReleases()
     {
         var runtime = Read("Services/Iec61850MonitorRuntime.cs");
@@ -47,6 +78,8 @@ public sealed class P10StopReconnectOfflineTests
         Assert.Contains("dispatcher.InvokeAsync(", runtime);
         Assert.Contains("await ResetAssociationControlAuthorityAsync(session.Device)", runtime);
         Assert.Contains("await slot.StopGate.WaitAsync()", facade);
+        Assert.Contains("if (slot.ActiveStopTask is { IsCompleted: false } inFlight)", facade);
+        Assert.Contains("slot.ActiveStopTask = completion.Task;", facade);
         Assert.Contains("await stopOperation().ConfigureAwait(false)", facade);
         Assert.Contains("finally", runtime);
         Assert.Contains("session.Device.IsConnected = false", runtime);
