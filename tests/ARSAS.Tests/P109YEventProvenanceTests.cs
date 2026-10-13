@@ -14,14 +14,14 @@ public sealed class P109YEventProvenanceTests
     [InlineData("integrity", "Static DataSet: StaticBrcb", "Intg", "BRCB")]
     [InlineData("general-interrogation, data-change", "Static DataSet: StaticBrcb", "GI", "BRCB")]
     [InlineData("cyclic", "MMS Polling", "Poll", "MMS read")]
-    [InlineData("report / reason not supplied", "Static DataSet: StaticBrcb", "Chg", "BRCB")]
+    [InlineData("report / reason not supplied", "Static DataSet: StaticBrcb", "Changed", "BRCB")]
     public void EventLabelsAreShortAndUseActualReasonOnly(
         string reason, string acquisition, string expectedCause, string expectedStream)
     {
         var e = new Iec61850EventEntry { Reason = reason, SourceMode = acquisition };
         Assert.Equal(expectedCause, e.EventCause);
         Assert.Equal(expectedStream, e.ReportChannel);
-        Assert.True(e.EventCause.Length <= 5);
+        Assert.True(e.EventCause.Length <= 7);
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public sealed class P109YEventProvenanceTests
             SourceMode = "Static DataSet: StaticBrcb"
         };
         Assert.Equal("BRCB", entry.AcquisitionShort);
-        Assert.Equal("Chg", entry.EventCause);
+        Assert.Equal("Changed", entry.EventCause);
         Assert.DoesNotContain("replay", entry.EventCause, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("buffered", entry.EventCause, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(string.Empty, entry.ReportId);

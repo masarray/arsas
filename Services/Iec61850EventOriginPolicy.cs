@@ -27,7 +27,7 @@ public static class Iec61850EventOriginPolicy
 
         // SOE already requires an observed process edge. The actual IEC
         // reason was not supplied, so do NOT label it spontaneous.
-        return "Chg";
+        return "Changed";
     }
 
     // UI Acquisition means the actual RCB that routed this report, NOT

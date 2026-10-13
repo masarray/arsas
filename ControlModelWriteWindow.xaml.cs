@@ -51,6 +51,7 @@ public partial class ControlModelWriteWindow : Window
 
     private void UpdateWriteButton()
     {
+        ReadButton.IsEnabled = !_busy;
         WriteButton.IsEnabled = !_busy && _device.IsConnected && _liveModelReady &&
             ModelPicker.SelectedItem is ModelChoice choice && choice.Model != _liveModel;
     }
@@ -62,6 +63,8 @@ public partial class ControlModelWriteWindow : Window
         ModelPicker.IsEnabled = false;
         UpdateWriteButton();
         StatusLabel.Text = "Reading current ctlModel…";
+        FailureDetails.Visibility = Visibility.Collapsed;
+        FailureDetails.Text = string.Empty;
         try
         {
             var capabilities = await _runtime.InspectControlAsync(
@@ -116,27 +119,48 @@ public partial class ControlModelWriteWindow : Window
         try
         {
             var result = await ConfigureExactModelAsync(expected, selected.Model, _cancellation.Token);
-            if (!result.ReadbackVerified)
+            if (!result.ReadbackVerified || result.AfterModel != selected.Model)
             {
-                StatusLabel.Text = result.Detail + " Use Read to inspect before another change.";
+                ShowWriteFailure(result.Detail, selected.Model, result.AfterModel, result.ReadbackVerified);
                 return;
             }
-            await ReadModelAsync();
-            StatusLabel.Text = $"Write successful · ctlModel={(int)result.AfterModel} verified by MMS readback.";
+
+            // The engine has completed the exact CF write and authoritative MMS readback.
+            // Do not issue a second inspection or keep the commissioning dialog open.
+            if (!_cancellation.IsCancellationRequested && IsLoaded)
+                DialogResult = true;
         }
         catch (OperationCanceledException)
         {
-            StatusLabel.Text = "Write interrupted. Read actual ctlModel before retrying.";
+            ShowWriteFailure("Connection interrupted or operation cancelled. Read actual ctlModel before retrying.");
         }
         catch (Exception ex)
         {
-            StatusLabel.Text = $"Write not verified: {ex.Message}. Read actual ctlModel.";
+            ShowWriteFailure($"Write not verified: {ex.Message}. Read actual ctlModel.");
         }
         finally
         {
             _busy = false;
             UpdateWriteButton();
         }
+    }
+
+    private void ShowWriteFailure(string? detail,
+        Iec61850ControlModelKind? expected = null,
+        Iec61850ControlModelKind? actual = null, bool readbackVerified = false)
+    {
+        if (_cancellation.IsCancellationRequested || !IsLoaded)
+            return;
+
+        var reason = string.IsNullOrWhiteSpace(detail)
+            ? "IED did not provide a verified write result."
+            : detail.Trim();
+        if (readbackVerified && expected.HasValue && actual.HasValue && expected != actual)
+            reason = $"Readback mismatch • Expected {(int)expected.Value}, actual {(int)actual.Value}. {reason}";
+
+        FailureDetails.Text = reason;
+        FailureDetails.Visibility = Visibility.Visible;
+        StatusLabel.Text = "Write not verified • no further write will be sent automatically.";
     }
 
     // Compile-time transport bridge; no reflection or ad-hoc MMS Write.
