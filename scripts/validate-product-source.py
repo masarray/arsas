@@ -126,6 +126,13 @@ def validate_release(errors: list[str]) -> None:
         errors.append("latest.json stable identity is invalid")
     if not re.fullmatch(r"\d+\.\d+\.\d+", version) or notes.get("version") != version:
         errors.append("release evidence and notes versions differ")
+    # The bilingual templates already prefix the stable version in each headline.
+    for title_key in ("title", "titleId"):
+        title_value = notes.get(title_key)
+        if not isinstance(title_value, str) or not title_value.strip():
+            errors.append(f"release notes {title_key} is missing")
+        elif title_value.strip().casefold().startswith(f"arsas {version}".casefold()):
+            errors.append(f"release notes {title_key} repeats the rendered release version")
     if not re.fullmatch(r"v\d+\.\d+\.\d+", str(evidence.get("tag", ""))):
         errors.append("latest.json stable tag is invalid")
     if not re.fullmatch(r"[0-9a-f]{40}", str(evidence.get("sourceCommit", ""))):

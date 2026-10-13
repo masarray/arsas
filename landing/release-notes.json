@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "product": "ARSAS",
   "version": "1.6.41",
-  "title": "ARSAS 1.6.41 — clearer events and stable RCB workflow",
-  "titleId": "ARSAS 1.6.41 — detail Event lebih jelas dan alur RCB stabil",
+  "title": "Clearer event inspection and stable RCB export",
+  "titleId": "Event Properties lebih jelas dan ekspor RCB tetap stabil",
   "summary": "ARSAS 1.6.41 adds a versioned native title bar, readable Event Log categories and a read-only auto-hiding Event Properties drawer. The established RCB Export Filter remains the default. The unfinished IED Browser and replacement RCB exporter are not part of this stable release.",
   "summaryId": "ARSAS 1.6.41 menambahkan versi pada title bar native, kategori Event Log yang mudah dipahami, serta drawer Event Properties read-only yang dapat tersembunyi otomatis. Form RCB Export Filter lama tetap menjadi alur utama. IED Browser dan exporter RCB pengganti yang belum selesai tidak ikut rilis stabil.",
   "highlights": [
