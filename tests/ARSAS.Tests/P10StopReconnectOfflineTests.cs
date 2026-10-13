@@ -134,6 +134,21 @@ public sealed class P10StopReconnectOfflineTests
     }
 
     [Fact]
+    public void OfflineControlDockNeverCreatesAHiddenMmsAssociation()
+    {
+        var code = Read("MainWindow.xaml.cs");
+        var xaml = Read("MainWindow.xaml");
+        var start = code.IndexOf("private async void ControlDetails_Click(", StringComparison.Ordinal);
+        var end = code.IndexOf("private void RemoveControlFeedbackIndex(", start, StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start);
+        var modelHandler = code[start..end];
+        Assert.Contains("!device.IsConnected || device.IsStopping || device.IsBusy", modelHandler);
+        Assert.DoesNotContain("ConnectUsingSavedModelAsync(", modelHandler);
+        Assert.DoesNotContain("ConnectAndConfigureDeviceAsync(", modelHandler);
+        Assert.Contains("DataContext.SelectedDevice.IsConnected", xaml);
+    }
+
+    [Fact]
     public void BothExplorerGridsMuteOfflineRowsAndStartReplacesStaleProjection()
     {
         var xaml = Read("MainWindow.xaml");
