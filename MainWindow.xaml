@@ -558,6 +558,11 @@
                                                         <Setter Property="BorderBrush" Value="#F59E0B"/>
                                                         <Setter Property="BorderThickness" Value="4,1,1,1"/>
                                                     </DataTrigger>
+                                                                                                    <DataTrigger Binding="{Binding IsOffline}" Value="True">
+                                                        <Setter Property="Opacity" Value="0.56"/>
+                                                        <Setter Property="Background" Value="#F0F3F6"/>
+                                                        <Setter Property="ToolTip" Value="{Binding Status}"/>
+                                                    </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
                                         </DataGrid.RowStyle>
@@ -593,19 +598,16 @@
                                         </DataGrid.Columns>
                                     </DataGrid>
 
-                                    <Border Grid.Row="2" Visibility="{Binding SelectedDeviceNoLivePointsVisibility}" Background="#FAFCFF" CornerRadius="16"
-                                            BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="24"
-                                            HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="520">
-                                        <StackPanel>
-                                            <TextBlock Text="{Binding SelectedDevice.ReadyWorkspaceTitle}" FontSize="22" FontWeight="SemiBold" Foreground="{StaticResource Ink}" HorizontalAlignment="Center"/>
-                                            <TextBlock Text="{Binding SelectedDevice.ReadyWorkspaceMessage}"
-                                                       TextWrapping="Wrap" TextAlignment="Center" FontSize="13" Foreground="{StaticResource Muted}" Margin="0,8,0,16"/>
-                                            <WrapPanel HorizontalAlignment="Center">
-                                                <Button Content="Edit Signals" Tag="{Binding SelectedDevice}" Click="IedConfigureSignals_Click"
-                                                        Style="{StaticResource SoftButton}" Margin="0,0,8,0" IsEnabled="{Binding SelectedDevice.CanEditSignals}"/>
-                                                <Button Content="{Binding SelectedDevice.MonitorActionLabel}" Tag="{Binding SelectedDevice}" Click="IedMonitorAction_Click"
-                                                        Style="{StaticResource PrimaryButton}" IsEnabled="{Binding SelectedDevice.CanStartOrStopMonitor}"/>
-                                            </WrapPanel>
+                                    <!-- Presentation only; Play/Stop on the IED card owns lifecycle. -->
+                                    <Border Grid.Row="2" Visibility="{Binding SelectedDeviceNoLivePointsVisibility}"
+                                            Background="#F7F9FC" CornerRadius="10"
+                                            BorderBrush="#DBE2EA" BorderThickness="1" Padding="16,10"
+                                            HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="360"
+                                            IsHitTestVisible="False">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <TextBlock Text="○" FontSize="14" Foreground="#8292A4" Margin="0,0,8,0"/>
+                                            <TextBlock Text="Offline · Press Play on the IED card"
+                                                       Foreground="#64748B" FontSize="12" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Border>
                                 </Grid>
@@ -955,7 +957,12 @@
                                             <Setter Property="BorderBrush" Value="#F59E0B"/>
                                             <Setter Property="BorderThickness" Value="4,1,1,1"/>
                                         </DataTrigger>
-                                    </Style.Triggers>
+                                                                                        <DataTrigger Binding="{Binding IsOffline}" Value="True">
+                                                        <Setter Property="Opacity" Value="0.56"/>
+                                                        <Setter Property="Background" Value="#F0F3F6"/>
+                                                        <Setter Property="ToolTip" Value="{Binding Status}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
                                 </Style>
                             </DataGrid.RowStyle>
                             <DataGrid.CellStyle>
