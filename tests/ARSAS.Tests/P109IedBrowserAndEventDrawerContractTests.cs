@@ -18,7 +18,7 @@ public sealed class P109IedBrowserAndEventDrawerContractTests
         Assert.Contains("GridSplitter Grid.Column=\"1\"", xaml);
         Assert.DoesNotContain("x:Name=\"IedBrowserSections\"", xaml);
         Assert.Contains("MainTabs.SelectedIndex = IedBrowserWorkspaceIndex", code);
-        Assert.Contains("BuildRcbExportRows(device, sourceInventory, _iedBrowserSnapshot)", code);
+        Assert.Contains("BuildRcbExportRows(device, inventory, _iedBrowserSnapshot)", code);
         Assert.Contains("IedBrowserPresentation.Roots(", code);
     }
 
