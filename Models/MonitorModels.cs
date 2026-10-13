@@ -481,7 +481,9 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     public bool CanStartMonitor => IsConnected && SelectedLiveSignalCount > 0 && !IsBusy;
     public bool CanStartOrStopMonitor => !IsBusy && (IsMonitoring || SelectedLiveSignalCount > 0);
     public bool CanPlayAction => !IsBusy && (!IsConnected || (!IsMonitoring && SelectedLiveSignalCount > 0));
-    public bool CanStopAction => !IsBusy && (IsConnected || IsMonitoring);
+    // Stop is intentionally pre-emptive: a hung Connect/Start must not
+    // disable the only safe operator exit from an in-flight MMS operation.
+    public bool CanStopAction => IsBusy || IsConnected || IsMonitoring;
     public bool CanRescan => !IsBusy && !IsMonitoring && !IsDemo;
     public bool CanSaveScl => !IsBusy && !IsDemo && (SclWorkspace != null || LiveDiscoveryModel != null);
     public string SaveSclToolTip => SclWorkspace != null
