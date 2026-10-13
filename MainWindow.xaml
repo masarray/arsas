@@ -1644,34 +1644,46 @@
             </Grid>
         </Border>
 
-        <!-- Lightweight command shout: UI-only, does not intercept the operator
-             command buttons outside the visible notice; no dialog modality. -->
+        <!-- P10.9W compact command-result toast. Its transparent hit testing and
+             root overlay avoid shifting either the live grid or Command Dock. -->
         <Border x:Name="ControlShoutCard" Grid.RowSpan="3" Panel.ZIndex="90"
-                Visibility="Collapsed" HorizontalAlignment="Right" VerticalAlignment="Top"
-                Margin="0,74,12,0" Width="400" MaxHeight="190"
-                CornerRadius="14" Background="#FFF8FAFD"
-                BorderBrush="#FFED9B95" BorderThickness="1.5" Padding="15,13">
+                Visibility="Collapsed" IsHitTestVisible="False"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                Width="404" MaxHeight="146"
+                CornerRadius="13" Background="#FFFFFF"
+                BorderBrush="#CAD8E6" BorderThickness="1" ClipToBounds="False">
             <Border.Effect>
-                <DropShadowEffect BlurRadius="20" ShadowDepth="5" Opacity="0.26" Color="#152D48"/>
+                <DropShadowEffect BlurRadius="19" ShadowDepth="3" Opacity="0.16" Color="#1D3650"/>
             </Border.Effect>
-            <StackPanel>
-                <DockPanel LastChildFill="True">
-                    <Border Width="27" Height="27" CornerRadius="8" Background="#FFFDE8E7"
-                            DockPanel.Dock="Left" Margin="0,0,10,0">
-                        <TextBlock Text="!" Foreground="#B42318" FontWeight="Bold" FontSize="17"
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="4"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border x:Name="ControlShoutAccent" Background="#5278A3" CornerRadius="13,0,0,13"/>
+                <Grid Grid.Column="1" Margin="13,12,14,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="27"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Border x:Name="ControlShoutGlyphBackdrop" Width="25" Height="25"
+                            CornerRadius="8" Background="#EDF3FA"
+                            VerticalAlignment="Top" HorizontalAlignment="Left">
+                        <TextBlock x:Name="ControlShoutGlyph" Text="i" FontSize="15"
+                                   Foreground="#3E648D" FontWeight="SemiBold"
                                    VerticalAlignment="Center" HorizontalAlignment="Center"/>
                     </Border>
-                    <TextBlock x:Name="ControlShoutTitle" Text="Command rejected" FontSize="15"
-                               FontWeight="Bold" Foreground="#B42318"
-                               TextWrapping="Wrap" VerticalAlignment="Center"/>
-                </DockPanel>
-                <TextBlock x:Name="ControlShoutDetail" Margin="37,7,0,0" FontSize="12.5"
-                           Foreground="#33465F" TextWrapping="Wrap" MaxHeight="102"
-                           TextTrimming="CharacterEllipsis"
-                           Text="Read the command rejection reason in Diagnostics."/>
-                <TextBlock Margin="37,8,0,0" FontSize="10.5" Foreground="#62758A"
-                           Text="Details remain available in Diagnostics"/>
-            </StackPanel>
+                    <StackPanel Grid.Column="1" Margin="9,0,0,0">
+                        <TextBlock x:Name="ControlShoutTitle" FontSize="13.4"
+                                   FontWeight="SemiBold" Foreground="#223B54"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock x:Name="ControlShoutDetail" FontSize="11.7"
+                                   Margin="0,3,0,0" Foreground="#52677C"
+                                   MaxHeight="70" TextWrapping="Wrap"
+                                   TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
         </Border>
 
     </Grid>
