@@ -86,8 +86,17 @@ public static class IedBrowserStructuredDetails
                 $"{name} [{attr.FunctionalConstraint}]", "Not read", depth,
                 $"IEC declaration · {attr.MmsReference} · {attr.TypeSource}")
             {
-                ValueReference = hasDirect ? attr.MmsReference : "",
-                FunctionalConstraint = attr.FunctionalConstraint,
+                // A structured intermediate row may have its own observed
+                // report value even when no scalar attribute is declared at
+                // that exact depth. Keep the verified parent reference/FC.
+                ValueReference = hasDirect
+                    ? attr.MmsReference
+                    : attr.ObjectReference + "." +
+                        string.Join(".", groupArray[0].parts.Take(pathIndex + 1)),
+                FunctionalConstraint = groupArray.All(x =>
+                    string.Equals(x.attr.FunctionalConstraint, attr.FunctionalConstraint,
+                        StringComparison.OrdinalIgnoreCase))
+                        ? attr.FunctionalConstraint : "",
                 LoadChildren = children
             });
         }
