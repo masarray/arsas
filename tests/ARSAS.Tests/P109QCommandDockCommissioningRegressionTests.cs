@@ -30,6 +30,50 @@ public sealed class P109QCommandDockCommissioningRegressionTests
     }
 
     [Fact]
+    public void RaiseAndLowerUseSharedSemanticPalette_AndConfirmTracksPendingAction()
+    {
+        var xaml = Read("MainWindow.xaml");
+        var app = Read("App.xaml");
+        var start = xaml.IndexOf("<DataGridTemplateColumn Header=\"Control\"", StringComparison.Ordinal);
+        var end = xaml.IndexOf("</DataGridTemplateColumn>", start, StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start);
+        var cell = xaml[start..end];
+
+        // Both the combined BSC and separate TapOpR/TapOpL paths must
+        // have equally prominent, distinct colored command surfaces.
+        Assert.Equal(2, cell.Split("Style=\"{StaticResource CommandRaiseButton}\"",
+            StringSplitOptions.None).Length - 1);
+        Assert.Equal(2, cell.Split("Style=\"{StaticResource CommandLowerButton}\"",
+            StringSplitOptions.None).Length - 1);
+        Assert.Contains("Style=\"{StaticResource CommandConfirmButton}\"", cell);
+        Assert.Contains("Style=\"{StaticResource CommandDockSoftButton}\"", cell); // Cancel
+
+        foreach (var resource in new[]
+        {
+            "CommandRaiseFill", "CommandRaiseStroke",
+            "CommandLowerFill", "CommandLowerStroke", "CommandLowerInk"
+        })
+            Assert.Contains($"x:Key=\"{resource}\"", app);
+
+        var confirmStart = app.IndexOf("<Style x:Key=\"CommandConfirmButton\"", StringComparison.Ordinal);
+        var confirmEnd = app.IndexOf("</Style>", confirmStart, StringComparison.Ordinal);
+        Assert.True(confirmStart >= 0 && confirmEnd > confirmStart);
+        var confirm = app[confirmStart..confirmEnd];
+        foreach (var (action, resource) in new[]
+        {
+            ("Raise", "CommandRaiseFill"), ("Lower", "CommandLowerFill"),
+            ("Close", "CommandCloseGradient")
+        })
+        {
+            Assert.Contains($"Binding ControlPendingAction}}\" Value=\"{action}\"", confirm);
+            Assert.Contains($"StaticResource {resource}", confirm);
+        }
+        // Open remains default success green; Close remains red.
+        Assert.Contains("StaticResource CommandOpenGradient", confirm);
+        Assert.Contains("StaticResource CommandCloseGradient", confirm);
+    }
+
+    [Fact]
     public void ConfirmAndCancelPathUseSharedCommandOwnership()
     {
         var code = Read("MainWindow.xaml.cs");
