@@ -99,15 +99,14 @@ public sealed class IedBrowserPresentationTests
     [Fact]
     public void CategoriesFollowEngineeringNavigationOrder_WithoutMmsCalls()
     {
-        var roots = IedBrowserPresentation.Roots("IED", new LiveIedModelDiscoveryDocument(),
+        var roots = IedBrowserPresentation.Roots(new LiveIedModelDiscoveryDocument(),
             Array.Empty<RcbExportRow>());
         var projection = new IedBrowserTreeProjection();
         projection.Reset(roots);
-        projection.Expand(roots[0]);
         Assert.Equal(
             ["GOOSE", "Reports", "Setting Groups", "Files", "DataSets", "Data Model"],
-            projection.Rows.Skip(1).Select(x => x.Title).ToArray());
-        Assert.All(projection.Rows, x => Assert.True(x.Depth <= 1));
+            projection.Rows.Select(x => x.Title).ToArray());
+        Assert.All(projection.Rows, x => Assert.Equal(0, x.Depth));
     }
 
     [Fact]
@@ -119,9 +118,8 @@ public sealed class IedBrowserPresentationTests
             Inspection = RcbInspectionEvidence.FromSource("ReportIdIsNotName", null)
         };
         var tree = new IedBrowserTreeProjection();
-        var roots = IedBrowserPresentation.Roots("IED", null, [row]);
+        var roots = IedBrowserPresentation.Roots(null, [row]);
         tree.Reset(roots);
-        tree.Expand(roots[0]);
         var report = Assert.Single(tree.Rows.Where(x => x.Key == "category/reports"));
         tree.Expand(report);
         var ld = Assert.Single(tree.Rows.Where(x => x.Kind == "LD"));
@@ -151,12 +149,98 @@ public sealed class IedBrowserPresentationTests
             }]
         };
         var projection = new IedBrowserTreeProjection();
-        var roots = IedBrowserPresentation.Roots("IED", model, Array.Empty<RcbExportRow>());
+        var roots = IedBrowserPresentation.Roots(model, Array.Empty<RcbExportRow>());
         projection.Reset(roots);
-        projection.Expand(roots[0]);
-        Assert.Equal(7, projection.Rows.Count); // IED + 6 categories.
+        Assert.Equal(6, projection.Rows.Count); // IED is selected in the existing Explorer.
         var dataModel = Assert.Single(projection.Rows.Where(x => x.Key == "category/model"));
         projection.Expand(dataModel);
-        Assert.Equal(8, projection.Rows.Count); // + LD, but no DO/DA visual rows.
+        Assert.Equal(7, projection.Rows.Count); // + LD, but no DO/DA visual rows.
+    }
+
+    [Fact]
+    public void ReportContainers_RenderLeafListInRightGrid_AndNavigateToTheExistingTreeNode()
+    {
+        var r1 = new RcbExportRow { Name = "urcb01", Reference = "ZIVLD/LLN0.RP.urcb01",
+            Inspection = RcbInspectionEvidence.FromSource("ReportIdOne", null) };
+        var r2 = new RcbExportRow { Name = "brcb01", Reference = "ZIVLD/LLN0.BR.brcb01",
+            Inspection = RcbInspectionEvidence.FromSource("ReportIdTwo", null) };
+        var roots = IedBrowserPresentation.Roots(null, [r1, r2]);
+        var reports = Assert.Single(roots.Where(r => r.Key == "category/reports"));
+        var list = IedBrowserPresentation.Details(reports, null, false);
+        Assert.Equal(["urcb01", "brcb01"],
+            list.Where(r => r.Kind == "Object").Select(r => r.Name).ToArray());
+        Assert.DoesNotContain(list, r => r.Name == "ReportIdOne");
+        var ld = Assert.Single(reports.GetChildren());
+        var ln = Assert.Single(ld.GetChildren());
+        Assert.Equal(2, IedBrowserPresentation.Details(ld, null, false)
+            .Count(r => r.NavigateTo?.Kind == "RCB"));
+        Assert.Equal(2, IedBrowserPresentation.Details(ln, null, false)
+            .Count(r => r.NavigateTo?.Kind == "RCB"));
+        var projection = new IedBrowserTreeProjection();
+        projection.Reset(roots);
+        var target = Assert.Single(list.Where(r => r.Name == "brcb01")).NavigateTo!;
+        projection.Reveal(target);
+        Assert.Same(target, projection.FindVisible(target.Key));
+        Assert.Same(ln, target.Parent);
+        Assert.True(reports.IsExpanded);
+    }
+
+    [Fact]
+    public void GooseAndDataSetCategories_RenderActualObjectsWithoutImplicitReads()
+    {
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            GooseControlBlocks = [
+                new LiveIedControlBlockModel { Name = "LLN0.gcb01", Kind = "GOOSE",
+                    Reference = "ZIVLD/LLN0.GO.gcb01", Domain = "ZIVLD", LogicalNode = "LLN0" },
+                new LiveIedControlBlockModel { Name = "LLN0.gcb02", Kind = "GOOSE",
+                    Reference = "ZIVLD/LLN0.GO.gcb02", Domain = "ZIVLD", LogicalNode = "LLN0" }
+            ],
+            DataSets = [
+                new LiveIedDataSetModel { Name = "LLN0.DS_Signal", Reference = "ZIVLD/LLN0.DS_Signal",
+                    Domain = "ZIVLD", LogicalNode = "LLN0", MemberCount = 22 }
+            ]
+        };
+        var roots = IedBrowserPresentation.Roots(model, Array.Empty<RcbExportRow>());
+        var goose = Assert.Single(roots.Where(x => x.Key == "category/goose"));
+        Assert.Equal(["LLN0.gcb01", "LLN0.gcb02"],
+            IedBrowserPresentation.Details(goose, model, false)
+                .Where(r => r.Kind == "Object").Select(r => r.Name).ToArray());
+        var datasets = Assert.Single(roots.Where(x => x.Key == "category/datasets"));
+        var dsRow = Assert.Single(IedBrowserPresentation.Details(datasets, model, false)
+            .Where(r => r.Kind == "Object"));
+        Assert.Equal("LLN0.DS_Signal", dsRow.Name);
+        Assert.Equal("22 members", dsRow.Value);
+        Assert.Equal("DataSet", dsRow.NavigateTo?.Kind);
+    }
+
+    [Fact]
+    public void ModelHierarchy_RendersLDThenLNThenDOLists_OnTheRight()
+    {
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [
+                new LiveIedLogicalDeviceModel {
+                    MmsDomain = "ZIVLD",
+                    LogicalNodes = [
+                        new LiveIedLogicalNodeModel { Name = "LLN0", LnClass = "LLN0",
+                            DataObjects = [new LiveIedDataObjectModel { Name = "Beh", Reference = "ZIVLD/LLN0.Beh" }] },
+                        new LiveIedLogicalNodeModel { Name = "ATCC1", LnClass = "ATCC" }
+                    ]
+                }
+            ]
+        };
+        var roots = IedBrowserPresentation.Roots(model, Array.Empty<RcbExportRow>());
+        var dataModel = Assert.Single(roots.Where(x => x.Key == "category/model"));
+        var ld = Assert.Single(IedBrowserPresentation.Details(dataModel, model, false)
+            .Where(r => r.Kind == "Object"));
+        Assert.Equal("ZIVLD", ld.Name);
+        var lns = IedBrowserPresentation.Details(ld.NavigateTo!, model, false)
+            .Where(r => r.NavigateTo?.Kind == "LN").ToArray();
+        Assert.Equal(["LLN0", "ATCC1"], lns.Select(r => r.Name).ToArray());
+        var dos = IedBrowserPresentation.Details(lns[0].NavigateTo!, model, false)
+            .Where(r => r.NavigateTo?.Kind == "DO").ToArray();
+        Assert.Single(dos);
+        Assert.Equal("Beh", dos[0].Name);
     }
 }
