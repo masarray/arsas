@@ -218,31 +218,29 @@ public partial class MainWindow
             _iedBrowserCachedSourcePath = sourcePath;
             _iedBrowserCachedSourceStamp = stamp;
 
-            var roots = IedBrowserPresentation.Roots(device.Name, model, _iedBrowserCachedRcbRows);
+            var roots = IedBrowserPresentation.Roots(model, _iedBrowserCachedRcbRows);
             _iedBrowserTree.Reset(roots, expandedKeys);
-            if (roots.Count > 0 && _iedBrowserTree.Rows.Count == 1)
+            // Reports is the familiar entry point; selecting the category shows its
+            // full RCB list on the right. Preserve explicit expansion on same-IED refresh.
+            if (!sameDevice)
             {
-                _iedBrowserTree.Expand(roots[0]);
-                // The initial selection is an RCB when present, keeping the existing
-                // Explorer "Browse RCB" launcher familiar and functional.
-                var reports = _iedBrowserTree.Rows.FirstOrDefault(r => r.Key == "category/reports");
-                if (reports != null)
+                var reports = roots.FirstOrDefault(r => r.Key == "category/reports");
+                if (reports is not null)
                 {
                     _iedBrowserTree.Expand(reports);
-                    var ld = _iedBrowserTree.Rows.FirstOrDefault(r => r.Kind == "LD");
-                    if (ld != null)
+                    var ld = reports.GetChildren().FirstOrDefault();
+                    if (ld is not null)
                     {
                         _iedBrowserTree.Expand(ld);
-                        var ln = _iedBrowserTree.Rows.FirstOrDefault(r => r.Kind == "LN");
-                        if (ln != null) _iedBrowserTree.Expand(ln);
+                        var ln = ld.GetChildren().FirstOrDefault();
+                        if (ln is not null) _iedBrowserTree.Expand(ln);
                     }
                 }
             }
 
             IedBrowserTreeGrid.ItemsSource = _iedBrowserTree.Rows;
             var selected = priorKey == null ? null : _iedBrowserTree.FindVisible(priorKey);
-            selected ??= _iedBrowserTree.Rows.FirstOrDefault(r => r.Kind == "RCB");
-            selected ??= _iedBrowserTree.Rows.FirstOrDefault(r => r.Key == "category/reports");
+            selected ??= roots.FirstOrDefault(r => r.Key == "category/reports");
             selected ??= roots.FirstOrDefault();
             IedBrowserTreeGrid.SelectedItem = selected;
         }
@@ -266,6 +264,22 @@ public partial class MainWindow
         RenderIedBrowserSelection(IedBrowserTreeGrid.SelectedItem as IedBrowserTreeRow,
             model, SelectedDevice?.IsConnected == true);
     }
+    private void IedBrowserDetail_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!ReferenceEquals(sender, IedBrowserDetailList) ||
+            IedBrowserDetailList.SelectedItem is not IedBrowserDetailRow { NavigateTo: { } target })
+            return;
+
+        // The right list navigates to the very same tree node, without new MMS reads
+        // and without rebuilding any other category or device session.
+        _iedBrowserTree.Reveal(target);
+        if (!ReferenceEquals(IedBrowserTreeGrid.SelectedItem, target))
+            IedBrowserTreeGrid.SelectedItem = target;
+        else
+            IedBrowserDetailList.SelectedItem = null;
+        IedBrowserTreeGrid.ScrollIntoView(target);
+    }
+
 
     private void RenderIedBrowserSelection(
         IedBrowserTreeRow? row, LiveIedModelDiscoveryDocument? model, bool connected)
@@ -288,7 +302,11 @@ public partial class MainWindow
             LiveIedFileModel file => file.Path,
             _ => row.Title
         };
-        IedBrowserObjectPath.Text = reference;
+        var segments = new Stack<string>();
+        for (var current = row; current != null; current = current.Parent)
+            segments.Push(current.Title);
+        IedBrowserObjectPath.Text = (SelectedDevice?.Name ?? "IED") +
+            " • " + string.Join(" • ", segments);
         IedBrowserObjectPath.ToolTip = reference;
         IedBrowserDetailStatus.Text = row.Payload is RcbExportRow r
             ? r.Inspection.Summary(connected)
