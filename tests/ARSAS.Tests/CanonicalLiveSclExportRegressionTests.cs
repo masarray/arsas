@@ -460,8 +460,26 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var positionStatus = root.GetProperty("p109UPositionStatusNameListRecoveryTrial");
         Assert.Equal(position.GetProperty("exactCommit").GetString(),
             positionStatus.GetProperty("baseEngineCommit").GetString());
+        // P10.9U remains immutable historical evidence. P10.9V is the
+        // exact tested successor, not a rewrite of that accepted lineage.
+        Assert.Equal("ad43399ed411cc72e6eb68b67e198db5e7b95381",
+            positionStatus.GetProperty("exactCommit").GetString());
+        var typedBscTrial = root.GetProperty("p109VLiveBscAuthorityTrial");
         Assert.Equal(positionStatus.GetProperty("exactCommit").GetString(),
+            typedBscTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal("036e2c00d83a0815b6160147b14ea05975057965",
+            typedBscTrial.GetProperty("exactCommit").GetString());
+        Assert.Equal(typedBscTrial.GetProperty("exactCommit").GetString(),
             root.GetProperty("commit").GetString());
+        Assert.Equal("engine-ci-success-consumer-ci-pending-not-physical",
+            typedBscTrial.GetProperty("status").GetString());
+        Assert.Equal(38328335496L, typedBscTrial.GetProperty("engineCiRun").GetInt64());
+        Assert.True(typedBscTrial.GetProperty("staticSpcNeverOverridesExactLiveBsc").GetBoolean());
+        Assert.True(typedBscTrial.GetProperty("typedTwoBitCtlValAndExactStepStatusRequired").GetBoolean());
+        Assert.True(typedBscTrial.GetProperty("wrongOrCrossObjectStatusFailsClosed").GetBoolean());
+        Assert.True(typedBscTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(typedBscTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
+        Assert.True(typedBscTrial.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
         Assert.True(positionStatus.GetProperty("singleScalarReadOnly").GetBoolean());
         Assert.True(positionStatus.GetProperty("bitStringWidthTwoRequired").GetBoolean());
         Assert.True(position.GetProperty("structuredStatusRequiresTypedMmsRead").GetBoolean());
