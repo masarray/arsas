@@ -163,7 +163,7 @@ public sealed class IedBrowserPresentationTests
         var r1 = new RcbExportRow { Name = "urcb01", Reference = "ZIVLD/LLN0.RP.urcb01",
             Inspection = RcbInspectionEvidence.FromSource("ReportIdOne", null) };
         var r2 = new RcbExportRow { Name = "brcb01", Reference = "ZIVLD/LLN0.BR.brcb01",
-            Inspection = RcbInspectionEvidence.FromSource("ReportIdTwo", null) };
+            Buffered = true, Inspection = RcbInspectionEvidence.FromSource("ReportIdTwo", null) };
         var roots = IedBrowserPresentation.Roots(null, [r2, r1]);
         var reports = Assert.Single(roots.Where(r => r.Key == "category/reports"));
         var list = IedBrowserPresentation.Details(reports, null, false);
