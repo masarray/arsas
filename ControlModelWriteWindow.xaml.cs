@@ -119,7 +119,8 @@ public partial class ControlModelWriteWindow : Window
         try
         {
             var result = await ConfigureExactModelAsync(expected, selected.Model, _cancellation.Token);
-            if (!result.ReadbackVerified || (int)result.AfterModel != (int)selected.Model)
+            if (!result.WriteAccepted || !result.ReadbackVerified ||
+                (int)result.AfterModel != (int)selected.Model)
             {
                 ShowWriteFailure(result.Detail, (int)selected.Model, (int)result.AfterModel, result.ReadbackVerified);
                 return;

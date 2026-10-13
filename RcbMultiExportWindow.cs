@@ -186,8 +186,13 @@ public sealed class RcbMultiExportWindow : Window
             Background = Brushes.White
         };
         _inspectorProperties.Columns.Add(TextColumn("Property", nameof(RcbInspectionProperty.Property), 142));
-        _inspectorProperties.Columns.Add(TextColumn("Value", nameof(RcbInspectionProperty.Value),
-            new DataGridLength(1, DataGridLengthUnitType.Star)));
+        var provenanceStyle = new Style(typeof(TextBlock));
+        provenanceStyle.Setters.Add(new Setter(FrameworkElement.ToolTipProperty,
+            new Binding(nameof(RcbInspectionProperty.Source))));
+        var valueColumn = TextColumn("Value", nameof(RcbInspectionProperty.Value),
+            new DataGridLength(1, DataGridLengthUnitType.Star));
+        valueColumn.ElementStyle = provenanceStyle;
+        _inspectorProperties.Columns.Add(valueColumn);
         Grid.SetRow(_inspectorProperties, 3);
         inspectorRoot.Children.Add(_inspectorProperties);
 

@@ -66,7 +66,7 @@ public sealed class P109ZFinalInspectorRegressionTests
         Assert.Contains("CreateReportIdColumn()", window);
         Assert.Contains("ShowInspector(row)", window);
         Assert.Contains("CloseInspector()", window);
-        Assert.Contains("Inspection.Properties(row, connected)", window.Replace("row.Inspection.Properties(row, connected)", "Inspection.Properties(row, connected)"));
+        Assert.Contains("row.Inspection.Properties(row, connected)", window);
         Assert.Contains("FindRcbAncestor<Button>(source) != null", selection);
         Assert.DoesNotContain("MmsClientSession", window, StringComparison.Ordinal);
         Assert.DoesNotContain("WriteReport", window, StringComparison.Ordinal);
