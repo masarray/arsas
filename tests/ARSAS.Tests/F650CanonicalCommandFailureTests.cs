@@ -82,14 +82,22 @@ public sealed class F650CanonicalCommandFailureTests
     }
 
     [Fact]
-    public void FailedCommand_HasVisibleOperatorWarning_OnlyOnFailure()
+    public void EveryFinalCommandHasEvidenceGradedToast_DiagnosticsAlertOnlyOnFailure()
     {
         var main = Read("MainWindow.xaml.cs");
-        Assert.Contains("if (!result.IsSuccess)", main, StringComparison.Ordinal);
-        Assert.Contains("Iec61850ControlShout.FromResult(result)", main, StringComparison.Ordinal);
-        Assert.Contains("ShowControlShout(notice.Title, notice.Detail)", main, StringComparison.Ordinal);
-        Assert.Contains("MarkDiagnosticAlert()", main, StringComparison.Ordinal);
-        Assert.DoesNotContain("IED Command Failed —", main, StringComparison.Ordinal);
+        var start = main.IndexOf("signal.ControlLastResult = BuildQuickControlResult(result);", StringComparison.Ordinal);
+        var end = main.IndexOf("catch (OperationCanceledException)", start, StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start);
+        var resultPresentation = main[start..end];
+        Assert.Contains("if (!result.IsSuccess)", resultPresentation, StringComparison.Ordinal);
+        Assert.Contains("MarkDiagnosticAlert();", resultPresentation, StringComparison.Ordinal);
+        Assert.Contains("ShowControlShout(Iec61850ControlShout.FromResult(result));",
+            resultPresentation, StringComparison.Ordinal);
+        Assert.True(resultPresentation.IndexOf("MarkDiagnosticAlert();", StringComparison.Ordinal) <
+                    resultPresentation.IndexOf("ShowControlShout(Iec61850ControlShout.FromResult(result));",
+                        StringComparison.Ordinal));
+        Assert.DoesNotContain("if (result.IsSuccess)\n                MarkDiagnosticAlert();",
+            resultPresentation, StringComparison.Ordinal);
         Assert.DoesNotContain("MessageBoxImage.Warning", main, StringComparison.Ordinal);
     }
 
