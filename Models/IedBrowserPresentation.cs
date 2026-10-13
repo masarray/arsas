@@ -340,8 +340,8 @@ public static class IedBrowserPresentation
                 Source: child.Key)
             {
                 NavigateTo = child,
-                SecondaryText = child.Payload is LiveIedFileModel file
-                    ? file.LastModified : ""
+                SecondaryText = child.Payload is LiveIedFileModel detailFile
+                    ? detailFile.LastModified : ""
             });
         }
         return true;
