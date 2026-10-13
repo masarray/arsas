@@ -18,6 +18,7 @@ public partial class MainWindow
 {
     private const int IedBrowserWorkspaceIndex = 7;
     private readonly IedBrowserTreeProjection _iedBrowserTree = new();
+    private bool _iedBrowserForceRefresh;
     private Iec61850MonitorDevice? _iedBrowserCachedDevice;
     private LiveIedModelDiscoveryDocument? _iedBrowserCachedModel;
     private MmsRcbAvailabilityResult? _iedBrowserCachedSnapshot;
@@ -39,7 +40,7 @@ public partial class MainWindow
     private void IedBrowserRefresh_Click(object sender, RoutedEventArgs e)
     {
         // The operator explicitly requested a new local projection, not MMS discovery.
-        _iedBrowserCachedDevice = null;
+        _iedBrowserForceRefresh = true;
         RefreshIedBrowser();
     }
 
@@ -175,13 +176,15 @@ public partial class MainWindow
         catch (IOException) { /* An unavailable source file cannot poison in-memory browsing. */ }
         catch (UnauthorizedAccessException) { /* Still show the cached/discovered model. */ }
 
-        var changed = !ReferenceEquals(device, _iedBrowserCachedDevice) ||
+        var changed = _iedBrowserForceRefresh ||
+                      !ReferenceEquals(device, _iedBrowserCachedDevice) ||
                       !ReferenceEquals(model, _iedBrowserCachedModel) ||
                       !ReferenceEquals(_iedBrowserSnapshot, _iedBrowserCachedSnapshot) ||
                       !string.Equals(sourcePath, _iedBrowserCachedSourcePath, StringComparison.Ordinal) ||
                       stamp != _iedBrowserCachedSourceStamp;
         if (changed)
         {
+            _iedBrowserForceRefresh = false;
             var sameDevice = ReferenceEquals(device, _iedBrowserCachedDevice);
             var priorKey = sameDevice
                 ? (IedBrowserTreeGrid.SelectedItem as IedBrowserTreeRow)?.Key
@@ -223,7 +226,17 @@ public partial class MainWindow
                 // The initial selection is an RCB when present, keeping the existing
                 // Explorer "Browse RCB" launcher familiar and functional.
                 var reports = _iedBrowserTree.Rows.FirstOrDefault(r => r.Key == "category/reports");
-                if (reports != null) _iedBrowserTree.Expand(reports);
+                if (reports != null)
+                {
+                    _iedBrowserTree.Expand(reports);
+                    var ld = _iedBrowserTree.Rows.FirstOrDefault(r => r.Kind == "LD");
+                    if (ld != null)
+                    {
+                        _iedBrowserTree.Expand(ld);
+                        var ln = _iedBrowserTree.Rows.FirstOrDefault(r => r.Kind == "LN");
+                        if (ln != null) _iedBrowserTree.Expand(ln);
+                    }
+                }
             }
 
             IedBrowserTreeGrid.ItemsSource = _iedBrowserTree.Rows;
