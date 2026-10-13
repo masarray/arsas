@@ -6,6 +6,7 @@ using AR.Iec61850.Discovery;
 using AR.Iec61850.Mms;
 using AR.Iec61850.Scl.Export;
 using ArIED61850Tester.Models;
+using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
 
@@ -311,28 +312,15 @@ public partial class MainWindow
                 row.Value = "Not read";
                 continue;
             }
-            if (row.EvidenceField.Length == 0)
-            {
+            // The parent q and its inline children share one IEC Quality
+            // presentation path. Unknown flags stay unavailable, never false.
+            if (row.EvidenceKind == "Quality")
+                row.Value = Iec61850QualityPresentation.FormatObserved(
+                    live.Value, row.EvidenceField);
+            else if (row.EvidenceField.Length == 0)
                 row.Value = live.Value;
-                continue;
-            }
-            if (row.EvidenceField == "Validity")
-            {
-                // A normalized q of Good/Invalid/Questionable is proof of
-                // validity, not proof of the remaining independent q bits.
-                var quality = live.Value.Trim();
-                row.Value = quality.Equals("good", StringComparison.OrdinalIgnoreCase) ||
-                            quality.Equals("invalid", StringComparison.OrdinalIgnoreCase) ||
-                            quality.Equals("questionable", StringComparison.OrdinalIgnoreCase)
-                    ? quality.ToLowerInvariant() : "Not exposed";
-            }
             else
-            {
-                // The current report value formatter exposes normalized q/t
-                // without raw bits. Do not paint default false/true for bits
-                // that were not included in the model's actual value evidence.
                 row.Value = "Not exposed";
-            }
         }
     }
 
