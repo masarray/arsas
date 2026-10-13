@@ -119,9 +119,9 @@ public sealed class P109YEventProvenanceTests
             "Header=\"Acquisition\" Binding=\"{Binding AcquisitionShort}\"",
             StringSplitOptions.None).Length - 1);
         Assert.DoesNotContain("Header=\"Acquisition\" Binding=\"{Binding SourceMode}\"", xaml);
-        Assert.Contains("snapshot.IsReportTraffic && !string.IsNullOrWhiteSpace(snapshot.ReportControlReference)", ui);
+        Assert.Contains("if (!string.IsNullOrWhiteSpace(snapshot.ReportControlReference))", ui);
         Assert.Contains("point.LastLiveReportControlReference = snapshot.ReportControlReference;", ui);
-        Assert.Contains("ReportControlReference = trustReportEdge ? state.LastLiveReportControlReference", runtime);
+        Assert.Contains("ReportControlReference = state.LastLiveReportControlReference", runtime);
         Assert.Contains("var reportRcbChanged = trustReportEdge", runtime);
         Assert.Contains("point.ReportControlReference = result.ReportControlReference", runtime);
     }
