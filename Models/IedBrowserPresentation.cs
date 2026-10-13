@@ -196,8 +196,8 @@ public static class IedBrowserPresentation
                     .Select(ln => new IedBrowserTreeRow("datasets/ln/" + ld.Key + "/" + ln.Key,
                         ln.Key, "LN", 2,
                         loadChildren: () => ln.Select(set =>
-                            new IedBrowserTreeRow("datasets/set/" + set.Reference, set.Name,
-                                "DataSet", 3, set)).ToArray())).ToArray())).ToArray()
+                            new IedBrowserTreeRow("datasets/set/" + set.Reference,
+                                QualifiedName(set.LogicalNode, set.Name), "DataSet", 3, set)).ToArray())).ToArray())).ToArray()
             ?? Array.Empty<IedBrowserTreeRow>();
 
     private static IReadOnlyList<IedBrowserTreeRow> BlockGroups(
@@ -208,9 +208,18 @@ public static class IedBrowserPresentation
                     .Select(ln => new IedBrowserTreeRow(kind + "/ln/" + ld.Key + "/" + ln.Key,
                         ln.Key, "LN", 2,
                         loadChildren: () => ln.Select(block =>
-                            new IedBrowserTreeRow(kind + "/" + block.Reference, block.Name,
-                                kind, 3, block)).ToArray())).ToArray())).ToArray()
+                            new IedBrowserTreeRow(kind + "/" + block.Reference,
+                                QualifiedName(block.LogicalNode, block.Name), kind, 3, block)).ToArray())).ToArray())).ToArray()
             ?? Array.Empty<IedBrowserTreeRow>();
+
+    // Visual labels may qualify the name with LN context; IEC/MMS references remain exact.
+    private static string QualifiedName(string logicalNode, string name)
+    {
+        if (string.IsNullOrWhiteSpace(logicalNode) || string.IsNullOrWhiteSpace(name) ||
+            name.StartsWith(logicalNode + ".", StringComparison.Ordinal))
+            return name;
+        return logicalNode + "." + name;
+    }
 
     private static string LogicalDevice(string reference)
     {
@@ -234,7 +243,7 @@ public static class IedBrowserPresentation
     private static bool TryBuildObjectList(
         IedBrowserTreeRow node, List<IedBrowserDetailRow> rows)
     {
-        var serviceCategory = node.Kind is "LD" or "LN" &&
+        var serviceCategory = (node.Kind is "LD" or "LN") &&
             (node.Key.StartsWith("reports/", StringComparison.Ordinal) ||
              node.Key.StartsWith("GoCB/", StringComparison.Ordinal) ||
              node.Key.StartsWith("SGCB/", StringComparison.Ordinal) ||
