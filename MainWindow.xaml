@@ -1760,8 +1760,18 @@
                             <Border BorderBrush="#E4EAF2" BorderThickness="0,0,1,1" Padding="5,2">
                                 <StackPanel Orientation="Horizontal">
                                     <Border Width="{Binding IndentWidth}"/>
+                                    <Button Tag="{Binding}" Content="{Binding ToggleGlyph}"
+                                            Visibility="{Binding ChevronVisibility}"
+                                            Click="IedBrowserDetailToggle_Click"
+                                            Background="Transparent" BorderThickness="0"
+                                            Width="17" Height="19" Padding="0"
+                                            Focusable="False" FontSize="11.5" ToolTip="Expand / collapse"/>
+                                    <TextBlock Text="{Binding Glyph}" FontSize="9.5"
+                                               Foreground="#2875B9" Margin="1,0,6,0"
+                                               VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding Name}" ToolTip="{Binding Tooltip}" FontSize="11.2"
-                                               TextTrimming="CharacterEllipsis" Foreground="#283F58"/>
+                                               TextTrimming="CharacterEllipsis" Foreground="#283F58"
+                                               VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
                             <Border Grid.Column="1" BorderBrush="#E4EAF2" BorderThickness="0,0,0,1" Padding="8,2">
@@ -1776,6 +1786,24 @@
                                        TextWrapping="Wrap"/>
                         </Border>
                     </DataTemplate>
+                    <DataTemplate x:Key="BrowserFlagGroupRow">
+                        <Border Padding="7,5" BorderBrush="#DCE4EF" BorderThickness="0,0,0,1">
+                            <ItemsControl ItemsSource="{Binding Flags}" ToolTip="{Binding Tooltip}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <CheckBox Content="{Binding Label}"
+                                                  IsChecked="{Binding IsEnabled, Mode=OneWay}" IsThreeState="True"
+                                                  IsHitTestVisible="False" Focusable="False"
+                                                  ToolTip="{Binding Status}" Margin="2,2,19,4"
+                                                  FontSize="11.2" Foreground="#344860"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                    </DataTemplate>
                     <DataTemplate x:Key="BrowserObjectRow">
                         <Border MinHeight="23" BorderBrush="#E0E7EF" BorderThickness="0,0,0,1"
                                 Background="{Binding RelativeSource={RelativeSource AncestorType=ListViewItem}, Path=Background}">
@@ -1787,9 +1815,24 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{Binding Glyph}" FontSize="10"
                                            Foreground="#1A71C1" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="1" Text="{Binding Name}" ToolTip="{Binding Tooltip}"
-                                           FontSize="11.2" Foreground="#273C55" TextTrimming="CharacterEllipsis"
-                                           VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Name}" ToolTip="{Binding Tooltip}"
+                                               FontSize="11.2" Foreground="#273C55"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding SecondaryText}" FontSize="10"
+                                               Foreground="#718398" TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding SecondaryText}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
                                 <TextBlock Grid.Column="2" Text="{Binding Value}" ToolTip="{Binding Value}"
                                            FontSize="10.5" Foreground="#63768A" Margin="10,0,0,0"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
@@ -1814,6 +1857,9 @@
                             </DataTrigger>
                             <DataTrigger Binding="{Binding Kind}" Value="Object">
                                 <Setter Property="ContentTemplate" Value="{StaticResource BrowserObjectRow}"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Kind}" Value="FlagGroup">
+                                <Setter Property="ContentTemplate" Value="{StaticResource BrowserFlagGroupRow}"/>
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
@@ -1917,7 +1963,7 @@
                                     </StackPanel>
                                 </Border>
                                 <ListView x:Name="IedBrowserDetailList" Grid.Row="1"
-                                          SelectionChanged="IedBrowserDetail_SelectionChanged"
+                                          MouseDoubleClick="IedBrowserDetail_DoubleClick"
                                           AlternationCount="2"
                                           BorderBrush="#CBD7E4" BorderThickness="1"
                                           Background="White" HorizontalContentAlignment="Stretch"
