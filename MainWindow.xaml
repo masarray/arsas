@@ -594,7 +594,7 @@
                                             </DataGridTemplateColumn>
                                             <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="0.72*" MinWidth="105"/>
                                             <DataGridTextColumn Header="IED Timestamp" Binding="{Binding DeviceTimestamp}" Width="1.05*" MinWidth="155"/>
-                                            <DataGridTextColumn Header="Acquisition" Binding="{Binding AcquisitionShort}" Width="1.05*" MinWidth="150"/>
+                                            <DataGridTextColumn Header="Acquisition" Binding="{Binding AcquisitionShort}" IsReadOnly="True" Width="1.05*" MinWidth="150"/>
                                         </DataGrid.Columns>
                                     </DataGrid>
 
@@ -983,7 +983,7 @@
                                 <DataGridTemplateColumn Header="Value" Width="125" CellTemplate="{StaticResource ProcessValueBadgeTemplate}"/>
                                 <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="155"/>
                                 <DataGridTextColumn Header="IED Timestamp" Binding="{Binding DeviceTimestamp}" Width="185"/>
-                                <DataGridTextColumn Header="Acquisition" Binding="{Binding AcquisitionShort}" Width="190"/>
+                                <DataGridTextColumn Header="Acquisition" Binding="{Binding AcquisitionShort}" IsReadOnly="True" Width="190"/>
                             </DataGrid.Columns>
                         </DataGrid>
                     </DockPanel>
@@ -1018,7 +1018,7 @@
                                 <DataGridTemplateColumn Header="Value" Width="130" CellTemplate="{StaticResource ProcessValueBadgeTemplate}"/>
                                 <DataGridTemplateColumn Header="Quality" Width="110" CellTemplate="{StaticResource EventQualityBadgeTemplate}"/>
                                 <DataGridTextColumn Header="Event" Binding="{Binding EventCause}" Width="100" IsReadOnly="True"/>
-                                <DataGridTextColumn Header="Acquisition" Binding="{Binding AcquisitionShort}" Width="*" MinWidth="145" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="Acquisition" Binding="{Binding AcquisitionShort}" IsReadOnly="True" Width="*" MinWidth="145" IsReadOnly="True"/>
                             </DataGrid.Columns>
                         </DataGrid>
                     </DockPanel>
