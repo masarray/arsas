@@ -1011,7 +1011,15 @@
                                 <Button Content="Clear" Style="{StaticResource SoftButton}" Click="ClearEvents_Click"/>
                             </WrapPanel>
                         </Grid>
-                        <DataGrid ItemsSource="{Binding Events}" IsReadOnly="True" Style="{StaticResource ModernDataGrid}"
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition x:Name="EventDrawerColumn" Width="0"/>
+                            </Grid.ColumnDefinitions>
+                        <DataGrid x:Name="EventLogGrid" Grid.Column="0" ItemsSource="{Binding Events}"
+                                  SelectionChanged="EventLogGrid_SelectionChanged"
+                                  PreviewKeyDown="EventLogGrid_PreviewKeyDown"
+                                  IsReadOnly="True" Style="{StaticResource ModernDataGrid}"
                                   FrozenColumnCount="4" EnableRowVirtualization="True" EnableColumnVirtualization="True"
                                   VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                                   ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto">
@@ -1023,10 +1031,38 @@
                                 <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="260"/>
                                 <DataGridTemplateColumn Header="Value" Width="130" CellTemplate="{StaticResource ProcessValueBadgeTemplate}"/>
                                 <DataGridTemplateColumn Header="Quality" Width="110" CellTemplate="{StaticResource EventQualityBadgeTemplate}"/>
-                                <DataGridTextColumn Header="Event" Binding="{Binding EventCause}" Width="108" MinWidth="104" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="Event" Binding="{Binding EventCause}" Width="124" MinWidth="120" IsReadOnly="True"/>
                                 <DataGridTextColumn Header="Acquisition" Binding="{Binding AcquisitionShort}" ElementStyle="{StaticResource RcbAcquisitionTextStyle}" Width="*" MinWidth="145" IsReadOnly="True"/>
                             </DataGrid.Columns>
                         </DataGrid>
+                        <Border x:Name="EventDetailsDrawer" Grid.Column="1" Visibility="Collapsed"
+                                Background="#FFFFFF" BorderBrush="#DAE4EF" BorderThickness="1"
+                                CornerRadius="8" Margin="10,0,0,0" Padding="10"
+                                MouseEnter="EventDetailsDrawer_MouseEnter"
+                                MouseLeave="EventDetailsDrawer_MouseLeave">
+                            <DockPanel>
+                                <Grid DockPanel.Dock="Top" Margin="0,0,0,9">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Event details" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                        <TextBlock x:Name="EventDetailsSubtitle" FontSize="10.5"
+                                                   Foreground="{StaticResource Muted}" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="×" Width="27" Height="27" ToolTip="Close details"
+                                            Style="{StaticResource SoftButton}" Click="EventDetailsClose_Click"/>
+                                </Grid>
+                                <DataGrid x:Name="EventDetailsGrid" IsReadOnly="True" AutoGenerateColumns="False"
+                                          HeadersVisibility="Column" RowHeaderWidth="0" CanUserAddRows="False"
+                                          CanUserDeleteRows="False" FontSize="10.8" RowHeight="31"
+                                          GridLinesVisibility="Horizontal" BorderThickness="0">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Property" Binding="{Binding Property}" Width="125"/>
+                                        <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </DockPanel>
+                        </Border>
+                        </Grid>
                     </DockPanel>
                 </Border>
             </TabItem>

@@ -6,22 +6,41 @@ namespace ARSAS.Tests;
 public sealed class P109YEventProvenanceTests
 {
     [Theory]
-    [InlineData("data-change", "Static DataSet: StaticBrcb", "Spont", "BRCB")]
-    [InlineData("dchg", "Static DataSet: StaticUrcb", "Spont", "URCB")]
-    [InlineData("quality-change", "Static DataSet: StaticBrcb", "Qchg", "BRCB")]
-    [InlineData("dupd", "Static DataSet: StaticBrcb", "DUpd", "BRCB")]
+    [InlineData("data-change", "Static DataSet: StaticBrcb", "Spontaneous", "BRCB")]
+    [InlineData("dchg", "Static DataSet: StaticUrcb", "Spontaneous", "URCB")]
+    [InlineData("quality-change", "Static DataSet: StaticBrcb", "Quality", "BRCB")]
+    [InlineData("dupd", "Static DataSet: StaticBrcb", "Data update", "BRCB")]
     [InlineData("general-interrogation", "Static DataSet: StaticBrcb", "GI", "BRCB")]
-    [InlineData("integrity", "Static DataSet: StaticBrcb", "Intg", "BRCB")]
+    [InlineData("integrity", "Static DataSet: StaticBrcb", "Integrity", "BRCB")]
     [InlineData("general-interrogation, data-change", "Static DataSet: StaticBrcb", "GI", "BRCB")]
     [InlineData("cyclic", "MMS Polling", "Poll", "MMS read")]
-    [InlineData("report / reason not supplied", "Static DataSet: StaticBrcb", "Changed", "BRCB")]
+    [InlineData("report / reason not supplied", "Static DataSet: StaticBrcb", "State change", "BRCB")]
     public void EventLabelsAreShortAndUseActualReasonOnly(
         string reason, string acquisition, string expectedCause, string expectedStream)
     {
         var e = new Iec61850EventEntry { Reason = reason, SourceMode = acquisition };
         Assert.Equal(expectedCause, e.EventCause);
         Assert.Equal(expectedStream, e.ReportChannel);
-        Assert.True(e.EventCause.Length <= 7);
+        Assert.True(e.EventCause.Length <= 12);
+    }
+
+    [Fact]
+    public void BufferCategoryRequiresIndependentVerifiedReplayEvidence()
+    {
+        var plainBrcb = new Iec61850EventEntry
+        {
+            SourceMode = "Static DataSet: StaticBrcb",
+            Reason = "data-change"
+        };
+        Assert.Equal("Spontaneous", plainBrcb.EventCause);
+        var verified = new Iec61850EventEntry
+        {
+            SourceMode = plainBrcb.SourceMode,
+            Reason = plainBrcb.Reason,
+            VerifiedBufferedReplay = true
+        };
+        Assert.Equal("Buffer", verified.EventCause);
+        Assert.Equal("Poll", Iec61850EventOriginPolicy.Cause("dchg", "MMS Polling"));
     }
 
     [Fact]
@@ -34,7 +53,7 @@ public sealed class P109YEventProvenanceTests
             ReportId = "urcbA01",
             ReportControlReference = "BCUGELD/LLN0$RP$Unbuffer01"
         };
-        Assert.Equal("Spont", entry.EventCause);
+        Assert.Equal("Spontaneous", entry.EventCause);
         Assert.Equal("Unbuffer01", entry.AcquisitionShort);
         Assert.Equal("urcbA01", entry.ReportId);
         Assert.Equal("BCUGELD/LLN0$RP$Unbuffer01", entry.ReportControlReference);
@@ -161,7 +180,7 @@ public sealed class P109YEventProvenanceTests
             SourceMode = "Static DataSet: StaticBrcb"
         };
         Assert.Equal("BRCB", entry.AcquisitionShort);
-        Assert.Equal("Changed", entry.EventCause);
+        Assert.Equal("State change", entry.EventCause);
         Assert.DoesNotContain("replay", entry.EventCause, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("buffered", entry.EventCause, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(string.Empty, entry.ReportId);

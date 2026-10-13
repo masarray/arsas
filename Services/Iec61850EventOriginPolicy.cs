@@ -7,7 +7,7 @@ namespace ArIED61850Tester.Services;
 /// </summary>
 public static class Iec61850EventOriginPolicy
 {
-    public static string Cause(string? reportReason, string? acquisition)
+    public static string Cause(string? reportReason, string? acquisition, bool verifiedBufferedReplay = false)
     {
         var tokens = (reportReason ?? string.Empty).Split(
             new[] { ' ', ',', ';', '|', '/', '+', '(', ')', ':' },
@@ -16,18 +16,21 @@ public static class Iec61850EventOriginPolicy
             tokens.Any(x => x.Equals(longName, StringComparison.OrdinalIgnoreCase) ||
                             x.Equals(shortName, StringComparison.OrdinalIgnoreCase));
 
-        // A GI or integrity snapshot is not a spontaneous event even when
-        // another trigger flag accompanies it.
-        if (Includes("general-interrogation", "gi")) return "GI";
-        if (Includes("integrity", "intg")) return "Intg";
-        if (Includes("data-change", "dchg")) return "Spont";
-        if (Includes("quality-change", "qchg")) return "Qchg";
-        if (Includes("data-update", "dupd")) return "DUpd";
+        // Buffered reports are not necessarily replayed historical events.
+        // Only a separate verified continuity/replay proof may request Buffer.
+        if (verifiedBufferedReplay) return "Buffer";
         if (IsPolling(acquisition)) return "Poll";
+        // GI and integrity are snapshots, never spontaneous merely because
+        // another optional trigger accompanies them.
+        if (Includes("general-interrogation", "gi")) return "GI";
+        if (Includes("integrity", "intg")) return "Integrity";
+        if (Includes("data-change", "dchg")) return "Spontaneous";
+        if (Includes("quality-change", "qchg")) return "Quality";
+        if (Includes("data-update", "dupd")) return "Data update";
 
         // SOE already requires an observed process edge. The actual IEC
         // reason was not supplied, so do NOT label it spontaneous.
-        return "Changed";
+        return "State change";
     }
 
     // UI Acquisition means the actual RCB that routed this report, NOT

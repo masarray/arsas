@@ -937,9 +937,12 @@ public sealed class Iec61850EventEntry
     public string ReportId { get; init; } = string.Empty;
     public string ReportControlReference { get; init; } = string.Empty;
     public IReadOnlyList<string> RoutedReportControlReferences { get; init; } = Array.Empty<string>();
+    // Assigned only from future independently proven buffered replay evidence.
+    // BRCB membership or receipt of a buffered report does not prove replay.
+    public bool VerifiedBufferedReplay { get; init; }
     // Operator labels are deliberately short. Full source evidence remains
     // available in the export and the native report diagnostics.
-    public string EventCause => Iec61850EventOriginPolicy.Cause(Reason, SourceMode);
+    public string EventCause => Iec61850EventOriginPolicy.Cause(Reason, SourceMode, VerifiedBufferedReplay);
     public string AcquisitionShort => Iec61850EventOriginPolicy.Acquisition(
         ReportId, ReportControlReference, SourceMode, RoutedReportControlReferences);
     public string ReportChannel => Iec61850EventOriginPolicy.Channel(SourceMode);
