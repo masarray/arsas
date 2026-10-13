@@ -656,6 +656,7 @@ public sealed class Iec61850MonitorPoint : ObservableObject
     private string _status = "Queued";
     private long _sequence;
     private bool _isRecentlyChanged;
+    private bool _isOffline;
     private bool _isAnnunciatorSelected;
 
     public string DeviceId { get; set; } = string.Empty;
@@ -745,6 +746,9 @@ public sealed class Iec61850MonitorPoint : ObservableObject
     // Runtime ordering metadata is not rendered. Avoid an unnecessary WPF property-change
     // notification for every poll/report sample; the value still guards stale snapshots.
     public long Sequence { get => _sequence; set => _sequence = value; }
+    // Presentation state only: cached/last-seen values cannot be mistaken
+    // for fresh IED data when the MMS association has been stopped.
+    public bool IsOffline { get => _isOffline; set => Set(ref _isOffline, value); }
     public bool IsRecentlyChanged { get => _isRecentlyChanged; set => Set(ref _isRecentlyChanged, value); }
     public bool IsAnnunciatorSelected { get => _isAnnunciatorSelected; set => Set(ref _isAnnunciatorSelected, value); }
     public bool CanUseAsAnnunciator => FunctionalConstraint.Equals("ST", StringComparison.OrdinalIgnoreCase);
