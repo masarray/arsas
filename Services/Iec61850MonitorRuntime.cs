@@ -49,6 +49,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public Dictionary<string, Iec61850MonitorPoint> Points { get; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, RuntimePointState> States { get; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, ReportControlPlan> ActiveReportPlans { get; } = new(StringComparer.OrdinalIgnoreCase);
+        // Exact RCBs with successful runtime activation. Concurrent publication
+        // avoids enumerating a mutable monitor dictionary on the WPF thread.
+        public ConcurrentDictionary<string, byte> BrowserActiveRcbs { get; } =
+            new(StringComparer.OrdinalIgnoreCase);
         public List<ReportControlPlan> ActiveReportPlanOrder { get; } = new();
         public Dictionary<string, string> PointPlanIds { get; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, Iec61850MonitorPoint> ReportReferenceIndex { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -88,6 +92,11 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     public event Action<DiagnosticEntry>? Diagnostic;
     public event Action<Iec61850PointSnapshot>? PointUpdated;
     public event Action<Iec61850EventEntry>? EventRaised;
+
+    public IReadOnlySet<string> GetActiveBrowserRcbReferences(string deviceId)
+        => _sessions.TryGetValue(deviceId, out var session)
+            ? session.BrowserActiveRcbs.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     public int ConnectedDeviceCount => _sessions.Values.Count(session => session.Client.IsConnected);
     public int MonitoringDeviceCount => _sessions.Values.Count(session => session.Device.IsMonitoring);
@@ -618,6 +627,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.Points.Clear();
         session.States.Clear();
         session.ActiveReportPlans.Clear();
+        session.BrowserActiveRcbs.Clear();
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
         session.ReportReferenceIndex.Clear();
@@ -1042,6 +1052,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 session.ActiveReportPlans[plan.PlanId] = plan;
                 session.ActiveReportPlanOrder.Add(plan);
                 session.ReportActivationByPlanId[plan.PlanId] = result;
+                var activeReference = string.IsNullOrWhiteSpace(result.ReportControlReference)
+                    ? plan.ReportControlReference : result.ReportControlReference;
+                if (!string.IsNullOrWhiteSpace(activeReference))
+                    session.BrowserActiveRcbs[activeReference.Trim().Replace('
 
                 var coveredPoints = ResolveCoveredPoints(plan, result.CoveredReferences);
                 var acquisitionLabel = session.StaticDataSetReportOnly
@@ -2121,6 +2135,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         // discovery/re-arming returns to the normal background report pipeline so a
         // slow vendor RCB read/write can never hold the reconnect state machine hostage.
         session.ActiveReportPlans.Clear();
+        session.BrowserActiveRcbs.Clear();
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
         session.ReportStreams.Clear();
@@ -2434,6 +2449,1963 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
         session.MonitorTask = null;
         session.ActiveReportPlans.Clear();
+        session.BrowserActiveRcbs.Clear();
+        session.ActiveReportPlanOrder.Clear();
+        session.PointPlanIds.Clear();
+        session.StaticReportProjection.Reset();
+        session.PollQueue.Clear();
+        session.ReportStreams.Clear();
+        session.ReportActivationByPlanId.Clear();
+        session.ContinuityProcessUpdatesSeen = 0;
+        session.ContinuityUntrackedStreams = 0;
+        session.Device.ReportContinuityEvidence = null;
+        session.LastUnroutedReportCount = 0;
+        session.ReportPlanCursor = 0;
+        session.PendingReportPlans = Array.Empty<ReportControlPlan>();
+        session.ReportSetupPending = false;
+        session.ReportSetupNotBeforeUtc = DateTime.MinValue;
+        session.ReportSetupDeadlineUtc = DateTime.MinValue;
+        if (!preservePointDefinitions)
+        {
+            session.Points.Clear();
+            session.States.Clear();
+            session.ReportReferenceIndex.Clear();
+        }
+    }
+
+    private static Iec61850MonitorPoint CreatePoint(
+        Iec61850MonitorDevice device,
+        SignalDefinition signal,
+        int pollingIntervalMs)
+    {
+        return new Iec61850MonitorPoint
+        {
+            DeviceId = device.DeviceId,
+            DeviceName = device.Name,
+            IpAddress = device.IpAddress,
+            SignalName = string.IsNullOrWhiteSpace(signal.Name) ? signal.ObjectReference : signal.Name,
+            IecReference = signal.ObjectReference,
+            QualityReference = signal.QualityReference,
+            TimestampReference = signal.TimestampReference,
+            FunctionalConstraint = signal.FunctionalConstraint,
+            IecDataType = signal.DataType,
+            Category = signal.Category,
+            Unit = signal.Unit,
+            DataSetReference = signal.DataSetReference,
+            ReportControlReference = signal.ReportControlReference,
+            PollingIntervalMs = pollingIntervalMs,
+            SourceMode = Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device)
+                ? "Static DataSet report pending"
+                : signal.IsReportCapable ? "Report pending / polling fallback" : "MMS polling"
+        };
+    }
+
+    private static IReadOnlyList<string> BuildCompanionCandidates(params string[] references)
+    {
+        var candidates = new List<string>(references.Length);
+        foreach (var reference in references)
+        {
+            if (string.IsNullOrWhiteSpace(reference) ||
+                candidates.Contains(reference, StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            candidates.Add(reference.Trim());
+        }
+        return candidates;
+    }
+
+    private static bool IsFastPoint(Iec61850MonitorPoint point)
+    {
+        var reference = NormalizeReference(point.IecReference);
+        return point.Category.Equals("Position", StringComparison.OrdinalIgnoreCase) ||
+               point.Category.Equals("Protection", StringComparison.OrdinalIgnoreCase) ||
+               point.Category.Equals("Status", StringComparison.OrdinalIgnoreCase) ||
+               point.IecDataType.Equals("Boolean", StringComparison.OrdinalIgnoreCase) ||
+               point.IecDataType.Equals("Dbpos", StringComparison.OrdinalIgnoreCase) ||
+               reference.Contains(".pos.stval") ||
+               reference.EndsWith(".general");
+    }
+
+    private static bool RequiresExactMmsValueAuthority(string reference)
+    {
+        var normalized = NormalizeReference(reference);
+        return SignalDefinition.IsThreePhaseMeasurementAggregate(normalized) ||
+               normalized.Contains(".thda.phs", StringComparison.OrdinalIgnoreCase) ||
+               normalized.Contains(".thdppv.phs", StringComparison.OrdinalIgnoreCase) ||
+               normalized.Contains(".dmdwh", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasSchemaProvenReportValueAuthority(
+        Iec61850MonitorPoint point,
+        NativeReportValueUpdate update)
+    {
+        var projectionStatus = (update.ProjectionStatus ?? string.Empty).Trim();
+        if (projectionStatus.Equals("semantic-structured-leaf", StringComparison.OrdinalIgnoreCase) ||
+            projectionStatus.Equals("schema-safe-report-three-phase-aggregate", StringComparison.OrdinalIgnoreCase) ||
+            projectionStatus.Equals("schema-safe-report-demand-energy-aggregate", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // Exact report identity is also authoritative for a scalar member. This admits
+        // direct and deterministic MX-pair projections only when ARIEC has named exactly
+        // the same IEC reference selected by the runtime; parent/child prefix coincidence
+        // alone is not sufficient.
+        if (!CanonicalDataReference(point.IecReference)
+                .Equals(CanonicalDataReference(update.Reference), StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return projectionStatus.Length == 0 ||
+               projectionStatus.Equals("direct", StringComparison.OrdinalIgnoreCase) ||
+               projectionStatus.Equals("projected-mx-pair", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasExactSemanticEdge(Iec61850MonitorPoint point, string oldValue, string newValue)
+    {
+        var oldText = (oldValue ?? string.Empty).Trim();
+        var newText = (newValue ?? string.Empty).Trim();
+        if (string.Equals(oldText, newText, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // Report values can arrive through different decoders (false/False, 0/0.0,
+        // Open [01]/OPEN [01]). SOE must represent a process edge, not formatting noise.
+        if (TryNormalizeDiscreteState(point, oldText, out var oldState) &&
+            TryNormalizeDiscreteState(point, newText, out var newState))
+        {
+            return !oldState.Equals(newState, StringComparison.Ordinal);
+        }
+
+        if (TryExtractNumber(oldText, out var oldNumber) && TryExtractNumber(newText, out var newNumber))
+            return Math.Abs(oldNumber - newNumber) > 0.000000001;
+
+        var oldStateCode = ExtractStateCode(oldText);
+        var newStateCode = ExtractStateCode(newText);
+        if (!string.IsNullOrWhiteSpace(oldStateCode) && !string.IsNullOrWhiteSpace(newStateCode))
+            return !oldStateCode.Equals(newStateCode, StringComparison.OrdinalIgnoreCase);
+
+        return !oldText.Equals(newText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TryNormalizeDiscreteState(
+        Iec61850MonitorPoint point,
+        string value,
+        out string normalized)
+    {
+        normalized = string.Empty;
+        var text = (value ?? string.Empty).Trim();
+        if (text.Length == 0)
+            return false;
+
+        if (bool.TryParse(text, out var boolean))
+        {
+            normalized = boolean ? "bool:1" : "bool:0";
+            return true;
+        }
+
+        // The operator formatter renders Boolean report values as "True [1]" / "False [0]".
+        // Those suffixes are presentation, not a new process state. Restrict this
+        // normalization to Boolean-family points; DPC [01]/[10] must retain its own semantics.
+        var normalizedDataType = (point.IecDataType ?? string.Empty)
+            .Trim().Replace("_", string.Empty, StringComparison.Ordinal)
+            .Replace("-", string.Empty, StringComparison.Ordinal)
+            .Replace(" ", string.Empty, StringComparison.Ordinal);
+        var isBooleanPoint = normalizedDataType.Equals("BOOL", StringComparison.OrdinalIgnoreCase) ||
+                             normalizedDataType.Equals("BOOLEAN", StringComparison.OrdinalIgnoreCase) ||
+                             normalizedDataType.Equals("SPS", StringComparison.OrdinalIgnoreCase) ||
+                             normalizedDataType.Equals("SPC", StringComparison.OrdinalIgnoreCase) ||
+                             normalizedDataType.Equals("SINGLEPOINTSTATUS", StringComparison.OrdinalIgnoreCase);
+        if (isBooleanPoint)
+        {
+            if (text.Equals("True [1]", StringComparison.OrdinalIgnoreCase) ||
+                text.Equals("False [0]", StringComparison.OrdinalIgnoreCase))
+            {
+                normalized = text.StartsWith("True", StringComparison.OrdinalIgnoreCase)
+                    ? "bool:1"
+                    : "bool:0";
+                return true;
+            }
+
+            if (text.Equals("1", StringComparison.OrdinalIgnoreCase) ||
+                text.Equals("1.0", StringComparison.OrdinalIgnoreCase) ||
+                text.Equals("on", StringComparison.OrdinalIgnoreCase) ||
+                text.Equals("active", StringComparison.OrdinalIgnoreCase) ||
+                text.Equals("asserted", StringComparison.OrdinalIgnoreCase))
+            {
+                normalized = "bool:1";
+                return true;
+            }
+
+            if (text.Equals("0", StringComparison.OrdinalIgnoreCase) ||
+                text.Equals("0.0", StringComparison.OrdinalIgnoreCase) ||
+                text.Equals("off", StringComparison.OrdinalIgnoreCase) ||
+                text.Equals("inactive", StringComparison.OrdinalIgnoreCase) ||
+                text.Equals("deasserted", StringComparison.OrdinalIgnoreCase))
+            {
+                normalized = "bool:0";
+                return true;
+            }
+        }
+
+        var stateCode = ExtractStateCode(text);
+        if (!string.IsNullOrWhiteSpace(stateCode))
+        {
+            normalized = "state:" + stateCode.ToLowerInvariant();
+            return true;
+        }
+
+        if (!IsAnalogPoint(point) && TryExtractNumber(text, out var numeric))
+        {
+            normalized = "number:" + numeric.ToString("R", CultureInfo.InvariantCulture);
+            return true;
+        }
+
+        if (IsAnalogPoint(point))
+            return false;
+
+        normalized = "text:" + text.ToLowerInvariant();
+        return true;
+    }
+
+    private static string ExtractStateCode(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+        var open = value.LastIndexOf('[');
+        var close = value.LastIndexOf(']');
+        return open >= 0 && close > open ? value[(open + 1)..close].Trim() : string.Empty;
+    }
+
+    private static bool HasMeaningfulEdge(Iec61850MonitorPoint point, string oldValue, string newValue)
+    {
+        if (!IsAnalogPoint(point))
+            return HasExactSemanticEdge(point, oldValue, newValue);
+
+        if (string.Equals(oldValue, newValue, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!TryExtractNumber(oldValue, out var oldNumber) || !TryExtractNumber(newValue, out var newNumber))
+            return !oldValue.Trim().Equals(newValue.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        var absolute = Math.Abs(newNumber - oldNumber);
+        var reference = Math.Max(Math.Abs(oldNumber), Math.Abs(newNumber));
+        var deadband = Math.Max(reference * 0.001, 0.000001); // 0.1% analog deadband
+        return absolute >= deadband;
+    }
+
+    private static bool ShouldRecordSequenceOfEvents(Iec61850MonitorPoint point)
+    {
+        if (IsAnalogPoint(point))
+            return false;
+
+        var type = point.IecDataType ?? string.Empty;
+        var category = point.Category ?? string.Empty;
+        var reference = NormalizeReference(point.IecReference);
+
+        return type.Contains("Boolean", StringComparison.OrdinalIgnoreCase) ||
+               type.Contains("Dbpos", StringComparison.OrdinalIgnoreCase) ||
+               type.Contains("Enum", StringComparison.OrdinalIgnoreCase) ||
+               type.Contains("Bit", StringComparison.OrdinalIgnoreCase) ||
+               category.Equals("Position", StringComparison.OrdinalIgnoreCase) ||
+               category.Equals("Protection", StringComparison.OrdinalIgnoreCase) ||
+               category.Equals("Status", StringComparison.OrdinalIgnoreCase) ||
+               reference.EndsWith(".stval", StringComparison.OrdinalIgnoreCase) ||
+               reference.EndsWith(".general", StringComparison.OrdinalIgnoreCase) ||
+               reference.Contains(".pos.stval", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int GetCompanionPollIntervalMs(Iec61850MonitorPoint point)
+        => Math.Clamp(point.PollingIntervalMs * 5, 3000, 30000);
+
+    private static int GetVerificationPollIntervalMs(
+        Iec61850MonitorPoint point,
+        RuntimePointState state,
+        bool reportAssigned)
+        => ReportVerificationPollingPolicy.GetIntervalMs(
+            point.PollingIntervalMs,
+            IsFastPoint(point),
+            reportAssigned,
+            state.ReportTrafficSeen,
+            state.ReportChangeVerified);
+
+    private static string BuildStaticDataSetAcquisitionLabel(ReportControlPlan plan)
+    {
+        if (!string.IsNullOrWhiteSpace(plan.EngineAcquisitionKind))
+            return $"Static DataSet: {plan.EngineAcquisitionKind}";
+        return plan.Buffered ? "Static DataSet: StaticBrcb" : "Static DataSet: StaticUrcb";
+    }
+
+    private static string BuildPlanAcquisitionLabel(ReportControlPlan plan, bool dynamicDataSet)
+    {
+        var reference = (plan.ReportControlReference ?? string.Empty).Trim().Replace('$', '.');
+        var fallback = plan.Buffered ? "BRCB" : "URCB";
+        var name = fallback;
+        if (!string.IsNullOrWhiteSpace(reference))
+        {
+            var slash = reference.LastIndexOf('/');
+            var item = slash >= 0 && slash < reference.Length - 1 ? reference[(slash + 1)..] : reference;
+            var segments = item.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (segments.Length > 0)
+                name = segments[^1];
+        }
+        return $"{(dynamicDataSet ? "Dynamic" : "Static")}: {name}";
+    }
+
+    private static bool AreSemanticallyEquivalent(
+        Iec61850MonitorPoint point,
+        string? left,
+        string? right)
+        => !HasExactSemanticEdge(point, left ?? string.Empty, right ?? string.Empty);
+
+    private static bool TryParseReportTimestampUtc(string? value, out DateTime timestampUtc)
+    {
+        timestampUtc = DateTime.MinValue;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var text = value.Trim();
+        var qualitySuffix = text.IndexOf(" (q=", StringComparison.OrdinalIgnoreCase);
+        if (qualitySuffix > 0)
+            text = text[..qualitySuffix].Trim();
+
+        if (DateTimeOffset.TryParse(
+                text,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var timestamp))
+        {
+            timestampUtc = timestamp.UtcDateTime;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsChangeReportReason(string? reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            return false;
+        var text = reason.Trim().ToLowerInvariant();
+        return text.Contains("dchg") || text.Contains("data-change") ||
+               text.Contains("qchg") || text.Contains("quality-change") ||
+               text.Contains("dupd") || text.Contains("data-update");
+    }
+
+    private static bool IsUsefulProcessField(string? value)
+        => !string.IsNullOrWhiteSpace(value) &&
+           !value.Equals("-", StringComparison.OrdinalIgnoreCase) &&
+           !value.Equals("unknown", StringComparison.OrdinalIgnoreCase) &&
+           !value.Equals("unavailable", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsAnalogPoint(Iec61850MonitorPoint point)
+        => point.Category.Equals("Measurement", StringComparison.OrdinalIgnoreCase) ||
+           point.IecDataType.Contains("Float", StringComparison.OrdinalIgnoreCase) ||
+           point.IecDataType.Contains("Double", StringComparison.OrdinalIgnoreCase);
+
+    private static bool TryExtractNumber(string text, out double value)
+    {
+        value = 0;
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+        var token = text.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        return double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+    }
+
+    private static string NormalizeQuality(string? quality)
+    {
+        if (string.IsNullOrWhiteSpace(quality) || quality.Equals("Unknown", StringComparison.OrdinalIgnoreCase))
+            return "Unavailable / q not supplied";
+        return quality;
+    }
+
+    private static bool IsDegradedIecQuality(string? quality)
+    {
+        if (string.IsNullOrWhiteSpace(quality))
+            return false;
+
+        var normalized = quality.Trim().ToLowerInvariant();
+        return normalized.Contains("questionable", StringComparison.Ordinal) ||
+               normalized.Contains("invalid", StringComparison.Ordinal) ||
+               normalized.Contains("reserved", StringComparison.Ordinal);
+    }
+
+    private static void IndexPointReference(DeviceSession session, Iec61850MonitorPoint point)
+    {
+        foreach (var key in GetReferenceKeys(point.IecReference))
+            session.ReportReferenceIndex.TryAdd(key, point);
+    }
+
+    private static Iec61850MonitorPoint? FindPointForReportReference(DeviceSession session, string reference)
+    {
+        foreach (var key in GetReferenceKeys(reference))
+        {
+            if (session.ReportReferenceIndex.TryGetValue(key, out var indexed))
+                return indexed;
+        }
+
+        // Rare vendor projection fallback. Cache the resolved alias so subsequent report
+        // events do not scan every monitored point again.
+        var canonical = CanonicalDataReference(reference);
+        var point = session.Points.Values.FirstOrDefault(candidate =>
+        {
+            var candidateCanonical = CanonicalDataReference(candidate.IecReference);
+            return candidateCanonical.Equals(canonical, StringComparison.OrdinalIgnoreCase) ||
+                   candidateCanonical.StartsWith(canonical + ".", StringComparison.OrdinalIgnoreCase) ||
+                   canonical.StartsWith(candidateCanonical + ".", StringComparison.OrdinalIgnoreCase);
+        });
+
+        if (point != null)
+        {
+            foreach (var key in GetReferenceKeys(reference))
+                session.ReportReferenceIndex[key] = point;
+        }
+
+        return point;
+    }
+
+    private static IReadOnlyList<Iec61850MonitorPoint> ResolveCoveredPoints(
+        ReportControlPlan plan,
+        IReadOnlyList<string> coveredReferences)
+    {
+        if (coveredReferences.Count == 0)
+            return Array.Empty<Iec61850MonitorPoint>();
+
+        var members = coveredReferences
+            .Select(CanonicalDataReference)
+            .Where(reference => !string.IsNullOrWhiteSpace(reference))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return plan.Bindings
+            .Where(point =>
+            {
+                var pointReference = CanonicalDataReference(point.IecReference);
+                return members.Any(member =>
+                    pointReference.Equals(member, StringComparison.OrdinalIgnoreCase) ||
+                    pointReference.StartsWith(member + ".", StringComparison.OrdinalIgnoreCase));
+            })
+            .ToList();
+    }
+
+    private static void ResetPollQueue(
+        DeviceSession session,
+        bool staggerForRecovery = false)
+    {
+        session.PollQueue.Clear();
+        if (session.StaticDataSetReportOnly)
+        {
+            foreach (var state in session.States.Values)
+                state.NextPollUtc = DateTime.MaxValue;
+            return;
+        }
+
+        var nowUtc = DateTime.UtcNow;
+        var index = 0;
+        foreach (var point in session.Points.Values)
+        {
+            // Initial startup keeps the legacy immediate-read behavior. After an actual
+            // reconnect, spread the first recovery reads over a small bounded window so
+            // a large selected signal set does not hit a recovering IED with a request burst.
+            var dueUtc = staggerForRecovery
+                ? nowUtc.AddMilliseconds(SmartReconnectPolicy.GetRecoveryStaggerDelayMs(index++))
+                : nowUtc;
+            var state = session.States[point.PointKey];
+            state.NextPollUtc = dueUtc;
+            if (staggerForRecovery)
+                state.NextCompanionPollUtc = session.RecoveryWarmupUntilUtc;
+            session.PollQueue.Enqueue(point.PointKey, dueUtc.Ticks);
+        }
+    }
+
+    private static IEnumerable<string> GetReferenceKeys(string? reference)
+    {
+        var normalized = NormalizeReference(reference);
+        if (!string.IsNullOrWhiteSpace(normalized))
+            yield return normalized;
+
+        var canonical = CanonicalDataReference(reference);
+        if (!string.IsNullOrWhiteSpace(canonical) &&
+            !canonical.Equals(normalized, StringComparison.OrdinalIgnoreCase))
+            yield return canonical;
+    }
+
+    private static string CanonicalDataReference(string? reference)
+    {
+        var normalized = NormalizeReference(reference);
+        var slash = normalized.IndexOf('/');
+        if (slash < 0 || slash >= normalized.Length - 1)
+            return normalized;
+
+        var domain = normalized[..(slash + 1)];
+        var segments = normalized[(slash + 1)..]
+            .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+        if (segments.Count > 1 && IsFunctionalConstraint(segments[1]))
+            segments.RemoveAt(1);
+        return domain + string.Join('.', segments);
+    }
+
+    private static bool IsFunctionalConstraint(string value)
+        => value is "st" or "mx" or "sp" or "sv" or "cf" or "dc" or "sg" or "se" or
+                    "sr" or "or" or "bl" or "ex" or "co" or "rp" or "br" or "lg" or "go" or "gs";
+
+    private static bool LooksLikeReferenceEcho(string value, string updateReference, string pointReference)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+        if (bool.TryParse(value, out _) || TryExtractNumber(value, out _))
+            return false;
+
+        var normalizedValue = NormalizeReference(value);
+        return normalizedValue.Equals(NormalizeReference(updateReference), StringComparison.OrdinalIgnoreCase) ||
+               normalizedValue.Equals(NormalizeReference(pointReference), StringComparison.OrdinalIgnoreCase) ||
+               (value.Contains('/') && value.Contains('$'));
+    }
+
+    internal static string BuildCompanionReference(string reference, string companion)
+    {
+        var normalized = reference.Replace('$', '.').Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+            return string.Empty;
+
+        foreach (var suffix in new[]
+                 {
+                     ".valWTr.posVal", ".instCVal.mag.f", ".cVal.mag.f", ".instMag.f", ".stVal", ".general", ".mag.f"
+                 })
+        {
+            if (!normalized.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                continue;
+            return normalized[..^suffix.Length] + "." + companion;
+        }
+
+        var dot = normalized.LastIndexOf('.');
+        return dot > normalized.IndexOf('/') ? normalized[..dot] + "." + companion : string.Empty;
+    }
+
+    private static string NormalizeReference(string? reference)
+        => (reference ?? string.Empty).Trim().Replace('$', '.').Replace("..", ".").ToLowerInvariant();
+
+    private static void ValidateEndpoint(Iec61850MonitorDevice device)
+    {
+        if (string.IsNullOrWhiteSpace(device.IpAddress))
+            throw new ArgumentException("IED IP address is required.", nameof(device));
+        if (!System.Net.IPAddress.TryParse(device.IpAddress, out _))
+            throw new ArgumentException($"'{device.IpAddress}' is not a valid IPv4/IPv6 address.", nameof(device));
+        if (device.Port is <= 0 or > 65535)
+            throw new ArgumentOutOfRangeException(nameof(device), "MMS port must be between 1 and 65535.");
+    }
+
+    private void Log(string level, string source, string message)
+        => Diagnostic?.Invoke(new DiagnosticEntry
+        {
+            Time = DateTime.Now,
+            Level = level,
+            Source = source,
+            Message = message
+        });
+
+    public async ValueTask DisposeAsync()
+    {
+        foreach (var deviceId in _sessions.Keys.ToList())
+            await StopDeviceAsync(deviceId).ConfigureAwait(false);
+    }
+}
+, '.')] = 1;
+
+                var coveredPoints = ResolveCoveredPoints(plan, result.CoveredReferences);
+                var acquisitionLabel = session.StaticDataSetReportOnly
+                    ? BuildStaticDataSetAcquisitionLabel(plan)
+                    : string.IsNullOrWhiteSpace(result.AcquisitionLabel)
+                        ? BuildPlanAcquisitionLabel(plan, result.UsedDynamicDataSet)
+                        : result.AcquisitionLabel;
+                foreach (var point in coveredPoints)
+                {
+                    // Hybrid/manual mode retains its conservative exact-MMS authority rule.
+                    // Static DataSet report-only mode is different: when ARIEC proves that
+                    // the configured RCB covers the literal DataSet member, bind that point
+                    // to the report plan and let schema-safe report projection decide whether
+                    // an arriving value is publishable. Never convert this case into MMS.
+                    if (!session.StaticDataSetReportOnly && RequiresExactMmsValueAuthority(point.IecReference))
+                        continue;
+
+                    session.PointPlanIds[point.PointKey] = plan.PlanId;
+                    if (!string.IsNullOrWhiteSpace(result.ReportControlReference))
+                        point.ReportControlReference = result.ReportControlReference;
+                    if (!string.IsNullOrWhiteSpace(result.DataSetReference))
+                        point.DataSetReference = result.DataSetReference;
+                    if (session.States.TryGetValue(point.PointKey, out var pointState))
+                    {
+                        pointState.AcquisitionLabel = acquisitionLabel;
+                        pointState.SourceMode = acquisitionLabel;
+                        pointState.Reason = session.StaticDataSetReportOnly
+                            ? "awaiting configured static report / General Interrogation"
+                            : "awaiting report / MMS initial read";
+                        pointState.Status = session.StaticDataSetReportOnly
+                            ? "Static report armed / awaiting value"
+                            : "Report armed / verification active";
+                    }
+                }
+
+                if (result.CoveredReferences.Count == 0)
+                {
+                    var recoveryWillRun = !plan.IsEngineAuthoritative &&
+                                          !result.UsedDynamicDataSet &&
+                                          plan.AllowDynamicDataSetWrites &&
+                                          plan.Bindings.Count > 0;
+                    Log(recoveryWillRun ? "INFO" : "WARN", session.Device.Name,
+                        recoveryWillRun
+                            ? $"Static report candidate {plan.DisplayReference} returned no exact selected-member coverage; Smart Auto will attempt dynamic report recovery before retaining MMS polling."
+                            : $"Report monitor started for {plan.DisplayReference}, but exact DataSet member references were not returned. Points remain on safe polling fallback until live reports prove their mapping.");
+                }
+
+                Log("INFO", session.Device.Name,
+                    $"{(result.UsedDynamicDataSet ? "Dynamic" : "Static")} report monitor active: {plan.DisplayReference}; DataSet members={result.MemberCount}; exact selected coverage={coveredPoints.Count}; setup writes={result.WriteStepCount}. {result.SubscriptionSummary}");
+                foreach (var warning in result.Warnings.Take(3))
+                    Log("WARN", session.Device.Name, warning);
+
+                // A discovered static DataSet can cover only part of a heuristic group.
+                // Recover the exact uncovered remainder through temporary dynamic reporting
+                // before leaving those points on cyclic MMS polling.
+                if (!plan.IsEngineAuthoritative &&
+                    !result.UsedDynamicDataSet &&
+                    plan.AllowDynamicDataSetWrites &&
+                    coveredPoints.Count < plan.Bindings.Count)
+                {
+                    var coveredKeys = coveredPoints
+                        .Select(point => point.PointKey)
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var uncovered = plan.Bindings
+                        .Where(point => !coveredKeys.Contains(point.PointKey))
+                        .ToList();
+
+                    foreach (var recoveryPlan in Iec61850ReportPlanner.BuildDynamicFallbackPlans(session.Device, uncovered))
+                    {
+                        if (queuedPlanIds.Add(recoveryPlan.PlanId))
+                            pending.Enqueue(recoveryPlan);
+                    }
+
+                    if (uncovered.Count > 0)
+                    {
+                        Log("INFO", session.Device.Name,
+                            coveredPoints.Count == 0
+                                ? $"Static report candidate returned no exact selected-member coverage; Smart Auto queued dynamic reporting for all {uncovered.Count} point(s) before allowing MMS polling."
+                                : $"Static DataSet covered {coveredPoints.Count}/{plan.Bindings.Count} selected points; Smart Auto queued dynamic reporting for {uncovered.Count} uncovered point(s).");
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                Log("WARN", session.Device.Name,
+                    session.StaticDataSetReportOnly
+                        ? $"Static DataSet report setup failed for {plan.DisplayReference}; MMS process fallback is disabled. {ex.GetType().Name}: {ex.Message}"
+                        : $"Report setup failed for {plan.DisplayReference}; MMS polling remains the final fallback. {ex.GetType().Name}: {ex.Message}");
+                if (session.StaticDataSetReportOnly)
+                {
+                    foreach (var point in plan.Bindings)
+                    {
+                        if (!session.States.TryGetValue(point.PointKey, out var failedState))
+                            continue;
+                        failedState.SourceMode = "Static DataSet: report setup failed";
+                        failedState.AcquisitionLabel = failedState.SourceMode;
+                        failedState.Reason = $"{ex.GetType().Name}: {ex.Message}";
+                        EmitStatusSnapshot(point, failedState, "Static report setup failed / no MMS fallback", "Pending");
+                    }
+                }
+            }
+        }
+    }
+
+    private async Task MonitorLoopAsync(DeviceSession session, CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                if (Volatile.Read(ref session.ControlCommandActive) > 0)
+                {
+                    await Task.Delay(5, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                if (!session.Client.IsConnected)
+                {
+                    MarkSessionOffline(session, "IEC 61850 transport is offline; smart reconnect is pending.");
+                    await TryReconnectAsync(session, cancellationToken).ConfigureAwait(false);
+                    await Task.Delay(200, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                await ReceiveReportSlicesAsync(session, cancellationToken).ConfigureAwait(false);
+                await PollDuePointsAsync(session, cancellationToken).ConfigureAwait(false);
+                await ProbeSessionHealthAsync(session, cancellationToken).ConfigureAwait(false);
+                await TryStartPendingReportSetupAsync(session, cancellationToken).ConfigureAwait(false);
+
+                await Task.Delay(CalculateLoopDelayMs(session), cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                session.ConsecutiveSessionErrors++;
+                Log("WARN", session.Device.Name,
+                    $"Monitor loop recovered from {ex.GetType().Name}: {ex.Message}");
+
+                if (session.ConsecutiveSessionErrors >= 2)
+                    await ForceReconnectAsync(session, "Repeated monitor I/O failures.").ConfigureAwait(false);
+
+                try
+                {
+                    await Task.Delay(500, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    private async Task TryStartPendingReportSetupAsync(
+        DeviceSession session,
+        CancellationToken cancellationToken)
+    {
+        if (!session.ReportSetupPending)
+            return;
+
+        var now = DateTime.UtcNow;
+        if (now < session.ReportSetupNotBeforeUtc)
+            return;
+
+        var initialImageReady = session.StaticDataSetReportOnly || session.States.Values.All(state =>
+            state.HasValue || state.ConsecutiveErrors > 0);
+        if (!initialImageReady && now < session.ReportSetupDeadlineUtc)
+            return;
+
+        session.ReportSetupPending = false;
+        var plans = session.PendingReportPlans;
+        session.PendingReportPlans = Array.Empty<ReportControlPlan>();
+
+        Log("INFO", session.Device.Name,
+            session.StaticDataSetReportOnly
+                ? "Static DataSet report-only mode: arming configured RCBs immediately; no cyclic MMS initial-image scheduler is active."
+                : initialImageReady
+                    ? "Initial live image is available. Validating static/dynamic report acquisition in the background monitor pipeline."
+                    : "Initial live-image deadline reached. Continuing report validation while MMS fallback remains active.");
+
+        plans = await BuildReportPlansForCurrentAssociationAsync(
+            session,
+            plans,
+            cancellationToken).ConfigureAwait(false);
+
+        await StartReportPlansAsync(session, plans, cancellationToken).ConfigureAwait(false);
+        ResetPollQueue(
+            session,
+            staggerForRecovery: DateTime.UtcNow < session.RecoveryWarmupUntilUtc);
+        UpdateDeviceAcquisitionSummary(session);
+    }
+
+    private async Task<IReadOnlyList<ReportControlPlan>> BuildReportPlansForCurrentAssociationAsync(
+        DeviceSession session,
+        IReadOnlyList<ReportControlPlan> legacyPlans,
+        CancellationToken cancellationToken)
+    {
+        session.CurrentStaticParityAttemptId = Guid.Empty;
+        if (session.Client.CanUseHybridReportPlanner(session.Device))
+        {
+            NativeHybridReportPlanningResult hybrid;
+            try
+            {
+                hybrid = await session.Client.BuildHybridReportPlansAsync(
+                    session.Device,
+                    session.Points.Values.ToArray(),
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                hybrid = new NativeHybridReportPlanningResult
+                {
+                    IsAuthoritative = true,
+                    Authority = "ARIEC61850 hybrid acquisition",
+                    Status = session.StaticDataSetReportOnly
+                        ? "Planner failure / static report unavailable"
+                        : "Planner failure / polling safe",
+                    Summary = session.StaticDataSetReportOnly
+                        ? $"ARIEC report planning failed closed: {ex.GetType().Name}: {ex.Message}. No local RCB heuristic was substituted and MMS process fallback remains disabled by Static DataSet mode."
+                        : $"ARIEC hybrid planning failed closed: {ex.GetType().Name}: {ex.Message}. No local RCB heuristic was substituted; bounded MMS polling remains active.",
+                    RequestedPointCount = session.Points.Count,
+                    PollingPointKeys = session.StaticDataSetReportOnly ? Array.Empty<string>() : session.Points.Keys.ToArray(),
+                    PollingFallbackSignalCount = session.StaticDataSetReportOnly ? 0 : session.Points.Count,
+                    UncoveredSignalCount = session.StaticDataSetReportOnly ? session.Points.Count : 0,
+                    Warnings = [$"Hybrid planning exception: {ex.GetType().Name}: {ex.Message}"]
+                };
+            }
+
+            session.HybridValidation.Reset(hybrid);
+            if (session.StaticDataSetReportOnly)
+            {
+                var parity = StaticAcquisitionParityTracker.Record(session.Device, hybrid);
+                var ingressEvidence = session.Device.SclWorkspace?.DesignModel is not null
+                    ? parity.OpenScl : parity.Discovery;
+                session.CurrentStaticParityAttemptId = ingressEvidence?.PlanningAttemptId ?? Guid.Empty;
+                Log(
+                    parity.Status is StaticAcquisitionParityStatus.Mismatch or StaticAcquisitionParityStatus.InsufficientEvidence ? "WARN" : "INFO",
+                    session.Device.Name,
+                    $"Static ingress parity evidence: {parity.Summary}. Concrete live RCB slots are diagnostic-only and excluded from the semantic fingerprint.");
+
+                foreach (var difference in parity.Differences.Take(6))
+                    Log("WARN", session.Device.Name, $"Static ingress parity difference: {difference}");
+
+                Log("INFO", session.Device.Name,
+                    $"Static DataSet ARIEC authority={hybrid.Authority}; status={hybrid.Status}; requested={hybrid.RequestedPointCount}, catalog={hybrid.CatalogMappedPointCount}, staticBRCB={hybrid.StaticBrcbSignalCount}, staticURCB={hybrid.StaticUrcbSignalCount}, engineFallbackCandidates={hybrid.PollingFallbackSignalCount}, uncovered={hybrid.UncoveredSignalCount}. Engine fallback candidates are diagnostic only and are not scheduled as MMS process polling.");
+            }
+            else
+            {
+                Log("INFO", session.Device.Name,
+                    $"Hybrid authority={hybrid.Authority}; status={hybrid.Status}; requested={hybrid.RequestedPointCount}, catalog={hybrid.CatalogMappedPointCount}, staticBRCB={hybrid.StaticBrcbSignalCount}, staticURCB={hybrid.StaticUrcbSignalCount}, dynamicBRCB={hybrid.DynamicBrcbSignalCount}, dynamicURCB={hybrid.DynamicUrcbSignalCount}, polling={hybrid.PollingFallbackSignalCount}, uncovered={hybrid.UncoveredSignalCount}. {hybrid.Summary}");
+            }
+            foreach (var warning in hybrid.Warnings.Take(5))
+                Log("WARN", session.Device.Name, warning);
+
+            return session.StaticDataSetReportOnly
+                ? hybrid.ReportPlans.Where(plan => !plan.AllowDynamicDataSetWrites).ToArray()
+                : hybrid.ReportPlans;
+        }
+
+        session.HybridValidation.Reset(null);
+        Log("INFO", session.Device.Name,
+            "ARIEC typed live-model authority is unavailable for this saved/session model; retaining the existing legacy report planner only as compatibility fallback.");
+        return legacyPlans;
+    }
+
+    private void UpdateDeviceAcquisitionSummary(DeviceSession session)
+    {
+        var dynamicReportCount = session.ActiveReportPlans.Values.Count(plan =>
+            plan.Status.Contains("Dynamic", StringComparison.OrdinalIgnoreCase));
+        var staticReportCount = session.ActiveReportPlans.Count - dynamicReportCount;
+        var unassignedCount = Math.Max(0, session.Points.Count - session.PointPlanIds.Count);
+
+        if (session.StaticDataSetReportOnly)
+        {
+            session.Device.AcquisitionMode = staticReportCount > 0
+                ? $"Static DataSet reporting • RCB {staticReportCount} • unresolved {unassignedCount}"
+                : $"Static DataSet reporting unavailable • unresolved {unassignedCount}";
+            session.Device.Detail = staticReportCount > 0
+                ? $"{session.Points.Count} DataSet-derived point(s): configured RCB reporting is the process-value authority; {unassignedCount} point(s) are unresolved/unavailable. Cyclic MMS process polling is disabled."
+                : $"{session.Points.Count} DataSet-derived point(s): no configured RCB could be armed. Values remain unavailable; MMS process fallback is disabled by Static DataSet mode.";
+            session.Device.RefreshComputed();
+            Log("INFO", session.Device.Name,
+                $"Static DataSet acquisition ready: static report plan(s)={staticReportCount}, report-covered={session.PointPlanIds.Count}, unresolved={unassignedCount}, cyclic MMS process polling=0.");
+            return;
+        }
+
+        var pollingFallbackCount = unassignedCount;
+        session.Device.AcquisitionMode = dynamicReportCount > 0
+            ? $"Smart reporting • dynamic {dynamicReportCount} • static {staticReportCount} • fallback {pollingFallbackCount}"
+            : staticReportCount > 0
+                ? $"Smart reporting • static {staticReportCount} • fallback {pollingFallbackCount}"
+                : $"MMS polling fallback • {pollingFallbackCount} point(s)";
+        session.Device.Detail = session.ActiveReportPlans.Count > 0
+            ? $"{session.Points.Count} point(s): event-driven reporting is primary; one lightweight MMS heartbeat and low-rate verification keep connection health reliable."
+            : $"{session.Points.Count} point(s): reporting could not be armed; bounded MMS polling fallback remains active.";
+        session.Device.RefreshComputed();
+
+        Log("INFO", session.Device.Name,
+            $"Acquisition ready: report plan(s)={session.ActiveReportPlans.Count}, report-covered={session.PointPlanIds.Count}, MMS fallback={pollingFallbackCount}.");
+    }
+
+    private static int CalculateLoopDelayMs(DeviceSession session)
+    {
+        var defaultDelay = session.ActiveReportPlans.Count > 0 ? 12 : 25;
+        if (!session.PollQueue.TryPeek(out _, out var dueTicks))
+            return defaultDelay;
+
+        var remainingMs = TimeSpan.FromTicks(Math.Max(0, dueTicks - DateTime.UtcNow.Ticks)).TotalMilliseconds;
+        if (remainingMs <= 0)
+            return 2;
+        return Math.Clamp((int)Math.Ceiling(remainingMs), 2, defaultDelay);
+    }
+
+    private async Task ReceiveReportSlicesAsync(DeviceSession session, CancellationToken cancellationToken)
+    {
+        var plans = session.ActiveReportPlanOrder;
+        if (plans.Count == 0)
+            return;
+
+        // Avoid N × blocking slices when an IED exposes many RCBs. A bounded
+        // round-robin drain keeps reporting responsive without starving polling.
+        var batchCount = Math.Min(plans.Count, 4);
+        for (var offset = 0; offset < batchCount; offset++)
+        {
+            if (Volatile.Read(ref session.ControlCommandActive) > 0)
+                break;
+            cancellationToken.ThrowIfCancellationRequested();
+            var index = (session.ReportPlanCursor + offset) % plans.Count;
+            var plan = plans[index];
+            var slice = await session.Client.ReceiveReportMonitorSliceAsync(
+                plan.PlanId,
+                TimeSpan.FromMilliseconds(3),
+                cancellationToken).ConfigureAwait(false);
+
+            ProcessReportHealth(session, plan, slice);
+            if (slice.ReportFrames.Count > 0 || slice.Updates.Count > 0)
+                RecordSuccessfulIo(session);
+
+            foreach (var sourceUpdate in slice.Updates)
+            {
+                var effectiveUpdates = session.StaticDataSetReportOnly
+                    ? session.StaticReportProjection.Project(
+                        session.Device.SclWorkspace?.DesignModel ?? session.Device.LiveDiscoveryModel,
+                        session.Points.Values.ToArray(),
+                        sourceUpdate)
+                    : new[] { sourceUpdate };
+
+                foreach (var update in effectiveUpdates)
+                {
+                    // Publish all *actually received* canonical DataSet members,
+                    // including q/t and engineering leaves that were not selected as
+                    // user-facing SCADA points. IEC Report inclusion is sparse unless
+                    // GI/integrity provides a full image; never fabricate absent members.
+                    var reportModel = session.Device.SclWorkspace?.DesignModel ??
+                                      session.Device.LiveDiscoveryModel;
+                    if (IedBrowserReportValueAuthority.TryResolveFunctionalConstraint(
+                            reportModel, plan.DataSetReference, update.Reference,
+                            out var reportFc))
+                    {
+                        if (update.HasValue &&
+                            IedBrowserReportValueAuthority.SafeScalar(update.Value) &&
+                            !LooksLikeReferenceEcho(update.Value, update.Reference, update.Reference))
+                            session.Device.LiveValues.Publish(
+                                update.Reference, reportFc, update.Value,
+                                update.HasQuality ? update.Quality : "",
+                                update.HasTimestamp ? update.Timestamp : "", "Report");
+                        if (update.HasQuality &&
+                            IedBrowserReportValueAuthority.SafeScalar(update.Quality))
+                        {
+                            var normalizedRef = IedBrowserLiveValues.CanonicalReference(update.Reference);
+                            var matchingObject = reportModel?.LogicalDevices
+                                .SelectMany(ld => ld.LogicalNodes)
+                                .SelectMany(ln => ln.DataObjects)
+                                .Where(obj => normalizedRef.Equals(obj.Reference, StringComparison.OrdinalIgnoreCase) ||
+                                              normalizedRef.StartsWith(obj.Reference + ".", StringComparison.OrdinalIgnoreCase))
+                                .OrderByDescending(obj => obj.Reference.Length)
+                                .FirstOrDefault();
+                            if (matchingObject is not null)
+                                session.Device.LiveValues.Publish(matchingObject.Reference + ".q",
+                                    reportFc, update.Quality, "", update.Timestamp, "Report quality");
+                        }
+                    }
+                    var point = FindPointForReportReference(session, update.Reference);
+                    if (point == null)
+                        continue;
+
+                    // The old rule rejected every THD/DmdWh report value merely because
+                    // those families once required MMS reads. ARIEC now provides exact
+                    // semantic leaf identities, and StaticDataSetReportProjectionAccumulator
+                    // reconstructs structured parents from schema-named leaves. Keep the
+                    // legacy veto only when the report update itself is not schema-proven.
+                    if (RequiresExactMmsValueAuthority(point.IecReference) &&
+                        !HasSchemaProvenReportValueAuthority(point, update))
+                    {
+                        continue;
+                    }
+
+                    // A real report update proves reference coverage. In Hybrid mode an
+                    // initial GI/integrity image still keeps MMS verification active until
+                    // dchg/qchg is proven; Static DataSet mode publishes the schema-safe GI
+                    // image directly because cyclic MMS process verification is disabled.
+                    session.PointPlanIds[point.PointKey] = plan.PlanId;
+
+                var state = session.States[point.PointKey];
+                var display = update.HasValue
+                    ? Iec61850ValueFormatter.FormatReportProcessValue(
+                        update.Value,
+                        point.IecDataType,
+                        point.Unit,
+                        point.Category,
+                        point.IecReference)
+                    : state.Value;
+                if (update.HasValue && LooksLikeReferenceEcho(display, update.Reference, point.IecReference))
+                    continue;
+
+                if (update.HasValue && !ReportProcessValueSafety.IsSafe(
+                        update.Value,
+                        display,
+                        point.IecDataType,
+                        point.IecReference,
+                        out var rejectionReason))
+                {
+                    // A malformed/misaligned report is still useful as proof that the
+                    // RCB is alive, but its process value is not authoritative. Do not
+                    // mutate state or SOE history. Hybrid mode keeps MMS verification;
+                    // Static DataSet mode stays report-pending without any MMS fallback.
+                    state.ReportTrafficSeen = true;
+                    state.LastReportUtc = DateTime.UtcNow;
+                    state.ReportChangeVerified = false;
+                    state.ReportMissLogged = false;
+                    if (!state.ReportValueRejectedLogged)
+                    {
+                        state.ReportValueRejectedLogged = true;
+                        var rawSummary = update.Value ?? "-";
+                        if (rawSummary.Length > 120)
+                            rawSummary = rawSummary[..120] + "…";
+                        Log("WARN", session.Device.Name,
+                            session.StaticDataSetReportOnly
+                                ? $"REPORT_VALUE_REJECTED: {point.SignalName} ({point.IecReference}) rejected report value '{rawSummary}'. {rejectionReason} The point remains report-pending; MMS process fallback is disabled."
+                                : $"REPORT_VALUE_REJECTED: {point.SignalName} ({point.IecReference}) rejected report value '{rawSummary}'. {rejectionReason} MMS verification/fallback remains authoritative.");
+                    }
+                    continue;
+                }
+                if (update.HasValue)
+                    state.ReportValueRejectedLogged = false;
+
+                var receivedUtc = update.UpdatedAt == default ? DateTime.UtcNow : update.UpdatedAt.UtcDateTime;
+                var hadValueBeforeReport = state.HasValue;
+                var valueChangedByReport = update.HasValue && hadValueBeforeReport && HasExactSemanticEdge(point, state.Value, display);
+                state.ReportTrafficSeen = true;
+                state.LastReportUtc = DateTime.UtcNow;
+                // IEC 61850 process truth comes from independent acquisition, never from
+                // a prior control result. A real IED report is therefore never suppressed,
+                // rewritten, or correlated against command-side feedback before publication.
+                if (valueChangedByReport || IsChangeReportReason(update.Reason))
+                {
+                    state.ReportChangeVerified = true;
+                    state.ReportMissLogged = false;
+                }
+
+                var reportSource = string.IsNullOrWhiteSpace(state.AcquisitionLabel)
+                    ? BuildPlanAcquisitionLabel(plan, plan.Status.Contains("Dynamic", StringComparison.OrdinalIgnoreCase))
+                    : state.AcquisitionLabel;
+
+                var reportQuality = update.HasQuality && IsUsefulProcessField(update.Quality)
+                    ? NormalizeQuality(update.Quality)
+                    : state.HasValue ? state.Quality : "Pending / q not supplied";
+                var reportTimestamp = update.HasTimestamp && IsUsefulProcessField(update.Timestamp)
+                    ? update.Timestamp
+                    : state.HasValue ? state.DeviceTimestamp : "-";
+
+                ApplyValueUpdate(
+                    session,
+                    point,
+                    display,
+                    reportQuality,
+                    reportTimestamp,
+                    reportSource,
+                    string.IsNullOrWhiteSpace(update.Reason) ? "report / reason not supplied" : update.Reason,
+                    receivedUtc,
+                    session.StaticDataSetReportOnly
+                        ? state.ReportChangeVerified
+                            ? string.IsNullOrWhiteSpace(update.ProjectionStatus) ? "Live / static report verified" : $"Live / static report verified ({update.ProjectionStatus})"
+                            : string.IsNullOrWhiteSpace(update.ProjectionStatus) ? "Live / static report" : $"Live / static report ({update.ProjectionStatus})"
+                        : state.ReportChangeVerified
+                            ? string.IsNullOrWhiteSpace(update.ProjectionStatus) ? "Live / report verified" : $"Live / report verified ({update.ProjectionStatus})"
+                            : string.IsNullOrWhiteSpace(update.ProjectionStatus) ? "Live / report traffic + MMS verification" : $"Live / report traffic + MMS verification ({update.ProjectionStatus})",
+                    trustReportEdge: true,
+                    hasProcessValue: update.HasValue,
+                    reportId: update.ReportId,
+                    reportControlReference: string.IsNullOrWhiteSpace(update.ReportControlReference)
+                        ? plan.ReportControlReference : update.ReportControlReference);
+
+                // A routed, schema-safe process value is the data-plane proof. RptEna,
+                // GI, raw/unrouted frames, rejected values, or stale associations
+                // cannot satisfy exact per-RCB ingress qualification.
+                if (session.StaticDataSetReportOnly && update.HasValue &&
+                    StaticAcquisitionParityTracker.TryRecordRoutedReport(
+                        session.Device, plan, session.CurrentStaticParityAttemptId,
+                        out var updatedParity))
+                {
+                    Log("INFO", session.Device.Name,
+                        $"Static RCB routed traffic proven for {plan.ReportControlReference} / {plan.DataSetReference}. " +
+                        $"{updatedParity.TrafficQualificationSummary}. Semantic parity: {updatedParity.Summary}. " +
+                        "No cyclic MMS process polling was introduced.");
+                }
+                }
+            }
+
+            var verifiedReportPointKeys = slice.Updates
+                .Select(update => FindPointForReportReference(session, update.Reference))
+                .Where(point => point is not null)
+                .Select(point => point!)
+                .Where(point => session.States.TryGetValue(point.PointKey, out var state) && state.ReportChangeVerified)
+                .Select(point => point.PointKey)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            session.HybridValidation.RecordSlice(plan, slice, verifiedReportPointKeys);
+
+            foreach (var warning in slice.Warnings.Take(2))
+                Log("WARN", session.Device.Name, warning);
+        }
+
+        session.ReportPlanCursor = (session.ReportPlanCursor + batchCount) % plans.Count;
+    }
+
+    private void ProcessReportHealth(
+        DeviceSession session,
+        ReportControlPlan plan,
+        NativeReportMonitorSliceResult slice)
+    {
+        if (slice.UnroutedReportCount > session.LastUnroutedReportCount)
+        {
+            var delta = slice.UnroutedReportCount - session.LastUnroutedReportCount;
+            session.LastUnroutedReportCount = slice.UnroutedReportCount;
+            Log("WARN", session.Device.Name,
+                $"{delta} IEC 61850 InformationReport frame(s) were not routed because RptID/DataSet identity was ambiguous. The engine intentionally refused unsafe DataSet projection.");
+        }
+
+        if (slice.Updates.Count > 0)
+            session.ContinuityProcessUpdatesSeen =
+                Math.Min(long.MaxValue - slice.Updates.Count, session.ContinuityProcessUpdatesSeen) +
+                slice.Updates.Count;
+
+        // Bound metadata cardinality even if an IED emits pathological RptID
+        // variations. Report acceptance and value delivery remain untouched.
+        const int maxTrackedStreams = 64;
+        foreach (var frame in slice.ReportFrames)
+        {
+            var streamKey = BuildReportStreamKey(plan, frame);
+            if (!session.ReportStreams.TryGetValue(streamKey, out var state))
+            {
+                if (session.ReportStreams.Count >= maxTrackedStreams)
+                {
+                    if (session.ContinuityUntrackedStreams < int.MaxValue)
+                        session.ContinuityUntrackedStreams++;
+                    if (session.ContinuityUntrackedStreams == 1)
+                        Log("WARN", session.Device.Name,
+                            "Report continuity evidence reached the 64-stream diagnostic limit; " +
+                            "additional metadata identities remain untracked; report processing continues.");
+                    continue;
+                }
+
+                state = new Iec61850ReportContinuityState
+                {
+                    ReportControlReference = string.IsNullOrWhiteSpace(frame.ReportControlReference)
+                        ? plan.ReportControlReference : frame.ReportControlReference,
+                    DataSetReference = string.IsNullOrWhiteSpace(frame.DataSetReference)
+                        ? plan.DataSetReference : frame.DataSetReference,
+                    ReportId = frame.ReportId,
+                    Buffered = plan.Buffered,
+                    RptEnaWriteAccepted = session.ReportActivationByPlanId.TryGetValue(plan.PlanId, out var activation)
+                        ? activation.RptEnaWriteAccepted : null,
+                    GiWriteAccepted = session.ReportActivationByPlanId.TryGetValue(plan.PlanId, out var giActivation)
+                        ? giActivation.GeneralInterrogationWriteAccepted : null,
+                    ActivationReturnedAtUtc = session.ReportActivationByPlanId.TryGetValue(plan.PlanId, out var returned)
+                        ? returned.ActivationReturnedAtUtc : null
+                };
+                session.ReportStreams[streamKey] = state;
+            }
+
+            // IEC 61850-7-2 evidence analysis only: each exact RCB has isolated
+            // report continuity state. We never discard, rewrite or reorder decoded
+            // process values, re-arm an RCB or add MMS process polling from warnings.
+            foreach (var finding in Iec61850ReportContinuityInspector.Observe(
+                         state, frame, plan.Buffered))
+            {
+                Log("WARN", session.Device.Name,
+                    $"{ReportName(frame.ReportControlReference, plan.ReportControlReference)}: {finding}");
+            }
+        }
+
+        // One immutable publication per non-empty slice, never per value/frame.
+        // The GUI may concurrently Copy Diagnostic without locking the MMS loop.
+        if (slice.Updates.Count > 0 || slice.ReportFrames.Count > 0)
+            session.Device.ReportContinuityEvidence =
+                Iec61850ReportContinuityInspector.Snapshot(
+                    session.ReportStreams,
+                    session.ContinuityProcessUpdatesSeen,
+                    session.ContinuityUntrackedStreams);
+    }
+
+    private static string BuildReportStreamKey(ReportControlPlan plan, NativeReportFrameMetadata frame)
+    {
+        var rcb = string.IsNullOrWhiteSpace(frame.ReportControlReference) ? plan.ReportControlReference : frame.ReportControlReference;
+        var reportId = string.IsNullOrWhiteSpace(frame.ReportId) ? "-" : frame.ReportId;
+        var dataSet = string.IsNullOrWhiteSpace(frame.DataSetReference) ? plan.DataSetReference : frame.DataSetReference;
+        return $"{NormalizeReference(rcb)}|{NormalizeReference(reportId)}|{NormalizeReference(dataSet)}";
+    }
+
+    private static string ReportName(string actualReference, string plannedReference)
+    {
+        var reference = string.IsNullOrWhiteSpace(actualReference) ? plannedReference : actualReference;
+        var normalized = (reference ?? string.Empty).Replace('$', '.').Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+            return "RCB";
+        var segments = normalized.Split(new[] { '.', '/' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return segments.Length == 0 ? normalized : segments[^1];
+    }
+
+    private async Task PollDuePointsAsync(DeviceSession session, CancellationToken cancellationToken)
+    {
+        var processed = 0;
+        while (processed < 4 && session.PollQueue.TryPeek(out var pointKey, out var dueTicks))
+        {
+            if (Volatile.Read(ref session.ControlCommandActive) > 0)
+                break;
+            var nowUtc = DateTime.UtcNow;
+            if (dueTicks > nowUtc.Ticks)
+                break;
+
+            session.PollQueue.Dequeue();
+            if (!session.Points.TryGetValue(pointKey, out var point) ||
+                !session.States.TryGetValue(pointKey, out var state))
+                continue;
+
+            var reportAssigned = session.PointPlanIds.ContainsKey(point.PointKey);
+            cancellationToken.ThrowIfCancellationRequested();
+            processed++;
+            var nextIntervalMs = SmartReconnectPolicy.ApplyRecoveryPollFloor(
+                GetVerificationPollIntervalMs(point, state, reportAssigned),
+                nowUtc < session.RecoveryWarmupUntilUtc);
+            state.NextPollUtc = nowUtc.AddMilliseconds(nextIntervalMs);
+            session.PollQueue.Enqueue(point.PointKey, state.NextPollUtc.Ticks);
+
+            try
+            {
+                var signal = new SignalDefinition
+                {
+                    Name = point.SignalName,
+                    ObjectReference = point.IecReference,
+                    FunctionalConstraint = point.FunctionalConstraint,
+                    DataType = point.IecDataType,
+                    Category = point.Category,
+                    Unit = point.Unit
+                };
+
+                var resolved = await IecSignalReadResolver.ReadAsync(session.Client, signal, cancellationToken).ConfigureAwait(false);
+                if (resolved == null)
+                {
+                    state.ConsecutiveErrors++;
+                    EmitStatusSnapshot(
+                        point,
+                        state,
+                        "MMS read returned no value",
+                        state.HasValue ? state.Quality : "Pending");
+                    continue;
+                }
+
+                state.ConsecutiveErrors = 0;
+                RecordSuccessfulIo(session);
+                if (resolved.UsedAlternateReference(point.IecReference))
+                {
+                    Log("INFO", session.Device.Name,
+                        $"Smart schema resolver read {point.SignalName} through leaf {resolved.EffectiveReference}.");
+                }
+
+                var rich = resolved.Value as Iec61850ReadValue;
+                var raw = Iec61850ReadValue.Unwrap(resolved.Value);
+                var display = Iec61850ValueFormatter.Format(raw, point.IecDataType, point.Unit);
+                var quality = rich?.HasQuality == true ? rich.Quality : state.Quality;
+                var deviceTimestamp = rich?.HasDeviceTimestamp == true ? rich.DeviceTimestamp : state.DeviceTimestamp;
+
+                if ((rich?.HasQuality != true || rich?.HasDeviceTimestamp != true) &&
+                    nowUtc >= session.RecoveryWarmupUntilUtc &&
+                    nowUtc >= state.NextCompanionPollUtc)
+                {
+                    state.NextCompanionPollUtc = nowUtc.AddMilliseconds(GetCompanionPollIntervalMs(point));
+                    var companions = await ReadCompanionAttributesAsync(
+                        session.Client,
+                        point,
+                        resolved.EffectiveReference,
+                        quality,
+                        deviceTimestamp,
+                        cancellationToken).ConfigureAwait(false);
+                    quality = companions.Quality;
+                    deviceTimestamp = companions.DeviceTimestamp;
+                }
+
+                var normalizedQuality = NormalizeQuality(quality);
+                var normalizedTimestamp = string.IsNullOrWhiteSpace(deviceTimestamp) ? "-" : deviceTimestamp;
+                var pollDetectedChange = state.HasValue && !string.Equals(state.Value, display, StringComparison.Ordinal);
+                var sourceMode = "MMS polling";
+                var reason = "cyclic";
+                var status = "Live / polling";
+
+                if (reportAssigned)
+                {
+                    if (state.ReportChangeVerified && pollDetectedChange)
+                    {
+                        sourceMode = string.IsNullOrWhiteSpace(state.AcquisitionLabel)
+                            ? "MMS fallback"
+                            : state.AcquisitionLabel + " + MMS fallback";
+                        reason = "value changed without matching report";
+                        status = "Live / report degraded, MMS fallback";
+                        state.ReportChangeVerified = false;
+                        if (!state.ReportMissLogged)
+                        {
+                            state.ReportMissLogged = true;
+                            Log("WARN", session.Device.Name,
+                                $"{point.SignalName}: MMS validation detected a value change not delivered by the armed report. Fast polling fallback remains active until dchg is verified again.");
+                        }
+                    }
+                    else if (state.ReportTrafficSeen)
+                    {
+                        // Preserve the report source in the live grid while MMS fills q/t
+                        // and verifies that the subscription is not silently frozen.
+                        sourceMode = string.IsNullOrWhiteSpace(state.AcquisitionLabel)
+                            ? state.SourceMode
+                            : state.AcquisitionLabel;
+                        reason = state.Reason;
+                        status = state.ReportChangeVerified
+                            ? "Live / report verified + MMS validation"
+                            : "Live / report traffic + MMS verification";
+                    }
+                    else
+                    {
+                        sourceMode = string.IsNullOrWhiteSpace(state.AcquisitionLabel)
+                            ? (state.HasValue ? "MMS verification" : "MMS initial read")
+                            : state.AcquisitionLabel;
+                        reason = "report armed / awaiting traffic";
+                        status = "Live / report armed + MMS verification";
+                    }
+                }
+
+                ApplyValueUpdate(
+                    session,
+                    point,
+                    display,
+                    normalizedQuality,
+                    normalizedTimestamp,
+                    sourceMode,
+                    reason,
+                    DateTime.UtcNow,
+                    status,
+                    trustReportEdge: false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                state.ConsecutiveErrors++;
+                EmitStatusSnapshot(point, state, $"Read error: {ex.Message}", "Bad / communication error");
+                if (state.ConsecutiveErrors >= 2)
+                    session.ConsecutiveSessionErrors++;
+            }
+        }
+    }
+
+    private void ApplyValueUpdate(
+        DeviceSession session,
+        Iec61850MonitorPoint point,
+        string display,
+        string quality,
+        string deviceTimestamp,
+        string sourceMode,
+        string reason,
+        DateTime timestampUtc,
+        string status,
+        bool trustReportEdge,
+        bool hasProcessValue = true,
+        string? reportId = null,
+        string? reportControlReference = null)
+    {
+        var state = session.States[point.PointKey];
+        var hadValue = state.HasValue;
+        var oldValue = state.Value;
+        var oldQuality = state.Quality;
+        var displayChanged = hasProcessValue && !string.Equals(oldValue, display, StringComparison.Ordinal);
+        var qualityChangedForUi = !string.Equals(oldQuality, quality, StringComparison.OrdinalIgnoreCase);
+        // Many enabled RCBs can produce one signal. Remember every RCB with
+        // *actual* routed ingress, not only the most recently received report.
+        // A new source is UI-relevant even if the process value has not changed.
+        var reportRcbChanged = trustReportEdge &&
+            !string.IsNullOrWhiteSpace(reportControlReference) &&
+            state.RoutedReportControlReferences.Add(reportControlReference.Trim());
+        var metadataChanged = reportRcbChanged ||
+                              !string.Equals(state.DeviceTimestamp, deviceTimestamp, StringComparison.Ordinal) ||
+                              !string.Equals(state.SourceMode, sourceMode, StringComparison.Ordinal) ||
+                              !string.Equals(state.Reason, reason, StringComparison.Ordinal) ||
+                              !string.Equals(state.Status, status, StringComparison.Ordinal);
+        var changed = hasProcessValue && hadValue && (trustReportEdge
+            ? HasExactSemanticEdge(point, oldValue, display)
+            : HasMeaningfulEdge(point, oldValue, display));
+
+        if (qualityChangedForUi && IsDegradedIecQuality(quality) &&
+            !state.LastLoggedDegradedQuality.Equals(quality, StringComparison.OrdinalIgnoreCase))
+        {
+            state.LastLoggedDegradedQuality = quality;
+            Log("INFO", session.Device.Name,
+                $"QUALITY_EVIDENCE: {point.SignalName} ({point.IecReference}) quality={quality}; acquisition={sourceMode}; qRef={(string.IsNullOrWhiteSpace(point.QualityReference) ? "derived companion/report q" : point.QualityReference)}; timestamp={(string.IsNullOrWhiteSpace(deviceTimestamp) ? "-" : deviceTimestamp)}. Quality is preserved from IED evidence and is not converted to Good.");
+        }
+        else if (!IsDegradedIecQuality(quality))
+        {
+            state.LastLoggedDegradedQuality = string.Empty;
+        }
+
+        if (hasProcessValue)
+        {
+            state.HasValue = true;
+            state.Value = display;
+        }
+        state.Quality = quality;
+        state.DeviceTimestamp = deviceTimestamp;
+        state.LastUpdateUtc = timestampUtc;
+        state.SourceMode = sourceMode;
+        state.Reason = reason;
+        state.Status = status;
+        if (changed)
+            state.Sequence++;
+
+        if (!hadValue || displayChanged || qualityChangedForUi || metadataChanged)
+        {
+            PointUpdated?.Invoke(new Iec61850PointSnapshot
+            {
+                Point = point,
+                PreviousValue = oldValue,
+                Value = state.Value,
+                Quality = quality,
+                DeviceTimestamp = deviceTimestamp,
+                SourceMode = sourceMode,
+                Reason = reason,
+                Status = status,
+                IsValueEdge = changed,
+                IsReportTraffic = trustReportEdge,
+                // This is association-local evidence from an actual routed report.
+                // Preserve it through later metadata/status UI coalescing.
+                RoutedReportControlReferences = state.RoutedReportControlReferences
+                    .OrderBy(reference => reference, StringComparer.OrdinalIgnoreCase).ToArray(),
+                Sequence = state.Sequence
+            });
+        }
+
+        // SAS/SCADA Sequence of Events records actual discrete process transitions.
+        // Initial images, GI/integrity refreshes with unchanged state, formatting-only
+        // differences, quality-only updates, and continuously changing analog values
+        // stay out of SOE.
+        if (!changed || !ShouldRecordSequenceOfEvents(point))
+            return;
+
+        var entry = new Iec61850EventEntry
+        {
+            Sequence = Interlocked.Increment(ref _eventSequence),
+            DeviceId = point.DeviceId,
+            PointKey = point.PointKey,
+            DeviceTimestamp = deviceTimestamp,
+            DeviceName = point.DeviceName,
+            IpAddress = point.IpAddress,
+            SignalName = point.SignalName,
+            IecReference = point.IecReference,
+            IecDataType = point.IecDataType,
+            OldValue = oldValue,
+            NewValue = display,
+            Quality = quality,
+            SourceMode = sourceMode,
+            Reason = reason,
+            ReportId = trustReportEdge ? reportId ?? string.Empty : string.Empty,
+            ReportControlReference = trustReportEdge ? reportControlReference ?? string.Empty : string.Empty,
+            RoutedReportControlReferences = state.RoutedReportControlReferences
+                .OrderBy(reference => reference, StringComparer.OrdinalIgnoreCase).ToArray()
+        };
+        EventRaised?.Invoke(entry);
+    }
+
+    private void EmitStatusSnapshot(
+        Iec61850MonitorPoint point,
+        RuntimePointState state,
+        string status,
+        string quality)
+    {
+        state.Status = status;
+        PointUpdated?.Invoke(new Iec61850PointSnapshot
+        {
+            Point = point,
+            PreviousValue = state.Value,
+            Value = state.Value,
+            Quality = quality,
+            DeviceTimestamp = state.DeviceTimestamp,
+            SourceMode = state.SourceMode,
+            Reason = state.Reason,
+            Status = status,
+            IsValueEdge = false,
+            RoutedReportControlReferences = state.RoutedReportControlReferences
+                .OrderBy(reference => reference, StringComparer.OrdinalIgnoreCase).ToArray(),
+            Sequence = state.Sequence
+        });
+    }
+
+    private async Task ConnectCachedAssociationWithRetryAsync(
+        DeviceSession session,
+        CancellationToken cancellationToken)
+    {
+        const int maxAttempts = 2;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(SmartReconnectPolicy.ConnectBudget);
+            try
+            {
+                await session.Client.ConnectAsync(
+                    session.Device.IpAddress,
+                    session.Device.Port,
+                    timeout.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                session.Device.LastDiagnosticSnapshot = session.Client.CaptureDiagnosticSnapshot(
+                    $"Fast saved-model connect attempt #{attempt} timed out");
+            }
+
+            if (session.Client.IsConnected)
+            {
+                if (attempt > 1)
+                {
+                    Log("INFO", session.Device.Name,
+                        $"Fast saved-model connection recovered automatically on attempt #{attempt}; no manual Play retry was required.");
+                }
+                return;
+            }
+
+            if (attempt >= maxAttempts)
+                return;
+
+            var failure = string.IsNullOrWhiteSpace(session.Client.LastErrorMessage)
+                ? $"native state={session.Client.NativeState}"
+                : session.Client.LastErrorMessage;
+            Log("WARN", session.Device.Name,
+                $"Fast saved-model connection attempt #{attempt} did not establish MMS ({failure}). Retrying once after {SmartReconnectPolicy.InitialAssociationRetryDelay.TotalMilliseconds:0} ms.");
+
+            var staleClient = session.Client;
+            session.Client = new NativeIec61850Client();
+            await DisposeClientForReconnectAsync(
+                staleClient,
+                session.Device.Name,
+                SmartReconnectPolicy.ClientCleanupBudget,
+                cancellationToken).ConfigureAwait(false);
+            await Task.Delay(SmartReconnectPolicy.InitialAssociationRetryDelay, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static async Task ResetAssociationControlAuthorityAsync(Iec61850MonitorDevice device)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher != null && !dispatcher.CheckAccess())
+        {
+            if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
+                return; // UI is gone; the native association is already revoked.
+            await dispatcher.InvokeAsync(
+                () => ResetAssociationControlAuthority(device),
+                System.Windows.Threading.DispatcherPriority.DataBind).Task.ConfigureAwait(false);
+            return;
+        }
+        ResetAssociationControlAuthority(device);
+    }
+
+    private static void ResetAssociationControlAuthority(Iec61850MonitorDevice device)
+    {
+        foreach (var signal in device.Signals.Where(s => s.IsValidControlObject))
+        {
+            signal.ClearControlConfirmation();
+            signal.ClearLiveControlAuthority();
+            signal.ControlInspectionBusy = false;
+            signal.ControlModelText = "Auto-detect";
+            signal.ControlInspectionEvidence =
+                "New MMS association: live CDC, ctlModel and typed ctlVal require reinspection.";
+        }
+        device.RefreshCommandSignalProjection();
+    }
+
+    private async Task TryReconnectAsync(DeviceSession session, CancellationToken cancellationToken)
+    {
+        var nowUtc = DateTime.UtcNow;
+        if (nowUtc < session.NextReconnectUtc)
+            return;
+
+        var attempt = session.ConsecutiveReconnectFailures + 1;
+        var reconnectStopwatch = Stopwatch.StartNew();
+        MarkSessionOffline(session, $"Reconnecting MMS association to {session.Device.EndpointText}.");
+        session.Device.Status = "Reconnecting";
+        session.Device.Detail = $"Smart reconnect attempt #{attempt}: opening a fresh MMS association.";
+        session.Device.RefreshComputed();
+        Log("WARN", session.Device.Name,
+            $"Smart reconnect attempt #{attempt} started. Transport recovery is bounded independently from report re-arming.");
+
+        // Automatic reconnection must revoke all previously verified control
+        // semantics BEFORE the fresh association is opened, even if the UI
+        // never visits its normal manual Disconnect/Connect path.
+        await ResetAssociationControlAuthorityAsync(session.Device).ConfigureAwait(false);
+        var staleClient = session.Client;
+        await DisposeClientForReconnectAsync(
+            staleClient,
+            session.Device.Name,
+            SmartReconnectPolicy.ClientCleanupBudget,
+            cancellationToken).ConfigureAwait(false);
+
+        var replacement = new NativeIec61850Client();
+        session.Client = replacement;
+
+        using var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        connectTimeout.CancelAfter(SmartReconnectPolicy.ConnectBudget);
+        try
+        {
+            var reconnectPath = await ConnectUsingSelectedFastPathAsync(
+                session,
+                connectTimeout.Token,
+                allowCachedRetry: false).ConfigureAwait(false);
+            Log("INFO", session.Device.Name,
+                reconnectPath == Iec61850ConnectionPath.SclAssisted
+                    ? "Smart reconnect reused verified SCL authority; no cached-association or discovery fallback was attempted."
+                    : "Smart reconnect reused the saved live-model association path.");
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            session.Device.LastDiagnosticSnapshot = replacement.CaptureDiagnosticSnapshot(
+                "Smart reconnect association timed out");
+            ScheduleReconnectRetry(
+                session,
+                attempt,
+                reconnectStopwatch.Elapsed,
+                $"MMS association exceeded the {SmartReconnectPolicy.ConnectBudget.TotalSeconds:0.#} s reconnect budget.");
+            return;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            session.Device.LastDiagnosticSnapshot = replacement.CaptureDiagnosticSnapshot(
+                "Smart reconnect association failed",
+                ex);
+            ScheduleReconnectRetry(
+                session,
+                attempt,
+                reconnectStopwatch.Elapsed,
+                $"{ex.GetType().Name}: {ex.Message}");
+            return;
+        }
+
+        if (!replacement.IsConnected)
+        {
+            session.Device.LastDiagnosticSnapshot = replacement.CaptureDiagnosticSnapshot(
+                "Smart reconnect association not established");
+            ScheduleReconnectRetry(
+                session,
+                attempt,
+                reconnectStopwatch.Elapsed,
+                string.IsNullOrWhiteSpace(replacement.LastErrorMessage)
+                    ? $"Native state={replacement.NativeState}; MMS association was not established."
+                    : replacement.LastErrorMessage);
+            return;
+        }
+
+        // Connection recovery and report recovery are intentionally separate stages.
+        // Once ACSE/MMS is healthy, resume bounded MMS reads immediately. Static RCB
+        // discovery/re-arming returns to the normal background report pipeline so a
+        // slow vendor RCB read/write can never hold the reconnect state machine hostage.
+        session.ActiveReportPlans.Clear();
+        session.BrowserActiveRcbs.Clear();
+        session.ActiveReportPlanOrder.Clear();
+        session.PointPlanIds.Clear();
+        session.ReportStreams.Clear();
+        session.ReportActivationByPlanId.Clear();
+        session.ContinuityProcessUpdatesSeen = 0;
+        session.ContinuityUntrackedStreams = 0;
+        session.Device.ReportContinuityEvidence = null;
+        session.LastUnroutedReportCount = 0;
+        ResetAssociationReportEvidence(session);
+
+        var legacyPlans = Iec61850ReportPlanner.BuildPlans(session.Device, session.Points.Values);
+        session.PendingReportPlans = legacyPlans;
+        session.ReportSetupPending =
+            replacement.CanUseHybridReportPlanner(session.Device) ||
+            legacyPlans.Count > 0;
+        var associatedUtc = DateTime.UtcNow;
+        session.ReportSetupNotBeforeUtc = associatedUtc.Add(SmartReconnectPolicy.ReportRearmDelay);
+        session.ReportSetupDeadlineUtc = associatedUtc.Add(SmartReconnectPolicy.ReportRearmDeadline);
+        session.RecoveryWarmupUntilUtc = associatedUtc.Add(SmartReconnectPolicy.RecoveryWarmupDuration);
+
+        ResetPollQueue(session, staggerForRecovery: true);
+        session.ConsecutiveReconnectFailures = 0;
+        session.NextReconnectUtc = DateTime.MinValue;
+        session.ConsecutiveSessionErrors = 0;
+        session.ConsecutiveHealthProbeFailures = 0;
+        session.LastSuccessfulIoUtc = associatedUtc;
+        session.NextHealthProbeUtc = session.RecoveryWarmupUntilUtc;
+        session.Device.IsConnected = true;
+        session.Device.Status = "Monitoring";
+        session.Device.AcquisitionMode = session.StaticDataSetReportOnly
+            ? "MMS recovered • Static DataSet report re-arm pending"
+            : "MMS recovered • report re-arm pending";
+        session.Device.Detail = session.StaticDataSetReportOnly
+            ? $"MMS reconnected in {reconnectStopwatch.Elapsed.TotalMilliseconds:0} ms. Static DataSet process polling remains disabled; configured RCB re-arm continues in the background."
+            : $"MMS reconnected in {reconnectStopwatch.Elapsed.TotalMilliseconds:0} ms. {session.Points.Count} point(s) resumed with staggered MMS recovery; report re-arm continues in the background.";
+        session.Device.LastDiagnosticSnapshot = replacement.CaptureDiagnosticSnapshot(
+            "Smart reconnect MMS associated; report re-arm deferred");
+        session.Device.RefreshComputed();
+
+        Log("INFO", session.Device.Name,
+            session.StaticDataSetReportOnly
+                ? $"MMS reconnect successful on attempt #{attempt} in {reconnectStopwatch.Elapsed.TotalMilliseconds:0} ms. Static DataSet process polling remains disabled; configured RCB re-arm is deferred to the background pipeline."
+                : $"MMS reconnect successful on attempt #{attempt} in {reconnectStopwatch.Elapsed.TotalMilliseconds:0} ms. Polling resumed immediately with a {SmartReconnectPolicy.RecoveryWarmupDuration.TotalSeconds:0} s recovery warm-up; report re-arm is deferred to the background pipeline.");
+    }
+
+    private void ScheduleReconnectRetry(
+        DeviceSession session,
+        int attempt,
+        TimeSpan elapsed,
+        string detail)
+    {
+        session.ConsecutiveReconnectFailures = attempt;
+        var retryDelay = SmartReconnectPolicy.GetRetryDelay(attempt);
+        session.NextReconnectUtc = DateTime.UtcNow.Add(retryDelay);
+        session.Device.IsConnected = false;
+        session.Device.Status = "Reconnect pending";
+        session.Device.AcquisitionMode = "Connection lost • reconnect pending";
+        session.Device.Detail =
+            $"Smart reconnect attempt #{attempt} failed after {elapsed.TotalMilliseconds:0} ms: {detail} " +
+            $"Retry in {retryDelay.TotalSeconds:0.#} s.";
+        session.Device.RefreshComputed();
+        Log("WARN", session.Device.Name,
+            $"Smart reconnect attempt #{attempt} failed after {elapsed.TotalMilliseconds:0} ms; retry in {retryDelay.TotalSeconds:0.#} s. {detail}");
+    }
+
+    private async Task DisposeClientForReconnectAsync(
+        NativeIec61850Client client,
+        string deviceName,
+        TimeSpan budget,
+        CancellationToken cancellationToken)
+    {
+        Task disposeTask;
+        try
+        {
+            disposeTask = client.DisposeAsync().AsTask();
+        }
+        catch (Exception ex)
+        {
+            Log("WARN", deviceName,
+                $"Stale MMS client cleanup could not start during reconnect: {ex.GetType().Name}: {ex.Message}");
+            return;
+        }
+
+        var delayTask = Task.Delay(budget, cancellationToken);
+        var completed = await Task.WhenAny(disposeTask, delayTask).ConfigureAwait(false);
+        if (completed == disposeTask)
+        {
+            try
+            {
+                await disposeTask.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log("WARN", deviceName,
+                    $"Stale MMS client cleanup completed with {ex.GetType().Name}: {ex.Message}. Reconnect will continue.");
+            }
+            return;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Never let a vendor/session cleanup stall the monitor loop. Observe any later
+        // fault while allowing the replacement association to proceed independently.
+        _ = disposeTask.ContinueWith(
+            task => _ = task.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
+        Log("WARN", deviceName,
+            $"Stale MMS client cleanup exceeded the {budget.TotalMilliseconds:0} ms reconnect budget. A fresh association will proceed without waiting for cleanup.");
+    }
+
+    private static void ResetAssociationReportEvidence(DeviceSession session)
+    {
+        session.CurrentStaticParityAttemptId = Guid.Empty;
+        // InformationReport proof is association-scoped. A report observed on the old
+        // socket must never make the replacement association look TrafficProven before
+        // the first routed report of the new generation arrives.
+        session.Device.HasReportStream = false;
+        session.Device.ReportPulseActive = false;
+
+        foreach (var state in session.States.Values)
+        {
+            state.ReportTrafficSeen = false;
+            state.ReportChangeVerified = false;
+            state.LastReportUtc = DateTime.MinValue;
+            state.ReportMissLogged = false;
+            state.AcquisitionLabel = session.StaticDataSetReportOnly ? "Static DataSet report rearming" : "MMS polling";
+            state.SourceMode = session.StaticDataSetReportOnly
+                ? "Static DataSet report rearming"
+                : "Report rearming / MMS polling fallback";
+            state.Reason = session.StaticDataSetReportOnly
+                ? "new MMS association / configured RCB evidence reset; MMS process fallback disabled"
+                : "new MMS association / report evidence reset";
+            state.Status = "Reconnected / report rearming";
+        }
+    }
+
+    private async Task ForceReconnectAsync(DeviceSession session, string reason)
+    {
+        MarkSessionOffline(session, reason);
+        session.ConsecutiveSessionErrors = 0;
+        session.ConsecutiveHealthProbeFailures = 0;
+        session.NextReconnectUtc = DateTime.MinValue;
+
+        var staleClient = session.Client;
+        session.Client = new NativeIec61850Client();
+        await DisposeClientForReconnectAsync(
+            staleClient,
+            session.Device.Name,
+            SmartReconnectPolicy.ClientCleanupBudget,
+            CancellationToken.None).ConfigureAwait(false);
+    }
+
+    private void RecordSuccessfulIo(DeviceSession session)
+    {
+        session.LastSuccessfulIoUtc = DateTime.UtcNow;
+        session.ConsecutiveHealthProbeFailures = 0;
+        session.ConsecutiveSessionErrors = 0;
+    }
+
+    private void MarkSessionOffline(DeviceSession session, string detail)
+    {
+        // Retain timestamped historical ingress proof but do not let the old socket
+        // credit a future planning attempt after transport loss.
+        session.CurrentStaticParityAttemptId = Guid.Empty;
+        var wasConnected = session.Device.IsConnected;
+        // A new MMS association has new RCB ownership; report names observed
+        // on the *old* socket cannot be credited to the recovered session.
+        if (wasConnected)
+        {
+            foreach (var state in session.States.Values)
+                state.RoutedReportControlReferences.Clear();
+        }
+        session.Device.IsConnected = false;
+        session.Device.HasReportStream = false;
+        session.Device.ReportPulseActive = false;
+        session.Device.Status = "Offline";
+        session.Device.Detail = detail;
+        session.Device.AcquisitionMode = "Connection lost • reconnect pending";
+        session.Device.RefreshComputed();
+        if (wasConnected) Log("WARN", session.Device.Name, detail);
+    }
+
+    private async Task ProbeSessionHealthAsync(DeviceSession session, CancellationToken cancellationToken)
+    {
+        // Static DataSet report-only uses report receive/transport evidence for health;
+        // process leaves are never repurposed as cyclic MMS heartbeat reads.
+        if (session.StaticDataSetReportOnly)
+            return;
+        if (Volatile.Read(ref session.ControlCommandActive) > 0)
+            return;
+        var now = DateTime.UtcNow;
+        if (now < session.RecoveryWarmupUntilUtc)
+            return;
+        if (now < session.NextHealthProbeUtc || now - session.LastSuccessfulIoUtc < TimeSpan.FromMilliseconds(900)) return;
+        session.NextHealthProbeUtc = now.AddSeconds(1);
+        if (string.IsNullOrWhiteSpace(session.HealthProbePointKey) || !session.Points.TryGetValue(session.HealthProbePointKey, out var point))
+        {
+            point = session.Points.Values.FirstOrDefault();
+            if (point == null) return;
+            session.HealthProbePointKey = point.PointKey;
+        }
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromMilliseconds(900));
+        try
+        {
+            var signal = new SignalDefinition { Name = point.SignalName, ObjectReference = point.IecReference, FunctionalConstraint = point.FunctionalConstraint, DataType = point.IecDataType, Category = point.Category, Unit = point.Unit };
+            if (await IecSignalReadResolver.ReadAsync(session.Client, signal, timeout.Token).ConfigureAwait(false) != null)
+            {
+                RecordSuccessfulIo(session);
+                return;
+            }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
+        catch (Exception ex) when (ex is not OperationCanceledException) { Log("WARN", session.Device.Name, $"MMS health probe failed: {ex.Message}"); }
+        session.ConsecutiveHealthProbeFailures++;
+        if (session.ConsecutiveHealthProbeFailures >= 2)
+            await ForceReconnectAsync(session, "IED stopped responding to two consecutive MMS health probes.").ConfigureAwait(false);
+    }
+
+    private static async Task<(string Quality, string DeviceTimestamp)> ReadCompanionAttributesAsync(
+        IIec61850Client client,
+        Iec61850MonitorPoint point,
+        string effectiveValueReference,
+        string currentQuality,
+        string currentTimestamp,
+        CancellationToken cancellationToken)
+    {
+        var quality = currentQuality;
+        var timestamp = currentTimestamp;
+        var effectiveQRef = BuildCompanionReference(effectiveValueReference, "q");
+        var effectiveTRef = BuildCompanionReference(effectiveValueReference, "t");
+        var originalQRef = BuildCompanionReference(point.IecReference, "q");
+        var originalTRef = BuildCompanionReference(point.IecReference, "t");
+        var qCandidates = BuildCompanionCandidates(point.QualityReference, effectiveQRef, originalQRef);
+        var tCandidates = BuildCompanionCandidates(point.TimestampReference, effectiveTRef, originalTRef);
+
+        foreach (var qRef in qCandidates)
+        {
+            try
+            {
+                var value = await client.ReadValueAsync(qRef, point.FunctionalConstraint, "Quality", cancellationToken).ConfigureAwait(false);
+                if (value != null)
+                {
+                    quality = value.ToString() ?? currentQuality;
+                    break;
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Some vendors expose q through a discovered explicit reference while
+                // others require the canonical sibling path. Try the next candidate.
+            }
+        }
+
+        foreach (var tRef in tCandidates)
+        {
+            try
+            {
+                var value = await client.ReadValueAsync(tRef, point.FunctionalConstraint, "Timestamp", cancellationToken).ConfigureAwait(false);
+                if (value != null)
+                {
+                    timestamp = value.ToString() ?? currentTimestamp;
+                    break;
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // t is optional; try the canonical sibling before leaving it unknown.
+            }
+        }
+
+        return (quality, timestamp);
+    }
+
+    private async Task StopMonitoringSessionAsync(DeviceSession session, bool preservePointDefinitions)
+    {
+        try
+        {
+            session.MonitorCancellation.Cancel();
+        }
+        catch
+        {
+            // Repeated cancellation is harmless.
+        }
+
+        if (session.MonitorTask != null)
+        {
+            try
+            {
+                await session.MonitorTask.ConfigureAwait(false);
+            }
+            catch
+            {
+                // Loop errors have already been surfaced as diagnostics.
+            }
+        }
+
+        try
+        {
+            var results = await session.Client.StopReportMonitorsAsync().ConfigureAwait(false);
+            foreach (var result in results)
+                Log(result.IsSuccess ? "INFO" : "WARN", session.Device.Name, result.Message);
+        }
+        catch (Exception ex)
+        {
+            Log("WARN", session.Device.Name, $"Report monitor cleanup: {ex.Message}");
+        }
+
+        session.MonitorTask = null;
+        session.ActiveReportPlans.Clear();
+        session.BrowserActiveRcbs.Clear();
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
         session.StaticReportProjection.Reset();
