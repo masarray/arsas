@@ -887,18 +887,46 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         if (!_sessions.TryRemove(deviceId, out var session))
             return;
 
-        await StopMonitoringSessionAsync(session, preservePointDefinitions: false).ConfigureAwait(false);
-        await session.Client.DisposeAsync().ConfigureAwait(false);
-        // No control qualification may outlive its MMS association.
-        ResetAssociationControlAuthority(session.Device);
-        session.MonitorCancellation.Dispose();
-        session.Device.IsMonitoring = false;
-        session.Device.IsConnected = false;
-        session.Device.AcquisitionMode = "Not started";
-        session.Device.Status = "Disconnected";
-        session.Device.Detail = "IEC 61850 session closed.";
-        session.Device.RefreshComputed();
-        Log("INFO", session.Device.Name, "IEC 61850 session disconnected.");
+        // Stop MUST leave a reusable device after any teardown failure. The
+        // session is already removed from the live registry, so never leave a
+        // half-connected UI or a stale control authority behind on exception.
+        try
+        {
+            await StopMonitoringSessionAsync(session, preservePointDefinitions: false).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Log("WARN", session.Device.Name, $"Monitor stop cleanup: {ex.GetType().Name}: {ex.Message}");
+        }
+        try
+        {
+            await session.Client.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Log("WARN", session.Device.Name, $"MMS disconnect cleanup: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            // WPF-owned CommandSignals may only be replaced on its Dispatcher.
+            // Await this work before allowing the facade's StopGate to release.
+            try
+            {
+                await ResetAssociationControlAuthorityAsync(session.Device).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log("WARN", session.Device.Name, $"Control UI authority cleanup: {ex.GetType().Name}: {ex.Message}");
+            }
+            session.MonitorCancellation.Dispose();
+            session.Device.IsMonitoring = false;
+            session.Device.IsConnected = false;
+            session.Device.AcquisitionMode = "Not started";
+            session.Device.Status = "Disconnected";
+            session.Device.Detail = "IEC 61850 session closed. Saved model remains available for Play.";
+            session.Device.RefreshComputed();
+            Log("INFO", session.Device.Name, "IEC 61850 session disconnected.");
+        }
     }
 
     private async Task StartReportPlansAsync(
@@ -1865,6 +1893,21 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         }
     }
 
+    private static async Task ResetAssociationControlAuthorityAsync(Iec61850MonitorDevice device)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher != null && !dispatcher.CheckAccess())
+        {
+            if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
+                return; // UI is gone; the native association is already revoked.
+            await dispatcher.InvokeAsync(
+                () => ResetAssociationControlAuthority(device),
+                System.Windows.Threading.DispatcherPriority.DataBind).Task.ConfigureAwait(false);
+            return;
+        }
+        ResetAssociationControlAuthority(device);
+    }
+
     private static void ResetAssociationControlAuthority(Iec61850MonitorDevice device)
     {
         foreach (var signal in device.Signals.Where(s => s.IsValidControlObject))
@@ -1896,7 +1939,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         // Automatic reconnection must revoke all previously verified control
         // semantics BEFORE the fresh association is opened, even if the UI
         // never visits its normal manual Disconnect/Connect path.
-        ResetAssociationControlAuthority(session.Device);
+        await ResetAssociationControlAuthorityAsync(session.Device).ConfigureAwait(false);
         var staleClient = session.Client;
         await DisposeClientForReconnectAsync(
             staleClient,
