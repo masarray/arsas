@@ -521,6 +521,25 @@
             </Setter>
         </Style>
 
+        <!-- One semantic palette for tap direction and the corresponding confirmation. -->
+        <SolidColorBrush x:Key="CommandRaiseFill" Color="#526AE8"/>
+        <SolidColorBrush x:Key="CommandRaiseStroke" Color="#4058C5"/>
+        <SolidColorBrush x:Key="CommandLowerFill" Color="#E9B451"/>
+        <SolidColorBrush x:Key="CommandLowerStroke" Color="#C28C2C"/>
+        <SolidColorBrush x:Key="CommandLowerInk" Color="#4A3108"/>
+
+        <Style x:Key="CommandRaiseButton" TargetType="Button" BasedOn="{StaticResource CommandActionButtonBase}">
+            <Setter Property="Background" Value="{StaticResource CommandRaiseFill}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource CommandRaiseStroke}"/>
+            <Setter Property="MinWidth" Value="56"/>
+        </Style>
+        <Style x:Key="CommandLowerButton" TargetType="Button" BasedOn="{StaticResource CommandActionButtonBase}">
+            <Setter Property="Background" Value="{StaticResource CommandLowerFill}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource CommandLowerStroke}"/>
+            <Setter Property="Foreground" Value="{StaticResource CommandLowerInk}"/>
+            <Setter Property="MinWidth" Value="56"/>
+        </Style>
+
         <Style x:Key="CommandDockPrimaryButton" TargetType="Button" BasedOn="{StaticResource CommandActionButtonBase}">
             <Setter Property="Background" Value="{StaticResource AccentGradient}"/>
             <Setter Property="BorderBrush" Value="#4B83DF"/>
@@ -550,6 +569,16 @@
                 <DataTrigger Binding="{Binding ControlPendingAction}" Value="Close">
                     <Setter Property="Background" Value="{StaticResource CommandCloseGradient}"/>
                     <Setter Property="BorderBrush" Value="#FF9A9A"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ControlPendingAction}" Value="Raise">
+                    <Setter Property="Background" Value="{StaticResource CommandRaiseFill}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource CommandRaiseStroke}"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ControlPendingAction}" Value="Lower">
+                    <Setter Property="Background" Value="{StaticResource CommandLowerFill}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource CommandLowerStroke}"/>
+                    <Setter Property="Foreground" Value="{StaticResource CommandLowerInk}"/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
