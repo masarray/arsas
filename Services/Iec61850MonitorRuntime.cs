@@ -1410,7 +1410,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                             ? string.IsNullOrWhiteSpace(update.ProjectionStatus) ? "Live / report verified" : $"Live / report verified ({update.ProjectionStatus})"
                             : string.IsNullOrWhiteSpace(update.ProjectionStatus) ? "Live / report traffic + MMS verification" : $"Live / report traffic + MMS verification ({update.ProjectionStatus})",
                     trustReportEdge: true,
-                    hasProcessValue: update.HasValue);
+                    hasProcessValue: update.HasValue,
+                    reportId: update.ReportId,
+                    reportControlReference: string.IsNullOrWhiteSpace(update.ReportControlReference)
+                        ? plan.ReportControlReference : update.ReportControlReference);
 
                 // A routed, schema-safe process value is the data-plane proof. RptEna,
                 // GI, raw/unrouted frames, rejected values, or stale associations
@@ -1697,7 +1700,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         DateTime timestampUtc,
         string status,
         bool trustReportEdge,
-        bool hasProcessValue = true)
+        bool hasProcessValue = true,
+        string? reportId = null,
+        string? reportControlReference = null)
     {
         var state = session.States[point.PointKey];
         var hadValue = state.HasValue;
@@ -1779,7 +1784,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             NewValue = display,
             Quality = quality,
             SourceMode = sourceMode,
-            Reason = reason
+            Reason = reason,
+            ReportId = trustReportEdge ? reportId ?? string.Empty : string.Empty,
+            ReportControlReference = trustReportEdge ? reportControlReference ?? string.Empty : string.Empty
         };
         EventRaised?.Invoke(entry);
     }
