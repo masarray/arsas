@@ -873,9 +873,15 @@ public sealed class Iec61850EventEntry
     public string Quality { get; init; } = "Unknown";
     public string SourceMode { get; init; } = string.Empty;
     public string Reason { get; init; } = string.Empty;
-    // Display-only classification. Command outcomes are a distinct event
-    // source and must never be inferred from a process-value edge.
+    // Raw reporting identity, copied ONLY from a routed live report, never
+    // fabricated from static DataSet labels or a process-value edge.
+    public string ReportId { get; init; } = string.Empty;
+    public string ReportControlReference { get; init; } = string.Empty;
+    // Operator labels are deliberately short. Full source evidence remains
+    // available in the export and the native report diagnostics.
     public string EventCause => Iec61850EventOriginPolicy.Cause(Reason, SourceMode);
+    public string AcquisitionShort => Iec61850EventOriginPolicy.Acquisition(
+        ReportId, ReportControlReference, SourceMode);
     public string ReportChannel => Iec61850EventOriginPolicy.Channel(SourceMode);
     public string EdgeType
     {
