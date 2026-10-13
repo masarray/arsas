@@ -1914,6 +1914,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         {
             signal.ClearControlConfirmation();
             signal.ClearLiveControlAuthority();
+            signal.ControlInspectionBusy = false;
             signal.ControlModelText = "Auto-detect";
             signal.ControlInspectionEvidence =
                 "New MMS association: live CDC, ctlModel and typed ctlVal require reinspection.";
