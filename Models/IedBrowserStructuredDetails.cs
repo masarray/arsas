@@ -15,8 +15,10 @@ public static class IedBrowserStructuredDetails
         var slash = name.IndexOf('/');
         if (slash >= 0 && slash + 1 < name.Length) name = name[(slash + 1)..];
         return new IedBrowserDetailRow("Data", $"{name} [{member.FunctionalConstraint}]", "Not read",
-            depth, "DataSet directory; no MMS value read")
+            depth, "DataSet directory; observed live values or explicit MMS read")
         {
+            ValueReference = member.Reference,
+            FunctionalConstraint = member.FunctionalConstraint,
             LoadChildren = () => DataSetMemberChildren(member, model, depth + 1)
         };
     }
@@ -84,6 +86,8 @@ public static class IedBrowserStructuredDetails
                 $"{name} [{attr.FunctionalConstraint}]", "Not read", depth,
                 $"IEC declaration · {attr.MmsReference} · {attr.TypeSource}")
             {
+                ValueReference = hasDirect ? attr.MmsReference : "",
+                FunctionalConstraint = attr.FunctionalConstraint,
                 LoadChildren = children
             });
         }
