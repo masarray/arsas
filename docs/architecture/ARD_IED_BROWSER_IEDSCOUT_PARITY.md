@@ -5,7 +5,7 @@
 **Status:** PROPOSED / DESIGN ONLY (no GUI or engine change authorized by this document)  
 **Owner:** ARSAS consumer; ARIEC61850 protocol engine  
 **Reference:** user-supplied IEDScout interaction recording `Arssyut-20261013-152821-pixel-accurate.mp4`, ARSAS screenshot `image(20261013-091856).png`, OMICRON IEDScout 4.20 guidance.  
-**Language:** Bahasa Indonesia for product decisions; IEC 61850 terms retain normative names.
+**Language:** Engineering specification in English; operator-facing copy should use concise, familiar IEC 61850 terminology.
 
 ## 0. Decision record / audit provenance
 
@@ -164,7 +164,7 @@ Navigation is read-only by default. Future `Enable RCB`, GI, reservation or reco
 - Distinguish `status only` from valid control operation capability. A control-specific dialog is never opened by an accidental double click on `Pos`.
 - Missing schema or ambiguous FC resolution is rendered as `Unresolved`; do not choose a likely MMS variable and quietly claim a verified read.
 
-### 5.4 Setting Groups — P1, engine API verification gate
+### 5.4 Setting Groups — P0 release requirement, engine API verification gate
 
 - SGCB name/ref, `NumOfSG`, `ActSG`, `EditSG`, `CnfEdit`, `LActTm`, reservation/status and affected LDs, **where readable and supported**.
 - Display a parameter matrix `Reference | FC | Type | Group 1 … Group N` only for actual group-specific values known through verified engine services; allow compact active-group-first mode for many groups.
@@ -335,7 +335,7 @@ If a capability gate fails, ship a clearly marked `Not supported / Not implement
 
 **M2 — Report + DataSet + Global Data detail:** type-safe rows, RCB properties and last actual report evidence, member-order exactness, smart read expansion, q/t/enum formatting, cross-links. ZIV AVR validation. **Stop** unless M2 live values source/freshness are correct.
 
-**M3 — SGCB, GOOSE/SMV, Files:** capability-gated read-only integration, bounded listing, group preview only when supported; additive engine PR only for verified gaps.
+**M3 — SGCB, GOOSE/SMV, Files:** SGCB properties and safe setting-value inspection are release-required; capability-gated integration, bounded listing, group preview only when supported; additive engine PR only for verified gaps. If verified group-reading support is absent, parity remains blocked rather than being claimed complete.
 
 **M4 — QA / polish / release:** performance profile, large IED tests, branch/lifecycle regression, screenshot pixel review, Windows packaged artifact and supervised live IED commissioning evidence. No silent auto merge.
 
