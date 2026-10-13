@@ -990,7 +990,7 @@
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="IEC 61850 Sequence of Events" Style="{StaticResource WorkspaceTitle}"/>
-                                <TextBlock Text="IEC report reasons • BRCB/URCB stream • process SOE. Buffered replay requires explicit entry evidence." Style="{StaticResource WorkspaceSubtitle}" Margin="0,2,0,0"/>
+                                <TextBlock Text="SOE edges • process state and signal quality are shown separately. IEC report cause and BRCB/URCB stream are also shown." Style="{StaticResource WorkspaceSubtitle}" Margin="0,2,0,0"/>
                             </StackPanel>
                             <WrapPanel Grid.Column="1">
                                 <Button Content="Export CSV" Style="{StaticResource SoftButton}" Click="ExportEvents_Click" Margin="0,0,8,0"/>
