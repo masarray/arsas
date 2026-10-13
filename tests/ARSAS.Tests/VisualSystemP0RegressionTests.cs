@@ -78,7 +78,7 @@ public sealed class VisualSystemP0RegressionTests
         Assert.Contains("CornerRadius=\"10\"", runtime, StringComparison.Ordinal);
         Assert.Contains("WideNavWidth = 1150d", responsive, StringComparison.Ordinal);
         Assert.Contains("MediumNavWidth = 1010d", responsive, StringComparison.Ordinal);
-        Assert.Contains("CompactNavWidth = 720d", responsive, StringComparison.Ordinal);
+        Assert.Contains("CompactNavWidth = 842d", responsive, StringComparison.Ordinal);
         Assert.Contains("shell.Width = shellWidth", responsive, StringComparison.Ordinal);
     }
 

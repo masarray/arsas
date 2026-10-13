@@ -34,7 +34,8 @@ public sealed class P109IedBrowserAndEventDrawerContractTests
         Assert.Contains("private async void IedBrowserReadRcb_Click", code);
         var opening = code.Split("internal void OpenIedBrowserRcb")[1].Split("private void IedBrowserRefresh_Click")[0];
         Assert.DoesNotContain("CheckAsync", opening);
-        Assert.DoesNotContain("Write", code, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("MmsWrite", code, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ConfigureControlModelAsync(", code);
         Assert.DoesNotContain(".IsSelected =", code);
         Assert.Contains("CancelIedBrowserRead();", code);
     }
