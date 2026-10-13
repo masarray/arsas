@@ -22,11 +22,16 @@ public sealed class P109IedBrowserAndEventDrawerContractTests
         Assert.Contains("IedBrowserPresentation.Roots(", code);
         var browserMarkup = xaml.Split("x:Name=\"IedBrowserTab\"")[1];
         Assert.DoesNotContain("DisplayMemberPath=\"Name\"", browserMarkup);
-        Assert.Contains("IedBrowserDetail_DoubleClick", browserMarkup);
+        Assert.Contains("IedBrowserDetailItem_DoubleClick", browserMarkup);
         Assert.Contains("IedBrowserDetailToggle_Click", browserMarkup);
         Assert.Contains("BrowserFlagGroupRow", browserMarkup);
         Assert.Contains("BrowserObjectRow", browserMarkup);
-        Assert.Contains("IedBrowserTreeGrid.SelectedItem = target", code);
+        Assert.Contains("IedBrowserTreeGrid.SelectedItem = visible", code);
+        Assert.Contains("x:Name=\"IedBrowserBackButton\"", browserMarkup);
+        Assert.Contains("IedBrowserNavigationTrail", code);
+        Assert.Contains("IedBrowserBack_Click", code);
+        Assert.Contains("SelectionChrome", browserMarkup);
+        Assert.DoesNotContain("Focusable\" Value=\"False\"", browserMarkup.Split("x:Name=\"IedBrowserDetailList\"")[1].Split("</ListView.ItemContainerStyle>")[0]);
     }
 
     [Fact]
