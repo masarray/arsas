@@ -17,7 +17,13 @@ public sealed class P0LifecycleAndTotPfRegressionTests
         Assert.Contains("RunDeviceOperationAsync", facade, StringComparison.Ordinal);
         Assert.Contains("RunPreemptiveStopAsync", facade, StringComparison.Ordinal);
         Assert.Contains("activeCancellation?.Cancel()", facade, StringComparison.Ordinal);
-        Assert.Contains("without\n        // waiting for OperationGate", facade, StringComparison.Ordinal);
+        var preemptiveStart = facade.IndexOf("private Task RunPreemptiveStopAsync(", StringComparison.Ordinal);
+        var preemptiveEnd = facade.IndexOf("public async ValueTask DisposeAsync()", preemptiveStart, StringComparison.Ordinal);
+        Assert.True(preemptiveStart >= 0 && preemptiveEnd > preemptiveStart);
+        var preemptiveBody = facade[preemptiveStart..preemptiveEnd];
+        Assert.DoesNotContain("await slot.OperationGate.WaitAsync(", preemptiveBody, StringComparison.Ordinal);
+        Assert.Contains("slot.ActiveStopTask", preemptiveBody, StringComparison.Ordinal);
+        Assert.Contains("await slot.StopGate.WaitAsync()", preemptiveBody, StringComparison.Ordinal);
         Assert.Contains("linkedCancellation.Token.ThrowIfCancellationRequested()", facade, StringComparison.Ordinal);
         Assert.Contains("slot.Generation != generation", facade, StringComparison.Ordinal);
         Assert.Contains("DisposeBudget = TimeSpan.FromSeconds(3)", facade, StringComparison.Ordinal);
