@@ -2383,9 +2383,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             point.IsOffline = false;
             point.DeviceTimestamp = snapshot.DeviceTimestamp;
             point.SourceMode = snapshot.SourceMode;
-            // RCB provenance only comes from a routed report, never from a
-            // selected DataSet, a configured plan, or a stale MMS poll.
-            if (snapshot.IsReportTraffic && !string.IsNullOrWhiteSpace(snapshot.ReportControlReference))
+            // Runtime attaches RCB metadata ONLY after an actual routed
+            // report. Preserve that verified identity even when a later
+            // status snapshot wins the UI batch with the same process value.
+            if (!string.IsNullOrWhiteSpace(snapshot.ReportControlReference))
                 point.LastLiveReportControlReference = snapshot.ReportControlReference;
             point.Reason = snapshot.Reason;
             point.Status = snapshot.Status;
