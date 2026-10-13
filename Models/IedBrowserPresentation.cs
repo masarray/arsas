@@ -185,7 +185,7 @@ public static class IedBrowserPresentation
                 loadChildren: () => ld.GroupBy(row => LogicalNode(row.Reference), StringComparer.Ordinal)
                     .Select(ln => new IedBrowserTreeRow("reports/ln/" + ld.Key + "/" + ln.Key,
                         ln.Key, "LN", 2,
-                        loadChildren: () => ln.Select(row =>
+                        loadChildren: () => ln.OrderBy(row => row.Buffered).Select(row =>
                             new IedBrowserTreeRow("reports/rcb/" + row.SelectionIdentity,
                                 row.Name, "RCB", 3, row)).ToArray())).ToArray())).ToArray();
 
@@ -234,10 +234,11 @@ public static class IedBrowserPresentation
     private static bool TryBuildObjectList(
         IedBrowserTreeRow node, List<IedBrowserDetailRow> rows)
     {
-        var serviceCategory = node.Key.StartsWith("reports/", StringComparison.Ordinal) ||
-                              node.Key.StartsWith("GoCB/", StringComparison.Ordinal) ||
-                              node.Key.StartsWith("SGCB/", StringComparison.Ordinal) ||
-                              node.Key.StartsWith("datasets/", StringComparison.Ordinal);
+        var serviceCategory = node.Kind is "LD" or "LN" &&
+            (node.Key.StartsWith("reports/", StringComparison.Ordinal) ||
+             node.Key.StartsWith("GoCB/", StringComparison.Ordinal) ||
+             node.Key.StartsWith("SGCB/", StringComparison.Ordinal) ||
+             node.Key.StartsWith("datasets/", StringComparison.Ordinal));
         var serviceRoot = node.Key is "category/reports" or "category/goose" or
             "category/settings" or "category/datasets";
         var dataModelContainer = node.Key == "category/model" ||
