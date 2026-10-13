@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "ad43399ed411cc72e6eb68b67e198db5e7b95381",
+  "commit": "036e2c00d83a0815b6160147b14ea05975057965",
   "sourcePullRequest": 169,
-  "purpose": "P10.9U: verified typed ST.Pos.stVal recovery on truncated MMS NameList; engine CI successful, ZIV bench acceptance pending.",
+  "purpose": "P10.9V: exact typed live BSC authority over stale SPC static projection; preserves P10.9U CSWI Pos recovery. Engine CI green; ZIV bench acceptance pending.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
@@ -239,6 +239,20 @@
     "physicalQualificationRequired": true,
     "mainlinePromotionForbidden": true,
     "fullDiscoveryFallbackForbidden": true,
+    "cyclicMmsProcessPollingForbidden": true
+  },
+  "p109VLiveBscAuthorityTrial": {
+    "status": "engine-ci-success-consumer-ci-pending-not-physical",
+    "enginePullRequest": 169,
+    "consumerPullRequest": 543,
+    "baseEngineCommit": "ad43399ed411cc72e6eb68b67e198db5e7b95381",
+    "exactCommit": "036e2c00d83a0815b6160147b14ea05975057965",
+    "engineCiRun": 38328335496,
+    "staticSpcNeverOverridesExactLiveBsc": true,
+    "typedTwoBitCtlValAndExactStepStatusRequired": true,
+    "wrongOrCrossObjectStatusFailsClosed": true,
+    "physicalQualificationRequired": true,
+    "mainlinePromotionForbidden": true,
     "cyclicMmsProcessPollingForbidden": true
   }
 }
