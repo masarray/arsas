@@ -1443,6 +1443,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var device = _signalOwners.TryGetValue(signal, out var owner) ? owner : SelectedDevice;
         if (device is null || !device.IsConnected || signal.ControlInspectionBusy || signal.ControlCommandBusy)
             return;
+        DismissControlShout();
 
         // A live Direct/SBO model permits a preflight inspection, not an
         // unqualified Operate. Only a verified live descriptor may be staged.
@@ -1581,6 +1582,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
+        DismissControlShout();
         var clickStopwatch = Stopwatch.StartNew();
         signal.ControlLastResult = $"Dispatching {claim.RequestedValue}…";
         SetStatus($"{device.Name}: dispatching {signal.Name} = {claim.RequestedValue}…");
@@ -1593,8 +1595,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (device.IsDemo)
             {
                 await ExecuteDemoControlAsync(device, signal, claim);
-                ShowControlShout(Iec61850ControlShout.FromDemo(signal.ControlCurrentValue));
-                return;
+                return; // Demo success is reflected in the values/status, not in a toast.
             }
             if (!device.IsConnected)
             {
@@ -1639,12 +1640,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             AddLog(result.IsSuccess ? "INFO" : "WARN", device.Name,
                 $"Control UI timing: {signal.ObjectReference}; sequence={claim.Sequence}; click-to-result={clickStopwatch.Elapsed.TotalMilliseconds:0.###} ms; engine-total={result.TotalElapsedText}; serviceAccepted={result.ServiceAccepted}; stage={result.Stage}.");
 
-            // Every final outcome gets one evidence-graded toast. Only an
-            // actual control failure marks Diagnostics; accepted service alone
-            // never becomes "Position reached" without confirmed feedback.
+            // Only failures require immediate, local Command Dock feedback.
+            // Successful commands and already-at-state preflights remain
+            // visible in values/status/Diagnostics without a distracting toast.
             if (!result.IsSuccess)
+            {
                 MarkDiagnosticAlert();
-            ShowControlShout(Iec61850ControlShout.FromResult(result));
+                ShowControlShout(Iec61850ControlShout.FromResult(result));
+            }
         }
         catch (OperationCanceledException)
         {
@@ -1701,46 +1704,42 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             : $"{result.Stage}: {Iec61850ControlFailureReason.Explain(result).Summary} • {result.Message}{suffix}";
     }
 
+    private void DismissControlShout()
+    {
+        // Stale failures must not appear to belong to the next command.
+        _controlShoutTimer.Stop();
+        ControlShoutCard.BeginAnimation(OpacityProperty, null);
+        ControlShoutCard.Visibility = Visibility.Collapsed;
+    }
+
     private void ShowControlShout(Iec61850ControlShout.Notice notice)
     {
-        // One window-local, latest-result-wins, non-modal toast. Command
-        // dispatch and the independently reported process state are untouched.
+        // Only warning/error notifications. The full failure evidence stays
+        // in Diagnostics; only one short summary is rendered in Command Dock.
         if (!Dispatcher.CheckAccess())
         {
             Dispatcher.BeginInvoke(() => ShowControlShout(notice));
             return;
         }
+        if (notice.Tone is not (Iec61850ControlNoticeTone.Warning or Iec61850ControlNoticeTone.Error))
+            return;
 
-        var (accent, tint, ink, glyph, duration) = notice.Tone switch
-        {
-            Iec61850ControlNoticeTone.Success =>
-                (Color.FromRgb(22, 132, 100), Color.FromRgb(230, 247, 240),
-                 Color.FromRgb(16, 97, 77), "✓", TimeSpan.FromSeconds(3.5)),
-            Iec61850ControlNoticeTone.Warning =>
-                (Color.FromRgb(182, 117, 30), Color.FromRgb(255, 245, 225),
-                 Color.FromRgb(138, 81, 11), "!", TimeSpan.FromSeconds(6)),
-            Iec61850ControlNoticeTone.Error =>
-                (Color.FromRgb(201, 73, 65), Color.FromRgb(255, 239, 235),
-                 Color.FromRgb(159, 51, 44), "×", TimeSpan.FromSeconds(8)),
-            _ =>
-                (Color.FromRgb(62, 110, 171), Color.FromRgb(235, 242, 252),
-                 Color.FromRgb(40, 86, 144), "i", TimeSpan.FromSeconds(4))
-        };
-
+        var error = notice.Tone == Iec61850ControlNoticeTone.Error;
+        var accent = error ? Color.FromRgb(175, 57, 53) : Color.FromRgb(153, 98, 26);
         _controlShoutTimer.Stop();
-        _controlShoutTimer.Interval = duration;
+        _controlShoutTimer.Interval = TimeSpan.FromSeconds(error ? 6 : 4.5);
         ControlShoutCard.BeginAnimation(OpacityProperty, null);
-        ControlShoutAccent.Background = new SolidColorBrush(accent);
-        ControlShoutCard.BorderBrush = new SolidColorBrush(accent);
-        ControlShoutGlyphBackdrop.Background = new SolidColorBrush(tint);
-        ControlShoutGlyph.Foreground = new SolidColorBrush(ink);
-        ControlShoutTitle.Foreground = new SolidColorBrush(ink);
-        ControlShoutGlyph.Text = glyph;
+        ControlShoutCard.BorderBrush = new SolidColorBrush(
+            error ? Color.FromRgb(238, 193, 189) : Color.FromRgb(232, 201, 154));
+        ControlShoutGlyphBackdrop.Background = new SolidColorBrush(
+            error ? Color.FromRgb(254, 236, 233) : Color.FromRgb(255, 245, 226));
+        ControlShoutGlyph.Foreground = new SolidColorBrush(accent);
+        ControlShoutTitle.Foreground = new SolidColorBrush(accent);
+        ControlShoutGlyph.Text = error ? "×" : "!";
         ControlShoutTitle.Text = notice.Title;
-        ControlShoutDetail.Text = notice.Detail;
         ControlShoutCard.Visibility = Visibility.Visible;
         ControlShoutCard.BeginAnimation(OpacityProperty,
-            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)));
+            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)));
         _controlShoutTimer.Start();
     }
 
