@@ -289,10 +289,34 @@ public partial class MainWindow
         foreach (var row in _iedBrowserDetails.Rows)
         {
             if (string.IsNullOrWhiteSpace(row.ValueReference)) continue;
-            row.Value = device.LiveValues.TryGet(row.ValueReference,
-                row.FunctionalConstraint, out var live)
-                ? live.Value
-                : "Not read";
+            if (!device.LiveValues.TryGet(row.ValueReference,
+                    row.FunctionalConstraint, out var live))
+            {
+                row.Value = "Not read";
+                continue;
+            }
+            if (row.EvidenceField.Length == 0)
+            {
+                row.Value = live.Value;
+                continue;
+            }
+            if (row.EvidenceField == "Validity")
+            {
+                // A normalized q of Good/Invalid/Questionable is proof of
+                // validity, not proof of the remaining independent q bits.
+                var quality = live.Value.Trim();
+                row.Value = quality.Equals("good", StringComparison.OrdinalIgnoreCase) ||
+                            quality.Equals("invalid", StringComparison.OrdinalIgnoreCase) ||
+                            quality.Equals("questionable", StringComparison.OrdinalIgnoreCase)
+                    ? quality.ToLowerInvariant() : "Not exposed";
+            }
+            else
+            {
+                // The current report value formatter exposes normalized q/t
+                // without raw bits. Do not paint default false/true for bits
+                // that were not included in the model's actual value evidence.
+                row.Value = "Not exposed";
+            }
         }
     }
 
