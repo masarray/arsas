@@ -20,6 +20,11 @@ public sealed class P109IedBrowserAndEventDrawerContractTests
         Assert.Contains("MainTabs.SelectedIndex = IedBrowserWorkspaceIndex", code);
         Assert.Contains("BuildRcbExportRows(device, inventory, _iedBrowserSnapshot)", code);
         Assert.Contains("IedBrowserPresentation.Roots(", code);
+        var browserMarkup = xaml.Split("x:Name=\"IedBrowserTab\"")[1];
+        Assert.DoesNotContain("DisplayMemberPath=\"Name\"", browserMarkup);
+        Assert.Contains("IedBrowserDetail_SelectionChanged", browserMarkup);
+        Assert.Contains("BrowserObjectRow", browserMarkup);
+        Assert.Contains("IedBrowserTreeGrid.SelectedItem = target", code);
     }
 
     [Fact]
