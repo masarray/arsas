@@ -227,11 +227,11 @@ public static class IedBrowserPresentation
                 rows.Add(new("Message", "No report-reception snapshot is available in this inspector."));
                 Section("Data");
                 rows.Add(new("DataHeader", "Name", "Value"));
-                var set = FindDataSet(model, rcb.DataSetReference);
-                if (set is null)
+                var linkedDataSet = FindDataSet(model, rcb.DataSetReference);
+                if (linkedDataSet is null)
                     rows.Add(new("Message", "DataSet member directory is not available in the current model."));
                 else
-                    foreach (var member in set.Members)
+                    foreach (var member in linkedDataSet.Members)
                         Member($"{member.Index}: {member.Reference} [{member.FunctionalConstraint}]",
                             source: "Ordered DataSet member (not a live read)");
                 break;
