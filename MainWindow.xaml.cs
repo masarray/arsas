@@ -1585,6 +1585,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (device.IsDemo)
             {
                 await ExecuteDemoControlAsync(device, signal, claim);
+                ShowControlShout(Iec61850ControlShout.FromDemo(signal.ControlCurrentValue));
                 return;
             }
             if (!device.IsConnected)
@@ -1594,7 +1595,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     ? await ConnectUsingSavedModelAsync(device)
                     : await ConnectAndConfigureDeviceAsync(device, openWizard: false);
                 if (!connected)
+                {
+                    ShowControlShout(Iec61850ControlShout.FromLocalRejection(
+                        "MMS connection could not be established"));
                     return;
+                }
             }
 
             AddLog("INFO", device.Name,
@@ -1626,15 +1631,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             AddLog(result.IsSuccess ? "INFO" : "WARN", device.Name,
                 $"Control UI timing: {signal.ObjectReference}; sequence={claim.Sequence}; click-to-result={clickStopwatch.Elapsed.TotalMilliseconds:0.###} ms; engine-total={result.TotalElapsedText}; serviceAccepted={result.ServiceAccepted}; stage={result.Stage}.");
 
-            // Failure must be visible without a modal dialog blocking unrelated
-            // IED operations. Service/AddCause evidence stays in diagnostics and
-            // the per-command result; the notice never invents Local/Remote.
+            // Every final outcome gets one evidence-graded toast. Only an
+            // actual control failure marks Diagnostics; accepted service alone
+            // never becomes "Position reached" without confirmed feedback.
             if (!result.IsSuccess)
-            {
                 MarkDiagnosticAlert();
-                var notice = Iec61850ControlShout.FromResult(result);
-                ShowControlShout(notice.Title, notice.Detail);
-            }
+            ShowControlShout(Iec61850ControlShout.FromResult(result));
         }
         catch (OperationCanceledException)
         {
@@ -1647,8 +1649,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             AddLog("ERROR", device.Name, $"Quick control failed for {signal.ObjectReference}: {ex}");
             SetStatus($"{device.Name}: {signal.Name} command failed — {ex.Message}");
             MarkDiagnosticAlert();
-            var notice = Iec61850ControlShout.FromUnexpectedFailure();
-            ShowControlShout(notice.Title, notice.Detail);
+            ShowControlShout(Iec61850ControlShout.FromUnexpectedFailure());
         }
         finally
         {
@@ -1692,19 +1693,46 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             : $"{result.Stage}: {Iec61850ControlFailureReason.Explain(result).Summary} • {result.Message}{suffix}";
     }
 
-    private void ShowControlShout(string title, string detail)
+    private void ShowControlShout(Iec61850ControlShout.Notice notice)
     {
-        // UI ownership is confined to WPF Dispatcher. The runtime's atomic
-        // per-target command admission remains independent of display timing.
+        // One window-local, latest-result-wins, non-modal toast. Command
+        // dispatch and the independently reported process state are untouched.
         if (!Dispatcher.CheckAccess())
         {
-            Dispatcher.BeginInvoke(() => ShowControlShout(title, detail));
+            Dispatcher.BeginInvoke(() => ShowControlShout(notice));
             return;
         }
+
+        var (accent, tint, ink, glyph, duration) = notice.Tone switch
+        {
+            Iec61850ControlNoticeTone.Success =>
+                (Color.FromRgb(22, 132, 100), Color.FromRgb(230, 247, 240),
+                 Color.FromRgb(16, 97, 77), "✓", TimeSpan.FromSeconds(3.5)),
+            Iec61850ControlNoticeTone.Warning =>
+                (Color.FromRgb(182, 117, 30), Color.FromRgb(255, 245, 225),
+                 Color.FromRgb(138, 81, 11), "!", TimeSpan.FromSeconds(6)),
+            Iec61850ControlNoticeTone.Error =>
+                (Color.FromRgb(201, 73, 65), Color.FromRgb(255, 239, 235),
+                 Color.FromRgb(159, 51, 44), "×", TimeSpan.FromSeconds(8)),
+            _ =>
+                (Color.FromRgb(62, 110, 171), Color.FromRgb(235, 242, 252),
+                 Color.FromRgb(40, 86, 144), "i", TimeSpan.FromSeconds(4))
+        };
+
         _controlShoutTimer.Stop();
-        ControlShoutTitle.Text = title;
-        ControlShoutDetail.Text = detail;
+        _controlShoutTimer.Interval = duration;
+        ControlShoutCard.BeginAnimation(OpacityProperty, null);
+        ControlShoutAccent.Background = new SolidColorBrush(accent);
+        ControlShoutCard.BorderBrush = new SolidColorBrush(accent);
+        ControlShoutGlyphBackdrop.Background = new SolidColorBrush(tint);
+        ControlShoutGlyph.Foreground = new SolidColorBrush(ink);
+        ControlShoutTitle.Foreground = new SolidColorBrush(ink);
+        ControlShoutGlyph.Text = glyph;
+        ControlShoutTitle.Text = notice.Title;
+        ControlShoutDetail.Text = notice.Detail;
         ControlShoutCard.Visibility = Visibility.Visible;
+        ControlShoutCard.BeginAnimation(OpacityProperty,
+            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)));
         _controlShoutTimer.Start();
     }
 
