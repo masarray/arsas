@@ -1018,7 +1018,7 @@
                                 <DataGridTemplateColumn Header="Value" Width="130" CellTemplate="{StaticResource ProcessValueBadgeTemplate}"/>
                                 <DataGridTemplateColumn Header="Quality" Width="110" CellTemplate="{StaticResource EventQualityBadgeTemplate}"/>
                                 <DataGridTextColumn Header="Event" Binding="{Binding EventCause}" Width="100" IsReadOnly="True"/>
-                                <DataGridTextColumn Header="Acquisition" Binding="{Binding AcquisitionShort}" IsReadOnly="True" Width="*" MinWidth="145" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="Acquisition" Binding="{Binding AcquisitionShort}" Width="*" MinWidth="145" IsReadOnly="True"/>
                             </DataGrid.Columns>
                         </DataGrid>
                     </DockPanel>
