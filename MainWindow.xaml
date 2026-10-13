@@ -1812,12 +1812,17 @@
                                 Background="Transparent">
                             <Grid Margin="7,1,7,1">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="30"/>
+                                    <ColumnDefinition Width="32"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="23"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{Binding Glyph}" FontSize="10"
-                                           Foreground="#1A71C1" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <Border Grid.Column="0" Background="{Binding GlyphBrush}" CornerRadius="2"
+                                        Height="16" Width="23" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Glyph}" FontSize="9" Foreground="White"
+                                               FontWeight="SemiBold" TextAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Border>
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding Name}" ToolTip="{Binding Tooltip}"
                                                FontSize="11.2" Foreground="#273C55"
@@ -1839,6 +1844,10 @@
                                 <TextBlock Grid.Column="2" Text="{Binding Value}" ToolTip="{Binding Value}"
                                            FontSize="10.5" Foreground="#63768A" Margin="10,0,0,0"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="3" Text="{Binding RcbUsageGlyph}"
+                                           Foreground="#B98506" FontSize="13"
+                                           ToolTip="{Binding RcbUsageTooltip}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Grid>
                         </Border>
                     </DataTemplate>
@@ -1940,6 +1949,7 @@
                                                             <ColumnDefinition Width="17"/>
                                                             <ColumnDefinition Width="34"/>
                                                             <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="18"/>
                                                         </Grid.ColumnDefinitions>
                                                         <Border Width="{Binding IndentWidth}"/>
                                                         <Button Grid.Column="1" Tag="{Binding}" Content="{Binding ToggleGlyph}"
@@ -1948,12 +1958,20 @@
                                                                 Background="Transparent" BorderThickness="0"
                                                                 Width="17" Height="21" FontSize="12" Padding="0"
                                                                 Focusable="False" ToolTip="Expand or collapse"/>
-                                                        <TextBlock Grid.Column="2" Text="{Binding Glyph}" Foreground="#2875B9"
-                                                                   FontSize="9.5" FontWeight="SemiBold"
-                                                                   Margin="4,0,6,0" VerticalAlignment="Center"/>
+                                                        <Border Grid.Column="2" Background="{Binding GlyphBrush}"
+                                                                CornerRadius="2" Padding="2,0" Height="16"
+                                                                VerticalAlignment="Center" Margin="3,0,5,0">
+                                                            <TextBlock Text="{Binding Glyph}" Foreground="White"
+                                                                       FontSize="9" FontWeight="SemiBold"
+                                                                       TextAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
                                                         <TextBlock Grid.Column="3" Text="{Binding Title}" ToolTip="{Binding Key}"
                                                                    TextTrimming="CharacterEllipsis"
                                                                    Foreground="#243B54" VerticalAlignment="Center"/>
+                                                        <TextBlock Grid.Column="4" Text="{Binding RcbUsageGlyph}"
+                                                                   Foreground="#B98506" FontSize="13"
+                                                                   ToolTip="{Binding RcbUsageTooltip}"
+                                                                   VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                                     </Grid>
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
