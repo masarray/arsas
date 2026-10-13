@@ -24,6 +24,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public long Sequence { get; set; }
         public string SourceMode { get; set; } = "Waiting";
         public string AcquisitionLabel { get; set; } = "MMS polling";
+        public string LastLiveReportControlReference { get; set; } = string.Empty;
         public string Reason { get; set; } = "-";
         public string Status { get; set; } = "Queued";
         public bool HasValue { get; set; }
@@ -1738,7 +1739,16 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         var oldQuality = state.Quality;
         var displayChanged = hasProcessValue && !string.Equals(oldValue, display, StringComparison.Ordinal);
         var qualityChangedForUi = !string.Equals(oldQuality, quality, StringComparison.OrdinalIgnoreCase);
-        var metadataChanged = !string.Equals(state.DeviceTimestamp, deviceTimestamp, StringComparison.Ordinal) ||
+        // The reporting RCB may change while the process value is unchanged
+        // (e.g. reconnect chooses a different free BRCB). This is meaningful
+        // UI provenance and must emit a snapshot even with no value edge.
+        var nextRcb = trustReportEdge && !string.IsNullOrWhiteSpace(reportControlReference)
+            ? reportControlReference.Trim()
+            : state.LastLiveReportControlReference;
+        var reportRcbChanged = trustReportEdge &&
+            !string.Equals(state.LastLiveReportControlReference, nextRcb, StringComparison.OrdinalIgnoreCase);
+        var metadataChanged = reportRcbChanged ||
+                              !string.Equals(state.DeviceTimestamp, deviceTimestamp, StringComparison.Ordinal) ||
                               !string.Equals(state.SourceMode, sourceMode, StringComparison.Ordinal) ||
                               !string.Equals(state.Reason, reason, StringComparison.Ordinal) ||
                               !string.Equals(state.Status, status, StringComparison.Ordinal);
@@ -1767,6 +1777,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         state.DeviceTimestamp = deviceTimestamp;
         state.LastUpdateUtc = timestampUtc;
         state.SourceMode = sourceMode;
+        if (trustReportEdge)
+            state.LastLiveReportControlReference = nextRcb;
         state.Reason = reason;
         state.Status = status;
         if (changed)
@@ -1786,6 +1798,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 Status = status,
                 IsValueEdge = changed,
                 IsReportTraffic = trustReportEdge,
+                ReportControlReference = trustReportEdge ? state.LastLiveReportControlReference : string.Empty,
                 Sequence = state.Sequence
             });
         }
