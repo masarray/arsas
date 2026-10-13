@@ -89,9 +89,11 @@ public sealed class F650CanonicalCommandFailureTests
         var end = main.IndexOf("catch (OperationCanceledException)", start, StringComparison.Ordinal);
         Assert.True(start >= 0 && end > start);
         var resultPresentation = main[start..end];
-        Assert.Contains(
-            "if (!result.IsSuccess)\n            {\n                MarkDiagnosticAlert();\n                ShowControlShout(Iec61850ControlShout.FromResult(result));\n            }",
-            resultPresentation, StringComparison.Ordinal);
+        // Whitespace-neutral: Git on Windows may check out CRLF source.
+        // The toast must remain lexically nested inside failure handling.
+        Assert.Matches(
+            @"if\s*\(!result\.IsSuccess\)\s*\{\s*MarkDiagnosticAlert\(\);\s*ShowControlShout\(Iec61850ControlShout\.FromResult\(result\)\);\s*\}",
+            resultPresentation);
         Assert.Equal(1, resultPresentation.Split(
             "ShowControlShout(Iec61850ControlShout.FromResult(result));",
             StringSplitOptions.None).Length - 1);
