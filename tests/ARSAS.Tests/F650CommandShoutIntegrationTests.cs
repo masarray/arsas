@@ -199,10 +199,17 @@ public sealed class F650CommandShoutIntegrationTests
         Assert.Contains("Panel.ZIndex=\"90\"", xaml, StringComparison.Ordinal);
         Assert.Contains("IsHitTestVisible=\"False\"", xaml, StringComparison.Ordinal);
         Assert.Contains("HorizontalAlignment=\"Center\" VerticalAlignment=\"Center\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"ControlShoutAccent\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"ControlShoutGlyph\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("x:Name=\"ControlShoutDetail\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("x:Name=\"ControlShoutAccent\"", xaml, StringComparison.Ordinal);
+        var dockStart = xaml.IndexOf("x:Name=\"CommandPanelExpander\"", StringComparison.Ordinal);
+        var dockEnd = xaml.IndexOf("</Expander>", dockStart, StringComparison.Ordinal);
+        var toast = xaml.IndexOf("x:Name=\"ControlShoutCard\"", StringComparison.Ordinal);
+        Assert.True(dockStart >= 0 && toast > dockStart && dockEnd > toast);
         Assert.Contains("ShowControlShout(Iec61850ControlShout.FromResult(result));", code, StringComparison.Ordinal);
         Assert.Contains("if (!result.IsSuccess)", code, StringComparison.Ordinal);
+        Assert.Contains("DismissControlShout();", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("ShowControlShout(Iec61850ControlShout.FromDemo(", code, StringComparison.Ordinal);
         Assert.Contains("Interval = TimeSpan.FromSeconds(8)", code, StringComparison.Ordinal);
         Assert.Contains("ControlShoutCard.Visibility = Visibility.Collapsed", code, StringComparison.Ordinal);
         Assert.Contains("Dispatcher.CheckAccess()", code, StringComparison.Ordinal);
