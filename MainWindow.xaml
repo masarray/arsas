@@ -789,6 +789,7 @@
                                                                                     IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
                                                                         </StackPanel>
                                                                         <Button Grid.Column="1" Content="Model" Tag="{Binding}" Click="ControlDetails_Click"
+                                                                                IsEnabled="{Binding DataContext.SelectedDevice.IsConnected, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
                                                                                 Style="{StaticResource CommandDockSoftButton}" Margin="6,0,1,0"
                                                                                 MinWidth="48"
                                                                                 Height="29" MinHeight="29" Padding="10,3"/>
