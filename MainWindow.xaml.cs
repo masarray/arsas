@@ -102,9 +102,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     public string HeaderStatusText => $"{Devices.Count} IED • {(IsDemoMode ? Devices.Count(device => device.IsMonitoring) : _runtime.MonitoringDeviceCount)} monitoring";
     public string DeviceCountText => $"{Devices.Count} device(s)";
-    public string RuntimeSummaryText => $"Connected {(IsDemoMode ? Devices.Count(device => device.IsConnected) : _runtime.ConnectedDeviceCount)} • Monitoring {(IsDemoMode ? Devices.Count(device => device.IsMonitoring) : _runtime.MonitoringDeviceCount)} • Values {GlobalPoints.Count} • Events {Events.Count}";
+    public string RuntimeSummaryText => $"Connected {(IsDemoMode ? Devices.Count(device => device.IsConnected) : _runtime.ConnectedDeviceCount)} • Monitoring {(IsDemoMode ? Devices.Count(device => device.IsMonitoring) : _runtime.MonitoringDeviceCount)} • Values {GlobalPoints.Count(point => !point.IsOffline)} • Events {Events.Count}";
     public string ConnectionInsightText => $"{(IsDemoMode ? Devices.Count(device => device.IsConnected) : _runtime.ConnectedDeviceCount)} connected / {Devices.Count} discovered";
-    public string MonitoringInsightText => $"{(IsDemoMode ? Devices.Count(device => device.IsMonitoring) : _runtime.MonitoringDeviceCount)} monitoring / {GlobalPoints.Count} values";
+    public string MonitoringInsightText => $"{(IsDemoMode ? Devices.Count(device => device.IsMonitoring) : _runtime.MonitoringDeviceCount)} monitoring / {GlobalPoints.Count(point => !point.IsOffline)} live values";
     public string EventInsightText => $"{Events.Count} event(s)";
     public Visibility DiagnosticsAlertVisibility => _hasUnreadDiagnosticError ? Visibility.Visible : Visibility.Collapsed;
     public Visibility EmptyExplorerVisibility => SelectedDevice == null ? Visibility.Visible : Visibility.Collapsed;
@@ -120,6 +120,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public MainWindow()
     {
         InitializeComponent();
+        // Use the actual compiled ARSAS assembly version, not a duplicated
+        // title-bar constant that can drift from the installed package.
+        var installedVersion = typeof(MainWindow).Assembly.GetName().Version;
+        Title = installedVersion is { Build: >= 0 }
+            ? $"ARSAS v{installedVersion.ToString(3)} — Smart IEC 61850 Communication Tester"
+            : "ARSAS — Smart IEC 61850 Communication Tester";
         DataContext = this;
         _controlShoutTimer.Tick += (_, _) =>
         {
@@ -802,6 +808,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (MainTabs.SelectedIndex != GooseSubscriberTabIndex)
             _pendingIedGooseAutoStart = null;
 
+        if (MainTabs.SelectedIndex != 2)
+            HideEventDetails();
         if (MainTabs.SelectedIndex == 2)
         {
             foreach (var device in Devices)
@@ -1018,8 +1026,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!device.HasDiscoveryCache || device.Signals.Count == 0)
             return await ConnectAndConfigureDeviceAsync(device, openWizard: true, selectDevice: selectDevice);
 
-        RemoveDevicePoints(device.DeviceId);
-        device.Points.Clear();
+        ResetControlReadinessForNewAssociation(device);
+        // Keep last-seen rows muted during fast reconnect. Replace them only
+        // after a new monitor session has successfully built its point model.
+        MarkDevicePointsInactive(device, disconnected: true);
+        EnsureOfflinePointProjection(device);
         device.RefreshComputed();
         if (selectDevice)
             SelectedDevice = device;
@@ -1280,7 +1291,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void IedStopAction_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetDeviceFromButton(sender, out var device) || device.IsBusy) return;
+        // Stop is a preemptive safety lane even while Connect/Start is busy.
+        if (!TryGetDeviceFromButton(sender, out var device) || device.IsStopping) return;
         SelectedDevice = device;
         if (device.IsDemo)
         {
@@ -1288,9 +1300,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        if (device.IsMonitoring)
-            await StopDeviceMonitorAsync(device);
-        else if (device.IsConnected)
+        // One Stop = one complete disconnect. The independent pause-monitor
+        // action remains available elsewhere; the IED card never requires
+        // a second Stop to release its MMS association.
+        if (device.IsBusy || device.IsConnected || device.IsMonitoring)
             await StopDeviceConnectionAsync(device);
     }
 
@@ -1368,11 +1381,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 signal.ControlLastResult = "Ready • live feedback available";
             return;
         }
-        if (!device.IsConnected || device.CommandSignals.Count == 0)
+        if (!device.IsConnected)
             return;
 
-        var candidates = device.CommandSignals
-            .Where(signal => force || signal.ControlCurrentValue == "-" || signal.ControlModelText == "Auto-detect")
+        // Never gate inspection on an operable-only UI projection.
+        var candidates = Iec61850ControlIdentity.DistinctSelected(device.Signals)
+            .Where(signal => force || !signal.ControlModelResolved ||
+                             signal.ControlCurrentValue == "-")
             .ToArray();
         if (candidates.Length == 0)
         {
@@ -1394,9 +1409,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 if (!signal.ControlCommandBusy)
                 {
                     signal.ControlCurrentValue = capabilities.CurrentValue;
-                    signal.ControlLastResult = capabilities.SupportsOperate
-                        ? capabilities.ControlModelText
-                        : "Control unavailable";
+                    signal.ControlInspectionEvidence =
+                        $"{capabilities.ControlModelReference} | {capabilities.ControlModelText} | " +
+                        $"{capabilities.EngineControlServiceStatus} | {capabilities.DiscoveryEvidence}";
+                    signal.ControlLastResult = capabilities.EngineControlServiceStatus;
+                    if (!capabilities.SupportsOperate)
+                        AddLog("INFO", device.Name,
+                            $"Read-only control inspection {signal.ObjectReference}: " +
+                            signal.ControlInspectionEvidence);
                 }
             }
             catch (OperationCanceledException)
@@ -1406,7 +1426,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             catch (Exception ex)
             {
                 if (!signal.ControlCommandBusy)
+                {
+                    signal.ControlInspectionEvidence =
+                        $"{signal.ObjectReference}: inspection failed; {ex.GetType().Name}: {ex.Message}";
                     signal.ControlLastResult = $"Status read failed: {ex.Message}";
+                }
             }
             finally
             {
@@ -1421,12 +1445,56 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         SetStatus($"{device.Name}: refreshed {candidates.Length} control value(s).");
     }
 
-    private void ControlStageAction_Click(object sender, RoutedEventArgs e)
+    private async void ControlStageAction_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button button || button.Tag is not SignalDefinition signal || !signal.IsPositionControl)
+        if (sender is not Button button || button.Tag is not SignalDefinition signal ||
+            !(signal.IsPositionControl || signal.IsRaiseLowerControl ||
+              signal.IsRaiseOnlyControl || signal.IsLowerOnlyControl))
             return;
 
         var device = _signalOwners.TryGetValue(signal, out var owner) ? owner : SelectedDevice;
+        if (device is null || !device.IsConnected || signal.ControlInspectionBusy || signal.ControlCommandBusy)
+            return;
+        DismissControlShout();
+
+        // A live Direct/SBO model permits a preflight inspection, not an
+        // unqualified Operate. Only a verified live descriptor may be staged.
+        if (signal.IsPositionControl && !signal.ControlSemanticVerified)
+        {
+            signal.ControlInspectionBusy = true;
+            try
+            {
+                var capabilities = await _runtime.InspectControlAsync(
+                    device.DeviceId, signal, _applicationCancellation.Token);
+                signal.ControlCurrentValue = capabilities.CurrentValue;
+                signal.ControlLastResult = capabilities.EngineControlServiceStatus;
+                if (!capabilities.IsOperationallyReady || !signal.ControlSupportsOperate)
+                {
+                    AddLog("WARN", device.Name,
+                        $"Position preflight not ready: {signal.ObjectReference}; {signal.ControlInspectionEvidence}");
+                    SetStatus($"{device.Name}: {signal.Name} cannot operate — check Diagnostics.");
+                    ShowControlShout(Iec61850ControlShout.FromLocalRejection(
+                        "live typed control preflight did not authorize operation"));
+                    return;
+                }
+            }
+            catch (OperationCanceledException) { return; }
+            catch (Exception ex)
+            {
+                signal.ControlLastResult = $"Live control inspection failed: {ex.Message}";
+                AddLog("WARN", device.Name,
+                    $"Position preflight failed: {signal.ObjectReference}; {ex.GetType().Name}: {ex.Message}");
+                SetStatus($"{device.Name}: {signal.Name} verification failed — check Diagnostics.");
+                ShowControlShout(Iec61850ControlShout.FromLocalRejection(
+                    "live control inspection failed"));
+                return;
+            }
+            finally
+            {
+                signal.ControlInspectionBusy = false;
+            }
+        }
+
         var requestedValue = button.CommandParameter?.ToString()?.Trim() ?? string.Empty;
         var actionLabel = button.Content?.ToString()?.Trim() ?? string.Empty;
         AddLog("INFO", device?.Name ?? "IED",
@@ -1438,6 +1506,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             AddLog("WARN", device?.Name ?? "IED",
                 $"Control confirmation stage rejected: {signal.ObjectReference}; reason={rejectionReason}.");
             SetStatus($"{device?.Name ?? "IED"}: {signal.Name} command not staged — {rejectionReason}.");
+            ShowControlShout(Iec61850ControlShout.FromLocalRejection(rejectionReason));
             return;
         }
 
@@ -1461,6 +1530,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             AddLog("WARN", device?.Name ?? "IED",
                 $"Confirm rejected: {signal.ObjectReference}; reason={rejectionReason}.");
             SetStatus($"{device?.Name ?? "IED"}: {signal.Name} confirmation rejected — {rejectionReason}.");
+            ShowControlShout(Iec61850ControlShout.FromLocalRejection(rejectionReason));
             return;
         }
 
@@ -1493,6 +1563,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (string.IsNullOrWhiteSpace(requestedValue))
         {
             signal.ControlLastResult = "Enter a setpoint value first.";
+            ShowControlShout(Iec61850ControlShout.FromLocalRejection("enter a setpoint value"));
             return;
         }
 
@@ -1507,6 +1578,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             AddLog("WARN", device?.Name ?? "IED",
                 $"Direct control rejected: {signal.ObjectReference}; reason={rejectionReason}.");
             SetStatus($"{device?.Name ?? "IED"}: {signal.Name} command rejected — {rejectionReason}.");
+            ShowControlShout(Iec61850ControlShout.FromLocalRejection(rejectionReason));
             return;
         }
 
@@ -1522,6 +1594,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
+        DismissControlShout();
         var clickStopwatch = Stopwatch.StartNew();
         signal.ControlLastResult = $"Dispatching {claim.RequestedValue}…";
         SetStatus($"{device.Name}: dispatching {signal.Name} = {claim.RequestedValue}…");
@@ -1534,7 +1607,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (device.IsDemo)
             {
                 await ExecuteDemoControlAsync(device, signal, claim);
-                return;
+                return; // Demo success is reflected in the values/status, not in a toast.
             }
             if (!device.IsConnected)
             {
@@ -1543,7 +1616,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     ? await ConnectUsingSavedModelAsync(device)
                     : await ConnectAndConfigureDeviceAsync(device, openWizard: false);
                 if (!connected)
+                {
+                    ShowControlShout(Iec61850ControlShout.FromLocalRejection(
+                        "MMS connection could not be established"));
                     return;
+                }
             }
 
             AddLog("INFO", device.Name,
@@ -1575,14 +1652,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             AddLog(result.IsSuccess ? "INFO" : "WARN", device.Name,
                 $"Control UI timing: {signal.ObjectReference}; sequence={claim.Sequence}; click-to-result={clickStopwatch.Elapsed.TotalMilliseconds:0.###} ms; engine-total={result.TotalElapsedText}; serviceAccepted={result.ServiceAccepted}; stage={result.Stage}.");
 
-            // Failure must be visible without a modal dialog blocking unrelated
-            // IED operations. Service/AddCause evidence stays in diagnostics and
-            // the per-command result; the notice never invents Local/Remote.
+            // Only failures require immediate, local Command Dock feedback.
+            // Successful commands and already-at-state preflights remain
+            // visible in values/status/Diagnostics without a distracting toast.
             if (!result.IsSuccess)
             {
                 MarkDiagnosticAlert();
-                var notice = Iec61850ControlShout.FromResult(result);
-                ShowControlShout(notice.Title, notice.Detail);
+                ShowControlShout(Iec61850ControlShout.FromResult(result));
             }
         }
         catch (OperationCanceledException)
@@ -1596,8 +1672,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             AddLog("ERROR", device.Name, $"Quick control failed for {signal.ObjectReference}: {ex}");
             SetStatus($"{device.Name}: {signal.Name} command failed — {ex.Message}");
             MarkDiagnosticAlert();
-            var notice = Iec61850ControlShout.FromUnexpectedFailure();
-            ShowControlShout(notice.Title, notice.Detail);
+            ShowControlShout(Iec61850ControlShout.FromUnexpectedFailure());
         }
         finally
         {
@@ -1641,19 +1716,42 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             : $"{result.Stage}: {Iec61850ControlFailureReason.Explain(result).Summary} • {result.Message}{suffix}";
     }
 
-    private void ShowControlShout(string title, string detail)
+    private void DismissControlShout()
     {
-        // UI ownership is confined to WPF Dispatcher. The runtime's atomic
-        // per-target command admission remains independent of display timing.
+        // Stale failures must not appear to belong to the next command.
+        _controlShoutTimer.Stop();
+        ControlShoutCard.BeginAnimation(OpacityProperty, null);
+        ControlShoutCard.Visibility = Visibility.Collapsed;
+    }
+
+    private void ShowControlShout(Iec61850ControlShout.Notice notice)
+    {
+        // Only warning/error notifications. The full failure evidence stays
+        // in Diagnostics; only one short summary is rendered in Command Dock.
         if (!Dispatcher.CheckAccess())
         {
-            Dispatcher.BeginInvoke(() => ShowControlShout(title, detail));
+            Dispatcher.BeginInvoke(() => ShowControlShout(notice));
             return;
         }
+        if (notice.Tone is not (Iec61850ControlNoticeTone.Warning or Iec61850ControlNoticeTone.Error))
+            return;
+
+        var error = notice.Tone == Iec61850ControlNoticeTone.Error;
+        var accent = error ? Color.FromRgb(175, 57, 53) : Color.FromRgb(153, 98, 26);
         _controlShoutTimer.Stop();
-        ControlShoutTitle.Text = title;
-        ControlShoutDetail.Text = detail;
+        _controlShoutTimer.Interval = TimeSpan.FromSeconds(error ? 6 : 4.5);
+        ControlShoutCard.BeginAnimation(OpacityProperty, null);
+        ControlShoutCard.BorderBrush = new SolidColorBrush(
+            error ? Color.FromRgb(238, 193, 189) : Color.FromRgb(232, 201, 154));
+        ControlShoutGlyphBackdrop.Background = new SolidColorBrush(
+            error ? Color.FromRgb(254, 236, 233) : Color.FromRgb(255, 245, 226));
+        ControlShoutGlyph.Foreground = new SolidColorBrush(accent);
+        ControlShoutTitle.Foreground = new SolidColorBrush(accent);
+        ControlShoutGlyph.Text = error ? "×" : "!";
+        ControlShoutTitle.Text = notice.Title;
         ControlShoutCard.Visibility = Visibility.Visible;
+        ControlShoutCard.BeginAnimation(OpacityProperty,
+            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)));
         _controlShoutTimer.Start();
     }
 
@@ -1662,25 +1760,25 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (sender is not Button button || button.Tag is not SignalDefinition signal || !signal.IsControlSignal)
             return;
 
-        var device = SelectedDevice;
+        var device = _signalOwners.TryGetValue(signal, out var owner) ? owner : SelectedDevice;
         if (device == null)
             return;
 
-        if (!device.IsConnected)
+        // ctlModel writes require an intentionally opened, current association.
+        // Never create a hidden MMS connection from an offline command dock.
+        if (!device.IsConnected || device.IsStopping || device.IsBusy)
         {
-            SetStatus($"{device.Name}: connecting before opening technical control details…");
-            var connected = device.HasDiscoveryCache && device.Signals.Count > 0
-                ? await ConnectUsingSavedModelAsync(device)
-                : await ConnectAndConfigureDeviceAsync(device, openWizard: false);
-            if (!connected)
-                return;
+            SetStatus($"{device.Name}: press Play to connect before editing the control model.");
+            return;
         }
 
-        var dialog = new ControlCommandWindow(_runtime, device, signal)
+        var dialog = new ControlModelWriteWindow(_runtime, device, signal)
         {
             Owner = this
         };
         dialog.ShowDialog();
+        if (device.IsConnected)
+            await RefreshControlValuesAsync(device, force: true);
     }
 
     private void RemoveControlFeedbackIndex(string deviceId)
@@ -2090,11 +2188,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (OperationCanceledException)
         {
-            SetStatus($"{device.Name}: monitor start cancelled.");
+            EnsureOfflinePointProjection(device);
+            MarkDevicePointsInactive(device, disconnected: !device.IsConnected);
+            SetStatus($"{device.Name}: monitor start cancelled; offline signal catalog retained.");
             return false;
         }
         catch (Exception ex)
         {
+            EnsureOfflinePointProjection(device);
+            MarkDevicePointsInactive(device, disconnected: !device.IsConnected);
             AddLog("ERROR", device.Name, ex.Message);
             SetStatus($"{device.Name}: monitor start failed. Diagnostics is marked with !.");
             MarkDiagnosticAlert();
@@ -2109,31 +2211,127 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         device.ReportPulseActive = false;
         _reportPulseUntil.Remove(device.DeviceId);
         RemoveDeviceHighlights(device.DeviceId);
-        RemoveDevicePoints(device.DeviceId);
-        device.Points.Clear();
+        MarkDevicePointsInactive(device, disconnected: false);
+        EnsureOfflinePointProjection(device);
         device.RefreshComputed();
         RaiseWorkspaceCounts();
-        SetStatus($"{device.Name}: monitoring stopped; MMS connection remains available.");
+        SetStatus($"{device.Name}: monitoring paused; last observed values are not live.");
+    }
+
+    private static void ResetControlReadinessForNewAssociation(Iec61850MonitorDevice device)
+    {
+        foreach (var signal in device.Signals.Where(s => s.IsValidControlObject))
+        {
+            signal.ClearControlConfirmation();
+            signal.ClearLiveControlAuthority();
+            signal.ControlInspectionBusy = false;
+            signal.ControlModelText = "Auto-detect";
+            signal.ControlInspectionEvidence = "Inspection pending for the current MMS association.";
+            signal.ControlLastResult = "Inspection pending for the current MMS association.";
+        }
+        device.RefreshCommandSignalProjection();
     }
 
     private async Task StopDeviceConnectionAsync(Iec61850MonitorDevice device)
     {
-        await _runtime.StopDeviceAsync(device.DeviceId);
-        device.HasReportStream = false;
-        device.ReportPulseActive = false;
-        _reportPulseUntil.Remove(device.DeviceId);
-        RemoveDeviceHighlights(device.DeviceId);
-        RemoveDevicePoints(device.DeviceId);
-        device.Points.Clear();
-        if (device.HasDiscoveryCache)
+        // The button and every alternate Stop caller share this UI flight.
+        // A repeat click must not initiate another MMS teardown or consume
+        // a newly opened association while the first disconnect is in flight.
+        if (device.IsStopping) return;
+        device.IsStopping = true;
+        device.Status = "Disconnecting";
+        try
         {
-            device.Status = "Saved model ready";
-            device.Detail = "Press Play for fast reconnect and live values. Use Re-scan only when the IED model changes.";
-            device.AcquisitionMode = "Saved model • fast connect";
+            await _runtime.StopDeviceAsync(device.DeviceId);
         }
+        catch (Exception ex)
+        {
+            // A failed native teardown must never prevent the operator from
+            // pressing Play again. The runtime evicts the association first.
+            AddLog("WARN", device.Name, $"Disconnect cleanup: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            ResetControlReadinessForNewAssociation(device);
+            device.IsMonitoring = false;
+            device.IsConnected = false;
+            device.HasReportStream = false;
+            device.ReportPulseActive = false;
+            _reportPulseUntil.Remove(device.DeviceId);
+            RemoveDeviceHighlights(device.DeviceId);
+            MarkDevicePointsInactive(device, disconnected: true);
+            EnsureOfflinePointProjection(device);
+            if (device.HasDiscoveryCache)
+            {
+                device.Status = "Offline • saved model";
+                device.Detail = "Last observed values are offline. Press Play on this IED to reconnect.";
+                device.AcquisitionMode = "Saved model • offline";
+            }
+            device.RefreshComputed();
+            device.IsStopping = false;
+            RaiseWorkspaceCounts();
+            SetStatus($"{device.Name}: disconnected; values retained as offline. Press Play to reconnect.");
+        }
+    }
+
+    // Offline is a display state, not an IEC 61850 quality claim or a fresh
+    // process measurement. Retain old values/timestamps, but never present
+    // them as live data or raise new SOE events during the transition.
+    private void MarkDevicePointsInactive(Iec61850MonitorDevice device, bool disconnected)
+    {
+        var label = disconnected ? "Offline" : "Paused";
+        foreach (var point in device.Points)
+        {
+            point.IsOffline = true;
+            point.IsRecentlyChanged = false;
+            point.SourceMode = label;
+            point.Quality = label;
+            point.Status = disconnected ? "Offline • last known value" : "Paused • last known value";
+        }
+        foreach (var key in _pendingPointSnapshots.Keys.Where(key =>
+                     key.StartsWith(device.DeviceId + "|", StringComparison.OrdinalIgnoreCase)).ToArray())
+            _pendingPointSnapshots.TryRemove(key, out _);
+    }
+
+    // A saved project may be opened with no MMS session and no runtime points.
+    // Materialize *only* the user's already-selected live signals, never new
+    // selections or invented process values. Live Start replaces these rows.
+    private void EnsureOfflinePointProjection(Iec61850MonitorDevice device)
+    {
+        if (device.Points.Count > 0) return;
+        var offlinePoints = device.Signals
+            .Where(signal => signal.IsSelected && signal.CanPublishAsSignal)
+            .GroupBy(signal => NormalizeReference(signal.ObjectReference), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .Select(signal => new Iec61850MonitorPoint
+            {
+                DeviceId = device.DeviceId,
+                DeviceName = device.Name,
+                IpAddress = device.IpAddress,
+                SignalName = string.IsNullOrWhiteSpace(signal.Name) ? signal.ObjectReference : signal.Name,
+                IecReference = signal.ObjectReference,
+                QualityReference = signal.QualityReference,
+                TimestampReference = signal.TimestampReference,
+                FunctionalConstraint = signal.FunctionalConstraint,
+                IecDataType = signal.DataType,
+                Category = signal.Category,
+                Unit = signal.Unit,
+                DataSetReference = signal.DataSetReference,
+                ReportControlReference = signal.ReportControlReference,
+                PollingIntervalMs = PollingIntervalMs,
+                Quality = "Offline",
+                SourceMode = "Offline",
+                Status = "Offline • waiting for Play",
+                IsOffline = true
+            })
+            .ToArray();
+        if (offlinePoints.Length == 0) return;
+        device.Points.AddRange(offlinePoints);
+        GlobalPoints.AddRange(offlinePoints);
+        foreach (var point in offlinePoints)
+            _pointIndex[point.PointKey] = point;
         device.RefreshComputed();
         RaiseWorkspaceCounts();
-        SetStatus($"{device.Name}: connection closed; saved model retained for fast reconnect.");
     }
 
     private void Runtime_PointUpdated(Iec61850PointSnapshot snapshot)
@@ -2190,8 +2388,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (pending.HasValueEdge || snapshot.IsValueEdge || uiDetectedEdge)
                 MarkPointRecentlyChanged(point);
             point.Quality = snapshot.Quality;
+            point.IsOffline = false;
             point.DeviceTimestamp = snapshot.DeviceTimestamp;
             point.SourceMode = snapshot.SourceMode;
+            // The immutable runtime snapshot aggregates only RCBs that have
+            // actually delivered this signal on the current association.
+            // A non-value status snapshot cannot erase prior routed sources.
+            point.RoutedReportControlReferences = snapshot.RoutedReportControlReferences;
             point.Reason = snapshot.Reason;
             point.Status = snapshot.Status;
             point.Sequence = snapshot.Sequence;
@@ -2471,6 +2674,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     }
                     device.Signals.AddRange(cachedSignals);
                     device.RecountSelectedSignals();
+                    EnsureOfflinePointProjection(device);
                 }
                 else
                 {
@@ -2562,7 +2766,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         try
         {
             var csv = new StringBuilder();
-            csv.AppendLine("Sequence,DeviceTimestamp,IED,IP,Signal,Value,PreviousValue,Transition,Quality,Acquisition,IECTelegram");
+            csv.AppendLine("Sequence,DeviceTimestamp,IED,IP,Signal,Value,PreviousValue,Transition,Quality,Event,Acquisition,Stream,RawAcquisition,RawReason,ReportId,RCBReference,IECTelegram");
             foreach (var entry in Events.OrderBy(item => item.Sequence))
             {
                 csv.AppendLine(string.Join(',', new[]
@@ -2576,7 +2780,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     Csv(entry.OldValue),
                     Csv(entry.EdgeType),
                     Csv(entry.Quality),
+                    Csv(entry.EventCause),
+                    Csv(entry.AcquisitionShort),
+                    Csv(entry.ReportChannel),
                     Csv(entry.SourceMode),
+                    Csv(entry.Reason),
+                    Csv(entry.ReportId),
+                    Csv(entry.ReportControlReference),
                     Csv(entry.IecTelegram)
                 }));
             }

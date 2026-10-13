@@ -499,8 +499,10 @@ public partial class MainWindow
         }
 
         var filteredModel = SclReportControlFilter.FilterLiveModel(exportModel, row.Reference);
+        // Retain verified IED identity authority added after v1.6.40.
+        // This preserves the public dialog/RCB workflow without security regression.
         var verifiedIdentity = await TrustedSclIdentityAuthority.TryMatchAsync(
-            device,filteredModel,cancellationToken);
+            device, filteredModel, cancellationToken);
         var liveResult = await Task.Run(() => AuthoritativeLiveIedSclExporter.WriteFiles(
             filteredModel,
             outputPath,

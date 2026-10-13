@@ -91,7 +91,207 @@ function Test-P109FCoreRoutingTrial {
         [bool]$generic.fullDiscoveryFallbackForbidden -and
         [bool]$generic.cyclicMmsProcessPollingForbidden
     )
-    if (-not ($previousHead -or $subscriberHead -or $canonicalHead -or $zivHead -or $genericHead) -or
+    # Exact P10.9L read-only engine candidate, preserving every historical gate.
+    $probe = $Lock.p109LControlRecoveryTrial
+    $probeHead = (
+        [string]$Lock.commit -ceq '5e17da5f673eedce125b5c66e7dc2fa0abef2851' -and
+        [int]$Lock.sourcePullRequest -eq 169 -and
+        $zivIntegrityValid -and $null -ne $generic -and $null -ne $probe -and
+        [string]$generic.exactCommit -ceq 'a43b9b4864a9565c02f544d4135fe157c2fac577' -and
+        [string]$generic.baseEngineCommit -ceq [string]$ziv.exactCommit -and
+        [int]$generic.enginePullRequest -eq 168 -and
+        [long]$generic.engineCiRun -eq 38231327892 -and
+        [bool]$generic.typedSemanticGateRequired -and
+        [bool]$generic.associationScopedInventoryRequired -and
+        [bool]$generic.vendorDispatchForbidden -and
+        [bool]$generic.physicalQualificationRequired -and
+        [bool]$generic.mainlinePromotionForbidden -and
+        [bool]$generic.fullDiscoveryFallbackForbidden -and
+        [bool]$generic.cyclicMmsProcessPollingForbidden -and
+        [string]$probe.status -ceq 'code-trial-not-physical' -and
+        [int]$probe.issue -eq 525 -and
+        [int]$probe.enginePullRequest -eq 169 -and
+        [string]$probe.baseEngineCommit -ceq [string]$generic.exactCommit -and
+        [string]$probe.exactCommit -ceq '5e17da5f673eedce125b5c66e7dc2fa0abef2851' -and
+        [long]$probe.engineCiRun -eq 38239451501 -and
+        [bool]$probe.readOnlyCtlModelProbeRequired -and
+        [bool]$probe.noControlWriteOnProbe -and
+        [bool]$probe.physicalQualificationRequired -and
+        [bool]$probe.mainlinePromotionForbidden -and
+        [bool]$probe.fullDiscoveryFallbackForbidden -and
+        [bool]$probe.cyclicMmsProcessPollingForbidden
+    )
+    # P10.9Q preserves the read-only probe gate; explicit commissioning requires
+    # live compare, one CF write and readback, never an Operate service.
+    $commission = $Lock.p109QControlModelCommissioningTrial
+    $commissionHead = (
+        [string]$Lock.commit -ceq 'f7a4e3ba2f9771e34e04073c0db0900112aa55fa' -and
+        [int]$Lock.sourcePullRequest -eq 169 -and
+        $probeHead -eq $false -and $null -ne $probe -and $null -ne $commission -and
+        $zivIntegrityValid -and $null -ne $generic -and
+        [string]$generic.exactCommit -ceq 'a43b9b4864a9565c02f544d4135fe157c2fac577' -and
+        [string]$generic.baseEngineCommit -ceq [string]$ziv.exactCommit -and
+        [int]$generic.enginePullRequest -eq 168 -and
+        [long]$generic.engineCiRun -eq 38231327892 -and
+        [bool]$generic.typedSemanticGateRequired -and
+        [bool]$generic.associationScopedInventoryRequired -and
+        [bool]$generic.vendorDispatchForbidden -and
+        [bool]$generic.physicalQualificationRequired -and
+        [bool]$generic.mainlinePromotionForbidden -and
+        [bool]$generic.fullDiscoveryFallbackForbidden -and
+        [bool]$generic.cyclicMmsProcessPollingForbidden -and
+        [string]$probe.status -ceq 'code-trial-not-physical' -and
+        [int]$probe.issue -eq 525 -and
+        [int]$probe.enginePullRequest -eq 169 -and
+        [string]$probe.baseEngineCommit -ceq [string]$generic.exactCommit -and
+        [bool]$probe.readOnlyCtlModelProbeRequired -and
+        [string]$probe.exactCommit -ceq '5e17da5f673eedce125b5c66e7dc2fa0abef2851' -and
+        [long]$probe.engineCiRun -eq 38239451501 -and
+        [bool]$probe.noControlWriteOnProbe -and
+        [bool]$probe.physicalQualificationRequired -and
+        [bool]$probe.mainlinePromotionForbidden -and
+        [bool]$probe.fullDiscoveryFallbackForbidden -and
+        [bool]$probe.cyclicMmsProcessPollingForbidden -and
+        [string]$commission.status -ceq 'code-trial-not-physical' -and
+        [int]$commission.enginePullRequest -eq 169 -and
+        [long]$commission.engineCiRun -eq 38257606517 -and
+        [string]$commission.baseEngineCommit -ceq [string]$probe.exactCommit -and
+        [string]$commission.exactCommit -ceq 'f7a4e3ba2f9771e34e04073c0db0900112aa55fa' -and
+        [bool]$commission.authorizedConfirmationRequired -and
+        [bool]$commission.exactLiveCompareRequired -and
+        [bool]$commission.singleWriteNoRetry -and
+        [bool]$commission.verifiedReadbackRequired -and
+        [bool]$commission.commandOperateForbidden -and
+        [bool]$commission.physicalQualificationRequired -and
+        [bool]$commission.mainlinePromotionForbidden -and
+        [bool]$commission.fullDiscoveryFallbackForbidden -and
+        [bool]$commission.cyclicMmsProcessPollingForbidden
+    )
+    # P10.9R retains all Q lineage checks and adds explicit StatusOnly=0
+    # usability without promoting commissioning to physical qualification.
+    $position = $Lock.p109TPositionControlInteroperabilityTrial
+    $positionHead = (
+        $null -ne $position -and
+        [string]$position.status -ceq 'code-trial-not-physical' -and
+        [int]$position.enginePullRequest -eq 169 -and
+        [long]$position.engineCiRun -eq 38320987660 -and
+        [string]$position.baseEngineCommit -ceq 'd1dd8fc14e79c5de15fbc52d77aea48a14c7c02b' -and
+        [string]$position.exactCommit -ceq '9d82523978c29dcbf38f60cbfb384c3b050eae7c' -and
+        [bool]$position.structuredStatusRequiresTypedMmsRead -and
+        [bool]$position.optionalCancelNotRequiredForNormalSbo -and
+        [bool]$position.liveTypedControlVerificationRequired -and
+        [bool]$position.commandOperateNeverAutoDispatched -and
+        [bool]$position.physicalQualificationRequired -and
+        [bool]$position.mainlinePromotionForbidden -and
+        [bool]$position.fullDiscoveryFallbackForbidden -and
+        [bool]$position.cyclicMmsProcessPollingForbidden
+    )
+    $positionStatus = $Lock.p109UPositionStatusNameListRecoveryTrial
+    $positionStatusHead = (
+        $null -ne $positionStatus -and
+        [string]$positionStatus.status -ceq 'code-trial-not-physical' -and
+        [int]$positionStatus.enginePullRequest -eq 169 -and
+        [long]$positionStatus.engineCiRun -eq 38324547203 -and
+        [string]$positionStatus.baseEngineCommit -ceq '9d82523978c29dcbf38f60cbfb384c3b050eae7c' -and
+        [string]$positionStatus.exactCommit -ceq 'ad43399ed411cc72e6eb68b67e198db5e7b95381' -and
+        [bool]$positionStatus.truncatedNameListSupported -and
+        [bool]$positionStatus.standardPositionOnlyProbe -and
+        [bool]$positionStatus.singleScalarReadOnly -and
+        [bool]$positionStatus.bitStringWidthTwoRequired -and
+        [bool]$positionStatus.typedControlSemanticVerificationRequired -and
+        [bool]$positionStatus.operateRequiresExplicitConfirmation -and
+        [bool]$positionStatus.physicalQualificationRequired -and
+        [bool]$positionStatus.mainlinePromotionForbidden -and
+        [bool]$positionStatus.fullDiscoveryFallbackForbidden -and
+        [bool]$positionStatus.cyclicMmsProcessPollingForbidden
+    )
+    # P10.9V is the exact CI-qualified, still-unaccepted successor to U.
+    # Its semantic resolver changes no reporting/Operate workflow. Preserve
+    # every historic P10.9T/U, commissioning and physical promotion guard.
+    $typedBsc = $Lock.p109VLiveBscAuthorityTrial
+    $typedBscHead = (
+        $positionHead -and $positionStatusHead -and
+        $null -ne $typedBsc -and
+        [string]$Lock.commit -ceq '036e2c00d83a0815b6160147b14ea05975057965' -and
+        [int]$Lock.sourcePullRequest -eq 169 -and
+        [string]$typedBsc.status -ceq 'engine-ci-success-consumer-ci-pending-not-physical' -and
+        [int]$typedBsc.enginePullRequest -eq 169 -and
+        [int]$typedBsc.consumerPullRequest -eq 543 -and
+        [string]$typedBsc.baseEngineCommit -ceq [string]$positionStatus.exactCommit -and
+        [string]$typedBsc.exactCommit -ceq '036e2c00d83a0815b6160147b14ea05975057965' -and
+        [long]$typedBsc.engineCiRun -eq 38328335496 -and
+        [bool]$typedBsc.staticSpcNeverOverridesExactLiveBsc -and
+        [bool]$typedBsc.typedTwoBitCtlValAndExactStepStatusRequired -and
+        [bool]$typedBsc.wrongOrCrossObjectStatusFailsClosed -and
+        [bool]$typedBsc.physicalQualificationRequired -and
+        [bool]$typedBsc.mainlinePromotionForbidden -and
+        [bool]$typedBsc.cyclicMmsProcessPollingForbidden
+    )
+    $simple = $Lock.p109RSimpleCtlModelEditorTrial
+    $simpleHead = (
+        ([string]$Lock.commit -ceq 'd1dd8fc14e79c5de15fbc52d77aea48a14c7c02b' -or
+         ([string]$Lock.commit -ceq '9d82523978c29dcbf38f60cbfb384c3b050eae7c' -and $positionHead) -or
+         ([string]$Lock.commit -ceq 'ad43399ed411cc72e6eb68b67e198db5e7b95381' -and $positionHead -and $positionStatusHead) -or
+         $typedBscHead) -and
+        [int]$Lock.sourcePullRequest -eq 169 -and
+        $zivIntegrityValid -and $null -ne $generic -and
+        [string]$generic.exactCommit -ceq 'a43b9b4864a9565c02f544d4135fe157c2fac577' -and
+        [string]$generic.baseEngineCommit -ceq [string]$ziv.exactCommit -and
+        [int]$generic.enginePullRequest -eq 168 -and
+        [long]$generic.engineCiRun -eq 38231327892 -and
+        [bool]$generic.typedSemanticGateRequired -and
+        [bool]$generic.associationScopedInventoryRequired -and
+        [bool]$generic.vendorDispatchForbidden -and
+        [bool]$generic.physicalQualificationRequired -and
+        [bool]$generic.mainlinePromotionForbidden -and
+        [bool]$generic.fullDiscoveryFallbackForbidden -and
+        [bool]$generic.cyclicMmsProcessPollingForbidden -and
+        $null -ne $probe -and
+        [string]$probe.status -ceq 'code-trial-not-physical' -and
+        [int]$probe.issue -eq 525 -and
+        [int]$probe.enginePullRequest -eq 169 -and
+        [string]$probe.baseEngineCommit -ceq [string]$generic.exactCommit -and
+        [string]$probe.exactCommit -ceq '5e17da5f673eedce125b5c66e7dc2fa0abef2851' -and
+        [long]$probe.engineCiRun -eq 38239451501 -and
+        [bool]$probe.readOnlyCtlModelProbeRequired -and
+        [bool]$probe.noControlWriteOnProbe -and
+        [bool]$probe.physicalQualificationRequired -and
+        [bool]$probe.mainlinePromotionForbidden -and
+        [bool]$probe.fullDiscoveryFallbackForbidden -and
+        [bool]$probe.cyclicMmsProcessPollingForbidden -and
+        $null -ne $commission -and
+        [string]$commission.status -ceq 'code-trial-not-physical' -and
+        [int]$commission.enginePullRequest -eq 169 -and
+        [string]$commission.baseEngineCommit -ceq [string]$probe.exactCommit -and
+        [string]$commission.exactCommit -ceq 'f7a4e3ba2f9771e34e04073c0db0900112aa55fa' -and
+        [long]$commission.engineCiRun -eq 38257606517 -and
+        [bool]$commission.authorizedConfirmationRequired -and
+        [bool]$commission.exactLiveCompareRequired -and
+        [bool]$commission.singleWriteNoRetry -and
+        [bool]$commission.verifiedReadbackRequired -and
+        [bool]$commission.commandOperateForbidden -and
+        [bool]$commission.physicalQualificationRequired -and
+        [bool]$commission.mainlinePromotionForbidden -and
+        [bool]$commission.fullDiscoveryFallbackForbidden -and
+        [bool]$commission.cyclicMmsProcessPollingForbidden -and
+        $null -ne $simple -and
+        [string]$simple.status -ceq 'code-trial-not-physical' -and
+        [int]$simple.enginePullRequest -eq 169 -and
+        [long]$simple.engineCiRun -eq 38311424952 -and
+        [string]$simple.baseEngineCommit -ceq [string]$commission.exactCommit -and
+        [string]$simple.exactCommit -ceq 'd1dd8fc14e79c5de15fbc52d77aea48a14c7c02b' -and
+        [bool]$simple.simpleSelectWriteUi -and
+        [bool]$simple.statusOnlyZeroSupported -and
+        [bool]$simple.exactLiveCompareRequired -and
+        [bool]$simple.singleWriteNoRetry -and
+        [bool]$simple.verifiedReadbackRequired -and
+        [bool]$simple.commandOperateForbidden -and
+        [bool]$simple.physicalQualificationRequired -and
+        [bool]$simple.mainlinePromotionForbidden -and
+        [bool]$simple.fullDiscoveryFallbackForbidden -and
+        [bool]$simple.cyclicMmsProcessPollingForbidden
+    )
+    if (-not ($previousHead -or $subscriberHead -or $canonicalHead -or $zivHead -or $genericHead -or $probeHead -or $commissionHead -or $simpleHead) -or
         [string]$Lock.repository -cne 'masarray/ARIEC61850' -or
         [string]$Lock.ref -cne 'main' -or $null -eq $candidate) { return $false }
 

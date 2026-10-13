@@ -14,6 +14,16 @@ public static class Iec61850ControlFailureReason
     {
         ArgumentNullException.ThrowIfNull(result);
         if (result.IsSuccess) return new("Command accepted", "NotApplicable", "-", "-");
+        // Local typed semantic validation is not an IED-side rejection.
+        // An absent wire step alone cannot prove NOT SENT when the transport was
+        // interrupted; require the explicit Validation + NotSent state.
+        if (result.Stage.Equals("Validation", StringComparison.OrdinalIgnoreCase) &&
+            result.CompletionState.Equals("NotSent", StringComparison.OrdinalIgnoreCase) &&
+            result.WireSteps.Count == 0 && !result.ServiceAccepted &&
+            string.IsNullOrWhiteSpace(result.RequestHex))
+            return new("Local control validation failed", "LocalValidation",
+                string.IsNullOrWhiteSpace(result.Message) ? "Typed control model validation blocked dispatch" : result.Message,
+                "Review the declared/live CDC, ctlVal and status reference; no MMS control write was sent");
         if (result.CompletionState.Equals("NotSent", StringComparison.OrdinalIgnoreCase))
             return new("Command was not sent to the IED", "ConfirmedClient",
                 "Client rejected before MMS Operate", "Review local command validation");

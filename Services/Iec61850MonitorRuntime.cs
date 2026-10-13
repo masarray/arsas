@@ -24,6 +24,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public long Sequence { get; set; }
         public string SourceMode { get; set; } = "Waiting";
         public string AcquisitionLabel { get; set; } = "MMS polling";
+        // Actual report ingress, scoped to the live MMS association. Multiple
+        // BRCBs/URCBs may publish the same selected DataSet member.
+        public HashSet<string> RoutedReportControlReferences { get; } =
+            new(StringComparer.OrdinalIgnoreCase);
         public string Reason { get; set; } = "-";
         public string Status { get; set; } = "Queued";
         public bool HasValue { get; set; }
@@ -659,6 +663,50 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             .ToList();
     }
 
+    public async Task<AR.Iec61850.Control.Iec61850ControlModelConfigurationResult> ConfigureControlModelAsync(
+        string deviceId, SignalDefinition signal,
+        Iec61850ControlModelKind expected, Iec61850ControlModelKind target,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(deviceId);
+        ArgumentNullException.ThrowIfNull(signal);
+        if (!_sessions.TryGetValue(deviceId, out var session) || !session.Client.IsConnected)
+            throw new InvalidOperationException("The IED is not associated. ctlModel Write is forbidden.");
+        if (expected == Iec61850ControlModelKind.Unknown ||
+            target is not (Iec61850ControlModelKind.StatusOnly or
+                           Iec61850ControlModelKind.DirectNormal or
+                           Iec61850ControlModelKind.DirectEnhanced or
+                           Iec61850ControlModelKind.SboNormal or
+                           Iec61850ControlModelKind.SboEnhanced))
+            throw new ArgumentException("A valid expected live ctlModel and target 1-4 are required.");
+
+        var targetKey = deviceId + "|" + Iec61850ControlIdentity.Normalize(signal.ObjectReference);
+        if (!_activeControlTargets.TryAdd(targetKey, 0))
+            throw new InvalidOperationException("A command is already running for this object.");
+
+        Interlocked.Increment(ref session.ControlCommandActive);
+        try
+        {
+            if (Volatile.Read(ref session.ControlCommandActive) != 1)
+                throw new InvalidOperationException("Another IED command is in progress. ctlModel configuration was not started.");
+            Log("WARN", session.Device.Name,
+                $"OPERATOR_CTL_MODEL_CONFIGURATION: {signal.ObjectReference}; expected={expected}; requested={target}; " +
+                "explicit commissioning confirmed; one CF Write maximum, never Operate.");
+            var result = await session.Client.ConfigureControlModelAsync(
+                signal, expected, target, cancellationToken).ConfigureAwait(false);
+            Log(result.ReadbackVerified ? "INFO" : "WARN", session.Device.Name,
+                $"CTL_MODEL_CONFIGURATION_RESULT: {signal.ObjectReference}; " +
+                $"writeAccepted={result.WriteAccepted}; readbackVerified={result.ReadbackVerified}; " +
+                $"before={result.BeforeModel}; after={result.AfterModel}; {result.Detail}");
+            return result;
+        }
+        finally
+        {
+            Interlocked.Decrement(ref session.ControlCommandActive);
+            _activeControlTargets.TryRemove(targetKey, out _);
+        }
+    }
+
     public async Task<Iec61850ControlCapabilities> InspectControlAsync(
         string deviceId,
         SignalDefinition signal,
@@ -843,16 +891,46 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         if (!_sessions.TryRemove(deviceId, out var session))
             return;
 
-        await StopMonitoringSessionAsync(session, preservePointDefinitions: false).ConfigureAwait(false);
-        await session.Client.DisposeAsync().ConfigureAwait(false);
-        session.MonitorCancellation.Dispose();
-        session.Device.IsMonitoring = false;
-        session.Device.IsConnected = false;
-        session.Device.AcquisitionMode = "Not started";
-        session.Device.Status = "Disconnected";
-        session.Device.Detail = "IEC 61850 session closed.";
-        session.Device.RefreshComputed();
-        Log("INFO", session.Device.Name, "IEC 61850 session disconnected.");
+        // Stop MUST leave a reusable device after any teardown failure. The
+        // session is already removed from the live registry, so never leave a
+        // half-connected UI or a stale control authority behind on exception.
+        try
+        {
+            await StopMonitoringSessionAsync(session, preservePointDefinitions: false).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Log("WARN", session.Device.Name, $"Monitor stop cleanup: {ex.GetType().Name}: {ex.Message}");
+        }
+        try
+        {
+            await session.Client.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Log("WARN", session.Device.Name, $"MMS disconnect cleanup: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            // WPF-owned CommandSignals may only be replaced on its Dispatcher.
+            // Await this work before allowing the facade's StopGate to release.
+            try
+            {
+                await ResetAssociationControlAuthorityAsync(session.Device).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log("WARN", session.Device.Name, $"Control UI authority cleanup: {ex.GetType().Name}: {ex.Message}");
+            }
+            session.MonitorCancellation.Dispose();
+            session.Device.IsMonitoring = false;
+            session.Device.IsConnected = false;
+            session.Device.AcquisitionMode = "Not started";
+            session.Device.Status = "Disconnected";
+            session.Device.Detail = "IEC 61850 session closed. Saved model remains available for Play.";
+            session.Device.RefreshComputed();
+            Log("INFO", session.Device.Name, "IEC 61850 session disconnected.");
+        }
     }
 
     private async Task StartReportPlansAsync(
@@ -1364,7 +1442,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                             ? string.IsNullOrWhiteSpace(update.ProjectionStatus) ? "Live / report verified" : $"Live / report verified ({update.ProjectionStatus})"
                             : string.IsNullOrWhiteSpace(update.ProjectionStatus) ? "Live / report traffic + MMS verification" : $"Live / report traffic + MMS verification ({update.ProjectionStatus})",
                     trustReportEdge: true,
-                    hasProcessValue: update.HasValue);
+                    hasProcessValue: update.HasValue,
+                    reportId: update.ReportId,
+                    reportControlReference: string.IsNullOrWhiteSpace(update.ReportControlReference)
+                        ? plan.ReportControlReference : update.ReportControlReference);
 
                 // A routed, schema-safe process value is the data-plane proof. RptEna,
                 // GI, raw/unrouted frames, rejected values, or stale associations
@@ -1651,7 +1732,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         DateTime timestampUtc,
         string status,
         bool trustReportEdge,
-        bool hasProcessValue = true)
+        bool hasProcessValue = true,
+        string? reportId = null,
+        string? reportControlReference = null)
     {
         var state = session.States[point.PointKey];
         var hadValue = state.HasValue;
@@ -1659,7 +1742,14 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         var oldQuality = state.Quality;
         var displayChanged = hasProcessValue && !string.Equals(oldValue, display, StringComparison.Ordinal);
         var qualityChangedForUi = !string.Equals(oldQuality, quality, StringComparison.OrdinalIgnoreCase);
-        var metadataChanged = !string.Equals(state.DeviceTimestamp, deviceTimestamp, StringComparison.Ordinal) ||
+        // Many enabled RCBs can produce one signal. Remember every RCB with
+        // *actual* routed ingress, not only the most recently received report.
+        // A new source is UI-relevant even if the process value has not changed.
+        var reportRcbChanged = trustReportEdge &&
+            !string.IsNullOrWhiteSpace(reportControlReference) &&
+            state.RoutedReportControlReferences.Add(reportControlReference.Trim());
+        var metadataChanged = reportRcbChanged ||
+                              !string.Equals(state.DeviceTimestamp, deviceTimestamp, StringComparison.Ordinal) ||
                               !string.Equals(state.SourceMode, sourceMode, StringComparison.Ordinal) ||
                               !string.Equals(state.Reason, reason, StringComparison.Ordinal) ||
                               !string.Equals(state.Status, status, StringComparison.Ordinal);
@@ -1707,6 +1797,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 Status = status,
                 IsValueEdge = changed,
                 IsReportTraffic = trustReportEdge,
+                // This is association-local evidence from an actual routed report.
+                // Preserve it through later metadata/status UI coalescing.
+                RoutedReportControlReferences = state.RoutedReportControlReferences
+                    .OrderBy(reference => reference, StringComparer.OrdinalIgnoreCase).ToArray(),
                 Sequence = state.Sequence
             });
         }
@@ -1733,7 +1827,11 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             NewValue = display,
             Quality = quality,
             SourceMode = sourceMode,
-            Reason = reason
+            Reason = reason,
+            ReportId = trustReportEdge ? reportId ?? string.Empty : string.Empty,
+            ReportControlReference = trustReportEdge ? reportControlReference ?? string.Empty : string.Empty,
+            RoutedReportControlReferences = state.RoutedReportControlReferences
+                .OrderBy(reference => reference, StringComparer.OrdinalIgnoreCase).ToArray()
         };
         EventRaised?.Invoke(entry);
     }
@@ -1756,6 +1854,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             Reason = state.Reason,
             Status = status,
             IsValueEdge = false,
+            RoutedReportControlReferences = state.RoutedReportControlReferences
+                .OrderBy(reference => reference, StringComparer.OrdinalIgnoreCase).ToArray(),
             Sequence = state.Sequence
         });
     }
@@ -1812,6 +1912,35 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         }
     }
 
+    private static async Task ResetAssociationControlAuthorityAsync(Iec61850MonitorDevice device)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher != null && !dispatcher.CheckAccess())
+        {
+            if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
+                return; // UI is gone; the native association is already revoked.
+            await dispatcher.InvokeAsync(
+                () => ResetAssociationControlAuthority(device),
+                System.Windows.Threading.DispatcherPriority.DataBind).Task.ConfigureAwait(false);
+            return;
+        }
+        ResetAssociationControlAuthority(device);
+    }
+
+    private static void ResetAssociationControlAuthority(Iec61850MonitorDevice device)
+    {
+        foreach (var signal in device.Signals.Where(s => s.IsValidControlObject))
+        {
+            signal.ClearControlConfirmation();
+            signal.ClearLiveControlAuthority();
+            signal.ControlInspectionBusy = false;
+            signal.ControlModelText = "Auto-detect";
+            signal.ControlInspectionEvidence =
+                "New MMS association: live CDC, ctlModel and typed ctlVal require reinspection.";
+        }
+        device.RefreshCommandSignalProjection();
+    }
+
     private async Task TryReconnectAsync(DeviceSession session, CancellationToken cancellationToken)
     {
         var nowUtc = DateTime.UtcNow;
@@ -1827,6 +1956,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         Log("WARN", session.Device.Name,
             $"Smart reconnect attempt #{attempt} started. Transport recovery is bounded independently from report re-arming.");
 
+        // Automatic reconnection must revoke all previously verified control
+        // semantics BEFORE the fresh association is opened, even if the UI
+        // never visits its normal manual Disconnect/Connect path.
+        await ResetAssociationControlAuthorityAsync(session.Device).ConfigureAwait(false);
         var staleClient = session.Client;
         await DisposeClientForReconnectAsync(
             staleClient,
@@ -2065,6 +2198,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         // credit a future planning attempt after transport loss.
         session.CurrentStaticParityAttemptId = Guid.Empty;
         var wasConnected = session.Device.IsConnected;
+        // A new MMS association has new RCB ownership; report names observed
+        // on the *old* socket cannot be credited to the recovered session.
+        if (wasConnected)
+        {
+            foreach (var state in session.States.Values)
+                state.RoutedReportControlReferences.Clear();
+        }
         session.Device.IsConnected = false;
         session.Device.HasReportStream = false;
         session.Device.ReportPulseActive = false;

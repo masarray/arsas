@@ -79,11 +79,17 @@ public sealed class IoListFatCommandPanelRegressionTests
         var identity = File.ReadAllText(FindRepoFile("Services/Iec61850ControlIdentity.cs"));
 
         Assert.Contains("live ctlModel", bridge, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("StatusOnly stays read-only", bridge, StringComparison.Ordinal);
+        // The selected catalog may contain StatusOnly rows; runtime authorization,
+        // not catalog membership, must remain the write-safety boundary.
+        Assert.Contains("ControlSupportsOperate", bridge, StringComparison.Ordinal);
+        Assert.Contains("StatusOnly", bridge, StringComparison.Ordinal);
         Assert.Contains("device.CommandSignals", bridge, StringComparison.Ordinal);
-        Assert.Contains("DistinctOperable(Signals)", monitorModels, StringComparison.Ordinal);
-        // Fail-closed gate migrated into the shared canonical command projection;
-        // all entry points still exclude unknown/read-only and generic controls.
+        // Selected control objects remain visible for diagnosis; operating safety
+        // is separately enforced by the per-object gate and FAT command dispatch.
+        Assert.Contains("DistinctSelected(Signals)", monitorModels, StringComparison.Ordinal);
+        Assert.Contains("ControlSupportsOperate", monitorModels, StringComparison.Ordinal);
+        // Legacy explicit-operability filter remains available for actual execution
+        // eligibility, never for removing the selected control row from the dock.
         Assert.Contains("ControlModelResolved && s.ControlSupportsOperate", identity, StringComparison.Ordinal);
         Assert.Contains("!s.IsGenericControl", identity, StringComparison.Ordinal);
         Assert.Contains("Status-only controls remain read-only", panel, StringComparison.Ordinal);

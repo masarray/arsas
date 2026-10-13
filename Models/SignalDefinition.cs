@@ -16,6 +16,8 @@ public class SignalDefinition : ObservableObject
     private string _displayReference = string.Empty;
     private DateTime _timestamp = DateTime.MinValue;
     private string _controlCdc = string.Empty;
+    private string _verifiedLiveControlCdc = string.Empty;
+    private string _dataSetAdvisoryCdc = string.Empty;
     private string _controlModelReference = string.Empty;
     private string _controlStatusReference = string.Empty;
     private string _controlModelText = "Auto-detect";
@@ -28,6 +30,7 @@ public class SignalDefinition : ObservableObject
     private string? _deferredControlCurrentValue;
     private string _controlSetPointText = string.Empty;
     private string _controlLastResult = string.Empty;
+    private string _controlInspectionEvidence = "Live ctlModel inspection pending.";
     private readonly object _controlCommandSync = new();
     private bool _controlInspectionBusy;
     private bool _controlCommandBusy;
@@ -91,14 +94,75 @@ public class SignalDefinition : ObservableObject
     public string Source { get; set; } = "Online";
     public bool IsControlSignal { get; set; }
     public bool IsValidControlObject => IsControlSignal && IsControlObjectReference(ObjectReference);
+    /// <summary>Association-scoped CDC proved by a typed live control descriptor.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string VerifiedLiveControlCdc => _verifiedLiveControlCdc;
+
+    /// <summary>Last advisory CDC from SCL/DataSet projection; not command authority.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string DataSetAdvisoryCdc => _dataSetAdvisoryCdc;
+
     public string ControlCdc
     {
         get => _controlCdc;
         set
         {
-            if (!Set(ref _controlCdc, value?.Trim() ?? string.Empty)) return;
+            var candidate = value?.Trim() ?? string.Empty;
+            // Existing callers can no longer overwrite a live-verified CDC using
+            // stale SCL, DataSet, or speculative discovery metadata.
+            if (_verifiedLiveControlCdc.Length > 0 &&
+                !candidate.Equals(_verifiedLiveControlCdc, StringComparison.OrdinalIgnoreCase))
+                return;
+            if (!Set(ref _controlCdc, candidate)) return;
             RaiseControlActionProperties();
         }
+    }
+
+    public void AcceptVerifiedLiveControlCdc(string cdc)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(cdc);
+        if (!IsValidControlObject)
+            throw new InvalidOperationException("Only a valid control DataObject can receive live CDC evidence.");
+        var validated = cdc.Trim().ToUpperInvariant();
+        // This method must only be called after the engine's typed live semantic
+        // resolver succeeded; it is not an SCL authority override.
+        _verifiedLiveControlCdc = validated;
+        Raise(nameof(VerifiedLiveControlCdc));
+        ControlCdc = validated;
+    }
+
+    public bool ApplyDataSetAdvisoryControlMetadata(string cdc, string? statusReference)
+    {
+        _dataSetAdvisoryCdc = cdc?.Trim().ToUpperInvariant() ?? string.Empty;
+        Raise(nameof(DataSetAdvisoryCdc));
+        if (_verifiedLiveControlCdc.Length > 0)
+        {
+            // Reporting membership is independent of the control plane. Do not
+            // rewrite validated CDC or live feedback binding during monitoring.
+            return _dataSetAdvisoryCdc.Equals(_verifiedLiveControlCdc, StringComparison.OrdinalIgnoreCase);
+        }
+        if (_dataSetAdvisoryCdc.Length > 0)
+            ControlCdc = _dataSetAdvisoryCdc;
+        if (!string.IsNullOrWhiteSpace(statusReference))
+            ControlStatusReference = statusReference;
+        return true;
+    }
+
+    public void ClearLiveControlAuthority()
+    {
+        // Called only at MMS association teardown/new association boundary.
+        _verifiedLiveControlCdc = string.Empty;
+        _dataSetAdvisoryCdc = string.Empty;
+        Raise(nameof(VerifiedLiveControlCdc));
+        Raise(nameof(DataSetAdvisoryCdc));
+        ControlSemanticVerified = false;
+    }
+    // Preserve exact read-only MMS proof independently of ControlLastResult,
+    // whose operator-friendly StatusOnly normalization intentionally shortens text.
+    public string ControlInspectionEvidence
+    {
+        get => _controlInspectionEvidence;
+        set => Set(ref _controlInspectionEvidence, value?.Trim() ?? string.Empty);
     }
     public string ControlModelReference { get => _controlModelReference; set => Set(ref _controlModelReference, value?.Trim() ?? string.Empty); }
     public string ControlStatusReference { get => _controlStatusReference; set => Set(ref _controlStatusReference, value?.Trim() ?? string.Empty); }
@@ -138,6 +202,14 @@ public class SignalDefinition : ObservableObject
         Iec61850ControlModelKind.SboNormal or
         Iec61850ControlModelKind.DirectEnhanced or
         Iec61850ControlModelKind.SboEnhanced;
+    // Direct/SBO makes an Open/Close preflight clickable; actual Select/Operate
+    // still requires live, typed CDC/status/ctlVal semantic verification.
+    public bool ControlCanInspectPosition => _controlModelResolved &&
+        _controlModelKind is (Iec61850ControlModelKind.DirectNormal or
+                              Iec61850ControlModelKind.SboNormal or
+                              Iec61850ControlModelKind.DirectEnhanced or
+                              Iec61850ControlModelKind.SboEnhanced) &&
+        !_controlInspectionBusy && !_controlCommandBusy;
     public bool IsReadOnlyControl => _controlModelResolved && !ControlSupportsOperate;
     public string ControlValueType
     {
@@ -234,6 +306,7 @@ public class SignalDefinition : ObservableObject
             if (!Set(ref _controlInspectionBusy, value))
                 return;
             Raise(nameof(ControlIsBusy));
+            Raise(nameof(ControlCanInspectPosition));
         }
     }
 
@@ -403,6 +476,7 @@ public class SignalDefinition : ObservableObject
 
         Raise(nameof(ControlCommandBusy));
         Raise(nameof(ControlIsBusy));
+        Raise(nameof(ControlCanInspectPosition));
         Raise(nameof(ControlCanConfirm));
         if (deferred != null)
             ApplyControlCurrentValue(deferred);
@@ -434,10 +508,14 @@ public class SignalDefinition : ObservableObject
         Raise(nameof(ControlConfirmationPending));
         Raise(nameof(ControlCommandBusy));
         Raise(nameof(ControlIsBusy));
+        Raise(nameof(ControlCanInspectPosition));
         Raise(nameof(ControlCanConfirm));
     }
 
-    private bool CanExposeControlActions => !_controlModelResolved || ControlSupportsOperate;
+    // Presentation classification is independent of live command authorization.
+    // A StatusOnly/unknown MMS ctlModel must NEVER hide a known CDC action family;
+    // ControlSupportsOperate still independently gates every staged/direct write.
+    private bool CanExposeControlActions => IsValidControlObject;
 
     private bool IsPositionSemanticControl
     {
@@ -547,6 +625,7 @@ public class SignalDefinition : ObservableObject
 
         Raise(nameof(ControlModelKind));
         Raise(nameof(ControlModelResolved));
+        Raise(nameof(ControlCanInspectPosition));
         Raise(nameof(ControlSupportsOperate));
         Raise(nameof(ControlCanConfirm));
         Raise(nameof(IsReadOnlyControl));

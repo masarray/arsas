@@ -16,6 +16,16 @@ public static class Iec61850ControlIdentity
             .Select(s => Normalize(s.ObjectReference))
             .Where(s => s.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).Count();
 
+    // Catalog membership and operational authorization are separate concerns.
+    public static SignalDefinition[] DistinctSelected(IEnumerable<SignalDefinition> signals)
+        => signals.Where(s => s.IsSelected && s.IsValidControlObject)
+            .GroupBy(s => Normalize(s.ObjectReference), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.OrderByDescending(s => s.ControlCommandBusy)
+                .ThenByDescending(s => s.ControlConfirmationPending)
+                .ThenByDescending(s => s.ControlSupportsOperate)
+                .ThenByDescending(s => s.ControlModelResolved).First())
+            .ToArray();
+
     public static SignalDefinition[] DistinctOperable(IEnumerable<SignalDefinition> signals)
         => signals.Where(s => s.IsSelected && s.IsValidControlObject &&
                               s.ControlModelResolved && s.ControlSupportsOperate && !s.IsGenericControl)
@@ -25,8 +35,5 @@ public static class Iec61850ControlIdentity
                 .ThenByDescending(s => s.ControlConfirmationPending).First()).ToArray();
 
     public static SignalDefinition[] InspectionRepresentatives(IEnumerable<SignalDefinition> signals)
-        => signals.Where(s => s.IsSelected && s.IsValidControlObject)
-            .GroupBy(s => Normalize(s.ObjectReference), StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.OrderByDescending(s => s.ControlModelResolved).First())
-            .Where(s => !s.ControlModelResolved).ToArray();
+        => DistinctSelected(signals).Where(s => !s.ControlModelResolved).ToArray();
 }

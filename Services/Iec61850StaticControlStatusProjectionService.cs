@@ -268,9 +268,9 @@ public static class Iec61850StaticControlStatusProjectionService
         if (string.IsNullOrWhiteSpace(control.DataSetReference))
             control.DataSetReference = membership.DataSetReference;
         control.IsReportCapable = true;
-        control.ControlCdc = cdc;
-        if (!string.IsNullOrWhiteSpace(exactFeedbackReference))
-            control.ControlStatusReference = exactFeedbackReference;
+        // Static DataSet metadata is read/report authority, never permission to
+        // overwrite a previously typed-verified live control identity.
+        control.ApplyDataSetAdvisoryControlMetadata(cdc, exactFeedbackReference);
 
         var report = descriptor.ReportMemberships.FirstOrDefault();
         if (report is not null && string.IsNullOrWhiteSpace(control.ReportControlReference))

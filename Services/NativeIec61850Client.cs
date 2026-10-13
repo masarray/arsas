@@ -1086,7 +1086,87 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         return null;
     }
 
+    /// <summary>
+    /// Opt-in commissioning only. An exact ctlModel CF Write is allowed once
+    /// and only after engine preflight confirms the expected live model.
+    /// Serializes with normal control operations; never issues SBO/Operate.
+    /// </summary>
+    public async Task<AR.Iec61850.Control.Iec61850ControlModelConfigurationResult> ConfigureControlModelAsync(
+        SignalDefinition signal,
+        Iec61850ControlModelKind expected, Iec61850ControlModelKind target,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(signal);
+        if (!signal.IsValidControlObject || !_session.IsMmsInitiated)
+            throw new InvalidOperationException("A valid connected control DataObject is required.");
+        await _controlCommandGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            try
+            {
+                var service = new ArControl.Iec61850ControlService();
+                return await RunMmsOperationAsync(
+                    () => service.ConfigureControlModelAsync(_session, signal.ObjectReference,
+                        (ArControl.Iec61850ControlModel)(int)expected,
+                        (ArControl.Iec61850ControlModel)(int)target,
+                        cancellationToken),
+                    cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                // Even a partial/uncertain write invalidates the cached descriptor.
+                // A subsequent explicit read-only inspection must rebuild authority.
+                await InvalidateCachedControlSessionAsync(signal.ObjectReference)
+                    .ConfigureAwait(false);
+                signal.ClearControlConfirmation();
+                signal.ClearLiveControlAuthority();
+                signal.ControlModelText = "Auto-detect";
+                signal.ControlInspectionEvidence =
+                    "ctlModel configuration attempted: fresh typed live inspection required.";
+            }
+        }
+        finally
+        {
+            _controlCommandGate.Release();
+        }
+    }
+
+    private async Task InvalidateCachedControlSessionAsync(string objectReference)
+    {
+        ArControl.Iec61850ControlObjectSession? stale = null;
+        await _controlSessionGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var key = NormalizeControlObjectKey(objectReference);
+            if (_controlSessions.Remove(key, out var previous))
+                stale = previous;
+        }
+        finally
+        {
+            _controlSessionGate.Release();
+        }
+        if (stale != null)
+            await stale.DisposeAsync().ConfigureAwait(false);
+    }
+
     public async Task<Iec61850ControlCapabilities> InspectControlAsync(
+        SignalDefinition signal,
+        CancellationToken cancellationToken)
+    {
+        // Rebuilding an MMS control descriptor can dispose a session currently
+        // used by Operate. Serialize inspection, configuration and control.
+        await _controlCommandGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await InspectControlCoreAsync(signal, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _controlCommandGate.Release();
+        }
+    }
+
+    private async Task<Iec61850ControlCapabilities> InspectControlCoreAsync(
         SignalDefinition signal,
         CancellationToken cancellationToken)
     {
@@ -1096,7 +1176,56 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         if (!_session.IsMmsInitiated)
             throw new InvalidOperationException("The IEC 61850 MMS association is not active.");
 
-        var control = await GetOrOpenControlSessionAsync(signal, cancellationToken).ConfigureAwait(false);
+        ArControl.Iec61850ControlObjectSession control;
+        try
+        {
+            // Explicit inspection must use a fresh, association-scoped descriptor.
+            // Another engineering client may have changed CF ctlModel since the
+            // previous inspection; cached control sessions are not authoritative.
+            signal.ClearControlConfirmation();
+            signal.ClearLiveControlAuthority();
+            signal.ControlModelText = "Auto-detect";
+            await InvalidateCachedControlSessionAsync(signal.ObjectReference).ConfigureAwait(false);
+            control = await GetOrOpenControlSessionAsync(signal, cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException discoveryError) when (_session.IsMmsInitiated)
+        {
+            // Distinguish an exact StatusOnly read from a failed/unsupported
+            // ctlModel read without a service write or full NameList discovery.
+            var probe = await RunMmsOperationAsync(
+                () => new ArControl.Iec61850ControlService().ProbeControlModelAsync(
+                    _session, signal.ObjectReference, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+            signal.ControlSemanticVerified = false;
+            signal.ControlModelText = probe.Decoded
+                ? FriendlyControlModel(probe.ControlModel)
+                : "Unknown";
+            signal.ControlModelReference = $"{signal.ObjectReference}.ctlModel";
+            var reason = $"{probe.Detail} Descriptor not ready: {discoveryError.Message}";
+            signal.ControlLastResult = reason;
+            signal.ControlInspectionEvidence =
+                $"{signal.ControlModelReference} | {probe.Detail} | " +
+                $"readSucceeded={probe.ReadSucceeded}, decoded={probe.Decoded}, " +
+                $"kind={probe.RawKind}, scalar={probe.RawScalar}, request={probe.RequestHexPreview}, " +
+                $"response={probe.ResponseHexPreview} | {discoveryError.Message}";
+            return new Iec61850ControlCapabilities
+            {
+                ObjectReference = signal.ObjectReference,
+                StatusReference = signal.ControlStatusReference,
+                ControlModelReference = signal.ControlModelReference,
+                ControlModel = probe.Decoded
+                    ? MapControlModel(probe.ControlModel)
+                    : Iec61850ControlModelKind.Unknown,
+                ControlModelText = signal.ControlModelText,
+                ControlCdc = signal.ControlCdc,
+                ControlValueType = signal.ControlValueType,
+                CurrentValue = signal.ControlCurrentValue,
+                EngineControlServiceAvailable = probe.ReadSucceeded,
+                IsOperationallyReady = false,
+                DiscoveryEvidence = $"Read-only {probe.MmsReference}; kind={probe.RawKind}; scalar={probe.RawScalar}; request={probe.RequestHexPreview}; response={probe.ResponseHexPreview}",
+                EngineControlServiceStatus = reason
+            };
+        }
         var descriptor = control.Descriptor;
         var semantic = ArControl.Iec61850ControlSemanticResolver.Resolve(
             descriptor, signal.ControlCdc, signal.ControlStatusReference);
@@ -1139,13 +1268,21 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         var modelText = FriendlyControlModel(descriptor.ControlModel);
         var valueType = MapControlValueType(descriptor, effectiveCdc);
 
-        signal.ControlCdc = effectiveCdc;
+        if (semantic.IsCommandSafe)
+            signal.AcceptVerifiedLiveControlCdc(effectiveCdc);
+        else
+            signal.ControlCdc = effectiveCdc;
         signal.ControlSemanticVerified = semantic.IsCommandSafe;
         signal.ControlValueType = valueType;
         signal.ControlCurrentValue = currentValue;
         signal.ControlStatusReference = statusReference;
         signal.ControlModelReference = $"{descriptor.ObjectReference}.ctlModel";
         signal.ControlModelText = modelText;
+        signal.ControlInspectionEvidence =
+            $"{descriptor.ObjectReference}.ctlModel | {modelText} | " +
+            $"typedCdc={descriptor.Cdc}, effectiveCdc={effectiveCdc}, " +
+            $"ctlVal={descriptor.CtlValSpecification.Signature}, status={statusReference}, " +
+            $"semanticSafe={semantic.IsCommandSafe} | {semantic.Reason} | {descriptor.DiscoveryEvidence}";
 
         return new Iec61850ControlCapabilities
         {
@@ -1927,7 +2064,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             IsSuccess = false,
             ServiceAccepted = false,
             FeedbackConfirmed = false,
-            CompletionState = "Rejected",
+            CompletionState = "NotSent",
             Stage = stage,
             Message = message,
             ControlModelText = capabilities.ControlModelText,
@@ -2850,6 +2987,9 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
     {
         var expanded = signals.ToList();
         AddValidatedControlCandidatesFromStatus(expanded);
+        // Reconcile only exact typed ST evidence from this discovery model.
+        // Do not guess that a TapChg name alone proves BSC semantics.
+        Iec61850ControlStatusEvidence.ApplyExactStepStatus(expanded);
 
         return expanded
             .Where(s => s.DataType != "Directory")

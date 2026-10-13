@@ -39,18 +39,9 @@ public partial class MainWindow
 
     private static void MultiRcbExportButton_Loaded(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button button || Window.GetWindow(button) is not MainWindow window)
-            return;
-
-        var toolTip = button.ToolTip?.ToString() ?? string.Empty;
-        if (!toolTip.Contains("RCB Export Filter", StringComparison.OrdinalIgnoreCase) &&
-            !toolTip.Contains("RCB Export", StringComparison.OrdinalIgnoreCase))
-            return;
-
-        button.Click -= window.IedEditRcb_Click;
-        button.Click -= window.IedEditRcbMulti_Click;
-        button.Click += window.IedEditRcbMulti_Click;
-        button.ToolTip = "RCB Export — select any number of native RCBs and export generic interoperable IEC 61850 SCL";
+        // Release gate: keep the legacy XAML Click binding intact.
+        // The experimental multi-exporter is retained for a future feature branch,
+        // not installed on the production card's RCB button.
     }
 
     private void IedEditRcbMulti_Click(object sender, RoutedEventArgs e)

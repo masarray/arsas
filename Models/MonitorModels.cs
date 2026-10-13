@@ -17,6 +17,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     private string _acquisitionMode = "Not started";
     private bool _isConnected;
     private bool _isBusy;
+    private bool _isStopping;
     private bool _isMonitoring;
     private bool _isActive;
     private bool _hasReportStream;
@@ -338,6 +339,17 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         }
     }
 
+    // One disconnect flight at a time; prevents double-click and Play races.
+    public bool IsStopping
+    {
+        get => _isStopping;
+        set
+        {
+            if (Set(ref _isStopping, value))
+                RefreshComputed();
+        }
+    }
+
     public bool IsMonitoring
     {
         get => _isMonitoring;
@@ -480,8 +492,10 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     public bool CanEditSignals => SignalCount > 0 && !IsBusy && !IsMonitoring && !IsDemo;
     public bool CanStartMonitor => IsConnected && SelectedLiveSignalCount > 0 && !IsBusy;
     public bool CanStartOrStopMonitor => !IsBusy && (IsMonitoring || SelectedLiveSignalCount > 0);
-    public bool CanPlayAction => !IsBusy && (!IsConnected || (!IsMonitoring && SelectedLiveSignalCount > 0));
-    public bool CanStopAction => !IsBusy && (IsConnected || IsMonitoring);
+    public bool CanPlayAction => !IsStopping && !IsBusy && (!IsConnected || (!IsMonitoring && SelectedLiveSignalCount > 0));
+    // Stop is intentionally pre-emptive: a hung Connect/Start must not
+    // disable the only safe operator exit from an in-flight MMS operation.
+    public bool CanStopAction => !IsStopping && (IsBusy || IsConnected || IsMonitoring);
     public bool CanRescan => !IsBusy && !IsMonitoring && !IsDemo;
     public bool CanSaveScl => !IsBusy && !IsDemo && (SclWorkspace != null || LiveDiscoveryModel != null);
     public string SaveSclToolTip => SclWorkspace != null
@@ -551,7 +565,9 @@ public sealed class Iec61850MonitorDevice : ObservableObject
             : SelectedLiveSignalCount == 0
                 ? $"Choose signals for {Name} first"
                 : $"Start monitoring {Name}";
-    public string StopToolTip => IsMonitoring
+    public string StopToolTip => IsStopping
+        ? $"Disconnecting {Name}…"
+        : IsMonitoring
         ? $"Stop monitoring {Name}"
         : IsConnected
             ? $"Disconnect {Name}"
@@ -595,10 +611,9 @@ public sealed class Iec61850MonitorDevice : ObservableObject
 
     private void RefreshCommandSignals()
     {
-        // The Command Panel is an operating surface, not a second signal browser.
-        // Keep unresolved, StatusOnly, unsupported, and feedback-only objects out so
-        // the panel contains only actions the connected IED has proven executable.
-        var selected = Iec61850ControlIdentity.DistinctOperable(Signals)
+        // Show every selected valid control DataObject. Operate authorization remains
+        // independently gated by ControlSupportsOperate on each command action.
+        var selected = Iec61850ControlIdentity.DistinctSelected(Signals)
             .OrderBy(signal => signal.SortPriority)
             .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
             .ThenBy(signal => signal.Name, StringComparer.OrdinalIgnoreCase)
@@ -653,10 +668,12 @@ public sealed class Iec61850MonitorPoint : ObservableObject
     private string _quality = "Unknown";
     private string _deviceTimestamp = "-";
     private string _sourceMode = "Waiting";
+    private IReadOnlyList<string> _routedReportControlReferences = Array.Empty<string>();
     private string _reason = "-";
     private string _status = "Queued";
     private long _sequence;
     private bool _isRecentlyChanged;
+    private bool _isOffline;
     private bool _isAnnunciatorSelected;
 
     public string DeviceId { get; set; } = string.Empty;
@@ -740,12 +757,50 @@ public sealed class Iec61850MonitorPoint : ObservableObject
         IecReference);
     public string Quality { get => _quality; set => Set(ref _quality, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
     public string DeviceTimestamp { get => _deviceTimestamp; set => Set(ref _deviceTimestamp, string.IsNullOrWhiteSpace(value) ? "-" : value); }
-    public string SourceMode { get => _sourceMode; set => Set(ref _sourceMode, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
+    public string SourceMode
+    {
+        get => _sourceMode;
+        set
+        {
+            if (Set(ref _sourceMode, string.IsNullOrWhiteSpace(value) ? "Unknown" : value))
+                Raise(nameof(AcquisitionShort));
+        }
+    }
+    // Proven by a live routed report frame, not a configured/cached RCB hint.
+    // Written on the WPF UI thread from a point snapshot only.
+    // Association-scoped actual report ingress; an IEC DataSet member may be
+    // published by multiple distinct enabled RCBs. This is NOT the set of all
+    // merely configured RCBs or the last wire RptID.
+    public IReadOnlyList<string> RoutedReportControlReferences
+    {
+        get => _routedReportControlReferences;
+        set
+        {
+            var next = value?.ToArray() ?? Array.Empty<string>();
+            if (_routedReportControlReferences.SequenceEqual(next, StringComparer.OrdinalIgnoreCase))
+                return;
+            if (Set(ref _routedReportControlReferences, next))
+                Raise(nameof(AcquisitionShort));
+        }
+    }
+    public string AcquisitionShort => Iec61850EventOriginPolicy.PointAcquisition(
+        RoutedReportControlReferences, SourceMode, IsOffline);
     public string Reason { get => _reason; set => Set(ref _reason, string.IsNullOrWhiteSpace(value) ? "-" : value); }
     public string Status { get => _status; set => Set(ref _status, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
     // Runtime ordering metadata is not rendered. Avoid an unnecessary WPF property-change
     // notification for every poll/report sample; the value still guards stale snapshots.
     public long Sequence { get => _sequence; set => _sequence = value; }
+    // Presentation state only: cached/last-seen values cannot be mistaken
+    // for fresh IED data when the MMS association has been stopped.
+    public bool IsOffline
+    {
+        get => _isOffline;
+        set
+        {
+            if (Set(ref _isOffline, value))
+                Raise(nameof(AcquisitionShort));
+        }
+    }
     public bool IsRecentlyChanged { get => _isRecentlyChanged; set => Set(ref _isRecentlyChanged, value); }
     public bool IsAnnunciatorSelected { get => _isAnnunciatorSelected; set => Set(ref _isAnnunciatorSelected, value); }
     public bool CanUseAsAnnunciator => FunctionalConstraint.Equals("ST", StringComparison.OrdinalIgnoreCase);
@@ -855,6 +910,9 @@ public sealed class Iec61850PointSnapshot
     /// </summary>
     public bool IsValueEdge { get; init; }
     public bool IsReportTraffic { get; init; }
+    // Association-local aggregate sourced only from real decoded report ingress.
+    // Immutable copy when published: safe across the runtime / WPF dispatcher.
+    public IReadOnlyList<string> RoutedReportControlReferences { get; init; } = Array.Empty<string>();
     public long Sequence { get; init; }
 }
 
@@ -874,6 +932,20 @@ public sealed class Iec61850EventEntry
     public string Quality { get; init; } = "Unknown";
     public string SourceMode { get; init; } = string.Empty;
     public string Reason { get; init; } = string.Empty;
+    // Raw reporting identity, copied ONLY from a routed live report, never
+    // fabricated from static DataSet labels or a process-value edge.
+    public string ReportId { get; init; } = string.Empty;
+    public string ReportControlReference { get; init; } = string.Empty;
+    public IReadOnlyList<string> RoutedReportControlReferences { get; init; } = Array.Empty<string>();
+    // Assigned only from future independently proven buffered replay evidence.
+    // BRCB membership or receipt of a buffered report does not prove replay.
+    public bool VerifiedBufferedReplay { get; init; }
+    // Operator labels are deliberately short. Full source evidence remains
+    // available in the export and the native report diagnostics.
+    public string EventCause => Iec61850EventOriginPolicy.Cause(Reason, SourceMode, VerifiedBufferedReplay);
+    public string AcquisitionShort => Iec61850EventOriginPolicy.Acquisition(
+        ReportId, ReportControlReference, SourceMode, RoutedReportControlReferences);
+    public string ReportChannel => Iec61850EventOriginPolicy.Channel(SourceMode);
     public string EdgeType
     {
         get

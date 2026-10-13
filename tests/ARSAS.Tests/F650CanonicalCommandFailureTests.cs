@@ -82,14 +82,22 @@ public sealed class F650CanonicalCommandFailureTests
     }
 
     [Fact]
-    public void FailedCommand_HasVisibleOperatorWarning_OnlyOnFailure()
+    public void OnlyFailedCommandsRaiseDiagnosticsAndToast_NoSuccessNotice()
     {
         var main = Read("MainWindow.xaml.cs");
-        Assert.Contains("if (!result.IsSuccess)", main, StringComparison.Ordinal);
-        Assert.Contains("Iec61850ControlShout.FromResult(result)", main, StringComparison.Ordinal);
-        Assert.Contains("ShowControlShout(notice.Title, notice.Detail)", main, StringComparison.Ordinal);
-        Assert.Contains("MarkDiagnosticAlert()", main, StringComparison.Ordinal);
-        Assert.DoesNotContain("IED Command Failed —", main, StringComparison.Ordinal);
+        var start = main.IndexOf("signal.ControlLastResult = BuildQuickControlResult(result);", StringComparison.Ordinal);
+        var end = main.IndexOf("catch (OperationCanceledException)", start, StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start);
+        var resultPresentation = main[start..end];
+        // Whitespace-neutral: Git on Windows may check out CRLF source.
+        // The toast must remain lexically nested inside failure handling.
+        Assert.Matches(
+            @"if\s*\(!result\.IsSuccess\)\s*\{\s*MarkDiagnosticAlert\(\);\s*ShowControlShout\(Iec61850ControlShout\.FromResult\(result\)\);\s*\}",
+            resultPresentation);
+        Assert.Equal(1, resultPresentation.Split(
+            "ShowControlShout(Iec61850ControlShout.FromResult(result));",
+            StringSplitOptions.None).Length - 1);
+        Assert.DoesNotContain("if (result.IsSuccess)", resultPresentation, StringComparison.Ordinal);
         Assert.DoesNotContain("MessageBoxImage.Warning", main, StringComparison.Ordinal);
     }
 
@@ -99,7 +107,8 @@ public sealed class F650CanonicalCommandFailureTests
         var projection = Read("Services/Iec61850StaticControlStatusProjectionService.cs");
         Assert.Contains("Full DataObject is command identity", projection, StringComparison.Ordinal);
         var model = Read("Models/MonitorModels.cs");
-        Assert.Contains("DistinctOperable(Signals)", model, StringComparison.Ordinal);
+        Assert.Contains("DistinctSelected(Signals)", model, StringComparison.Ordinal);
+        Assert.Contains("ControlSupportsOperate", model, StringComparison.Ordinal);
         var runtime = Read("Services/Iec61850MonitorRuntime.cs");
         Assert.Contains("_activeControlTargets.TryAdd(targetKey, 0)", runtime, StringComparison.Ordinal);
         Assert.Contains("_activeControlTargets.TryRemove(targetKey, out _)", runtime, StringComparison.Ordinal);

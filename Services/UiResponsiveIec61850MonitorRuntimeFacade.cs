@@ -33,6 +33,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public SemaphoreSlim StopGate { get; } = new(1, 1);
         public CancellationTokenSource? ActiveOperationCancellation { get; set; }
         public long Generation { get; set; }
+        public Task? ActiveStopTask { get; set; }
     }
 
     private sealed record CommandFeedbackFence(
@@ -126,6 +127,18 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             deviceId,
             cancellationToken,
             token => _inner.InspectControlAsync(deviceId, signal, token));
+
+    // The UI and the inner MMS runtime intentionally have different types.
+    // ctlModel editing must cross this facade, just like inspection/Operate;
+    // bypassing it loses the per-device lifecycle/serialization authority.
+    public Task<AR.Iec61850.Control.Iec61850ControlModelConfigurationResult> ConfigureControlModelAsync(
+        string deviceId, SignalDefinition signal,
+        Iec61850ControlModelKind expected, Iec61850ControlModelKind requested,
+        CancellationToken cancellationToken)
+        => RunDeviceOperationAsync(
+            deviceId,
+            cancellationToken,
+            token => _inner.ConfigureControlModelAsync(deviceId, signal, expected, requested, token));
 
     public Task<Iec61850ControlCommandResult> ExecuteControlAsync(
         string deviceId,
@@ -568,41 +581,75 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         }
     }
 
-    private async Task RunPreemptiveStopAsync(string? deviceId, Func<Task> stopOperation)
+    private Task RunPreemptiveStopAsync(string? deviceId, Func<Task> stopOperation)
     {
         ThrowIfDisposing();
         ArgumentNullException.ThrowIfNull(stopOperation);
 
         var slot = GetSlot(deviceId);
+        TaskCompletionSource<bool> completion;
         CancellationTokenSource? activeCancellation;
         lock (slot.SyncRoot)
         {
+            // Repeated Stop calls share the same teardown and do not increment
+            // the generation or cancel a future association a second time.
+            if (slot.ActiveStopTask is { IsCompleted: false } inFlight)
+                return inFlight;
+
+            completion = new TaskCompletionSource<bool>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            slot.ActiveStopTask = completion.Task;
             activeCancellation = slot.ActiveOperationCancellation;
             ++slot.Generation;
         }
 
-        // Cancellation is intentionally issued before StopGate and, critically, without
-        // waiting for OperationGate. This is the escape path when Connect/Start is hung.
+        // Preserve the preemptive lane: request cancellation immediately,
+        // before waiting for the StopGate (never wait for OperationGate).
         try
         {
             activeCancellation?.Cancel();
         }
         catch (ObjectDisposedException)
         {
-            // The active operation completed between snapshot and cancellation.
+            // Finished between snapshot and cancellation.
         }
 
-        await slot.StopGate.WaitAsync().ConfigureAwait(false);
+        _ = ExecutePreemptiveStopAsync(slot, stopOperation, completion);
+        return completion.Task;
+    }
+
+    private static async Task ExecutePreemptiveStopAsync(
+        DeviceOperationSlot slot,
+        Func<Task> stopOperation,
+        TaskCompletionSource<bool> completion)
+    {
         try
         {
-            await Task.Run(
-                    async () => await stopOperation().ConfigureAwait(false),
-                    CancellationToken.None)
-                .ConfigureAwait(false);
+            await slot.StopGate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                await Task.Run(
+                        async () => await stopOperation().ConfigureAwait(false),
+                        CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
+            finally
+            {
+                slot.StopGate.Release();
+            }
+            completion.TrySetResult(true);
+        }
+        catch (Exception ex)
+        {
+            completion.TrySetException(ex);
         }
         finally
         {
-            slot.StopGate.Release();
+            lock (slot.SyncRoot)
+            {
+                if (ReferenceEquals(slot.ActiveStopTask, completion.Task))
+                    slot.ActiveStopTask = null;
+            }
         }
     }
 

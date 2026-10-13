@@ -176,6 +176,17 @@ internal static class DiagnosticReportBuilder
                     AppendStaticInitialImage(builder, device.Points);
                 builder.AppendLine($"Saved model      : {device.HasDiscoveryCache} ({device.SignalCount:N0} signal(s))");
                 builder.AppendLine($"Selected         : live={device.SelectedLiveSignalCount:N0}, control={device.SelectedControlSignalCount:N0}");
+                var commandCatalog = Iec61850ControlIdentity.DistinctSelected(device.Signals);
+                builder.AppendLine($"Control catalog  : selected={commandCatalog.Length}, verified-operable={commandCatalog.Count(s => s.ControlSupportsOperate)}, read-only-or-unverified={commandCatalog.Count(s => !s.ControlSupportsOperate)}");
+                foreach (var command in commandCatalog.Take(40))
+                {
+                    // A bounded single line gives next real-test report the live
+                    // ctlModel reference/value and reason without losing raw evidence.
+                    var evidence = (command.ControlInspectionEvidence ?? string.Empty)
+                        .Replace('\r', ' ').Replace('\n', ' ');
+                    if (evidence.Length > 480) evidence = evidence[..480] + "…";
+                    builder.AppendLine($"  {command.ObjectReference} | CDC={command.ControlCdc} | liveVerifiedCdc={command.VerifiedLiveControlCdc} | dataSetCdc={command.DataSetAdvisoryCdc} | model={command.ControlModelText} | canOperate={command.ControlSupportsOperate} | {evidence}");
+                }
                 builder.AppendLine($"Logical Devices  : {EmptyAsUnavailable(device.LogicalDeviceSummary)}");
                 builder.AppendLine($"Identity source  : {EmptyAsUnavailable(device.IdentitySource)}");
 

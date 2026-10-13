@@ -445,8 +445,49 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var genericTrial = root.GetProperty("genericControlInteroperabilityTrial");
         Assert.Equal(zivTrial.GetProperty("exactCommit").GetString(),
             genericTrial.GetProperty("baseEngineCommit").GetString());
+        var recovery = root.GetProperty("p109LControlRecoveryTrial");
         Assert.Equal(genericTrial.GetProperty("exactCommit").GetString(),
+            recovery.GetProperty("baseEngineCommit").GetString());
+        var commissioning = root.GetProperty("p109QControlModelCommissioningTrial");
+        Assert.Equal(recovery.GetProperty("exactCommit").GetString(),
+            commissioning.GetProperty("baseEngineCommit").GetString());
+        var simpleEditor = root.GetProperty("p109RSimpleCtlModelEditorTrial");
+        Assert.Equal(commissioning.GetProperty("exactCommit").GetString(),
+            simpleEditor.GetProperty("baseEngineCommit").GetString());
+        var position = root.GetProperty("p109TPositionControlInteroperabilityTrial");
+        Assert.Equal(simpleEditor.GetProperty("exactCommit").GetString(),
+            position.GetProperty("baseEngineCommit").GetString());
+        var positionStatus = root.GetProperty("p109UPositionStatusNameListRecoveryTrial");
+        Assert.Equal(position.GetProperty("exactCommit").GetString(),
+            positionStatus.GetProperty("baseEngineCommit").GetString());
+        // P10.9U remains immutable historical evidence. P10.9V is the
+        // exact tested successor, not a rewrite of that accepted lineage.
+        Assert.Equal("ad43399ed411cc72e6eb68b67e198db5e7b95381",
+            positionStatus.GetProperty("exactCommit").GetString());
+        var typedBscTrial = root.GetProperty("p109VLiveBscAuthorityTrial");
+        Assert.Equal(positionStatus.GetProperty("exactCommit").GetString(),
+            typedBscTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal("036e2c00d83a0815b6160147b14ea05975057965",
+            typedBscTrial.GetProperty("exactCommit").GetString());
+        Assert.Equal(typedBscTrial.GetProperty("exactCommit").GetString(),
             root.GetProperty("commit").GetString());
+        Assert.Equal("engine-ci-success-consumer-ci-pending-not-physical",
+            typedBscTrial.GetProperty("status").GetString());
+        Assert.Equal(38328335496L, typedBscTrial.GetProperty("engineCiRun").GetInt64());
+        Assert.True(typedBscTrial.GetProperty("staticSpcNeverOverridesExactLiveBsc").GetBoolean());
+        Assert.True(typedBscTrial.GetProperty("typedTwoBitCtlValAndExactStepStatusRequired").GetBoolean());
+        Assert.True(typedBscTrial.GetProperty("wrongOrCrossObjectStatusFailsClosed").GetBoolean());
+        Assert.True(typedBscTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(typedBscTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
+        Assert.True(typedBscTrial.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
+        Assert.True(positionStatus.GetProperty("singleScalarReadOnly").GetBoolean());
+        Assert.True(positionStatus.GetProperty("bitStringWidthTwoRequired").GetBoolean());
+        Assert.True(position.GetProperty("structuredStatusRequiresTypedMmsRead").GetBoolean());
+        Assert.True(position.GetProperty("liveTypedControlVerificationRequired").GetBoolean());
+        Assert.True(simpleEditor.GetProperty("statusOnlyZeroSupported").GetBoolean());
+        Assert.True(commissioning.GetProperty("singleWriteNoRetry").GetBoolean());
+        Assert.True(commissioning.GetProperty("commandOperateForbidden").GetBoolean());
+        Assert.True(recovery.GetProperty("noControlWriteOnProbe").GetBoolean());
         Assert.Equal("a43b9b4864a9565c02f544d4135fe157c2fac577",
             genericTrial.GetProperty("exactCommit").GetString());
         Assert.Equal("code-verified-not-physical", canonicalTrial.GetProperty("status").GetString());
@@ -467,7 +508,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.True(zivTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
         Assert.True(zivTrial.GetProperty("fullDiscoveryFallbackForbidden").GetBoolean());
         Assert.True(zivTrial.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
-        Assert.Equal(168, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(169, root.GetProperty("sourcePullRequest").GetInt32());
         Assert.True(genericTrial.GetProperty("typedSemanticGateRequired").GetBoolean());
         Assert.True(genericTrial.GetProperty("associationScopedInventoryRequired").GetBoolean());
         Assert.True(genericTrial.GetProperty("vendorDispatchForbidden").GetBoolean());
