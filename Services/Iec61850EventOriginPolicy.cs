@@ -30,26 +30,17 @@ public static class Iec61850EventOriginPolicy
         return "Chg";
     }
 
+    // UI Acquisition means the actual RCB that routed this report, NOT
+    // IEC ReportId (RptID). RptID can legitimately be "Rpt_0" while
+    // the configured BRCB object is named "brcb01".
     public static string Acquisition(
         string? reportId, string? reportControlReference, string? sourceMode)
     {
         if (IsPolling(sourceMode)) return "MMS Polling";
+        var rcbName = RcbName(reportControlReference);
+        if (rcbName.Length > 0) return rcbName;
 
-        // Actual decoded header ID is preferred over a configured RCB hint.
-        // Keep the ReportId literal (it need not be a path or an RCB name).
-        if (!string.IsNullOrWhiteSpace(reportId))
-            return reportId.Trim();
-
-        if (!string.IsNullOrWhiteSpace(reportControlReference))
-        {
-            var parts = reportControlReference.Trim().Split(
-                new[] { '/', '$', '.' },
-                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (parts.Length > 0)
-                return parts[^1];
-        }
-
-        // These are TYPE labels, not fabricated report identifiers.
+        // Preserve missing provenance; do not invent an RCB from RptID.
         return Channel(sourceMode) switch
         {
             "BRCB" => "BRCB",
@@ -58,6 +49,30 @@ public static class Iec61850EventOriginPolicy
             "Simulation" => "Demo",
             _ => "Unknown"
         };
+    }
+
+    public static string PointAcquisition(
+        string? lastLiveRcbReference, string? sourceMode, bool offline)
+    {
+        if (offline) return "Offline";
+        if (IsPolling(sourceMode)) return "MMS Polling";
+        var rcbName = RcbName(lastLiveRcbReference);
+        if (rcbName.Length > 0) return rcbName;
+        if (sourceMode?.Contains("report", StringComparison.OrdinalIgnoreCase) == true ||
+            Channel(sourceMode) is "BRCB" or "URCB")
+            return "RCB pending";
+        return Channel(sourceMode) == "Simulation" ? "Demo" : "Unknown";
+    }
+
+    // Both MMS ('$') and normalized SCL ('.') references are accepted.
+    // The full reference is retained separately as unabridged evidence.
+    public static string RcbName(string? reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference)) return string.Empty;
+        var parts = reference.Trim().Split(
+            new[] { '/', '$', '.' },
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length == 0 ? string.Empty : parts[^1];
     }
 
     public static string Channel(string? acquisition)
