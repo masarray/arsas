@@ -1,4 +1,5 @@
 using System.Windows;
+using System.ComponentModel;
 using AR.Iec61850.Discovery;
 
 namespace ArIED61850Tester.Models;
@@ -139,7 +140,22 @@ public sealed record IedBrowserFlagOption(string Label, bool? IsEnabled)
 
 public sealed record IedBrowserDetailRow(
     string Kind, string Name, string Value = "", int Depth = 0, string Source = "")
+    : INotifyPropertyChanged
 {
+    private string _displayValue = Value;
+    public string Value
+    {
+        get => _displayValue;
+        set
+        {
+            if (_displayValue == value) return;
+            _displayValue = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Value)));
+        }
+    }
+    public event PropertyChangedEventHandler? PropertyChanged;
+    public string ValueReference { get; init; } = "";
+    public string FunctionalConstraint { get; init; } = "";
     private IReadOnlyList<IedBrowserDetailRow>? _children;
     public IedBrowserTreeRow? NavigateTo { get; init; }
     public Func<IReadOnlyList<IedBrowserDetailRow>>? LoadChildren { get; init; }
@@ -345,7 +361,9 @@ public static class IedBrowserPresentation
             {
                 NavigateTo = child,
                 SecondaryText = child.Payload is LiveIedFileModel detailFile
-                    ? detailFile.LastModified : ""
+                    ? detailFile.LastModified : "",
+                ValueReference = child.Payload is LiveIedDataObjectModel doModel
+                    ? doModel.Reference : ""
             });
         }
         return true;
@@ -455,7 +473,11 @@ public static class IedBrowserPresentation
                         foreach (var attr in settings)
                             rows.Add(new IedBrowserDetailRow("Data",
                                 $"{attr.ObjectReference}.{attr.AttributePath} [{attr.FunctionalConstraint}]",
-                                "Not read", Source: "SG/SE declaration, no live setting-group read"));
+                                "Not read", Source: "SG/SE declaration, no live setting-group read")
+                            {
+                                ValueReference = attr.MmsReference,
+                                FunctionalConstraint = attr.FunctionalConstraint
+                            });
                         if (settings.Length == 0)
                             rows.Add(new("Message", "No SG/SE parameters available in this model."));
                     }
@@ -526,7 +548,12 @@ public static class IedBrowserPresentation
                 Field("MMS type", attr.MmsType);
                 Field("SCL bType", attr.SclBType);
                 Field("Type confidence", attr.TypeConfidence);
-                Field("Value", "Not read", "No explicit MMS read");
+                rows.Add(new IedBrowserDetailRow("Property", "Value", "Not read",
+                    Source: "Read-only MMS / observed report")
+                {
+                    ValueReference = attr.MmsReference,
+                    FunctionalConstraint = attr.FunctionalConstraint
+                });
                 break;
             case LiveIedFileModel file:
                 Section("File attributes");
