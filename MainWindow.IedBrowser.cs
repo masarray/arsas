@@ -129,6 +129,7 @@ public partial class MainWindow
             return;
         }
 
+        var bindingIndex = new IedBrowserReadBindingIndex(device);
         var cts = CancellationTokenSource.CreateLinkedTokenSource(_applicationCancellation.Token);
         // Read All may include thousands of attributes. It is cancellable by the
         // operator, never a new continuous acquisition/polling process.
@@ -166,7 +167,7 @@ public partial class MainWindow
                 sourceDevice.LiveValues.Publish(result.Target.Reference,
                     result.Target.FunctionalConstraint, result.Value, result.Quality,
                     result.DeviceTimestamp, "MMS Read");
-                ApplyIedBrowserReadToExistingSignals(sourceDevice, result);
+                bindingIndex.Apply(result);
                 RefreshIedBrowserVisibleValues();
             });
             var readProgress = new Progress<IedBrowserReadProgress>(p =>
@@ -207,40 +208,6 @@ public partial class MainWindow
         }
     }
 
-    private static void ApplyIedBrowserReadToExistingSignals(
-        Iec61850MonitorDevice device, IedBrowserReadResult read)
-    {
-        var reference = IedBrowserLiveValues.CanonicalReference(read.Target.Reference);
-        var fc = read.Target.FunctionalConstraint;
-        foreach (var signal in device.Signals)
-        {
-            if (!string.Equals(IedBrowserLiveValues.CanonicalReference(signal.ObjectReference),
-                    reference, StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(signal.FunctionalConstraint, fc, StringComparison.OrdinalIgnoreCase))
-                continue;
-            signal.Value = read.Value;
-            if (!string.IsNullOrWhiteSpace(read.Quality)) signal.Quality = read.Quality;
-            if (!string.IsNullOrWhiteSpace(read.DeviceTimestamp))
-                signal.DeviceTimestamp = read.DeviceTimestamp;
-        }
-
-        // Read is a point snapshot, not an SOE event. Do not increment an event
-        // sequence, fabricate edges or alter report acquisition authority.
-        foreach (var point in device.Points)
-        {
-            if (!string.Equals(IedBrowserLiveValues.CanonicalReference(point.IecReference),
-                    reference, StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(point.FunctionalConstraint, fc, StringComparison.OrdinalIgnoreCase))
-                continue;
-            point.Value = read.Value;
-            if (!string.IsNullOrWhiteSpace(read.Quality)) point.Quality = read.Quality;
-            if (!string.IsNullOrWhiteSpace(read.DeviceTimestamp))
-                point.DeviceTimestamp = read.DeviceTimestamp;
-            point.IsOffline = false;
-            point.SourceMode = "MMS Read";
-            point.Status = "Read-only snapshot";
-        }
-    }
 
     private void RefreshIedBrowserReadButtons()
     {
