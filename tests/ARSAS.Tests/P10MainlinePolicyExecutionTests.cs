@@ -112,6 +112,8 @@ public sealed class P10MainlinePolicyExecutionTests
             Directory.CreateDirectory(Path.Combine(folder, "scripts"));
             File.Copy(Path.Combine(root, "scripts", "test-p10-9f-core-routing-trial.ps1"),
                 Path.Combine(folder, "scripts", "test-p10-9f-core-routing-trial.ps1"));
+            File.Copy(Path.Combine(root, "scripts", "test-exact-operator-release-acceptance.ps1"),
+                Path.Combine(folder, "scripts", "test-exact-operator-release-acceptance.ps1"));
             var lockDoc = JsonNode.Parse(File.ReadAllText(Path.Combine(root,
                 "engines", "ARIEC61850.lock.json")))!.AsObject();
 

@@ -180,30 +180,8 @@ jobs:
             # A narrowly scoped public product-release decision is NOT a fresh
             # R10 physical relay qualification. Bind exact tested binary/engine,
             # operator decision, permitted UI scope and negative SOE evidence.
-            $proofPath = '.\\evidence\\v1.6.41-operator-release-acceptance.json'
-            if (-not (Test-Path $proofPath)) {
-              throw 'Runtime engine pin lacks historical or exact operator-approved release authority.'
-            }
-            $approval = Get-Content $proofPath -Raw | ConvertFrom-Json
-            $version = (Get-Content .\\VERSION -Raw).Trim()
-            if ($approval.status -ne 'operator-approved-limited-public-release' -or
-                $approval.releaseTag -ne "v$version" -or
-                -not [bool]$approval.decision.releaseApproved -or
-                $approval.installedBuild.appVersion -ne $version -or
-                $approval.installedBuild.appAssemblyRevision -ne '44eacf200ab20c0453e62a88ad71f472821ec5a2' -or
-                $approval.installedBuild.engineCommit -ne $lock.commit -or
-                [int]$lock.sourcePullRequest -ne 169 -or
-                -not [bool]$approval.scope.legacyRcbDialogRetained -or
-                -not [bool]$approval.scope.eventPropertiesIncluded -or
-                -not [bool]$approval.scope.iedBrowserExcluded -or
-                -not [bool]$approval.scope.newRcbExporterExcluded -or
-                -not [bool]$approval.scope.staticDatasetReportOnly -or
-                -not [bool]$approval.scope.cyclicMmsProcessPollingForbidden -or
-                -not [bool]$approval.observations.continuity.bufferOverflowObserved -or
-                -not [bool]$approval.observations.continuity.sequenceDiscontinuitiesObserved -or
-                [bool]$approval.qualification.hardwarePhysicallyAttested -or
-                [bool]$approval.qualification.completeSoeContinuityVerified -or
-                -not [bool]$approval.qualification.scopedOperatorAcceptance) {
+            . .\scripts\test-exact-operator-release-acceptance.ps1
+            if (-not (Test-ExactOperatorReleaseAcceptance -Lock $lock -SourceRoot (Get-Location).Path)) {
               throw 'Exact v1.6.41 operator release proof missing, mismatched, or overclaiming physical qualification.'
             }
             Write-Host 'Exact v1.6.41 operator-approved public release scope verified; independent R10 hardware qualification is NOT claimed.'

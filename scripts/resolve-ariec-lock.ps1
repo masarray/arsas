@@ -126,10 +126,18 @@ if ($null -ne $lock.sclAssociationInteroperability) {
                 ($p10Valid -and [string]$lock.commit -ceq [string]$p10.exactCommit -and [int]$lock.sourcePullRequest -eq 161) -or
                 ($p10Valid -and $coreRoutingTrialValid)
             )
-            if (-not $historicalAnchorValid -or -not $acceptedTrial) {
-                throw 'SCL association physical-tested engine head differs from integration lock.'
+            . (Join-Path $PSScriptRoot 'test-exact-operator-release-acceptance.ps1')
+            $sourceRoot = Split-Path -Parent (Split-Path -Parent $LockPath)
+            $operatorReleaseAccepted = Test-ExactOperatorReleaseAcceptance -Lock $lock -SourceRoot $sourceRoot
+            if (-not $historicalAnchorValid -or (-not $acceptedTrial -and -not $operatorReleaseAccepted)) {
+                throw 'SCL association physical-tested engine head differs from integration lock without exact release scope.'
             }
-            Write-Host 'Exact stacked code trial recognized; physical SCL-association/R10 authority remains historical and promotion-blocked.'
+            if ($operatorReleaseAccepted) {
+                Write-Host 'v1.6.41 scoped operator release approved; historical R10 hardware and SOE qualifications remain separate.'
+            }
+            else {
+                Write-Host 'Exact stacked code trial recognized; physical SCL-association/R10 authority remains historical and promotion-blocked.'
+            }
         }
     }
     if ($null -ne $association.mergedEngineCommit) {
