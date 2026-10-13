@@ -82,22 +82,20 @@ public sealed class F650CanonicalCommandFailureTests
     }
 
     [Fact]
-    public void EveryFinalCommandHasEvidenceGradedToast_DiagnosticsAlertOnlyOnFailure()
+    public void OnlyFailedCommandsRaiseDiagnosticsAndToast_NoSuccessNotice()
     {
         var main = Read("MainWindow.xaml.cs");
         var start = main.IndexOf("signal.ControlLastResult = BuildQuickControlResult(result);", StringComparison.Ordinal);
         var end = main.IndexOf("catch (OperationCanceledException)", start, StringComparison.Ordinal);
         Assert.True(start >= 0 && end > start);
         var resultPresentation = main[start..end];
-        Assert.Contains("if (!result.IsSuccess)", resultPresentation, StringComparison.Ordinal);
-        Assert.Contains("MarkDiagnosticAlert();", resultPresentation, StringComparison.Ordinal);
-        Assert.Contains("ShowControlShout(Iec61850ControlShout.FromResult(result));",
+        Assert.Contains(
+            "if (!result.IsSuccess)\n            {\n                MarkDiagnosticAlert();\n                ShowControlShout(Iec61850ControlShout.FromResult(result));\n            }",
             resultPresentation, StringComparison.Ordinal);
-        Assert.True(resultPresentation.IndexOf("MarkDiagnosticAlert();", StringComparison.Ordinal) <
-                    resultPresentation.IndexOf("ShowControlShout(Iec61850ControlShout.FromResult(result));",
-                        StringComparison.Ordinal));
-        Assert.DoesNotContain("if (result.IsSuccess)\n                MarkDiagnosticAlert();",
-            resultPresentation, StringComparison.Ordinal);
+        Assert.Equal(1, resultPresentation.Split(
+            "ShowControlShout(Iec61850ControlShout.FromResult(result));",
+            StringSplitOptions.None).Length - 1);
+        Assert.DoesNotContain("if (result.IsSuccess)", resultPresentation, StringComparison.Ordinal);
         Assert.DoesNotContain("MessageBoxImage.Warning", main, StringComparison.Ordinal);
     }
 
