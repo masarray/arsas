@@ -20,7 +20,7 @@ public sealed class AlarmAnnunciatorIntegrationRegressionTests
         var navColumns = navGrid.Element(p + "Grid.ColumnDefinitions")?
             .Elements(p + "ColumnDefinition").Count() ?? 0;
 
-        Assert.Equal(8, navColumns);
+        Assert.Equal(7, navColumns);
         Assert.Contains(navGrid.Descendants(p + "Button"), button =>
             (string?)button.Attribute(x + "Name") == "NavAlarmButton" &&
             (string?)button.Attribute("Tag") == "3" &&
@@ -50,7 +50,7 @@ public sealed class AlarmAnnunciatorIntegrationRegressionTests
     {
         var source = File.ReadAllText(FindRepoFile("SasOperationalUiPolicy.cs"));
 
-        Assert.Contains("\"NavExplorerButton\", \"NavLiveButton\", \"NavEventsButton\", \"NavAlarmButton\", \"NavGooseButton\", \"NavDiagnosticsButton\", \"NavNativeFatButton\", \"NavIedBrowserButton\"", source, StringComparison.Ordinal);
+        Assert.Contains("\"NavExplorerButton\", \"NavLiveButton\", \"NavEventsButton\", \"NavAlarmButton\", \"NavGooseButton\", \"NavDiagnosticsButton\", \"NavNativeFatButton\"", source, StringComparison.Ordinal);
         Assert.Contains("UpdateNavigation(buttons, tabs.SelectedIndex", source, StringComparison.Ordinal);
         Assert.Contains("buttons[index].Background = selected ? AccentGradient()", source, StringComparison.Ordinal);
     }
@@ -126,20 +126,20 @@ public sealed class AlarmAnnunciatorIntegrationRegressionTests
     }
 
     [Fact]
-    public void NavigationAndDiagnosticsUseEightTabGeometry()
+    public void NavigationAndDiagnosticsUseSevenTabGeometry()
     {
         var navigation = File.ReadAllText(FindRepoFile("MainWindow.NavigationLayoutFix.cs"));
         var main = File.ReadAllText(FindRepoFile("MainWindow.xaml.cs"));
         var nativeFat = File.ReadAllText(FindRepoFile("MainWindow.NativeFatWorkspace.cs"));
 
-        Assert.Contains("contentWidth / 8d", navigation, StringComparison.Ordinal);
-        Assert.Contains("Math.Clamp(tabs.SelectedIndex, 0, 7)", navigation, StringComparison.Ordinal);
+        Assert.Contains("contentWidth / 7d", navigation, StringComparison.Ordinal);
+        Assert.Contains("Math.Clamp(tabs.SelectedIndex, 0, 6)", navigation, StringComparison.Ordinal);
         Assert.Contains("NavAlarmButton", navigation, StringComparison.Ordinal);
         Assert.Contains("NavNativeFatButton", navigation, StringComparison.Ordinal);
         Assert.Contains("MainTabs.SelectedIndex == 4", main, StringComparison.Ordinal);
         Assert.Contains("MainTabs.SelectedIndex == 5", main, StringComparison.Ordinal);
         Assert.Contains("private const int NativeFatWorkspaceIndex = 6", nativeFat, StringComparison.Ordinal);
-        Assert.Contains("Math.Clamp(index, 0, IedBrowserWorkspaceIndex)", main, StringComparison.Ordinal);
+        Assert.Contains("Math.Clamp(index, 0, NativeFatWorkspaceIndex)", main, StringComparison.Ordinal);
     }
 
     [Fact]

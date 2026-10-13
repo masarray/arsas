@@ -235,8 +235,8 @@ internal static class FaultRecordUxBehavior
             rcbButton,
             hasRcbInventory ? CapabilityState.Available : CapabilityState.Unavailable,
             hasRcbInventory
-                ? $"Browse Report Control Blocks and details for {device.Name}"
-                : $"Open SCL or complete live discovery before browsing RCBs for {device.Name}");
+                ? $"Select and export one RCB for legacy SAS import from {device.Name}"
+                : $"Open SCL or complete live discovery before using RCB Export for {device.Name}");
     }
 
     private static void ApplyState(Button button, CapabilityState state, string toolTip)

@@ -48,11 +48,11 @@ public sealed class ProductionFatEngineeringTabRegressionTests
         var repoRoot = FindRepoRoot();
 
         Assert.Contains("x:Name=\"NavNativeFatButton\" Grid.Column=\"6\" Content=\"FAT\" Tag=\"6\" Click=\"NavButton_Click\" Style=\"{StaticResource SegmentedNavButton}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Grid.ColumnSpan=\"8\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Grid.ColumnSpan=\"7\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"NativeFatTab\" Header=\"FAT\"", xaml, StringComparison.Ordinal);
 
-        Assert.Contains("Math.Clamp(index, 0, IedBrowserWorkspaceIndex)", mainSource, StringComparison.Ordinal);
-        Assert.Contains("var cellWidth = contentWidth / 8d", mainSource, StringComparison.Ordinal);
+        Assert.Contains("Math.Clamp(index, 0, NativeFatWorkspaceIndex)", mainSource, StringComparison.Ordinal);
+        Assert.Contains("var cellWidth = contentWidth / 7d", mainSource, StringComparison.Ordinal);
         Assert.Contains("NavNativeFatButton", mainSource, StringComparison.Ordinal);
 
         Assert.Contains("private const int NativeFatWorkspaceIndex = 6", bridgeSource, StringComparison.Ordinal);

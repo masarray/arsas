@@ -9,6 +9,6 @@ public partial class MainWindow
     internal void OpenRcbExportFilter(Iec61850MonitorDevice device)
     {
         ArgumentNullException.ThrowIfNull(device);
-        OpenIedBrowserRcb(device);
+        IedEditRcb_Click(new Button { Tag = device }, new RoutedEventArgs());
     }
 }
