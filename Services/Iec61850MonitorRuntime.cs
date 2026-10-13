@@ -1798,7 +1798,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 Status = status,
                 IsValueEdge = changed,
                 IsReportTraffic = trustReportEdge,
-                ReportControlReference = trustReportEdge ? state.LastLiveReportControlReference : string.Empty,
+                // This is association-local evidence from an actual routed report.
+                // Preserve it through later metadata/status UI coalescing.
+                ReportControlReference = state.LastLiveReportControlReference,
                 Sequence = state.Sequence
             });
         }
@@ -1850,6 +1852,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             Reason = state.Reason,
             Status = status,
             IsValueEdge = false,
+            ReportControlReference = state.LastLiveReportControlReference,
             Sequence = state.Sequence
         });
     }
