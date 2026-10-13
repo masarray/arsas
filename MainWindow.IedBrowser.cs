@@ -21,6 +21,7 @@ public partial class MainWindow
     private readonly IedBrowserDetailProjection _iedBrowserDetails = new();
     private readonly IedBrowserNavigationTrail _iedBrowserNavigation = new();
     private bool _iedBrowserSyncingSelection;
+    private long _iedBrowserLastLiveVersion = -1;
     private IedBrowserTreeRow? _iedBrowserRenderedPage;
     private bool? _iedBrowserRenderedConnected;
     private bool _iedBrowserForceRefresh;
@@ -99,6 +100,176 @@ public partial class MainWindow
         }
     }
 
+    private void IedBrowserCancelRead_Click(object sender, RoutedEventArgs e)
+        => CancelIedBrowserRead();
+
+    private async void IedBrowserReadValues_Click(object sender, RoutedEventArgs e)
+    {
+        var device = SelectedDevice;
+        if (device is null || device.IsDemo || device.IsBusy ||
+            _iedBrowserReadOperation is not null)
+            return;
+        if (device.IsMonitoring)
+        {
+            IedBrowserSubtitle.Text = "Values follow the active monitor. Stop monitoring before an explicit MMS Read.";
+            return;
+        }
+
+        var model = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
+        var readAll = sender is Button { Tag: "All" };
+        var targets = IedBrowserReadPlan.Build(model, _iedBrowserNavigation.Current, readAll);
+        if (targets.Count == 0)
+        {
+            IedBrowserSubtitle.Text = "No model-verified readable FC attributes in this selection.";
+            return;
+        }
+        if (!device.IsConnected && !device.HasSclDesignModel && !device.HasDiscoveryCache)
+        {
+            IedBrowserSubtitle.Text = "Read requires an MMS connection. Connect/discover this IED first.";
+            return;
+        }
+
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(_applicationCancellation.Token);
+        // Read All may include thousands of attributes. It is cancellable by the
+        // operator, never a new continuous acquisition/polling process.
+        _iedBrowserReadOperation = cts;
+        var sourceDevice = device;
+        var successes = 0;
+        var failures = 0;
+        device.ResetDiscoveryProgress("Preparing read-only MMS values…",
+            readAll ? "Reading all IED values" : "Reading Browser values");
+        device.IsBusy = true; // Existing IED Card progress overlay (not another modal).
+        IedBrowserReadPageButton.IsEnabled = false;
+        IedBrowserReadAllButton.IsEnabled = false;
+        IedBrowserReadRcbButton.IsEnabled = false;
+        IedBrowserCancelReadButton.IsEnabled = true;
+        try
+        {
+            if (!device.IsConnected)
+            {
+                device.BusyStage = "Connecting with verified cached SCL/discovery model…";
+                await _runtime.ConnectUsingCachedModelAsync(device, cts.Token);
+                if (!device.IsConnected)
+                    throw new InvalidOperationException("MMS connection was not established.");
+            }
+
+            var readValues = new Progress<IedBrowserReadResult>(result =>
+            {
+                if (!ReferenceEquals(SelectedDevice, sourceDevice) || cts.IsCancellationRequested)
+                    return;
+                if (result.Error.Length != 0)
+                {
+                    failures++;
+                    return;
+                }
+                successes++;
+                sourceDevice.LiveValues.Publish(result.Target.Reference,
+                    result.Target.FunctionalConstraint, result.Value, result.Quality,
+                    result.DeviceTimestamp, "MMS Read");
+                ApplyIedBrowserReadToExistingSignals(sourceDevice, result);
+                RefreshIedBrowserVisibleValues();
+            });
+            var readProgress = new Progress<IedBrowserReadProgress>(p =>
+            {
+                if (!cts.IsCancellationRequested)
+                    sourceDevice.ApplyBrowserReadProgress(p.Completed, p.Total);
+            });
+            await _runtime.ReadBrowserValuesAsync(device, targets,
+                readValues, readProgress, cts.Token);
+            if (!cts.IsCancellationRequested && ReferenceEquals(SelectedDevice, sourceDevice))
+            {
+                device.CompleteDiscoveryProgressAnimation();
+                IedBrowserSubtitle.Text = $"Read complete · {successes:N0} values / {targets.Count:N0} attributes · {failures:N0} unavailable";
+                RefreshIedBrowserVisibleValues();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            if (ReferenceEquals(SelectedDevice, sourceDevice))
+                IedBrowserSubtitle.Text = $"Read cancelled · {successes:N0} value(s) received; no settings changed.";
+        }
+        catch (Exception ex)
+        {
+            if (ReferenceEquals(SelectedDevice, sourceDevice))
+            {
+                device.MarkDiscoveryFailed(ex.Message);
+                IedBrowserSubtitle.Text = "Read failed: " + ex.Message;
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(_iedBrowserReadOperation, cts))
+                _iedBrowserReadOperation = null;
+            cts.Dispose();
+            sourceDevice.IsBusy = false;
+            if (ReferenceEquals(SelectedDevice, sourceDevice))
+                RefreshIedBrowserReadButtons();
+        }
+    }
+
+    private static void ApplyIedBrowserReadToExistingSignals(
+        Iec61850MonitorDevice device, IedBrowserReadResult read)
+    {
+        var reference = IedBrowserLiveValues.CanonicalReference(read.Target.Reference);
+        var fc = read.Target.FunctionalConstraint;
+        foreach (var signal in device.Signals)
+        {
+            if (!string.Equals(IedBrowserLiveValues.CanonicalReference(signal.ObjectReference),
+                    reference, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(signal.FunctionalConstraint, fc, StringComparison.OrdinalIgnoreCase))
+                continue;
+            signal.Value = read.Value;
+            if (!string.IsNullOrWhiteSpace(read.Quality)) signal.Quality = read.Quality;
+            if (!string.IsNullOrWhiteSpace(read.DeviceTimestamp))
+                signal.DeviceTimestamp = read.DeviceTimestamp;
+        }
+
+        // Read is a point snapshot, not an SOE event. Do not increment an event
+        // sequence, fabricate edges or alter report acquisition authority.
+        foreach (var point in device.Points)
+        {
+            if (!string.Equals(IedBrowserLiveValues.CanonicalReference(point.IecReference),
+                    reference, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(point.FunctionalConstraint, fc, StringComparison.OrdinalIgnoreCase))
+                continue;
+            point.Value = read.Value;
+            if (!string.IsNullOrWhiteSpace(read.Quality)) point.Quality = read.Quality;
+            if (!string.IsNullOrWhiteSpace(read.DeviceTimestamp))
+                point.DeviceTimestamp = read.DeviceTimestamp;
+            point.IsOffline = false;
+            point.SourceMode = "MMS Read";
+            point.Status = "Read-only snapshot";
+        }
+    }
+
+    private void RefreshIedBrowserReadButtons()
+    {
+        if (IedBrowserReadPageButton == null) return;
+        var ready = SelectedDevice is { IsBusy: false, IsMonitoring: false, IsDemo: false } &&
+            _iedBrowserReadOperation == null;
+        IedBrowserReadPageButton.IsEnabled = ready;
+        IedBrowserReadAllButton.IsEnabled = ready;
+        IedBrowserCancelReadButton.IsEnabled = _iedBrowserReadOperation != null;
+    }
+
+    private void RefreshIedBrowserVisibleValues()
+    {
+        if (MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
+            SelectedDevice is not { } device)
+            return;
+        var version = device.LiveValues.Version;
+        if (_iedBrowserLastLiveVersion == version) return;
+        _iedBrowserLastLiveVersion = version;
+        foreach (var row in _iedBrowserDetails.Rows)
+        {
+            if (string.IsNullOrWhiteSpace(row.ValueReference)) continue;
+            row.Value = device.LiveValues.TryGet(row.ValueReference,
+                row.FunctionalConstraint, out var live)
+                ? live.Value
+                : "Not read";
+        }
+    }
+
     private void CancelIedBrowserRead()
     {
         _iedBrowserReadOperation?.Cancel();
@@ -150,6 +321,7 @@ public partial class MainWindow
         ObserveIedBrowserDevice(device);
         IedBrowserReadRcbButton.IsEnabled = device?.IsConnected == true &&
                                             device.IsBusy == false && _iedBrowserReadOperation == null;
+        RefreshIedBrowserReadButtons();
         IedBrowserExportRcbButton.IsEnabled = device is { IsBusy: false, IsDemo: false };
         if (device == null)
         {
@@ -391,6 +563,8 @@ public partial class MainWindow
                         : "Offline · cached SCL/discovery model";
         _iedBrowserDetails.Reset(IedBrowserPresentation.Details(row, model, connected));
         IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
+        _iedBrowserLastLiveVersion = -1;
+        RefreshIedBrowserVisibleValues();
         // Folder entry opens at its first child, regardless of the scroll
         // position in the previously inspected RCB, LN or DataSet.
         if (_iedBrowserDetails.Rows.Count > 0)
