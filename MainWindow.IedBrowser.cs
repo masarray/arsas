@@ -18,6 +18,7 @@ public partial class MainWindow
 {
     private const int IedBrowserWorkspaceIndex = 7;
     private readonly IedBrowserTreeProjection _iedBrowserTree = new();
+    private readonly IedBrowserDetailProjection _iedBrowserDetails = new();
     private bool _iedBrowserForceRefresh;
     private Iec61850MonitorDevice? _iedBrowserCachedDevice;
     private LiveIedModelDiscoveryDocument? _iedBrowserCachedModel;
@@ -151,7 +152,8 @@ public partial class MainWindow
             _iedBrowserCachedDevice = null;
             _iedBrowserTree.Reset([]);
             IedBrowserTreeGrid.ItemsSource = _iedBrowserTree.Rows;
-            IedBrowserDetailList.ItemsSource = null;
+            _iedBrowserDetails.Reset([]);
+            IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
             IedBrowserSubtitle.Text = "Select an IED in Explorer. Browsing does not open MMS sessions.";
             IedBrowserObjectPath.Text = "No IED selected";
             IedBrowserDetailStatus.Text = "Select an existing engineering model";
@@ -264,20 +266,37 @@ public partial class MainWindow
         RenderIedBrowserSelection(IedBrowserTreeGrid.SelectedItem as IedBrowserTreeRow,
             model, SelectedDevice?.IsConnected == true);
     }
-    private void IedBrowserDetail_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void IedBrowserDetailToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: IedBrowserDetailRow detail } || !detail.HasChildren)
+            return;
+        _iedBrowserDetails.Toggle(detail);
+        e.Handled = true;
+    }
+
+    private void IedBrowserDetail_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (!ReferenceEquals(sender, IedBrowserDetailList) ||
-            IedBrowserDetailList.SelectedItem is not IedBrowserDetailRow { NavigateTo: { } target })
+            IedBrowserDetailList.SelectedItem is not IedBrowserDetailRow detail)
             return;
 
-        // The right list navigates to the very same tree node, without new MMS reads
-        // and without rebuilding any other category or device session.
+        if (detail.HasChildren)
+        {
+            _iedBrowserDetails.Toggle(detail);
+            e.Handled = true;
+            return;
+        }
+
+        if (detail.NavigateTo is not { } target)
+            return;
+        // Double-click goes one semantic level deeper; single-click only selects.
+        // The target object retains its exact canonical IEC identity.
         _iedBrowserTree.Reveal(target);
-        if (!ReferenceEquals(IedBrowserTreeGrid.SelectedItem, target))
-            IedBrowserTreeGrid.SelectedItem = target;
-        else
-            IedBrowserDetailList.SelectedItem = null;
+        IedBrowserTreeGrid.SelectedItem = target;
         IedBrowserTreeGrid.ScrollIntoView(target);
+        var model = SelectedDevice?.LiveDiscoveryModel ?? SelectedDevice?.SclWorkspace?.DesignModel;
+        RenderIedBrowserSelection(target, model, SelectedDevice?.IsConnected == true);
+        e.Handled = true;
     }
 
 
@@ -288,7 +307,8 @@ public partial class MainWindow
         {
             IedBrowserObjectPath.Text = "Select an object in the left tree";
             IedBrowserDetailStatus.Text = "Cached engineering model · read-only navigation";
-            IedBrowserDetailList.ItemsSource = null;
+            _iedBrowserDetails.Reset([]);
+            IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
             return;
         }
 
@@ -312,7 +332,8 @@ public partial class MainWindow
             ? r.Inspection.Summary(connected)
             : connected ? "Connected · cached model metadata (not a live read)"
                         : "Offline · cached SCL/discovery model";
-        IedBrowserDetailList.ItemsSource = IedBrowserPresentation.Details(row, model, connected);
+        _iedBrowserDetails.Reset(IedBrowserPresentation.Details(row, model, connected));
+        IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
     }
 
 }
