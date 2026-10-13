@@ -11,6 +11,11 @@ public sealed class P10MainlinePolicyExecutionTests
 {
     [Theory]
     [InlineData("p10-stacked-valid", true)]
+    [InlineData("release-operator-approved-on-main", true)]
+    [InlineData("release-operator-engine-tampered-denied", false)]
+    [InlineData("release-operator-version-tampered-denied", false)]
+    [InlineData("release-operator-physical-overclaim-denied", false)]
+    [InlineData("release-operator-browser-included-denied", false)]
     [InlineData("core-trial-wrong-exact-sha-denied", false)]
     [InlineData("core-trial-wrong-base-denied", false)]
     [InlineData("core-trial-wrong-ci-denied", false)]
@@ -112,9 +117,41 @@ public sealed class P10MainlinePolicyExecutionTests
 
             string baseRef = "fix/512-goose-event-header-alignment";
             string sourceRef = "512/merge";
+            var operatorReleaseScenario = scenario.StartsWith("release-operator-", StringComparison.Ordinal);
+            if (operatorReleaseScenario)
+            {
+                File.Copy(Path.Combine(root, "evidence", "v1.6.41-operator-release-acceptance.json"),
+                    Path.Combine(folder, "evidence", "v1.6.41-operator-release-acceptance.json"));
+                File.Copy(Path.Combine(root, "VERSION"), Path.Combine(folder, "VERSION"));
+                baseRef = "main";
+                sourceRef = "main";
+                var approval = JsonNode.Parse(File.ReadAllText(Path.Combine(folder,
+                    "evidence", "v1.6.41-operator-release-acceptance.json")))!.AsObject();
+                switch (scenario)
+                {
+                    case "release-operator-engine-tampered-denied":
+                        approval["installedBuild"]!["engineCommit"] = new string('0', 40); break;
+                    case "release-operator-version-tampered-denied":
+                        approval["releaseTag"] = "v1.6.42"; break;
+                    case "release-operator-physical-overclaim-denied":
+                        approval["qualification"]!["hardwarePhysicallyAttested"] = true; break;
+                    case "release-operator-browser-included-denied":
+                        approval["scope"]!["iedBrowserExcluded"] = false; break;
+                }
+                File.WriteAllText(Path.Combine(folder, "evidence",
+                    "v1.6.41-operator-release-acceptance.json"), approval.ToJsonString());
+            }
             switch (scenario)
             {
-                case "p10-pr-main-denied": baseRef = "main"; break;
+                case "p10-stacked-valid":
+                    lockDoc["commit"] = "00ad2819b99ffe6b3f885e59aa24a6afb2b4d8e1";
+                    lockDoc["sourcePullRequest"] = 161;
+                    break;
+                case "release-operator-approved-on-main":
+                    break;
+                case "p10-pr-main-denied":
+                    lockDoc["commit"] = "00ad2819b99ffe6b3f885e59aa24a6afb2b4d8e1";
+                    lockDoc["sourcePullRequest"] = 161; baseRef = "main"; break;
                 case "core-trial-wrong-exact-sha-denied":
                     lockDoc["coreReportRoutingTrial"]!["exactCommit"] = new string('0', 40); break;
                 case "core-trial-wrong-base-denied":
@@ -221,7 +258,10 @@ public sealed class P10MainlinePolicyExecutionTests
                     lockDoc["p109UPositionStatusNameListRecoveryTrial"]!["operateRequiresExplicitConfirmation"] = false; break;
                 case "position-status-polling-denied":
                     lockDoc["p109UPositionStatusNameListRecoveryTrial"]!["cyclicMmsProcessPollingForbidden"] = false; break;
-                case "p10-source-main-denied": sourceRef = "main"; break;
+                case "p10-source-main-denied":
+                    lockDoc["commit"] = "00ad2819b99ffe6b3f885e59aa24a6afb2b4d8e1";
+                    lockDoc["sourcePullRequest"] = 161;
+                    sourceRef = "main"; break;
                 case "p10-wrong-sha-denied":
                     lockDoc["p10IdentityTrial"]!["exactCommit"] = new string('0', 40); break;
                 case "p10-wrong-parent-denied":

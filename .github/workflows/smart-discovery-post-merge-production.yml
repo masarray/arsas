@@ -59,9 +59,26 @@ jobs:
             }
           }
 
-          if ($lock.commit -ne $target.activeStack.engineModelAndScl.mainMerge -or
-              $lock.commit -ne $r10.testedArtifact.engineMergedMain) {
-            throw 'ARSAS engine lock no longer matches the R10 merged engine authority.'
+          if ($lock.mergedMainCommit -ne $target.activeStack.engineModelAndScl.mainMerge -or
+              $lock.mergedMainCommit -ne $r10.testedArtifact.engineMergedMain -or
+              $lock.previousStablePin.commit -ne $lock.mergedMainCommit) {
+            throw 'Historical R10 physically accepted engine authority is inconsistent.'
+          }
+          if ($lock.commit -ne $lock.mergedMainCommit) {
+            $approval = Get-Content .\\evidence\\v1.6.41-operator-release-acceptance.json -Raw | ConvertFrom-Json
+            $version = (Get-Content .\\VERSION -Raw).Trim()
+            if ($approval.status -ne 'operator-approved-limited-public-release' -or
+                $approval.releaseTag -ne "v$version" -or
+                $approval.installedBuild.engineCommit -ne $lock.commit -or
+                $approval.installedBuild.appAssemblyRevision -ne '44eacf200ab20c0453e62a88ad71f472821ec5a2' -or
+                [int]$lock.sourcePullRequest -ne 169 -or
+                -not [bool]$approval.decision.releaseApproved -or
+                -not [bool]$approval.qualification.scopedOperatorAcceptance -or
+                [bool]$approval.qualification.hardwarePhysicallyAttested -or
+                [bool]$approval.qualification.completeSoeContinuityVerified) {
+              throw 'Current engine is not independently hardware-qualified and has no exact limited operator release acceptance.'
+            }
+            Write-Host 'Historical R10 hardware proof preserved; current pinned engine verified only for explicit operator-approved v1.6.41 scope.'
           }
 
           "ENGINE_REPOSITORY=$($lock.repository)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
