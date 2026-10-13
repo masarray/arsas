@@ -17,7 +17,16 @@ public sealed class P109ScopedReleaseNoBrowserRegressionTests
         Assert.Contains("VerifiedIdentity = verifiedIdentity", Read("MainWindow.RcbExport.cs"));
         Assert.Contains("TrustedSclIdentityAuthority.TryMatchAsync", Read("MainWindow.RcbExport.cs"));
         Assert.Contains("IedEditRcb_Click", Read("MainWindow.RcbCapability.cs"));
-        Assert.Contains("IedEditRcbMulti_Click(button, e)", Read("MainWindow.RcbExportClickAuthority.cs"));
+        // Release scope: all WPF input paths retain the proven original dialog.
+        // The experimental multi-RCB exporter remains source-controlled,
+        // but MUST NOT intercept RCB from a production IED card.
+        Assert.Contains("new RcbExportFilterWindow(options)", Read("MainWindow.RcbExport.cs"));
+        Assert.DoesNotContain("window.IedEditRcbMulti_Click(button, e)",
+            Read("MainWindow.RcbExportClickAuthority.cs"));
+        Assert.DoesNotContain("window.IedEditRcbMulti_Click(button, e)",
+            Read("MainWindow.RcbMultiSelectPointerAuthority.cs"));
+        Assert.DoesNotContain("button.Click += window.IedEditRcbMulti_Click",
+            Read("MainWindow.MultiRcbExport.cs"));
         Assert.False(File.Exists(Find("MainWindow.IedBrowser.cs")));
         Assert.False(File.Exists(Find("Models/RcbInspectionEvidence.cs")));
     }
