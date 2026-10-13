@@ -349,4 +349,96 @@ public sealed class IedBrowserPresentationTests
         Assert.Contains(gRows, r => r.Kind == "Data" && r.HasChildren && r.Value == "Not read");
     }
 
+    [Fact]
+    public void LeftDataModelStopsAtLogicalNode_WhileRightDrillsDoAndDa()
+    {
+        var attribute = new LiveIedDataAttributeModel
+        {
+            AttributePath = "Pos.stVal", ObjectReference = "LD/CSWI1.Pos",
+            MmsReference = "LD/CSWI1$ST$Pos$stVal", FunctionalConstraint = "ST"
+        };
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices =
+            [
+                new LiveIedLogicalDeviceModel
+                {
+                    MmsDomain = "LD",
+                    LogicalNodes =
+                    [
+                        new LiveIedLogicalNodeModel
+                        {
+                            Name = "CSWI1",
+                            DataObjects = [new LiveIedDataObjectModel
+                            {
+                                Name = "Pos", Reference = "LD/CSWI1.Pos",
+                                Attributes = [attribute]
+                            }]
+                        }
+                    ]
+                }
+            ]
+        };
+        var tree = new IedBrowserTreeProjection();
+        var categories = IedBrowserPresentation.Roots(model, []);
+        tree.Reset(categories);
+        var dataModel = Assert.Single(categories.Where(r => r.Key == "category/model"));
+        tree.Expand(dataModel);
+        var ld = Assert.Single(tree.Rows.Where(r => r.Kind == "LD"));
+        tree.Expand(ld);
+        var ln = Assert.Single(tree.Rows.Where(r => r.Kind == "LN"));
+        Assert.False(ln.HasChildren);
+        Assert.Equal(System.Windows.Visibility.Hidden, ln.ChevronVisibility);
+        tree.Expand(ln); // Cannot add DO/DA to the left pane, even via API.
+        Assert.DoesNotContain(tree.Rows, r => r.Kind is "DO" or "DA");
+
+        var doRow = Assert.Single(IedBrowserPresentation.Details(ln, model, false)
+            .Where(r => r.NavigateTo?.Kind == "DO"));
+        var doPage = doRow.NavigateTo!;
+        Assert.Same(ln, doPage.Parent);
+        var daRow = Assert.Single(IedBrowserPresentation.Details(doPage, model, false)
+            .Where(r => r.NavigateTo?.Kind == "DA"));
+        Assert.Equal("Pos.stVal", daRow.Name);
+        Assert.Same(doPage, daRow.NavigateTo!.Parent);
+        Assert.Contains(IedBrowserPresentation.Details(daRow.NavigateTo!, model, false),
+            r => r.Kind == "Property" && r.Name == "FC" && r.Value == "ST");
+        Assert.DoesNotContain(tree.Rows, r => r.Kind is "DO" or "DA");
+    }
+
+    [Fact]
+    public void FolderHistory_GoesBackToPreviouslyViewedPage_NotGuessedProtocolParent()
+    {
+        var reports = new IedBrowserTreeRow("category/reports", "Reports", "Category", 0);
+        var ld = new IedBrowserTreeRow("reports/ld/LD", "LD", "LD", 1);
+        var rcb = new IedBrowserTreeRow("reports/rcb/LD/LLN0.RP.rcb01", "rcb01", "RCB", 3);
+        var trail = new IedBrowserNavigationTrail();
+
+        trail.SelectFromTree(reports);
+        Assert.False(trail.CanGoBack);
+        Assert.True(trail.Enter(rcb)); // Flat list skips LD and LN by design.
+        Assert.True(trail.CanGoBack);
+        Assert.Same(reports, trail.Back());
+        Assert.False(trail.CanGoBack);
+        Assert.Null(trail.Back());
+
+        trail.Enter(ld);
+        trail.Enter(rcb);
+        Assert.Same(ld, trail.Back());
+        Assert.Same(reports, trail.Back());
+        trail.Enter(rcb);
+        trail.SelectFromTree(ld); // Explicit new tree selection resets right navigation.
+        Assert.False(trail.CanGoBack);
+        Assert.Same(ld, trail.Current);
+    }
+
+    [Fact]
+    public void RepeatedRightPageSelection_DoesNotPushRedundantHistory()
+    {
+        var page = new IedBrowserTreeRow("category/model", "Data Model", "Category", 0);
+        var trail = new IedBrowserNavigationTrail();
+        trail.SelectFromTree(page);
+        Assert.False(trail.Enter(page));
+        Assert.False(trail.CanGoBack);
+    }
+
 }
