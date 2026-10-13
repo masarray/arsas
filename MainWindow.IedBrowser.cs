@@ -331,13 +331,19 @@ public partial class MainWindow
                 anchor = anchor.Parent;
         }
 
-        _iedBrowserTree.Reveal(anchor);
-        var visible = _iedBrowserTree.FindVisible(anchor.Key);
-        if (visible is null) return;
+        // Expanding an ancestor batch-resets the virtualized tree and can emit
+        // a transient SelectionChanged(null). Suppress those events for the
+        // *entire* reveal-and-select operation, or the folder history is lost.
         _iedBrowserSyncingSelection = true;
-        try { IedBrowserTreeGrid.SelectedItem = visible; }
+        try
+        {
+            _iedBrowserTree.Reveal(anchor);
+            var visible = _iedBrowserTree.FindVisible(anchor.Key);
+            if (visible is null) return;
+            IedBrowserTreeGrid.SelectedItem = visible;
+            IedBrowserTreeGrid.ScrollIntoView(visible);
+        }
         finally { _iedBrowserSyncingSelection = false; }
-        IedBrowserTreeGrid.ScrollIntoView(visible);
     }
 
     private void RenderIedBrowserSelection(
@@ -375,6 +381,10 @@ public partial class MainWindow
                         : "Offline · cached SCL/discovery model";
         _iedBrowserDetails.Reset(IedBrowserPresentation.Details(row, model, connected));
         IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
+        // Folder entry opens at its first child, regardless of the scroll
+        // position in the previously inspected RCB, LN or DataSet.
+        if (_iedBrowserDetails.Rows.Count > 0)
+            IedBrowserDetailList.ScrollIntoView(_iedBrowserDetails.Rows[0]);
     }
 
 }
