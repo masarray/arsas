@@ -63,11 +63,11 @@ jobs:
           python-version: '3.12'
 
       - name: Run offline release-ready and installer-verifier fixtures
+        shell: bash
         run: |
-          python .\ArIED61850Tester\scripts\test-ci-release-ready.py
-          if ($LASTEXITCODE -ne 0) { throw 'Release-ready metadata gate fixtures failed.' }
-          python .\ArIED61850Tester\scripts\test-ci-installer-reuse.py
-          if ($LASTEXITCODE -ne 0) { throw 'Validated-installer verifier fixtures failed.' }
+          set -euo pipefail
+          python ./ArIED61850Tester/scripts/test-ci-release-ready.py
+          python ./ArIED61850Tester/scripts/test-ci-installer-reuse.py
 
       - name: Wait for exact immutable release dependencies
         id: ready

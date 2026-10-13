@@ -2,6 +2,6 @@
   "version": "1.6.41",
   "channel": "stable",
   "platform": "windows-x64",
-  "primaryAsset": "ARSAS-Windows-x64-Setup.exe",
-  "publicationRequest": 29
+  "publicationRequest": 29,
+  "primaryAsset": "ARSAS-Windows-x64-Setup.exe"
 }
