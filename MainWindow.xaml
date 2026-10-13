@@ -824,6 +824,37 @@
                                                            Foreground="{StaticResource Muted}" HorizontalAlignment="Center"/>
                                             </Border>
                                         </Grid>
+
+                                        <!-- P10.9X error-only toast. Local to Command Dock so
+                                             feedback appears beside the operator's action.
+                                             No layout shift, focus capture or modal UI. -->
+                                        <Border x:Name="ControlShoutCard" Grid.RowSpan="2"
+                                                Panel.ZIndex="90" Visibility="Collapsed"
+                                                IsHitTestVisible="False" HorizontalAlignment="Center"
+                                                VerticalAlignment="Center" MaxWidth="338"
+                                                Padding="12,8" CornerRadius="10"
+                                                Background="#FFFFFF" BorderBrush="#E5BA82"
+                                                BorderThickness="1">
+                                            <Border.Effect>
+                                                <DropShadowEffect BlurRadius="15" ShadowDepth="2"
+                                                                  Opacity="0.15" Color="#243649"/>
+                                            </Border.Effect>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <Border x:Name="ControlShoutGlyphBackdrop" Width="22" Height="22"
+                                                        CornerRadius="7" Background="#FFF3E2"
+                                                        VerticalAlignment="Center" Margin="0,0,9,0">
+                                                    <TextBlock x:Name="ControlShoutGlyph" Text="!"
+                                                               FontSize="13" FontWeight="SemiBold"
+                                                               Foreground="#996219"
+                                                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock x:Name="ControlShoutTitle"
+                                                           Text="Command not sent" FontSize="12.4"
+                                                           FontWeight="SemiBold" Foreground="#76501B"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center" MaxWidth="277"/>
+                                            </StackPanel>
+                                        </Border>
                                     </Grid>
                                 </Border>
                             </Expander>
@@ -1644,47 +1675,7 @@
             </Grid>
         </Border>
 
-        <!-- P10.9W compact command-result toast. Its transparent hit testing and
-             root overlay avoid shifting either the live grid or Command Dock. -->
-        <Border x:Name="ControlShoutCard" Grid.RowSpan="3" Panel.ZIndex="90"
-                Visibility="Collapsed" IsHitTestVisible="False"
-                HorizontalAlignment="Center" VerticalAlignment="Center"
-                Width="404" MaxHeight="146"
-                CornerRadius="13" Background="#FFFFFF"
-                BorderBrush="#CAD8E6" BorderThickness="1" ClipToBounds="False">
-            <Border.Effect>
-                <DropShadowEffect BlurRadius="19" ShadowDepth="3" Opacity="0.16" Color="#1D3650"/>
-            </Border.Effect>
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="4"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <Border x:Name="ControlShoutAccent" Background="#5278A3" CornerRadius="13,0,0,13"/>
-                <Grid Grid.Column="1" Margin="13,12,14,12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="27"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Border x:Name="ControlShoutGlyphBackdrop" Width="25" Height="25"
-                            CornerRadius="8" Background="#EDF3FA"
-                            VerticalAlignment="Top" HorizontalAlignment="Left">
-                        <TextBlock x:Name="ControlShoutGlyph" Text="i" FontSize="15"
-                                   Foreground="#3E648D" FontWeight="SemiBold"
-                                   VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                    </Border>
-                    <StackPanel Grid.Column="1" Margin="9,0,0,0">
-                        <TextBlock x:Name="ControlShoutTitle" FontSize="13.4"
-                                   FontWeight="SemiBold" Foreground="#223B54"
-                                   TextWrapping="Wrap"/>
-                        <TextBlock x:Name="ControlShoutDetail" FontSize="11.7"
-                                   Margin="0,3,0,0" Foreground="#52677C"
-                                   MaxHeight="70" TextWrapping="Wrap"
-                                   TextTrimming="CharacterEllipsis"/>
-                    </StackPanel>
-                </Grid>
-            </Grid>
-        </Border>
+
 
     </Grid>
 </Window>
