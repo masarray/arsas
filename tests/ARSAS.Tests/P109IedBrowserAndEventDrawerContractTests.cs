@@ -13,13 +13,25 @@ public sealed class P109IedBrowserAndEventDrawerContractTests
         Assert.Contains("x:Name=\"IedBrowserTab\" Header=\"IED Browser\"", xaml);
         Assert.Contains("x:Name=\"NavIedBrowserButton\" Grid.Column=\"7\"", xaml);
         Assert.Contains("x:Name=\"NativeFatTab\" Header=\"FAT\"", xaml);
-        Assert.Contains("x:Name=\"IedBrowserRcbGrid\"", xaml);
-        Assert.Contains("x:Name=\"IedBrowserDataSetGrid\"", xaml);
-        Assert.Contains("x:Name=\"IedBrowserModelTree\"", xaml);
-        Assert.Contains("x:Name=\"IedBrowserSignalsGrid\"", xaml);
+        Assert.Contains("x:Name=\"IedBrowserTreeGrid\"", xaml);
+        Assert.Contains("x:Name=\"IedBrowserDetailList\"", xaml);
+        Assert.Contains("GridSplitter Grid.Column=\"1\"", xaml);
+        Assert.DoesNotContain("x:Name=\"IedBrowserSections\"", xaml);
         Assert.Contains("MainTabs.SelectedIndex = IedBrowserWorkspaceIndex", code);
-        Assert.Contains("BuildRcbExportRows(device, sourceInventory, _iedBrowserSnapshot)", code);
-        Assert.Contains("IedBrowserSections.SelectedIndex = 0", code);
+        Assert.Contains("BuildRcbExportRows(device, inventory, _iedBrowserSnapshot)", code);
+        Assert.Contains("IedBrowserPresentation.Roots(", code);
+        var browserMarkup = xaml.Split("x:Name=\"IedBrowserTab\"")[1];
+        Assert.DoesNotContain("DisplayMemberPath=\"Name\"", browserMarkup);
+        Assert.Contains("IedBrowserDetailItem_DoubleClick", browserMarkup);
+        Assert.Contains("IedBrowserDetailToggle_Click", browserMarkup);
+        Assert.Contains("BrowserFlagGroupRow", browserMarkup);
+        Assert.Contains("BrowserObjectRow", browserMarkup);
+        Assert.Contains("IedBrowserTreeGrid.SelectedItem = visible", code);
+        Assert.Contains("x:Name=\"IedBrowserBackButton\"", browserMarkup);
+        Assert.Contains("IedBrowserNavigationTrail", code);
+        Assert.Contains("IedBrowserBack_Click", code);
+        Assert.Contains("SelectionChrome", browserMarkup);
+        Assert.DoesNotContain("Focusable\" Value=\"False\"", browserMarkup.Split("x:Name=\"IedBrowserDetailList\"")[1].Split("</ListView.ItemContainerStyle>")[0]);
     }
 
     [Fact]
@@ -71,6 +83,27 @@ public sealed class P109IedBrowserAndEventDrawerContractTests
         Assert.Contains("Raw Reason", code);
         Assert.Contains("ReasonForInclusion", code);
         Assert.DoesNotContain("Header=\"Raw Reason\"", xaml);
+    }
+
+
+    [Fact]
+    public void BrowserReadDuringMonitoring_IsIsolatedAndProgressDoesNotStopStaticReporting()
+    {
+        var xaml = Read("MainWindow.xaml");
+        var code = Read("MainWindow.IedBrowser.cs");
+        var device = Read("Models/MonitorModels.cs");
+        var service = Read("Services/IedBrowserIsolatedReadService.cs");
+        Assert.Contains("IedBrowserIsolatedReadService.ReadAsync(", code);
+        Assert.Contains("device.IsBrowserReading = true", code);
+        Assert.DoesNotContain("device.IsBusy = true", code.Split("private async void IedBrowserReadValues_Click")[1]
+            .Split("private void RefreshIedBrowserReadButtons")[0]);
+        Assert.Contains("IsBrowserReading", device);
+        Assert.Contains("Binding IsBrowserReading", xaml);
+        Assert.Contains("ReadValueAsync(", service);
+        Assert.DoesNotContain("StartReport", service);
+        Assert.DoesNotContain("WriteAsync(", service);
+        Assert.Contains("BrowseIedBrowserFilesAsync", code);
+        Assert.Contains("FaultRecordTransferClient", code);
     }
 
     private static string Read(string path)

@@ -17,8 +17,27 @@ namespace ArIED61850Tester;
 public partial class MainWindow
 {
     private const int IedBrowserWorkspaceIndex = 7;
+    private readonly IedBrowserTreeProjection _iedBrowserTree = new();
+    private readonly IedBrowserDetailProjection _iedBrowserDetails = new();
+    private readonly IedBrowserNavigationTrail _iedBrowserNavigation = new();
+    private bool _iedBrowserSyncingSelection;
+    private long _iedBrowserLastLiveVersion = -1;
+    private IedBrowserTreeRow? _iedBrowserRenderedPage;
+    private bool? _iedBrowserRenderedConnected;
+    private bool _iedBrowserForceRefresh;
+    private Iec61850MonitorDevice? _iedBrowserCachedDevice;
+    private LiveIedModelDiscoveryDocument? _iedBrowserCachedModel;
+    private MmsRcbAvailabilityResult? _iedBrowserCachedSnapshot;
+    private IReadOnlyList<RcbExportRow> _iedBrowserCachedRcbRows = Array.Empty<RcbExportRow>();
+    private string _iedBrowserCachedSourcePath = string.Empty;
+    private DateTime _iedBrowserCachedSourceStamp;
     private Iec61850MonitorDevice? _iedBrowserObservedDevice;
     private MmsRcbAvailabilityResult? _iedBrowserSnapshot;
+    private IReadOnlyList<IedBrowserRemoteFile> _iedBrowserRemoteFiles = Array.Empty<IedBrowserRemoteFile>();
+    private Iec61850MonitorDevice? _iedBrowserFileOwner;
+    private bool _iedBrowserFilesLoaded;
+    private bool _iedBrowserFilesLoading;
+    private CancellationTokenSource? _iedBrowserFileReadOperation;
     private CancellationTokenSource? _iedBrowserReadOperation;
 
     internal void OpenIedBrowserRcb(Iec61850MonitorDevice device)
@@ -26,13 +45,79 @@ public partial class MainWindow
         ArgumentNullException.ThrowIfNull(device);
         SelectedDevice = device;
         MainTabs.SelectedIndex = IedBrowserWorkspaceIndex;
-        IedBrowserSections.SelectedIndex = 0;
         RefreshIedBrowser();
+    }
+
+    private async Task BrowseIedBrowserFilesAsync(Iec61850MonitorDevice device)
+    {
+        if (_iedBrowserFilesLoading || _iedBrowserReadOperation != null)
+            return;
+        _iedBrowserFilesLoading = true;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        _iedBrowserFileReadOperation = cts;
+        var source = device;
+        IedBrowserDetailStatus.Text = "Reading IEC 61850 FileDirectory…";
+        try
+        {
+            // Reuse the exact service in Fault Records / COMTRADE.
+            // The service owns its own association and bounded traversal.
+            var files = await Task.Run(async () =>
+            {
+                await using var transfer = new ArIED61850Tester.Services.FaultRecordTransferClient();
+                await transfer.ConnectAsync(source.IpAddress, source.Port, cts.Token);
+                var catalog = await transfer.DiscoverAsync(remoteDirectory: null, cts.Token);
+                return catalog.Records.SelectMany(record => record.Files)
+                    .Select(file => new IedBrowserRemoteFile(file.Name, file.RemotePath,
+                        file.SizeBytes, file.LastModifiedUtc))
+                    .DistinctBy(file => file.RemotePath, StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(file => file.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+            }, cts.Token).ConfigureAwait(true);
+            if (cts.IsCancellationRequested ||
+                !ReferenceEquals(source, SelectedDevice) ||
+                !ReferenceEquals(source, _iedBrowserFileOwner) || !source.IsConnected)
+                return;
+            _iedBrowserRemoteFiles = files;
+            _iedBrowserFilesLoaded = true;
+            _iedBrowserForceRefresh = true;
+            RefreshIedBrowser();
+            IedBrowserDetailStatus.Text = $"FileDirectory · {files.Length:N0} remote record file(s)";
+        }
+        catch (OperationCanceledException)
+        {
+            if (ReferenceEquals(source, SelectedDevice))
+                IedBrowserDetailStatus.Text = "FileDirectory read cancelled or timed out.";
+        }
+        catch (Exception ex)
+        {
+            if (ReferenceEquals(source, SelectedDevice))
+                IedBrowserDetailStatus.Text = "FileDirectory read failed: " + ex.Message;
+        }
+        finally
+        {
+            if (ReferenceEquals(_iedBrowserFileReadOperation, cts))
+            {
+                _iedBrowserFileReadOperation = null;
+                _iedBrowserFilesLoading = false;
+            }
+        }
+    }
+
+    private void IedBrowserBrowseFiles_Click(object sender, RoutedEventArgs e)
+    {
+        if (SelectedDevice is not { IsConnected: true } device ||
+            _iedBrowserFilesLoading || _iedBrowserReadOperation != null)
+        {
+            IedBrowserDetailStatus.Text = "Connect this IED to browse remote files.";
+            return;
+        }
+        _iedBrowserFilesLoaded = false;
+        _ = BrowseIedBrowserFilesAsync(device);
     }
 
     private void IedBrowserRefresh_Click(object sender, RoutedEventArgs e)
     {
-        // Read from existing memory/source SCL only, never an MMS request.
+        // The operator explicitly requested a new local projection, not MMS discovery.
+        _iedBrowserForceRefresh = true;
         RefreshIedBrowser();
     }
 
@@ -86,6 +171,171 @@ public partial class MainWindow
         }
     }
 
+    private void IedBrowserCancelRead_Click(object sender, RoutedEventArgs e)
+        => CancelIedBrowserRead();
+
+    private async void IedBrowserReadValues_Click(object sender, RoutedEventArgs e)
+    {
+        var device = SelectedDevice;
+        if (device is null || device.IsDemo || device.IsBusy ||
+            _iedBrowserReadOperation is not null)
+            return;
+        // A dedicated read-only MMS association is used if monitoring is active.
+        // Its bounded reads never interfere with the reporting session.
+
+        var model = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
+        var readAll = sender is Button { Tag: "All" };
+        var targets = IedBrowserReadPlan.Build(model, _iedBrowserNavigation.Current, readAll);
+        if (targets.Count == 0)
+        {
+            IedBrowserSubtitle.Text = "No model-verified readable FC attributes in this selection.";
+            return;
+        }
+        if (!device.IsConnected && !device.HasSclDesignModel && !device.HasDiscoveryCache)
+        {
+            IedBrowserSubtitle.Text = "Read requires an MMS connection. Connect/discover this IED first.";
+            return;
+        }
+
+        var bindingIndex = new IedBrowserReadBindingIndex(device);
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(_applicationCancellation.Token);
+        // Read All may include thousands of attributes. It is cancellable by the
+        // operator, never a new continuous acquisition/polling process.
+        _iedBrowserReadOperation = cts;
+        var sourceDevice = device;
+        var successes = 0;
+        var failures = 0;
+        device.ResetDiscoveryProgress("Preparing read-only MMS values…",
+            readAll ? "Reading all IED values" : "Reading Browser values");
+        device.IsBrowserReading = true; // Preserve the ongoing report monitor lifecycle.
+        IedBrowserReadPageButton.IsEnabled = false;
+        IedBrowserReadAllButton.IsEnabled = false;
+        IedBrowserReadRcbButton.IsEnabled = false;
+        IedBrowserCancelReadButton.IsEnabled = true;
+        try
+        {
+            if (!device.IsConnected)
+            {
+                device.BusyStage = "Connecting with verified cached SCL/discovery model…";
+                await _runtime.ConnectUsingCachedModelAsync(device, cts.Token);
+                if (!device.IsConnected)
+                    throw new InvalidOperationException("MMS connection was not established.");
+            }
+
+            var readValues = new Progress<IedBrowserReadResult>(result =>
+            {
+                if (!ReferenceEquals(SelectedDevice, sourceDevice) || cts.IsCancellationRequested)
+                    return;
+                if (result.Error.Length != 0)
+                {
+                    failures++;
+                    return;
+                }
+                successes++;
+                sourceDevice.LiveValues.Publish(result.Target.Reference,
+                    result.Target.FunctionalConstraint, result.Value, result.Quality,
+                    result.DeviceTimestamp, "MMS Read");
+                // Never overwrite a live report point with an unrelated
+                // independent MMS snapshot while the reporter owns acquisition.
+                if (!sourceDevice.IsMonitoring)
+                    bindingIndex.Apply(result);
+                RefreshIedBrowserVisibleValues();
+            });
+            var readProgress = new Progress<IedBrowserReadProgress>(p =>
+            {
+                if (!cts.IsCancellationRequested)
+                    sourceDevice.ApplyBrowserReadProgress(p.Completed, p.Total);
+            });
+            if (device.IsMonitoring)
+                await ArIED61850Tester.Services.IedBrowserIsolatedReadService.ReadAsync(
+                    device, targets, readValues, readProgress, cts.Token);
+            else
+                await _runtime.ReadBrowserValuesAsync(device, targets,
+                    readValues, readProgress, cts.Token);
+            if (!cts.IsCancellationRequested && ReferenceEquals(SelectedDevice, sourceDevice))
+            {
+                device.CompleteDiscoveryProgressAnimation();
+                IedBrowserSubtitle.Text = $"Read complete · {successes:N0} values / {targets.Count:N0} attributes · {failures:N0} unavailable";
+                RefreshIedBrowserVisibleValues();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            if (ReferenceEquals(SelectedDevice, sourceDevice))
+                IedBrowserSubtitle.Text = $"Read cancelled · {successes:N0} value(s) received; no settings changed.";
+        }
+        catch (Exception ex)
+        {
+            if (ReferenceEquals(SelectedDevice, sourceDevice))
+            {
+                device.MarkDiscoveryFailed(ex.Message);
+                IedBrowserSubtitle.Text = "Read failed: " + ex.Message;
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(_iedBrowserReadOperation, cts))
+                _iedBrowserReadOperation = null;
+            cts.Dispose();
+            sourceDevice.IsBrowserReading = false;
+            if (ReferenceEquals(SelectedDevice, sourceDevice))
+                RefreshIedBrowserReadButtons();
+        }
+    }
+
+
+    private void RefreshIedBrowserReadButtons()
+    {
+        if (IedBrowserReadPageButton == null) return;
+        var ready = SelectedDevice is { IsBusy: false, IsDemo: false, IsBrowserReading: false } &&
+            _iedBrowserReadOperation == null;
+        IedBrowserReadPageButton.IsEnabled = ready;
+        IedBrowserReadAllButton.IsEnabled = ready;
+        IedBrowserCancelReadButton.IsEnabled = _iedBrowserReadOperation != null;
+    }
+
+    private void RefreshIedBrowserVisibleValues()
+    {
+        if (MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
+            SelectedDevice is not { } device)
+            return;
+        var version = device.LiveValues.Version;
+        if (_iedBrowserLastLiveVersion == version) return;
+        _iedBrowserLastLiveVersion = version;
+        foreach (var row in _iedBrowserDetails.Rows)
+        {
+            if (string.IsNullOrWhiteSpace(row.ValueReference)) continue;
+            if (!device.LiveValues.TryGet(row.ValueReference,
+                    row.FunctionalConstraint, out var live))
+            {
+                row.Value = "Not read";
+                continue;
+            }
+            if (row.EvidenceField.Length == 0)
+            {
+                row.Value = live.Value;
+                continue;
+            }
+            if (row.EvidenceField == "Validity")
+            {
+                // A normalized q of Good/Invalid/Questionable is proof of
+                // validity, not proof of the remaining independent q bits.
+                var quality = live.Value.Trim();
+                row.Value = quality.Equals("good", StringComparison.OrdinalIgnoreCase) ||
+                            quality.Equals("invalid", StringComparison.OrdinalIgnoreCase) ||
+                            quality.Equals("questionable", StringComparison.OrdinalIgnoreCase)
+                    ? quality.ToLowerInvariant() : "Not exposed";
+            }
+            else
+            {
+                // The current report value formatter exposes normalized q/t
+                // without raw bits. Do not paint default false/true for bits
+                // that were not included in the model's actual value evidence.
+                row.Value = "Not exposed";
+            }
+        }
+    }
+
     private void CancelIedBrowserRead()
     {
         _iedBrowserReadOperation?.Cancel();
@@ -97,8 +347,14 @@ public partial class MainWindow
         CancelIedBrowserRead();
         if (_iedBrowserObservedDevice != null)
             _iedBrowserObservedDevice.PropertyChanged -= IedBrowserDevice_PropertyChanged;
+        _iedBrowserFileReadOperation?.Cancel();
+        _iedBrowserFileReadOperation = null;
+        _iedBrowserFilesLoading = false;
         _iedBrowserObservedDevice = device;
         _iedBrowserSnapshot = null;
+        _iedBrowserFileOwner = device;
+        _iedBrowserRemoteFiles = Array.Empty<IedBrowserRemoteFile>();
+        _iedBrowserFilesLoaded = false;
         if (device != null)
             device.PropertyChanged += IedBrowserDevice_PropertyChanged;
     }
@@ -106,7 +362,8 @@ public partial class MainWindow
     private void IedBrowserDevice_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is not (nameof(Iec61850MonitorDevice.IsConnected)
-                                    or nameof(Iec61850MonitorDevice.IsBusy)))
+                                    or nameof(Iec61850MonitorDevice.IsBusy)
+                                    or nameof(Iec61850MonitorDevice.IsMonitoring)))
             return;
         if (!Dispatcher.CheckAccess())
         {
@@ -117,10 +374,19 @@ public partial class MainWindow
 
         if (!ReferenceEquals(sender, _iedBrowserObservedDevice))
             return;
+        if (e.PropertyName is nameof(Iec61850MonitorDevice.IsMonitoring))
+            _iedBrowserForceRefresh = true;
 
         // A disconnected/replaced association can never supply "live" inspector values.
         if (_iedBrowserObservedDevice?.IsConnected != true)
         {
+            _iedBrowserFileReadOperation?.Cancel();
+            if (_iedBrowserFilesLoaded)
+            {
+                _iedBrowserFilesLoaded = false;
+                _iedBrowserRemoteFiles = Array.Empty<IedBrowserRemoteFile>();
+                _iedBrowserForceRefresh = true;
+            }
             CancelIedBrowserRead();
             _iedBrowserSnapshot = null;
         }
@@ -132,29 +398,29 @@ public partial class MainWindow
     {
         if (IedBrowserTab == null || MainTabs.SelectedIndex != IedBrowserWorkspaceIndex)
             return;
+
         var device = SelectedDevice;
         ObserveIedBrowserDevice(device);
-        IedBrowserRcbGrid.ItemsSource = null;
-        IedBrowserRcbProperties.ItemsSource = null;
-        IedBrowserRcbEvidence.Text = "Select a Report Control Block to inspect properties.";
-        IedBrowserDataSetGrid.ItemsSource = null;
-        IedBrowserDataSetMembers.ItemsSource = null;
-        IedBrowserDataSetEvidence.Text = "Select a DataSet to inspect the exact FCDA members.";
-        IedBrowserModelTree.Items.Clear();
-        IedBrowserModelProperties.ItemsSource = null;
-        IedBrowserSignalsGrid.ItemsSource = null;
-
+        IedBrowserReadRcbButton.IsEnabled = device?.IsConnected == true &&
+                                            device.IsBusy == false && _iedBrowserReadOperation == null;
+        RefreshIedBrowserReadButtons();
+        IedBrowserExportRcbButton.IsEnabled = device is { IsBusy: false, IsDemo: false };
         if (device == null)
         {
-            IedBrowserSubtitle.Text = "Select an IED in Explorer. Inspection does not initiate a connection.";
-            IedBrowserReadRcbButton.IsEnabled = false;
-            IedBrowserExportRcbButton.IsEnabled = false;
+            _iedBrowserCachedDevice = null;
+            _iedBrowserRenderedPage = null;
+            _iedBrowserRenderedConnected = null;
+            _iedBrowserNavigation.SelectFromTree(null);
+            IedBrowserBackButton.IsEnabled = false;
+            _iedBrowserTree.Reset([]);
+            IedBrowserTreeGrid.ItemsSource = _iedBrowserTree.Rows;
+            _iedBrowserDetails.Reset([]);
+            IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
+            IedBrowserSubtitle.Text = "Select an IED in Explorer. Browsing does not open MMS sessions.";
+            IedBrowserObjectPath.Text = "No IED selected";
+            IedBrowserDetailStatus.Text = "Select an existing engineering model";
             return;
         }
-
-        IedBrowserReadRcbButton.IsEnabled = device.IsConnected && !device.IsBusy &&
-                                            _iedBrowserReadOperation == null;
-        IedBrowserExportRcbButton.IsEnabled = !device.IsBusy && !device.IsDemo;
 
         var model = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
         IedBrowserSubtitle.Text = $"{device.Name} · {device.EndpointText} · " +
@@ -162,141 +428,251 @@ public partial class MainWindow
             $" · {model?.LogicalDevices.Count ?? 0} LD / {model?.DataSets.Count ?? 0} DataSets / " +
             $"{model?.ReportControls.Count ?? 0} RCB";
 
-        SclReportControlInventoryResult? sourceInventory = null;
-        if (!string.IsNullOrWhiteSpace(device.SclSourcePath) && File.Exists(device.SclSourcePath))
+        // Source SCL parsing and hierarchical projection are performed only when
+        // device/model/check/source really changes, not on every IsBusy/connection notification.
+        var sourcePath = device.SclSourcePath ?? string.Empty;
+        var stamp = DateTime.MinValue;
+        try
         {
-            try
-            {
-                sourceInventory = SclReportControlFilter.InspectFile(
-                    device.SclSourcePath, EffectiveSclIedName(device), device.SclAccessPointName);
-            }
-            catch (Exception ex)
-            {
-                IedBrowserRcbEvidence.Text = $"Source SCL RCB inventory: {ex.Message}";
-            }
+            if (sourcePath.Length > 0 && File.Exists(sourcePath))
+                stamp = File.GetLastWriteTimeUtc(sourcePath);
         }
+        catch (IOException) { /* An unavailable source file cannot poison in-memory browsing. */ }
+        catch (UnauthorizedAccessException) { /* Still show the cached/discovered model. */ }
 
-        var rows = BuildRcbExportRows(device, sourceInventory, _iedBrowserSnapshot);
-        if (rows.Count == 0 && model != null)
-            rows = BuildLiveModelRcbRows(model, _iedBrowserSnapshot);
-        IedBrowserRcbGrid.ItemsSource = rows;
-        IedBrowserDataSetGrid.ItemsSource = model?.DataSets;
-        IedBrowserSignalsGrid.ItemsSource = device.Signals;
-
-        if (model == null)
-            return;
-
-        // Create only LD/LN nodes now. DO and DA children are materialized upon expansion
-        // so large 1000+ DO IEDs do not freeze the WPF dispatcher.
-        foreach (var ld in model.LogicalDevices)
+        var changed = _iedBrowserForceRefresh ||
+                      !ReferenceEquals(device, _iedBrowserCachedDevice) ||
+                      !ReferenceEquals(model, _iedBrowserCachedModel) ||
+                      !ReferenceEquals(_iedBrowserSnapshot, _iedBrowserCachedSnapshot) ||
+                      !string.Equals(sourcePath, _iedBrowserCachedSourcePath, StringComparison.Ordinal) ||
+                      stamp != _iedBrowserCachedSourceStamp;
+        if (changed)
         {
-            var deviceNode = new TreeViewItem
+            _iedBrowserForceRefresh = false;
+            var sameDevice = ReferenceEquals(device, _iedBrowserCachedDevice);
+            var priorKey = sameDevice
+                ? (IedBrowserTreeGrid.SelectedItem as IedBrowserTreeRow)?.Key
+                : null;
+            var expandedKeys = sameDevice
+                ? _iedBrowserTree.ExpandedKeys()
+                : new HashSet<string>(StringComparer.Ordinal);
+
+            SclReportControlInventoryResult? inventory = null;
+            if (stamp != DateTime.MinValue)
             {
-                Header = $"{ld.MmsDomain} · {ld.LogicalNodes.Count} LN",
-                Tag = ld
-            };
-            foreach (var ln in ld.LogicalNodes)
-            {
-                var node = new TreeViewItem
+                try
                 {
-                    Header = $"{ln.Name} · {ln.DataObjects.Count} DO",
-                    Tag = ln
-                };
-                if (ln.DataObjects.Count > 0)
-                    node.Items.Add(new TreeViewItem { Header = "Loading…" });
-                deviceNode.Items.Add(node);
-            }
-            IedBrowserModelTree.Items.Add(deviceNode);
-        }
-    }
-
-    private void IedBrowserRcb_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (IedBrowserRcbGrid.SelectedItem is not RcbExportRow row)
-            return;
-        var connected = SelectedDevice?.IsConnected == true;
-        IedBrowserRcbEvidence.Text = row.Inspection.Summary(connected) +
-            " · Unavailable means not measured (not zero). No RCB write on inspect.";
-        IedBrowserRcbProperties.ItemsSource = row.Inspection.Properties(row, connected);
-    }
-
-    private void IedBrowserDataSet_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (IedBrowserDataSetGrid.SelectedItem is not LiveIedDataSetModel set)
-            return;
-        IedBrowserDataSetEvidence.Text = $"{set.Reference} · {set.MemberCount} FCDA" +
-            (set.IsDeletable.HasValue ? $" · deletable={set.IsDeletable.Value}" : "") +
-            " · saved SCL/discovery membership";
-        IedBrowserDataSetMembers.ItemsSource = set.Members;
-    }
-
-    private void IedBrowserModelNode_Expanded(object sender, RoutedEventArgs e)
-    {
-        if (e.OriginalSource is not TreeViewItem item ||
-            item.Items.Count != 1 || item.Items[0] is not TreeViewItem { Tag: null })
-            return;
-
-        if (item.Tag is LiveIedLogicalNodeModel ln)
-        {
-            item.Items.Clear();
-            foreach (var data in ln.DataObjects)
-            {
-                var node = new TreeViewItem
+                    inventory = SclReportControlFilter.InspectFile(
+                        sourcePath, EffectiveSclIedName(device), device.SclAccessPointName);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                                             or InvalidDataException or ArgumentException)
                 {
-                    Header = $"{data.Name} · {data.InferredCdc}",
-                    Tag = data
-                };
-                if (data.Attributes.Count > 0)
-                    node.Items.Add(new TreeViewItem { Header = "Loading…" });
-                item.Items.Add(node);
+                    IedBrowserDetailStatus.Text = "Source inventory unavailable: " + ex.Message;
+                }
             }
-        }
-        else if (item.Tag is LiveIedDataObjectModel obj)
-        {
-            item.Items.Clear();
-            foreach (var attribute in obj.Attributes)
-                item.Items.Add(new TreeViewItem
+
+            var rcbs = BuildRcbExportRows(device, inventory, _iedBrowserSnapshot);
+            if (rcbs.Count == 0 && model != null)
+                rcbs = BuildLiveModelRcbRows(model, _iedBrowserSnapshot);
+            // Only *successfully activated* runtime report plans prove caller
+            // ownership; a configured RCB name alone never does.
+            var callerOwned = _runtime.GetActiveBrowserRcbReferences(device.DeviceId)
+                .Select(NormalizeRcbReference)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var report in rcbs)
+            {
+                if (!callerOwned.Contains(NormalizeRcbReference(report.Reference)))
+                    continue;
+                report.Availability = AR.Iec61850.Mms.MmsRcbOperationalAvailability.UsedByCaller;
+                report.StatusText = "ARSAS active";
+                report.Reason = "Successfully activated by the current ARSAS monitor association.";
+            }
+            _iedBrowserCachedRcbRows = rcbs;
+            _iedBrowserCachedDevice = device;
+            _iedBrowserCachedModel = model;
+            _iedBrowserCachedSnapshot = _iedBrowserSnapshot;
+            _iedBrowserCachedSourcePath = sourcePath;
+            _iedBrowserCachedSourceStamp = stamp;
+
+            var roots = IedBrowserPresentation.Roots(model, _iedBrowserCachedRcbRows,
+                _iedBrowserRemoteFiles);
+            _iedBrowserTree.Reset(roots, expandedKeys);
+            // Reports is the familiar entry point; selecting the category shows its
+            // full RCB list on the right. Preserve explicit expansion on same-IED refresh.
+            if (!sameDevice)
+            {
+                var reports = roots.FirstOrDefault(r => r.Key == "category/reports");
+                if (reports is not null)
                 {
-                    Header = $"[{attribute.FunctionalConstraint}] {attribute.AttributePath}",
-                    Tag = attribute
-                });
+                    _iedBrowserTree.Expand(reports);
+                    var ld = reports.GetChildren().FirstOrDefault();
+                    if (ld is not null)
+                    {
+                        _iedBrowserTree.Expand(ld);
+                        var ln = ld.GetChildren().FirstOrDefault();
+                        if (ln is not null) _iedBrowserTree.Expand(ln);
+                    }
+                }
+            }
+
+            IedBrowserTreeGrid.ItemsSource = _iedBrowserTree.Rows;
+            var selected = priorKey == null ? null : _iedBrowserTree.FindVisible(priorKey);
+            selected ??= roots.FirstOrDefault(r => r.Key == "category/reports");
+            selected ??= roots.FirstOrDefault();
+            // Source identity changed: previous folder objects are no longer authoritative.
+            _iedBrowserNavigation.SelectFromTree(selected);
+            _iedBrowserSyncingSelection = true;
+            try { IedBrowserTreeGrid.SelectedItem = selected; }
+            finally { _iedBrowserSyncingSelection = false; }
         }
+        var currentPage = _iedBrowserNavigation.Current ?? IedBrowserTreeGrid.SelectedItem as IedBrowserTreeRow;
+        // Fast path for routine device notifications: preserve the selected row,
+        // focused cell, expanded q/t descendants and right-pane scroll offset.
+        if (changed || !ReferenceEquals(currentPage, _iedBrowserRenderedPage) ||
+            _iedBrowserRenderedConnected != device.IsConnected)
+            RenderIedBrowserSelection(currentPage, model, device.IsConnected);
     }
 
-    private void IedBrowserModelTree_SelectedItemChanged(object sender,
-        RoutedPropertyChangedEventArgs<object> e)
+    private void IedBrowserTreeToggle_Click(object sender, RoutedEventArgs e)
     {
-        if (e.NewValue is not TreeViewItem item)
+        if (sender is not Button { Tag: IedBrowserTreeRow row })
             return;
-        static RcbInspectionProperty P(string name, string value)
-            => new(name, string.IsNullOrWhiteSpace(value) ? "—" : value, "Saved model");
-        IedBrowserModelProperties.ItemsSource = item.Tag switch
+        _iedBrowserTree.Toggle(row);
+        IedBrowserTreeGrid.SelectedItem = row;
+        e.Handled = true;
+    }
+
+    private void IedBrowserTree_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!ReferenceEquals(sender, IedBrowserTreeGrid) || _iedBrowserSyncingSelection)
+            return;
+        _iedBrowserNavigation.SelectFromTree(IedBrowserTreeGrid.SelectedItem as IedBrowserTreeRow);
+        var model = SelectedDevice?.LiveDiscoveryModel ?? SelectedDevice?.SclWorkspace?.DesignModel;
+        RenderIedBrowserSelection(_iedBrowserNavigation.Current,
+            model, SelectedDevice?.IsConnected == true);
+        if (_iedBrowserNavigation.Current?.Key == "category/files" &&
+            SelectedDevice is { IsConnected: true } fileDevice &&
+            !_iedBrowserFilesLoaded && !_iedBrowserFilesLoading)
+            _ = BrowseIedBrowserFilesAsync(fileDevice);
+    }
+    private void IedBrowserDetailToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: IedBrowserDetailRow detail } || !detail.HasChildren)
+            return;
+        _iedBrowserDetails.Toggle(detail);
+        _iedBrowserLastLiveVersion = -1;
+        RefreshIedBrowserVisibleValues();
+        e.Handled = true;
+    }
+
+    private void IedBrowserDetailItem_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        // The ListViewItem is the click source: never open a previously selected row
+        // when an operator double-clicks whitespace or another row.
+        if (sender is not System.Windows.Controls.ListViewItem { DataContext: IedBrowserDetailRow detail })
+            return;
+
+        if (detail.NavigateTo is { } target)
         {
-            LiveIedLogicalDeviceModel ld => new[]
-            {
-                P("MMS Domain", ld.MmsDomain), P("LDevice instance", ld.Inst),
-                P("Logical Nodes", ld.LogicalNodes.Count.ToString())
-            },
-            LiveIedLogicalNodeModel ln => new[]
-            {
-                P("Logical Node", ln.Name), P("Class", ln.LnClass),
-                P("Type", ln.ProposedLnTypeId), P("Data Objects", ln.DataObjects.Count.ToString())
-            },
-            LiveIedDataObjectModel obj => new[]
-            {
-                P("Reference", obj.Reference), P("Name", obj.Name),
-                P("CDC (inferred)", obj.InferredCdc),
-                P("Confidence", obj.ConfidenceLevel.ToString()),
-                P("Data Attributes", obj.Attributes.Count.ToString())
-            },
-            LiveIedDataAttributeModel attr => new[]
-            {
-                P("Reference", attr.ObjectReference), P("DA path", attr.AttributePath),
-                P("FC", attr.FunctionalConstraint), P("MMS Reference", attr.MmsReference),
-                P("MMS type", attr.MmsType), P("SCL bType", attr.SclBType),
-                P("Type source", attr.TypeSource), P("Confidence", attr.TypeConfidence.ToString())
-            },
-            _ => Array.Empty<RcbInspectionProperty>()
+            if (!_iedBrowserNavigation.Enter(target))
+                return;
+            SynchronizeIedBrowserTree(target);
+            var model = SelectedDevice?.LiveDiscoveryModel ?? SelectedDevice?.SclWorkspace?.DesignModel;
+            RenderIedBrowserSelection(target, model, SelectedDevice?.IsConnected == true);
+            e.Handled = true;
+            return;
+        }
+
+        if (!detail.HasChildren)
+            return;
+        // Quality/time and ordered dataset member rows drill down lazily in place,
+        // preserving the selected IEC object and the surrounding report context.
+        _iedBrowserDetails.Toggle(detail);
+        _iedBrowserLastLiveVersion = -1;
+        RefreshIedBrowserVisibleValues();
+        e.Handled = true;
+    }
+
+    private void IedBrowserBack_Click(object sender, RoutedEventArgs e)
+    {
+        var prior = _iedBrowserNavigation.Back();
+        if (prior == null) return;
+        SynchronizeIedBrowserTree(prior);
+        var model = SelectedDevice?.LiveDiscoveryModel ?? SelectedDevice?.SclWorkspace?.DesignModel;
+        RenderIedBrowserSelection(prior, model, SelectedDevice?.IsConnected == true);
+    }
+
+    private void SynchronizeIedBrowserTree(IedBrowserTreeRow page)
+    {
+        // DO/DA pages live exclusively in the right pane; their owning LN stays
+        // selected in the left tree, avoiding deep or very long Explorer branches.
+        var anchor = page;
+        if (page.Key.StartsWith("model/do/", StringComparison.Ordinal) ||
+            page.Key.StartsWith("model/da/", StringComparison.Ordinal))
+        {
+            while (anchor.Kind != "LN" && anchor.Parent is not null)
+                anchor = anchor.Parent;
+        }
+
+        // Expanding an ancestor batch-resets the virtualized tree and can emit
+        // a transient SelectionChanged(null). Suppress those events for the
+        // *entire* reveal-and-select operation, or the folder history is lost.
+        _iedBrowserSyncingSelection = true;
+        try
+        {
+            _iedBrowserTree.Reveal(anchor);
+            var visible = _iedBrowserTree.FindVisible(anchor.Key);
+            if (visible is null) return;
+            IedBrowserTreeGrid.SelectedItem = visible;
+            IedBrowserTreeGrid.ScrollIntoView(visible);
+        }
+        finally { _iedBrowserSyncingSelection = false; }
+    }
+
+    private void RenderIedBrowserSelection(
+        IedBrowserTreeRow? row, LiveIedModelDiscoveryDocument? model, bool connected)
+    {
+        _iedBrowserRenderedPage = row;
+        _iedBrowserRenderedConnected = connected;
+        IedBrowserBackButton.IsEnabled = _iedBrowserNavigation.CanGoBack;
+        if (row == null)
+        {
+            IedBrowserObjectPath.Text = "Select an object in the left tree";
+            IedBrowserDetailStatus.Text = "Cached engineering model · read-only navigation";
+            _iedBrowserDetails.Reset([]);
+            IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
+            return;
+        }
+
+        var reference = row.Payload switch
+        {
+            RcbExportRow rcb => rcb.Reference,
+            LiveIedDataSetModel ds => ds.Reference,
+            LiveIedControlBlockModel block => block.Reference,
+            LiveIedDataObjectModel obj => obj.Reference,
+            LiveIedDataAttributeModel attr => attr.ObjectReference,
+            LiveIedFileModel file => file.Path,
+            _ => row.Title
         };
+        var segments = new Stack<string>();
+        for (var current = row; current != null; current = current.Parent)
+            segments.Push(current.Title);
+        IedBrowserObjectPath.Text = (SelectedDevice?.Name ?? "IED") +
+            " • " + string.Join(" • ", segments);
+        IedBrowserObjectPath.ToolTip = reference;
+        IedBrowserDetailStatus.Text = row.Payload is RcbExportRow r
+            ? r.Inspection.Summary(connected)
+            : connected ? "Connected · cached model metadata (not a live read)"
+                        : "Offline · cached SCL/discovery model";
+        _iedBrowserDetails.Reset(IedBrowserPresentation.Details(row, model, connected));
+        IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
+        _iedBrowserLastLiveVersion = -1;
+        RefreshIedBrowserVisibleValues();
+        // Folder entry opens at its first child, regardless of the scroll
+        // position in the previously inspected RCB, LN or DataSet.
+        if (_iedBrowserDetails.Rows.Count > 0)
+            IedBrowserDetailList.ScrollIntoView(_iedBrowserDetails.Rows[0]);
     }
+
 }

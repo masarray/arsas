@@ -1,0 +1,656 @@
+using System.Windows;
+using System.ComponentModel;
+using AR.Iec61850.Discovery;
+
+namespace ArIED61850Tester.Models;
+
+/// <summary>
+/// Presentation-only node. Child factories materialize model objects on expansion, not when
+/// navigating to the Browser. Stable keys use exact IEC references and never change protocol identity.
+/// </summary>
+public sealed class IedBrowserTreeRow : ObservableObject
+{
+    private readonly Func<IReadOnlyList<IedBrowserTreeRow>>? _loadChildren;
+    private IReadOnlyList<IedBrowserTreeRow>? _children;
+
+    public IedBrowserTreeRow(string key, string title, string kind, int depth, object? payload = null,
+        Func<IReadOnlyList<IedBrowserTreeRow>>? loadChildren = null)
+    {
+        Key = key;
+        Title = title;
+        Kind = kind;
+        Depth = depth;
+        Payload = payload;
+        _loadChildren = loadChildren;
+    }
+
+    public IedBrowserTreeRow? Parent { get; private set; }
+    public string Key { get; }
+    public string Title { get; }
+    public string Kind { get; }
+    public int Depth { get; }
+    public object? Payload { get; }
+    // The left Data Model tree intentionally stops at LN. The lazy DO/DA
+    // factories remain available to the right-hand object browser only.
+    public bool HasChildren => _loadChildren is not null &&
+        !Key.StartsWith("model/ln/", StringComparison.Ordinal);
+    public Visibility ChevronVisibility => HasChildren ? Visibility.Visible : Visibility.Hidden;
+    public double IndentWidth => Depth * 14d;
+    public string Glyph => Kind switch
+    {
+        "IED" => "IED", "Category" => "▦", "LD" => "LD", "LN" => "LN",
+        "RCB" => "R", "DataSet" => "DS", "GoCB" => "G", "SGCB" => "SG",
+        "SVCB" => "SV", "File" => "F", "DO" => "DO", "DA" => "DA",
+        _ => "·"
+    };
+
+    public System.Windows.Media.Brush GlyphBrush => Payload is RcbExportRow report
+        ? report.Buffered ? System.Windows.Media.Brushes.SeaGreen
+            : System.Windows.Media.Brushes.RoyalBlue
+        : System.Windows.Media.Brushes.SteelBlue;
+    public string RcbUsageGlyph => Payload is RcbExportRow report
+        ? report.Availability switch
+        {
+            AR.Iec61850.Mms.MmsRcbOperationalAvailability.UsedByCaller => "●",
+            AR.Iec61850.Mms.MmsRcbOperationalAvailability.InUse => "◆",
+            _ => ""
+        } : "";
+    public string RcbUsageTooltip => Payload is RcbExportRow report
+        ? report.Availability switch
+        {
+            AR.Iec61850.Mms.MmsRcbOperationalAvailability.UsedByCaller =>
+                "Active in the current ARSAS monitoring session",
+            AR.Iec61850.Mms.MmsRcbOperationalAvailability.InUse =>
+                "RCB in use by another client (read-only RCB status)",
+            _ => report.Reason
+        } : "";
+
+    private bool _isExpanded;
+    public bool IsExpanded
+    {
+        get => _isExpanded;
+        internal set { if (Set(ref _isExpanded, value)) Raise(nameof(ToggleGlyph)); }
+    }
+    public string ToggleGlyph => IsExpanded ? "▾" : "▸";
+    internal IReadOnlyList<IedBrowserTreeRow> GetChildren()
+    {
+        if (_children is not null) return _children;
+        var children = _loadChildren?.Invoke() ?? Array.Empty<IedBrowserTreeRow>();
+        foreach (var child in children)
+            child.Parent = this;
+        return _children = children;
+    }
+}
+
+/// <summary>
+/// Only visible flattened rows enter the virtual DataGrid. Hidden grandchildren are
+/// not allocated as WPF elements or materialized presentation rows.
+/// </summary>
+public sealed class IedBrowserTreeProjection
+{
+    public BulkObservableCollection<IedBrowserTreeRow> Rows { get; } = new();
+
+    public void Reset(IReadOnlyList<IedBrowserTreeRow> roots, IReadOnlySet<string>? restoreExpanded = null)
+    {
+        Rows.ReplaceAll(roots);
+
+        if (restoreExpanded is null) return;
+        // Re-expand only paths visible in this revision of the immutable model.
+        for (var i = 0; i < Rows.Count; i++)
+            if (restoreExpanded.Contains(Rows[i].Key))
+                Expand(Rows[i]);
+    }
+
+    public HashSet<string> ExpandedKeys()
+        => Rows.Where(row => row.IsExpanded).Select(row => row.Key).ToHashSet(StringComparer.Ordinal);
+
+    public IedBrowserTreeRow? FindVisible(string key)
+        => Rows.FirstOrDefault(row => string.Equals(row.Key, key, StringComparison.Ordinal));
+
+    // A detail-grid object points to the identical cached node owned by the tree.
+    // Reveal ancestors on demand; unrelated LD/LN branches stay lazy.
+    public void Reveal(IedBrowserTreeRow row)
+    {
+        var ancestors = new Stack<IedBrowserTreeRow>();
+        for (var parent = row.Parent; parent != null; parent = parent.Parent)
+            ancestors.Push(parent);
+        while (ancestors.Count > 0)
+            Expand(ancestors.Pop());
+    }
+
+    public void Toggle(IedBrowserTreeRow row)
+    {
+        if (row.IsExpanded) Collapse(row);
+        else Expand(row);
+    }
+
+    public void Expand(IedBrowserTreeRow row)
+    {
+        if (!row.HasChildren || row.IsExpanded) return;
+        var index = Rows.IndexOf(row);
+        if (index < 0) return;
+        row.IsExpanded = true;
+        var updated = Rows.ToList();
+        updated.InsertRange(index + 1, row.GetChildren());
+        // One WPF collection reset rather than one routed update per expanded child.
+        Rows.ReplaceAll(updated);
+    }
+
+    public void Collapse(IedBrowserTreeRow row)
+    {
+        if (!row.IsExpanded) return;
+        var index = Rows.IndexOf(row);
+        if (index < 0) return;
+        var descendant = index + 1;
+        while (descendant < Rows.Count && Rows[descendant].Depth > row.Depth)
+        {
+            Rows[descendant].IsExpanded = false;
+            descendant++;
+        }
+        var updated = Rows.ToList();
+        updated.RemoveRange(index + 1, descendant - index - 1);
+        row.IsExpanded = false;
+        Rows.ReplaceAll(updated);
+    }
+}
+
+public sealed record IedBrowserFlagOption(string Label, bool? IsEnabled)
+{
+    public string Status => IsEnabled is null ? "Unknown" : IsEnabled.Value ? "Enabled" : "Disabled";
+}
+
+public sealed record IedBrowserDetailRow(
+    string Kind, string Name, string Value = "", int Depth = 0, string Source = "")
+    : INotifyPropertyChanged
+{
+    private string _displayValue = Value;
+    public string Value
+    {
+        get => _displayValue;
+        set
+        {
+            if (_displayValue == value) return;
+            _displayValue = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Value)));
+        }
+    }
+    public event PropertyChangedEventHandler? PropertyChanged;
+    public string ValueReference { get; init; } = "";
+    // A typed child of a received q/t field; never treat the entire parent
+    // value text as this individual Boolean/time-quality bit.
+    public string EvidenceField { get; init; } = "";
+    public string FunctionalConstraint { get; init; } = "";
+    private IReadOnlyList<IedBrowserDetailRow>? _children;
+    public IedBrowserTreeRow? NavigateTo { get; init; }
+    public Func<IReadOnlyList<IedBrowserDetailRow>>? LoadChildren { get; init; }
+    public IReadOnlyList<IedBrowserFlagOption> Flags { get; init; } = Array.Empty<IedBrowserFlagOption>();
+    public string SecondaryText { get; init; } = "";
+    public string Glyph => NavigateTo?.Glyph ?? (Kind == "Data" ? "DA" : "");
+    public System.Windows.Media.Brush GlyphBrush => NavigateTo?.GlyphBrush ??
+        System.Windows.Media.Brushes.SteelBlue;
+    public string RcbUsageGlyph => NavigateTo?.RcbUsageGlyph ?? "";
+    public string RcbUsageTooltip => NavigateTo?.RcbUsageTooltip ?? "";
+
+    public bool HasChildren => LoadChildren is not null;
+    public Visibility ChevronVisibility => HasChildren ? Visibility.Visible : Visibility.Hidden;
+    public bool IsExpanded { get; internal set; }
+    public string ToggleGlyph => IsExpanded ? "▾" : "▸";
+    public double IndentWidth => Depth * 15d;
+    public string Tooltip => string.IsNullOrWhiteSpace(Source) ? Name : $"{Name} · {Source}";
+    internal IReadOnlyList<IedBrowserDetailRow> GetChildren()
+        => _children ??= LoadChildren?.Invoke() ?? Array.Empty<IedBrowserDetailRow>();
+}
+
+/// <summary>Virtualized flat detail projection; a collapsed model attribute never creates WPF rows.</summary>
+public sealed class IedBrowserDetailProjection
+{
+    public BulkObservableCollection<IedBrowserDetailRow> Rows { get; } = new();
+
+    public void Reset(IReadOnlyList<IedBrowserDetailRow> rows) => Rows.ReplaceAll(rows);
+
+    public void Toggle(IedBrowserDetailRow row)
+    {
+        if (!row.HasChildren) return;
+        var position = Rows.IndexOf(row);
+        if (position < 0) return;
+        var updated = Rows.ToList();
+        if (row.IsExpanded)
+        {
+            var end = position + 1;
+            while (end < updated.Count && updated[end].Depth > row.Depth)
+            {
+                updated[end].IsExpanded = false;
+                end++;
+            }
+            updated.RemoveRange(position + 1, end - position - 1);
+            row.IsExpanded = false;
+        }
+        else
+        {
+            row.IsExpanded = true;
+            updated.InsertRange(position + 1, row.GetChildren());
+        }
+        Rows.ReplaceAll(updated);
+    }
+}
+
+/// <summary>
+/// Exact model-to-UI projection. Never reads MMS or invents a report history.
+/// The canonical dataset member order and multiplicity are preserved.
+/// </summary>
+public static class IedBrowserPresentation
+{
+    public static IReadOnlyList<IedBrowserTreeRow> Roots(
+        LiveIedModelDiscoveryDocument? model, IReadOnlyList<RcbExportRow> rcbs,
+        IReadOnlyList<IedBrowserRemoteFile>? remoteFiles = null)
+    {
+        const int childDepth = 1;
+        IedBrowserTreeRow Category(string name, string key,
+            Func<IReadOnlyList<IedBrowserTreeRow>> children)
+            => new("category/" + key, name, "Category", 0, loadChildren: children);
+
+        var categories = new List<IedBrowserTreeRow>
+        {
+            Category("GOOSE", "goose", () => BlockGroups(model?.GooseControlBlocks, "GoCB")),
+            Category("Reports", "reports", () => ReportGroups(rcbs)),
+            Category("Setting Groups", "settings", () => BlockGroups(model?.SettingGroupControls, "SGCB")),
+            Category("Files", "files", () =>
+                (model?.FileDirectory.Entries.Select(f =>
+                    new IedBrowserTreeRow("file/" + f.Path, f.Name, "File", childDepth, f))
+                    ?? Enumerable.Empty<IedBrowserTreeRow>())
+                .Concat((remoteFiles ?? Array.Empty<IedBrowserRemoteFile>())
+                    .Select(file => new IedBrowserTreeRow(
+                        "remote-file/" + file.RemotePath, file.Name, "File", childDepth, file)))
+                .DistinctBy(row => row.Payload switch
+                {
+                    IedBrowserRemoteFile remote => remote.RemotePath,
+                    LiveIedFileModel file => file.Path,
+                    _ => row.Key
+                }, StringComparer.OrdinalIgnoreCase)
+                .ToArray()),
+            Category("DataSets", "datasets", () => DataSetGroups(model?.DataSets)),
+            Category("Data Model", "model", () =>
+                model?.LogicalDevices.Select(ld =>
+                    new IedBrowserTreeRow("model/ld/" + ld.MmsDomain, ld.MmsDomain, "LD", 1, ld,
+                        () => ld.LogicalNodes.Select(ln =>
+                            new IedBrowserTreeRow("model/ln/" + ld.MmsDomain + "/" + ln.Name,
+                                ln.Name, "LN", 2, ln,
+                                () => ln.DataObjects.Select(obj =>
+                                    new IedBrowserTreeRow("model/do/" + obj.Reference, obj.Name, "DO", 3, obj,
+                                        () => obj.Attributes.Select((attr, ordinal) =>
+                                            new IedBrowserTreeRow("model/da/" + attr.MmsReference + "/" + ordinal,
+                                                attr.AttributePath, "DA", 4, attr)).ToArray()))
+                                    .ToArray())).ToArray())).ToArray()
+                    ?? Array.Empty<IedBrowserTreeRow>())
+        };
+        return categories; // ARSAS IED Explorer already owns device selection; never duplicate it.
+    }
+
+    private static IReadOnlyList<IedBrowserTreeRow> ReportGroups(IReadOnlyList<RcbExportRow> rcbs)
+        => rcbs.GroupBy(row => LogicalDevice(row.Reference), StringComparer.Ordinal)
+            .Select(ld => new IedBrowserTreeRow("reports/ld/" + ld.Key, ld.Key, "LD", 1,
+                loadChildren: () => ld.GroupBy(row => LogicalNode(row.Reference), StringComparer.Ordinal)
+                    .Select(ln => new IedBrowserTreeRow("reports/ln/" + ld.Key + "/" + ln.Key,
+                        ln.Key, "LN", 2,
+                        loadChildren: () => ln.OrderBy(row => row.Buffered).Select(row =>
+                            new IedBrowserTreeRow("reports/rcb/" + row.SelectionIdentity,
+                                row.Name, "RCB", 3, row)).ToArray())).ToArray())).ToArray();
+
+    private static IReadOnlyList<IedBrowserTreeRow> DataSetGroups(IReadOnlyList<LiveIedDataSetModel>? sets)
+        => sets?.GroupBy(set => set.Domain, StringComparer.Ordinal)
+            .Select(ld => new IedBrowserTreeRow("datasets/ld/" + ld.Key, ld.Key, "LD", 1,
+                loadChildren: () => ld.GroupBy(set => set.LogicalNode, StringComparer.Ordinal)
+                    .Select(ln => new IedBrowserTreeRow("datasets/ln/" + ld.Key + "/" + ln.Key,
+                        ln.Key, "LN", 2,
+                        loadChildren: () => ln.Select(set =>
+                            new IedBrowserTreeRow("datasets/set/" + set.Reference,
+                                QualifiedName(set.LogicalNode, set.Name), "DataSet", 3, set)).ToArray())).ToArray())).ToArray()
+            ?? Array.Empty<IedBrowserTreeRow>();
+
+    private static IReadOnlyList<IedBrowserTreeRow> BlockGroups(
+        IReadOnlyList<LiveIedControlBlockModel>? blocks, string kind)
+        => blocks?.GroupBy(block => block.Domain, StringComparer.Ordinal)
+            .Select(ld => new IedBrowserTreeRow(kind + "/ld/" + ld.Key, ld.Key, "LD", 1,
+                loadChildren: () => ld.GroupBy(block => block.LogicalNode, StringComparer.Ordinal)
+                    .Select(ln => new IedBrowserTreeRow(kind + "/ln/" + ld.Key + "/" + ln.Key,
+                        ln.Key, "LN", 2,
+                        loadChildren: () => ln.Select(block =>
+                            new IedBrowserTreeRow(kind + "/" + block.Reference,
+                                QualifiedName(block.LogicalNode, block.Name), kind, 3, block)).ToArray())).ToArray())).ToArray()
+            ?? Array.Empty<IedBrowserTreeRow>();
+
+    // Visual labels may qualify the name with LN context; IEC/MMS references remain exact.
+    private static string QualifiedName(string logicalNode, string name)
+    {
+        if (string.IsNullOrWhiteSpace(logicalNode) || string.IsNullOrWhiteSpace(name) ||
+            name.StartsWith(logicalNode + ".", StringComparison.Ordinal))
+            return name;
+        return logicalNode + "." + name;
+    }
+
+    private static string LogicalDevice(string reference)
+    {
+        var slash = reference.IndexOf('/');
+        return slash < 1 ? "(unknown LD)" : reference[..slash];
+    }
+
+    private static string LogicalNode(string reference)
+    {
+        var slash = reference.IndexOf('/');
+        if (slash < 0 || slash >= reference.Length - 1) return "(unknown LN)";
+        var suffix = reference[(slash + 1)..];
+        var cut = suffix.IndexOfAny(['.', '$']);
+        return cut < 0 ? suffix : suffix[..cut];
+    }
+
+    // Right pane is an object browser for containers, not a generic metadata form.
+    // Flatten only LD/LN wrappers for service categories (Reports, GOOSE, etc.).
+    // Data Model retains LD -> LN -> DO navigation, so a 100k-DO model is not
+    // eagerly represented when its category or LD is selected.
+    private static bool TryBuildObjectList(
+        IedBrowserTreeRow node, List<IedBrowserDetailRow> rows)
+    {
+        var serviceCategory = (node.Kind is "LD" or "LN") &&
+            (node.Key.StartsWith("reports/", StringComparison.Ordinal) ||
+             node.Key.StartsWith("GoCB/", StringComparison.Ordinal) ||
+             node.Key.StartsWith("SGCB/", StringComparison.Ordinal) ||
+             node.Key.StartsWith("datasets/", StringComparison.Ordinal));
+        var serviceRoot = node.Key is "category/reports" or "category/goose" or
+            "category/settings" or "category/datasets";
+        var dataModelContainer = node.Key == "category/model" ||
+            node.Key.StartsWith("model/ld/", StringComparison.Ordinal) ||
+            node.Key.StartsWith("model/ln/", StringComparison.Ordinal) ||
+            node.Key.StartsWith("model/do/", StringComparison.Ordinal);
+        var fileRoot = node.Key == "category/files";
+        if (!serviceRoot && !serviceCategory && !dataModelContainer && !fileRoot)
+            return false;
+
+        var isCategory = node.Kind == "Category";
+        if (isCategory)
+            rows.Add(new("Section", node.Title));
+        else
+            rows.Add(new IedBrowserDetailRow("Object", node.Title, Source: node.Key)
+            {
+                NavigateTo = node
+            });
+
+        var objects = serviceRoot || serviceCategory
+            ? ServiceObjects(node).ToArray()
+            : node.GetChildren();
+
+        if (objects.Count == 0)
+        {
+            rows.Add(new("Message", "No objects available in the current SCL/discovery model."));
+            return true;
+        }
+        foreach (var child in objects)
+        {
+            var descriptor = child.Payload switch
+            {
+                RcbExportRow rcb when rcb.Availability !=
+                    AR.Iec61850.Mms.MmsRcbOperationalAvailability.Unknown => rcb.StatusText,
+                LiveIedLogicalNodeModel ln => ln.LnClass,
+                LiveIedDataSetModel ds => $"{ds.MemberCount} members",
+                LiveIedFileModel file => file.SizeBytes is { } bytes ? FormatFileSize(bytes) : "",
+                IedBrowserRemoteFile file => file.SizeText,
+                _ => ""
+            };
+            // Keep exact reference as tooltip/evidence; list glyph and short
+            // name follow the navigation tree, never use RptID as RCB identity.
+            rows.Add(new IedBrowserDetailRow("Object", child.Title, descriptor,
+                Source: child.Key)
+            {
+                NavigateTo = child,
+                SecondaryText = child.Payload switch
+                {
+                    LiveIedFileModel modelFile => modelFile.LastModified,
+                    IedBrowserRemoteFile remote => remote.ModifiedText,
+                    _ => ""
+                },
+                ValueReference = child.Payload is LiveIedDataObjectModel doModel
+                    ? doModel.Reference : "",
+                FunctionalConstraint = child.Payload is LiveIedDataObjectModel sourceDo
+                    ? PrimaryValueFunctionalConstraint(sourceDo) : ""
+            });
+        }
+        return true;
+    }
+
+    private static string PrimaryValueFunctionalConstraint(LiveIedDataObjectModel model)
+    {
+        // A DO can contain ST, MX, CF and CO together. Use only its proven
+        // process-value leaf; never borrow a setting or control FC implicitly.
+        var primary = model.Attributes.FirstOrDefault(attr =>
+            attr.FunctionalConstraint is "ST" or "MX" &&
+            (attr.AttributePath.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase) ||
+             attr.AttributePath.EndsWith(".posVal", StringComparison.OrdinalIgnoreCase) ||
+             attr.AttributePath.EndsWith(".valWTr", StringComparison.OrdinalIgnoreCase) ||
+             attr.AttributePath.EndsWith(".general", StringComparison.OrdinalIgnoreCase) ||
+             attr.AttributePath.EndsWith(".mag.f", StringComparison.OrdinalIgnoreCase) ||
+             attr.AttributePath.EndsWith(".instMag.f", StringComparison.OrdinalIgnoreCase)));
+        return primary?.FunctionalConstraint ?? "";
+    }
+
+    private static string FormatFileSize(uint size)
+        => size >= 1_048_576 ? $"{size / 1_048_576d:0.##} MB"
+            : size >= 1_024 ? $"{size / 1_024d:0.##} KB"
+            : $"{size} B";
+
+    private static IEnumerable<IedBrowserTreeRow> ServiceObjects(IedBrowserTreeRow parent)
+    {
+        foreach (var child in parent.GetChildren())
+        {
+            if (child.Kind is "LD" or "LN")
+            {
+                foreach (var leaf in ServiceObjects(child))
+                    yield return leaf;
+            }
+            else
+                yield return child;
+        }
+    }
+
+    public static IReadOnlyList<IedBrowserDetailRow> Details(
+        IedBrowserTreeRow node, LiveIedModelDiscoveryDocument? model, bool connected)
+    {
+        var rows = new List<IedBrowserDetailRow>();
+        void Section(string name) => rows.Add(new("Section", name));
+        void Field(string name, object? value, string source = "Model")
+            => rows.Add(new("Property", name, value?.ToString() is { Length: > 0 } v ? v : "—", Source: source));
+        void Member(string name, string value = "Not read", int depth = 0, string source = "Model")
+            => rows.Add(new("Data", name, value, depth, source));
+
+        if (TryBuildObjectList(node, rows))
+            return rows;
+
+        switch (node.Payload)
+        {
+            case RcbExportRow rcb:
+                Section("Control Block attributes");
+                foreach (var prop in rcb.Inspection.Properties(rcb, connected))
+                {
+                    if (prop.Property is "Trigger options" or "Optional fields")
+                        continue; // Never show opaque BER hex as the operator-facing value.
+                    Field(prop.Property, prop.Value, prop.Source);
+                }
+                var observed = connected ? rcb.Inspection.ReadOnlyCheck : null;
+                var trgRaw = !string.IsNullOrWhiteSpace(observed?.TriggerOptions)
+                    ? observed.TriggerOptions : rcb.Inspection.Model.TriggerOptions;
+                var optRaw = !string.IsNullOrWhiteSpace(observed?.OptionalFields)
+                    ? observed.OptionalFields : rcb.Inspection.Model.OptionalFields;
+                Section("Trigger options");
+                rows.Add(new IedBrowserDetailRow("FlagGroup", "Trigger options",
+                    Source: $"Raw TrgOps: {trgRaw}; {rcb.Inspection.ModelSource}")
+                {
+                    Flags = IedBrowserReportFlags.TriggerOptions(trgRaw)
+                });
+                Section("Optional fields");
+                rows.Add(new IedBrowserDetailRow("FlagGroup", "Optional fields",
+                    Source: $"Raw OptFlds: {optRaw}; {rcb.Inspection.ModelSource}")
+                {
+                    Flags = IedBrowserReportFlags.OptionalFields(optRaw)
+                });
+                Section("Information received in last Report");
+                rows.Add(new("Message", "No report-reception snapshot is available in this inspector."));
+                Section("Data");
+                rows.Add(new("DataHeader", "Name", "Value"));
+                var linkedDataSet = FindDataSet(model, rcb.DataSetReference);
+                if (linkedDataSet is null)
+                    rows.Add(new("Message", "DataSet member directory is not available in the current model."));
+                else
+                    foreach (var member in linkedDataSet.Members)
+                        rows.Add(IedBrowserStructuredDetails.Member(member, model));
+                break;
+            case LiveIedDataSetModel set:
+                Section("DataSet attributes");
+                Field("Reference", set.Reference);
+                Field("Member count", set.MemberCount);
+                Field("Deletable", set.IsDeletable?.ToString() ?? "Unknown");
+                Field("Used by reports", string.Join(", ", set.UsedByReportControls));
+                Section("Data");
+                rows.Add(new("DataHeader", "Name", "Value"));
+                foreach (var member in set.Members)
+                    rows.Add(IedBrowserStructuredDetails.Member(member, model));
+                break;
+            case LiveIedControlBlockModel block:
+                Section("Control Block attributes");
+                Field("Control Block reference", block.Reference);
+                if (node.Kind == "SGCB")
+                {
+                    Field("Number of Setting Groups", "Not read");
+                    Field("Active Setting Group", "Not read");
+                    Field("Last changed", "Unknown");
+                    Field("Affected Logical Devices", block.Domain);
+                    Section("Settings");
+                    rows.Add(new("DataHeader", "Name", "Value"));
+                    if (model is not null)
+                    {
+                        var settings = model.LogicalDevices
+                            .Where(ld => string.Equals(ld.MmsDomain, block.Domain, StringComparison.Ordinal))
+                            .SelectMany(ld => ld.LogicalNodes)
+                            .SelectMany(ln => ln.DataObjects)
+                            .SelectMany(obj => obj.Attributes)
+                            .Where(attr => attr.FunctionalConstraint is "SG" or "SE")
+                            .ToArray();
+                        foreach (var attr in settings)
+                            rows.Add(new IedBrowserDetailRow("Data",
+                                $"{attr.ObjectReference}.{attr.AttributePath} [{attr.FunctionalConstraint}]",
+                                "Not read", Source: "SG/SE declaration, no live setting-group read")
+                            {
+                                ValueReference = attr.MmsReference,
+                                FunctionalConstraint = attr.FunctionalConstraint
+                            });
+                        if (settings.Length == 0)
+                            rows.Add(new("Message", "No SG/SE parameters available in this model."));
+                    }
+                    else
+                        rows.Add(new("Message", "No model is available for SG/SE setting attributes."));
+                }
+                else
+                {
+                    Field("Enabled", "Not read");
+                    Field("GOOSE ID", block.ControlId);
+                    Field("DataSet reference", block.DataSetReference);
+                    Field("Application ID", block.AppId);
+                    Field("Configuration revision", block.ConfRev);
+                    Field("Minimum time (ms)", block.MinimumTimeMs);
+                    Field("Maximum time (ms)", block.MaximumTimeMs);
+                    Field("Destination MAC", "Not read");
+                    Field("VLAN ID", "Not read");
+                    Field("VLAN priority", "Not read");
+                    Field("Needs commissioning", "Not read");
+                    Section("Information received in last GOOSE");
+                    rows.Add(new("Message", "No passive GOOSE reception evidence is linked to this model."));
+                    Section("Data");
+                    rows.Add(new("DataHeader", "Name", "Value"));
+                    var linkedGooseSet = FindDataSet(model, block.DataSetReference);
+                    if (linkedGooseSet is null)
+                        rows.Add(new("Message", "No verified DataSet member directory for this GoCB."));
+                    else
+                        foreach (var member in linkedGooseSet.Members)
+                            rows.Add(IedBrowserStructuredDetails.Member(member, model));
+                }
+                break;
+            case LiveIedLogicalDeviceModel ld:
+                Section("Logical Device");
+                Field("MMS domain", ld.MmsDomain);
+                Field("LDevice instance", ld.Inst);
+                Field("Logical Nodes", ld.LogicalNodes.Count);
+                Section("Logical Nodes");
+                rows.Add(new("DataHeader", "Name", "Class"));
+                foreach (var ln in ld.LogicalNodes)
+                    Member(ln.Name, ln.LnClass, source: "Model");
+                break;
+            case LiveIedLogicalNodeModel ln:
+                Section("Logical Node");
+                Field("Name", ln.Name);
+                Field("Class", ln.LnClass);
+                Field("LN type", ln.ProposedLnTypeId);
+                Section("Data Objects");
+                rows.Add(new("DataHeader", "Name", "CDC"));
+                foreach (var obj in ln.DataObjects)
+                    Member(obj.Name, obj.InferredCdc);
+                break;
+            case LiveIedDataObjectModel obj:
+                Section("Data Object");
+                Field("Reference", obj.Reference);
+                Field("CDC", obj.InferredCdc);
+                Field("Type confidence", obj.ConfidenceLevel);
+                Section("Data Attributes");
+                rows.Add(new("DataHeader", "Name", "Type"));
+                foreach (var attr in IedBrowserStructuredDetails.AttributeRows(obj.Attributes, obj.Name))
+                    rows.Add(attr);
+                break;
+            case LiveIedDataAttributeModel attr:
+                Section("Data Attribute");
+                Field("IEC reference", attr.ObjectReference);
+                Field("DA path", attr.AttributePath);
+                Field("FC", attr.FunctionalConstraint);
+                Field("MMS reference", attr.MmsReference);
+                Field("MMS type", attr.MmsType);
+                Field("SCL bType", attr.SclBType);
+                Field("Type confidence", attr.TypeConfidence);
+                rows.Add(new IedBrowserDetailRow("Property", "Value", "Not read",
+                    Source: "Read-only MMS / observed report")
+                {
+                    ValueReference = attr.MmsReference,
+                    FunctionalConstraint = attr.FunctionalConstraint
+                });
+                break;
+            case IedBrowserRemoteFile remote:
+                Section("Remote file");
+                Field("Name", remote.Name);
+                Field("Path", remote.RemotePath);
+                Field("Size", remote.SizeText);
+                Field("Last modified", remote.ModifiedText);
+                Field("Source", "Live IEC 61850 FileDirectory");
+                break;
+            case LiveIedFileModel file:
+                Section("File attributes");
+                Field("Name", file.Name);
+                Field("Path", file.Path);
+                Field("Size (bytes)", file.SizeBytes?.ToString() ?? "Unknown");
+                Field("Last modified", file.LastModified);
+                Field("Source", file.Source);
+                break;
+            default:
+                Section(node.Title);
+                Field("Type", node.Kind);
+                Field("Model", model is null ? "Unavailable" : "Cached model");
+                Field("Read state", "No MMS read on navigation", "Browser policy");
+                break;
+        }
+        return rows;
+    }
+
+    private static LiveIedDataSetModel? FindDataSet(LiveIedModelDiscoveryDocument? model, string reference)
+    {
+        if (model is null || string.IsNullOrWhiteSpace(reference)) return null;
+        var exact = model.DataSets.FirstOrDefault(set => string.Equals(set.Reference, reference, StringComparison.Ordinal));
+        if (exact is not null) return exact;
+        // Use a case-insensitive fallback only if the match is unambiguous.
+        var candidates = model.DataSets.Where(set =>
+            string.Equals(set.Reference, reference, StringComparison.OrdinalIgnoreCase)).Take(2).ToArray();
+        return candidates.Length == 1 ? candidates[0] : null;
+    }
+}

@@ -2358,7 +2358,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         foreach (var device in Devices)
         {
-            if (device.IsBusy)
+            if (device.IsBusy || device.IsBrowserReading)
                 device.AdvanceDiscoveryProgressAnimation();
         }
     }
@@ -2401,6 +2401,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             point.Reason = snapshot.Reason;
             point.Status = snapshot.Status;
             point.Sequence = snapshot.Sequence;
+            // This is the same coalesced UI snapshot that updates Explorer,
+            // Live Monitor and SOE. Browser never has its own report decoder.
+            var observedOwner = Devices.FirstOrDefault(d =>
+                string.Equals(d.DeviceId, point.DeviceId, StringComparison.OrdinalIgnoreCase));
+            observedOwner?.LiveValues.PublishReport(point, snapshot.IsReportTraffic);
             if (uiDetectedEdge || pending.HasValueEdge || snapshot.IsValueEdge || qualityChanged)
             {
                 UpdateCommandFeedbackFromLivePoint(point);
@@ -2490,6 +2495,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (pointChanged || eventBatch.Count > 0 || diagnosticBatch.Count > 0)
             RaiseWorkspaceCounts();
+        if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
+            RefreshIedBrowserVisibleValues();
     }
 
     private void Signal_PropertyChanged(object? sender, PropertyChangedEventArgs e)

@@ -19,6 +19,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     private bool _isBusy;
     private bool _isStopping;
     private bool _isMonitoring;
+    private bool _isBrowserReading;
     private bool _isActive;
     private bool _hasReportStream;
     private bool _isDemo;
@@ -50,6 +51,11 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     public BulkObservableCollection<SignalDefinition> Signals { get; } = new();
     public BulkObservableCollection<Iec61850MonitorPoint> Points { get; } = new();
     public BulkObservableCollection<SignalDefinition> CommandSignals { get; } = new();
+    // Shared per-IED live model for the Browser, Explorer and all read-only
+    // engineering consumers. Runtime report ingress and manual MMS reads use
+    // identical reference/FC keys; not persisted across associations.
+    [JsonIgnore]
+    public IedBrowserLiveValues LiveValues { get; } = new();
     public Iec61850DeviceDiagnosticSnapshot LastDiagnosticSnapshot { get; set; } = new();
 
     [JsonIgnore]
@@ -325,7 +331,11 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         set
         {
             if (Set(ref _isConnected, value))
+            {
+                // Explicit MMS and report observations never cross associations.
+                if (!value) LiveValues.Clear();
                 RefreshComputed();
+            }
         }
     }
 
@@ -348,6 +358,13 @@ public sealed class Iec61850MonitorDevice : ObservableObject
             if (Set(ref _isStopping, value))
                 RefreshComputed();
         }
+    }
+
+    // Independent read-only association may run while static reporting stays live.
+    public bool IsBrowserReading
+    {
+        get => _isBrowserReading;
+        set => Set(ref _isBrowserReading, value);
     }
 
     public bool IsMonitoring
@@ -414,6 +431,16 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     {
         get => _discoveryProgressPercentText;
         private set => Set(ref _discoveryProgressPercentText, value ?? string.Empty);
+    }
+
+    public void ApplyBrowserReadProgress(int completed, int total)
+    {
+        if (total <= 0) return;
+        var processed = Math.Clamp(completed, 0, total);
+        BusyStage = $"Read-only MMS values · {processed:N0} / {total:N0}";
+        _discoveryProgressTargetPercent = 100d * processed / total;
+        DiscoveryProgressStepText = $"Value {processed:N0} of {total:N0}";
+        DiscoveryProgressPercentText = $"{DiscoveryProgressPercent:0}%";
     }
 
     public void ResetDiscoveryProgress(

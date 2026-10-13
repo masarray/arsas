@@ -49,6 +49,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public Dictionary<string, Iec61850MonitorPoint> Points { get; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, RuntimePointState> States { get; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, ReportControlPlan> ActiveReportPlans { get; } = new(StringComparer.OrdinalIgnoreCase);
+        // Successful runtime activation only; never inferred from SCL definitions.
+        public ConcurrentDictionary<string, byte> BrowserActiveRcbs { get; } =
+            new(StringComparer.OrdinalIgnoreCase);
+        // Per-association caches keep report projection independent of UI size.
+        public Dictionary<string, string> BrowserReportFcCache { get; } =
+            new(StringComparer.OrdinalIgnoreCase);
+        public HashSet<string>? BrowserDataObjects { get; set; }
         public List<ReportControlPlan> ActiveReportPlanOrder { get; } = new();
         public Dictionary<string, string> PointPlanIds { get; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, Iec61850MonitorPoint> ReportReferenceIndex { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -89,8 +96,71 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     public event Action<Iec61850PointSnapshot>? PointUpdated;
     public event Action<Iec61850EventEntry>? EventRaised;
 
+    public IReadOnlySet<string> GetActiveBrowserRcbReferences(string deviceId)
+        => _sessions.TryGetValue(deviceId, out var session)
+            ? session.BrowserActiveRcbs.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
     public int ConnectedDeviceCount => _sessions.Values.Count(session => session.Client.IsConnected);
     public int MonitoringDeviceCount => _sessions.Values.Count(session => session.Device.IsMonitoring);
+
+    /// <summary>
+    /// Explicit operator-commanded read-only MMS sweep. Uses the existing
+    /// association and a single sequential request lane. No report subscription,
+    /// GI, DataSet modification, control write or background verification polling.
+    /// </summary>
+    public async Task<int> ReadBrowserValuesAsync(
+        Iec61850MonitorDevice device,
+        IReadOnlyList<IedBrowserReadTarget> targets,
+        IProgress<IedBrowserReadResult> values,
+        IProgress<IedBrowserReadProgress> progress,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        if (!_sessions.TryGetValue(device.DeviceId, out var session) ||
+            !ReferenceEquals(session.Device, device) || !session.Client.IsConnected)
+            throw new InvalidOperationException("Read requires an active MMS association for the selected IED.");
+        // Shared reporting is the value authority during monitoring. Competing
+        // read requests are deliberately disallowed on that association.
+        if (device.IsMonitoring)
+            throw new InvalidOperationException("Live monitor is active. Browser values follow its report stream; stop monitoring for an explicit MMS Read.");
+        var succeeded = 0;
+        for (var index = 0; index < targets.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var target = targets[index];
+            try
+            {
+                using var singleRead = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                singleRead.CancelAfter(TimeSpan.FromSeconds(5));
+                var raw = await session.Client.ReadValueAsync(
+                    target.Reference, target.FunctionalConstraint, target.DataType,
+                    singleRead.Token).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                var rich = raw as Iec61850ReadValue;
+                var display = raw?.ToString() ?? "";
+                if (!string.IsNullOrWhiteSpace(display) && display != "-")
+                {
+                    values.Report(new IedBrowserReadResult(target, display,
+                        rich?.Quality ?? "", rich?.DeviceTimestamp ?? "", ""));
+                    succeeded++;
+                }
+                else
+                    values.Report(new IedBrowserReadResult(target, "", "", "",
+                        "IED did not return a readable value."));
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                values.Report(new IedBrowserReadResult(target, "", "", "", "Read timeout"));
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                values.Report(new IedBrowserReadResult(target, "", "", "", ex.Message));
+            }
+            progress.Report(new IedBrowserReadProgress(index + 1, targets.Count));
+        }
+        return succeeded;
+    }
 
     public async Task<int> EnrichSelectedStaticDataSetUnitsAsync(
         Iec61850MonitorDevice device,
@@ -560,6 +630,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.Points.Clear();
         session.States.Clear();
         session.ActiveReportPlans.Clear();
+        session.BrowserActiveRcbs.Clear();
+        session.BrowserReportFcCache.Clear();
+        session.BrowserDataObjects = null;
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
         session.ReportReferenceIndex.Clear();
@@ -984,6 +1057,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 session.ActiveReportPlans[plan.PlanId] = plan;
                 session.ActiveReportPlanOrder.Add(plan);
                 session.ReportActivationByPlanId[plan.PlanId] = result;
+                var activeReference = string.IsNullOrWhiteSpace(result.ReportControlReference)
+                    ? plan.ReportControlReference : result.ReportControlReference;
+                if (!string.IsNullOrWhiteSpace(activeReference))
+                    session.BrowserActiveRcbs[activeReference.Trim().Replace('$', '.')] = 1;
 
                 var coveredPoints = ResolveCoveredPoints(plan, result.CoveredReferences);
                 var acquisitionLabel = session.StaticDataSetReportOnly
@@ -1336,6 +1413,51 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
                 foreach (var update in effectiveUpdates)
                 {
+                    // Publish every real, schema-matched report member before
+                    // selected-SCADA-point filtering, without triggering reads or GI.
+                    var reportModel = session.Device.SclWorkspace?.DesignModel ??
+                                      session.Device.LiveDiscoveryModel;
+                    var memberKey = plan.DataSetReference + "|" +
+                        IedBrowserLiveValues.CanonicalReference(update.Reference);
+                    if (!session.BrowserReportFcCache.TryGetValue(memberKey, out var reportFc))
+                    {
+                        reportFc = IedBrowserReportValueAuthority.TryResolveFunctionalConstraint(
+                            reportModel, plan.DataSetReference, update.Reference,
+                            out var resolvedFc) ? resolvedFc : "";
+                        session.BrowserReportFcCache[memberKey] = reportFc;
+                    }
+                    if (reportFc.Length > 0)
+                    {
+                        if (update.HasValue &&
+                            IedBrowserReportValueAuthority.SafeScalar(update.Value) &&
+                            !LooksLikeReferenceEcho(update.Value, update.Reference, update.Reference))
+                            session.Device.LiveValues.Publish(
+                                update.Reference, reportFc, update.Value,
+                                update.HasQuality ? update.Quality : "",
+                                update.HasTimestamp ? update.Timestamp : "", "Report");
+
+                        if (update.HasQuality &&
+                            IedBrowserReportValueAuthority.SafeScalar(update.Quality))
+                        {
+                            var normalizedRef = IedBrowserLiveValues.CanonicalReference(update.Reference);
+                            session.BrowserDataObjects ??= reportModel?.LogicalDevices
+                                .SelectMany(ld => ld.LogicalNodes)
+                                .SelectMany(ln => ln.DataObjects)
+                                .Select(obj => IedBrowserLiveValues.CanonicalReference(obj.Reference))
+                                .ToHashSet(StringComparer.OrdinalIgnoreCase)
+                                ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                            var owner = normalizedRef;
+                            while (!session.BrowserDataObjects.Contains(owner))
+                            {
+                                var dot = owner.LastIndexOf('.');
+                                if (dot <= owner.IndexOf('/')) { owner = ""; break; }
+                                owner = owner[..dot];
+                            }
+                            if (owner.Length > 0)
+                                session.Device.LiveValues.Publish(owner + ".q",
+                                    reportFc, update.Quality, "", update.Timestamp, "Report quality");
+                        }
+                    }
                     var point = FindPointForReportReference(session, update.Reference);
                     if (point == null)
                         continue;
@@ -2030,6 +2152,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         // discovery/re-arming returns to the normal background report pipeline so a
         // slow vendor RCB read/write can never hold the reconnect state machine hostage.
         session.ActiveReportPlans.Clear();
+        session.BrowserActiveRcbs.Clear();
+        session.BrowserReportFcCache.Clear();
+        session.BrowserDataObjects = null;
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
         session.ReportStreams.Clear();
@@ -2343,6 +2468,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
         session.MonitorTask = null;
         session.ActiveReportPlans.Clear();
+        session.BrowserActiveRcbs.Clear();
+        session.BrowserReportFcCache.Clear();
+        session.BrowserDataObjects = null;
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
         session.StaticReportProjection.Reset();

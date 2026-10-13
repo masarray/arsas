@@ -72,8 +72,20 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     public event Action<Iec61850PointSnapshot>? PointUpdated;
     public event Action<Iec61850EventEntry>? EventRaised;
 
+    public IReadOnlySet<string> GetActiveBrowserRcbReferences(string deviceId)
+        => _inner.GetActiveBrowserRcbReferences(deviceId);
+
     public int ConnectedDeviceCount => _inner.ConnectedDeviceCount;
     public int MonitoringDeviceCount => _inner.MonitoringDeviceCount;
+
+    public Task<int> ReadBrowserValuesAsync(
+        Iec61850MonitorDevice device,
+        IReadOnlyList<IedBrowserReadTarget> targets,
+        IProgress<IedBrowserReadResult> values,
+        IProgress<IedBrowserReadProgress> progress,
+        CancellationToken cancellationToken)
+        => RunDeviceOperationAsync(device.DeviceId, cancellationToken,
+            token => _inner.ReadBrowserValuesAsync(device, targets, values, progress, token));
 
     public Task<int> EnrichSelectedStaticDataSetUnitsAsync(
         Iec61850MonitorDevice device,
