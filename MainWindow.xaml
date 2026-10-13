@@ -738,7 +738,7 @@
                                                                                     <Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsRaiseOnlyControl}" Value="True"/><Condition Binding="{Binding ControlConfirmationPending}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers>
                                                                                 </Style>
                                                                             </StackPanel.Style>
-                                                                            <Button Content="Raise" Tag="{Binding}" CommandParameter="Raise" Click="ControlStageAction_Click" Style="{StaticResource CommandDockPrimaryButton}"
+                                                                            <Button Content="Raise" Tag="{Binding}" CommandParameter="Raise" Click="ControlStageAction_Click" Style="{StaticResource CommandRaiseButton}"
                                                                                     IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
                                                                         </StackPanel>
 
@@ -748,7 +748,7 @@
                                                                                     <Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsLowerOnlyControl}" Value="True"/><Condition Binding="{Binding ControlConfirmationPending}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers>
                                                                                 </Style>
                                                                             </StackPanel.Style>
-                                                                            <Button Content="Lower" Tag="{Binding}" CommandParameter="Lower" Click="ControlStageAction_Click" Style="{StaticResource CommandDockSoftButton}"
+                                                                            <Button Content="Lower" Tag="{Binding}" CommandParameter="Lower" Click="ControlStageAction_Click" Style="{StaticResource CommandLowerButton}"
                                                                                     IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
                                                                         </StackPanel>
 
@@ -758,9 +758,9 @@
                                                                                     <Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsRaiseLowerControl}" Value="True"/><Condition Binding="{Binding ControlConfirmationPending}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers>
                                                                                 </Style>
                                                                             </StackPanel.Style>
-                                                                            <Button Content="Raise" Tag="{Binding}" CommandParameter="Raise" Click="ControlStageAction_Click" Style="{StaticResource CommandDockPrimaryButton}" Margin="0,0,7,0"
+                                                                            <Button Content="Raise" Tag="{Binding}" CommandParameter="Raise" Click="ControlStageAction_Click" Style="{StaticResource CommandRaiseButton}" Margin="0,0,7,0"
                                                                                     IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
-                                                                            <Button Content="Lower" Tag="{Binding}" CommandParameter="Lower" Click="ControlStageAction_Click" Style="{StaticResource CommandDockSoftButton}"
+                                                                            <Button Content="Lower" Tag="{Binding}" CommandParameter="Lower" Click="ControlStageAction_Click" Style="{StaticResource CommandLowerButton}"
                                                                                     IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
                                                                         </StackPanel>
 
