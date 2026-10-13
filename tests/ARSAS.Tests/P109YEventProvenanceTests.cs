@@ -143,8 +143,8 @@ public sealed class P109YEventProvenanceTests
             "Header=\"Acquisition\" Binding=\"{Binding AcquisitionShort}\"",
             StringSplitOptions.None).Length - 1);
         Assert.DoesNotContain("Header=\"Acquisition\" Binding=\"{Binding SourceMode}\"", xaml);
-        Assert.Contains("if (!string.IsNullOrWhiteSpace(snapshot.ReportControlReference))", ui);
         Assert.Contains("point.RoutedReportControlReferences = snapshot.RoutedReportControlReferences;", ui);
+        Assert.Contains("Iec61850EventOriginPolicy.PointAcquisition(", Read("Models/MonitorModels.cs"));
         Assert.Contains("RoutedReportControlReferences = state.RoutedReportControlReferences", runtime);
         Assert.Contains("var reportRcbChanged = trustReportEdge", runtime);
         Assert.Contains("state.RoutedReportControlReferences.Add(reportControlReference.Trim())", runtime);
