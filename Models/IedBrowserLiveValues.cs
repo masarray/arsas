@@ -46,9 +46,10 @@ public sealed class IedBrowserLiveValues
         Interlocked.Increment(ref _version);
     }
 
-    public void PublishReport(Iec61850MonitorPoint point)
+    public void PublishReport(Iec61850MonitorPoint point, bool observedReportIngress = false)
     {
         if (point.IsOffline || point.Value == "-" ||
+            !observedReportIngress &&
             !point.SourceMode.Contains("Report", StringComparison.OrdinalIgnoreCase) &&
             point.RoutedReportControlReferences.Count == 0)
             return;
