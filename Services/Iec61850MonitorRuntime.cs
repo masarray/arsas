@@ -1394,6 +1394,39 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
                 foreach (var update in effectiveUpdates)
                 {
+                    // Publish all *actually received* canonical DataSet members,
+                    // including q/t and engineering leaves that were not selected as
+                    // user-facing SCADA points. IEC Report inclusion is sparse unless
+                    // GI/integrity provides a full image; never fabricate absent members.
+                    var reportModel = session.Device.SclWorkspace?.DesignModel ??
+                                      session.Device.LiveDiscoveryModel;
+                    if (IedBrowserReportValueAuthority.TryResolveFunctionalConstraint(
+                            reportModel, plan.DataSetReference, update.Reference,
+                            out var reportFc))
+                    {
+                        if (update.HasValue &&
+                            IedBrowserReportValueAuthority.SafeScalar(update.Value) &&
+                            !LooksLikeReferenceEcho(update.Value, update.Reference, update.Reference))
+                            session.Device.LiveValues.Publish(
+                                update.Reference, reportFc, update.Value,
+                                update.HasQuality ? update.Quality : "",
+                                update.HasTimestamp ? update.Timestamp : "", "Report");
+                        if (update.HasQuality &&
+                            IedBrowserReportValueAuthority.SafeScalar(update.Quality))
+                        {
+                            var normalizedRef = IedBrowserLiveValues.CanonicalReference(update.Reference);
+                            var matchingObject = reportModel?.LogicalDevices
+                                .SelectMany(ld => ld.LogicalNodes)
+                                .SelectMany(ln => ln.DataObjects)
+                                .Where(obj => normalizedRef.Equals(obj.Reference, StringComparison.OrdinalIgnoreCase) ||
+                                              normalizedRef.StartsWith(obj.Reference + ".", StringComparison.OrdinalIgnoreCase))
+                                .OrderByDescending(obj => obj.Reference.Length)
+                                .FirstOrDefault();
+                            if (matchingObject is not null)
+                                session.Device.LiveValues.Publish(matchingObject.Reference + ".q",
+                                    reportFc, update.Quality, "", update.Timestamp, "Report quality");
+                        }
+                    }
                     var point = FindPointForReportReference(session, update.Reference);
                     if (point == null)
                         continue;
