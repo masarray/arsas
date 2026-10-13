@@ -92,6 +92,64 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     public int ConnectedDeviceCount => _sessions.Values.Count(session => session.Client.IsConnected);
     public int MonitoringDeviceCount => _sessions.Values.Count(session => session.Device.IsMonitoring);
 
+    /// <summary>
+    /// Explicit operator-commanded read-only MMS sweep. Uses the existing
+    /// association and a single sequential request lane. No report subscription,
+    /// GI, DataSet modification, control write or background verification polling.
+    /// </summary>
+    public async Task<int> ReadBrowserValuesAsync(
+        Iec61850MonitorDevice device,
+        IReadOnlyList<IedBrowserReadTarget> targets,
+        IProgress<IedBrowserReadResult> values,
+        IProgress<IedBrowserReadProgress> progress,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        if (!_sessions.TryGetValue(device.DeviceId, out var session) ||
+            !ReferenceEquals(session.Device, device) || !session.Client.IsConnected)
+            throw new InvalidOperationException("Read requires an active MMS association for the selected IED.");
+        // Shared reporting is the value authority during monitoring. Competing
+        // read requests are deliberately disallowed on that association.
+        if (device.IsMonitoring)
+            throw new InvalidOperationException("Live monitor is active. Browser values follow its report stream; stop monitoring for an explicit MMS Read.");
+        var succeeded = 0;
+        for (var index = 0; index < targets.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var target = targets[index];
+            try
+            {
+                using var singleRead = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                singleRead.CancelAfter(TimeSpan.FromSeconds(5));
+                var raw = await session.Client.ReadValueAsync(
+                    target.Reference, target.FunctionalConstraint, target.DataType,
+                    singleRead.Token).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                var rich = raw as Iec61850ReadValue;
+                var display = raw?.ToString() ?? "";
+                if (!string.IsNullOrWhiteSpace(display) && display != "-")
+                {
+                    values.Report(new IedBrowserReadResult(target, display,
+                        rich?.Quality ?? "", rich?.DeviceTimestamp ?? "", ""));
+                    succeeded++;
+                }
+                else
+                    values.Report(new IedBrowserReadResult(target, "", "", "",
+                        "IED did not return a readable value."));
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                values.Report(new IedBrowserReadResult(target, "", "", "", "Read timeout"));
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                values.Report(new IedBrowserReadResult(target, "", "", "", ex.Message));
+            }
+            progress.Report(new IedBrowserReadProgress(index + 1, targets.Count));
+        }
+        return succeeded;
+    }
+
     public async Task<int> EnrichSelectedStaticDataSetUnitsAsync(
         Iec61850MonitorDevice device,
         CancellationToken cancellationToken)
