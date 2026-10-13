@@ -1,7 +1,7 @@
 # ARD — ARSAS IED Browser: Two-Panel Engineering Inspection Workspace
 
 **Document ID:** ARD-ARSAS-IEDB-001  
-**Version / date:** v1.0 — 2026-10-13  
+**Version / date:** v1.1 — 2026-10-13  
 **Status:** PROPOSED / DESIGN ONLY (no GUI or engine change authorized by this document)  
 **Owner:** ARSAS consumer; ARIEC61850 protocol engine  
 **Design inputs:** private engineering workflow recording and ARSAS interface screenshot supplied by the maintainer; current ARSAS/ARIEC61850 code audit.
@@ -27,7 +27,7 @@
 
 ## 1. Product objective & constraints
 
-**Goal:** An Experienced protection/substation engineer must be able to inspect an IED without relearning where Reports, DataSets, Setting Groups, Files, GOOSE, and Data Model live, how child objects expand, and how to invoke a deliberate read.
+**Goal:** An experienced protection/substation engineer must be able to inspect an IED without relearning where Reports, DataSets, Setting Groups, Files, GOOSE, and Data Model live, how child objects expand, and how to invoke a deliberate read.
 
 ### In scope
 
@@ -247,7 +247,7 @@ ARSAS Browser View (thin WPF controls)
 1. Create a **dedicated** `Views/IedBrowser/IedBrowserView.xaml` and VM/presenter/services under corresponding folders; keep `MainWindow.xaml` to hosting + navigation, not another multi-hundred-line control composition.
 2. **Use a virtualized flat WPF DataGrid as TreeGrid**: typed `BrowserTreeRow` with `Depth`, `HasChildren`, `IsExpanded`, `ObjectKey`, type glyph, readable status; expander/indent in first cell. Do not place a WPF `TreeView` inside each DataGrid row or instantiate all `TreeViewItem` controls imperatively.
 3. Model hierarchy remains immutable/indexed; TreeGrid holds **only currently visible rows**, initially category + LD/LN scope. Expand inserts only immediate children; collapse removes descendant range. Provide deterministic row key and projection range updates; reuse the existing bulk observable collection infrastructure where suitable.
-4. Right DetailGrid uses a **shared typed row model**, with section/attribute/value/structured-child row kinds, `DataTemplateSelector` only if measured necessary, no per-cell costly converters and no deep nested `ItemsControl` trees.
+4. Right DetailGrid uses a **single virtualized flat stream of typed detail rows** (section/object/property/table-header/attribute/structured-child kinds), with lightweight per-kind WPF row templates. Different sections may use **different column width policies**; do not force one ordinary DataGrid's global columns onto the entire detail pane. Use one coherent vertical viewport and avoid stacked unbounded DataGrids or nested ScrollViewers. Use template selection only for the small fixed set of row kinds, cache row metadata, and never use deep nested ItemsControl trees.
 5. Avoid index-driven tab navigation: use a named workspace or typed navigation registry, not numeric `MainTabs.SelectedIndex=7` as the sole navigation contract.
 6. No raw `object?` + guessed position/index parsing inside XAML code-behind. Adapter returns typed `Result<T>` / structured state with exact evidence; preserve engine semantic binder behavior.
 7. Build display projections off the UI thread when materially expensive, publish immutable snapshots to UI and make small dispatcher changes only. No arbitrary `Task.Delay` fixing races.
@@ -352,7 +352,99 @@ Each milestone is its own focused PR with deterministic tests and **before/after
 - Real ZIV AVR session evidence + deterministic fixture tests + CI + installer QA before release.
 - No implementation change permitted until **M0 source branch reconciliation** is explicitly complete.
 
-## 13. References
+
+## 13. Visual-and-behavior fidelity addendum (DEC-08, v1.1)
+
+This is the **visual acceptance contract** for the maintainer-provided 1250×893 ARSAS reference screenshot and separate private engineering workflow recording. It is a design reference, not a claim that final Windows rendering has already been validated. **Color matching is explicitly excluded**; layout grammar, hierarchy, spacing, information density, reading order, interaction and section boundaries are required. The existing global Explorer panel is **outside** the Browser's required two internal panels.
+
+### 14.1 Spatial geometry at reference size (guide, verify Windows DPI)
+
+| Region | Observed screenshot approximation | Required adaptation |
+|---|---|---|
+| Application chrome/navigation | Titlebar ~32 px; app navigation y≈45–109 | Preserve current app navigation and NTP widgets; do not duplicate global toolbar inside Browser |
+| Main content | Begins y≈121; bottom system status remains visible | Browser fills remaining central workspace without overlapping bottom status |
+| Existing global IED Explorer | x≈14–248 (~234 px) | Remains a separate ARSAS shell panel; its current card/controls are not replaced |
+| Browser workspace | x≈262–1239 (~977 px) | **Exactly two internal panels**, not independent nested content tabs |
+| Internal tree panel | x≈263–550 (~287 px) | Nominal tree:detail width ≈30:70 with user-draggable splitter; controlled min widths |
+| Splitter | x≈551–555 (~4–5 px) | Subtle, discoverable hover/focus feedback; no bulky gutter |
+| Internal detail panel | x≈556–1238 (~682 px) | Receives remaining width; continuous vertical display |
+| Detail object path strip | y≈129–145 (~16 px) | Compact breadcrumb/reference strip; full exact path accessible to copy |
+| Detail object heading | y≈154–179 (~25 px) | Type glyph + object name + status/alignment; no oversized hero |
+| Section header bars | ~18–22 px | Small chevron, flat horizontal row, thin separators, clear expanded/collapsed state |
+| Properties (name/value) | Left label lane ≈125 px in screenshot | Fixed/limited property-label width; remaining horizontal width goes to complete value |
+| Data (name/value) | Name ≈48–50% of right pane | Adjustable Name / Value split, own column heading, right-aligned value as appropriate |
+| Tree child rows | ≈20–22 px | Dense nodes: chevron + semantic glyph + name, 14–16 px depth steps |
+| Data tree rows | ≈22–24 px | Dense continuous stripe/separators, expandable DO/DA/quality/time-quality child values |
+
+Measurements are **approximations from the 1250×893 screenshot**, not hard-coded global pixels. At minimum window 1180×760 and 125%/150% DPI, proportions and minimum accessibility/readability must win over strict pixel copying. No resizing should clip the only path to read or inspect the active object.
+
+### 14.2 Mandatory screenshot visual features
+
+**Tree panel** must include:
+
+- Compact \`IEDs\` label/header, the current IED selector/dropdown, endpoint/IP line, a separator, then the **single common category hierarchy**; retain familiar order GOOSE → Reports → Setting Groups → Files → DataSets → Data Model.
+- Category, LD, LN, RCB, GoCB, DataSet and DO/DA semantic glyphs (small, consistent size, not arbitrary emoji); caret only for nodes that can expand.
+- Visual indentation driven by depth, row-level hover, focus, selection, branch continuity/dotted separators **only if visually useful**; no individual node cards.
+- Expand only immediate children and keep scroll stable; one vertical scrollbar owned by the left tree and independent of the right detail pane.
+- No multi-row category headers, giant title bands, jumbo IED card repeated inside the Browser, or persistent tab bar switching Report/Model/Signals.
+
+**Detail panel** must include:
+
+- Persistent contextual path/breadcrumb header at top; path like \`IED • Reports • LD • LN • RCB\` is clickable/copyable for context, not a pseudo-folder that changes canonical references.
+- Thin selected-object header containing semantic glyph, exact short name, and right-edge status when proven.
+- RCB selection displays, **in this order**, three contiguous sections: \`Control Block attributes\` → \`Information received in last Report\` → \`Data\`. No separate popup, page or sub-tab for ordinary inspection.
+- Property rows are compact \`property | value\`. The report-info section displays its actual fields or explicit \`No report received\`. Data section has a visible \`Name | Value\` column header and expandable DO/DA/structured rows with FC metadata near the name.
+- \`q\` expansion shows nested validity, quality details, source, test, operator blocked. \`t\` expansion shows actual device time and time quality flags including leap seconds / clock failure / not synchronized / time accuracy where present. Unknown flags are not fabricated.
+- Flat/tabular LD selection shows LN entries with name/description in rows; LN selection drills into its DO details; sibling category changes do not scramble the information hierarchy.
+- Text remains scannable with alternating/subtle row fill and 1 px delineation; engineering values (e.g. references, Enum labels, timestamps, quality) are not truncated without copy/tooltip access.
+- Scrollbar **inside** right detail viewport; all sections share one coherent vertical scroll, not three scrollbars fighting over the same wheel/trackpad.
+
+### 14.3 Detail section column policy (corrects single-DataGrid simplification)
+
+Do **not** assume one \`DataGrid\` with a globally fixed \`Name/Value\` split can reproduce the screenshot:
+
+- Property-row template: label width capped near 120–155 px at reference scaling; value occupies remainder. Compact baseline and consistent typography.
+- Report-row template: same layout as property rows but state-aware empty values, report-only provenance.
+- Data-header template: configurable two-column layout with Name ≈45–52% by default, Value remaining; optional advanced FC/type/status lanes must not make default columns unreadable.
+- Data-tree template: depth indentation + caret + semantic glyph + exact name and FC; right value aligned to Data-header value boundary. Child rows keep column positions unchanged regardless of tree depth.
+- Section-row template: full-width with chevron and light neutral background, independent of property/data column allocation.
+- The implementation may use one flat virtualized \`ListView\` / list-based ItemsControl, or a verified equivalent. No unbounded nested ScrollViewers, \`DataGrid\` in each \`DataGridRow\`, or per-node heavy visual trees. Profile actual virtualization.
+
+### 14.4 State and interaction screenshot matrix (must capture)
+
+| State frame | Required screenshot / behavior |
+|---|---|
+| A — IED root, SCL offline | Selector/IP/source visible; root categories intact; no invented live values |
+| B — Reports / RCB selected | Breadcrumb + object header + three section headers in required order |
+| C — RCB quality expanded | \`q\` validity/source/test/operatorBlocked and \`t\` clock flags display without column drift |
+| D — DataSets selected | Properties + exact ordered DataSet member table; DataSet link to report and model |
+| E — Data Model / LD | Row list of LN child objects with descriptions where evidenced, familiar selection/expand |
+| F — Data Model / DO | Expandable DA + FC and values; typed read state and provenance |
+| G — Setting Groups | SGCB metadata and browsable setting values/groups if verified, explicit unsupported otherwise |
+| H — Files / GOOSE | Object-specific right detail templates with same shell visual grammar |
+| I — Disconnected / stale | Historic value remains visibly stale, no false online badge |
+| J — Read pending/error | Inline progress and field-level failure text, no blocking modal/error storm |
+| K — 1180 px min / high DPI | No header, label, scrollbar or value overlays; narrow viewport remains operable |
+| L — long vendor refs | Proper column sizing, tooltip/copy exact reference, no forced word wrap that doubles every tree row |
+
+Reference screenshot QA must use **same object, same tree expansion, same selection, same viewport** as the target implementation. Measure panel boundaries, row/header height, column breakpoints, indentation and visual states; compare **structure and alignment without judging hue**. Side-by-side annotated diff and regression screenshots are required for B/C/E/G before calling styling complete. Avoid misleading before/after screenshots with different objects or different Windows scale.
+
+### 14.5 Do not proceed to implementation until visual gates
+
+- **M0a:** reconcile exact commit/build of maintainer screenshot, branch state, and existing ARSAS global Explorer layout.
+- **M0b:** lock a **frame-by-frame UI state inventory** from the private reference recording (RCB, DataSet, Data Model, SGCB, GOOSE, Files). Mark items directly observed vs planned/engine-supported; don't claim the recording proves unobserved actions.
+- **M0c:** produce a compact, runnable WPF shell **visual proof** of the two-panel width, headers and 3-section RCB data layout (using *obviously labeled* fixture values, not fake live output), plus a 1180×760 narrow proof. This comes **before** wiring many protocol features.
+- **M1 visual gate:** approve shell/layout/interaction for screenshot states B/C/E before full object templates and data binding; maintain a fixed row/padding/column token table.
+- **M2 interaction gate:** verify keyboard, mouse, resize, scrollbar, selecting/report switching, expansion and source/status fidelity on actual installed build.
+- **M4 approval:** release requires both objective geometric assertions + maintainer visual sign-off and live IEC 61850 regression evidence; CI build alone cannot establish visual fidelity.
+
+### 14.6 Explicit limitations to the fidelity claim
+
+- The current ARD is a **target specification**, not evidence that ARSAS already renders like the screenshot.
+- Pixel-perfect matching cannot be guaranteed before a real WPF build, high-DPI screenshot comparison and acceptance of object-specific frames.
+- Color/brand/pixel-art identity are intentionally **not copied**. Successful parity means an experienced operator finds the same objects, reads the same semantic fields, navigates and expands similarly, with equally compact grid geometry.
+
+## 14. References
 
 - [ARSAS Architecture](../ARCHITECTURE.md)
 - [ARSAS Invariants](INVARIANTS.md)
