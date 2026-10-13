@@ -95,6 +95,8 @@ public static class IedBrowserStructuredDetails
                     ? attr.MmsReference
                     : attr.ObjectReference + "." +
                         string.Join(".", groupArray[0].parts.Take(pathIndex + 1)),
+                EvidenceKind = hasDirect && name == "q" ? "Quality" :
+                    hasDirect && name == "t" ? "Timestamp" : "",
                 FunctionalConstraint = groupArray.All(x =>
                     string.Equals(x.attr.FunctionalConstraint, attr.FunctionalConstraint,
                         StringComparison.OrdinalIgnoreCase))
@@ -119,7 +121,8 @@ public static class IedBrowserStructuredDetails
             {
                 ValueReference = qualityReference,
                 FunctionalConstraint = fc,
-                EvidenceField = evidence
+                EvidenceField = evidence,
+                EvidenceKind = "Quality"
             };
         var details = new[] { "Overflow", "OutOfRange", "BadReference",
             "Oscillatory", "Failure", "OldData", "Inconsistent", "Inaccurate" };
@@ -133,7 +136,8 @@ public static class IedBrowserStructuredDetails
                     {
                         ValueReference = qualityReference,
                         FunctionalConstraint = fc,
-                        EvidenceField = name
+                        EvidenceField = name,
+                        EvidenceKind = "Quality"
                     }).ToArray()
             },
             QualityField("Source", "Source"),
@@ -150,6 +154,7 @@ public static class IedBrowserStructuredDetails
             {
                 ValueReference = timestampReference,
                 FunctionalConstraint = fc,
-                EvidenceField = name
+                EvidenceField = name,
+                EvidenceKind = "Timestamp"
             }).ToArray();
 }
