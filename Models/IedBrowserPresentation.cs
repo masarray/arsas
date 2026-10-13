@@ -212,7 +212,8 @@ public sealed class IedBrowserDetailProjection
 public static class IedBrowserPresentation
 {
     public static IReadOnlyList<IedBrowserTreeRow> Roots(
-        LiveIedModelDiscoveryDocument? model, IReadOnlyList<RcbExportRow> rcbs)
+        LiveIedModelDiscoveryDocument? model, IReadOnlyList<RcbExportRow> rcbs,
+        IReadOnlyList<IedBrowserRemoteFile>? remoteFiles = null)
     {
         const int childDepth = 1;
         IedBrowserTreeRow Category(string name, string key,
@@ -225,9 +226,19 @@ public static class IedBrowserPresentation
             Category("Reports", "reports", () => ReportGroups(rcbs)),
             Category("Setting Groups", "settings", () => BlockGroups(model?.SettingGroupControls, "SGCB")),
             Category("Files", "files", () =>
-                model?.FileDirectory.Entries.Select(f =>
+                (model?.FileDirectory.Entries.Select(f =>
                     new IedBrowserTreeRow("file/" + f.Path, f.Name, "File", childDepth, f))
-                    .ToArray() ?? Array.Empty<IedBrowserTreeRow>()),
+                    ?? Enumerable.Empty<IedBrowserTreeRow>())
+                .Concat((remoteFiles ?? Array.Empty<IedBrowserRemoteFile>())
+                    .Select(file => new IedBrowserTreeRow(
+                        "remote-file/" + file.RemotePath, file.Name, "File", childDepth, file)))
+                .DistinctBy(row => row.Payload switch
+                {
+                    IedBrowserRemoteFile remote => remote.RemotePath,
+                    LiveIedFileModel file => file.Path,
+                    _ => row.Key
+                }, StringComparer.OrdinalIgnoreCase)
+                .ToArray()),
             Category("DataSets", "datasets", () => DataSetGroups(model?.DataSets)),
             Category("Data Model", "model", () =>
                 model?.LogicalDevices.Select(ld =>
@@ -352,6 +363,7 @@ public static class IedBrowserPresentation
                 LiveIedLogicalNodeModel ln => ln.LnClass,
                 LiveIedDataSetModel ds => $"{ds.MemberCount} members",
                 LiveIedFileModel file => file.SizeBytes is { } bytes ? FormatFileSize(bytes) : "",
+                IedBrowserRemoteFile file => file.SizeText,
                 _ => ""
             };
             // Keep exact reference as tooltip/evidence; list glyph and short
@@ -360,8 +372,12 @@ public static class IedBrowserPresentation
                 Source: child.Key)
             {
                 NavigateTo = child,
-                SecondaryText = child.Payload is LiveIedFileModel detailFile
-                    ? detailFile.LastModified : "",
+                SecondaryText = child.Payload switch
+                {
+                    LiveIedFileModel modelFile => modelFile.LastModified,
+                    IedBrowserRemoteFile remote => remote.ModifiedText,
+                    _ => ""
+                },
                 ValueReference = child.Payload is LiveIedDataObjectModel doModel
                     ? doModel.Reference : "",
                 FunctionalConstraint = child.Payload is LiveIedDataObjectModel sourceDo
@@ -568,6 +584,14 @@ public static class IedBrowserPresentation
                     ValueReference = attr.MmsReference,
                     FunctionalConstraint = attr.FunctionalConstraint
                 });
+                break;
+            case IedBrowserRemoteFile remote:
+                Section("Remote file");
+                Field("Name", remote.Name);
+                Field("Path", remote.RemotePath);
+                Field("Size", remote.SizeText);
+                Field("Last modified", remote.ModifiedText);
+                Field("Source", "Live IEC 61850 FileDirectory");
                 break;
             case LiveIedFileModel file:
                 Section("File attributes");
