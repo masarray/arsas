@@ -82,19 +82,43 @@ public sealed class P109YEventProvenanceTests
     }
 
     [Fact]
-    public void ExplorerShowsOnlyProvenRcbOrExplicitPendingAndOffline()
+    public void ExplorerAggregatesEveryObservedRcbAsSortedUniqueNames()
     {
-        var p = new Iec61850MonitorPoint { SourceMode = "Static DataSet: StaticBrcb" };
-        Assert.Equal("RCB pending", p.AcquisitionShort);
-        p.LastLiveReportControlReference = "ZIVAVRLD1/LLN0.BR.brcb01";
-        Assert.Equal("brcb01", p.AcquisitionShort);
-        p.LastLiveReportControlReference = "ZIVAVRLD1/LLN0.BR.brcb02";
-        Assert.Equal("brcb02", p.AcquisitionShort);
-        p.IsOffline = true;
-        Assert.Equal("Offline", p.AcquisitionShort);
-        p.IsOffline = false;
-        p.SourceMode = "MMS polling";
-        Assert.Equal("MMS Polling", p.AcquisitionShort);
+        var point = new Iec61850MonitorPoint { SourceMode = "Static DataSet: StaticBrcb" };
+        Assert.Equal("RCB pending", point.AcquisitionShort);
+        point.RoutedReportControlReferences = new[]
+        {
+            "ZIVAVRLD1/LLN0.BR.brcb02",
+            "ZIVAVRLD1/LLN0$BR$brcb01",
+            "zivavrld1/lln0.br.BRCB02"
+        };
+        Assert.Equal("brcb01, brcb02", point.AcquisitionShort);
+        point.IsOffline = true;
+        Assert.Equal("Offline", point.AcquisitionShort);
+        point.IsOffline = false;
+        point.SourceMode = "MMS polling";
+        Assert.Equal("MMS Polling", point.AcquisitionShort);
+        point.SourceMode = "Static DataSet: StaticBrcb";
+        Assert.Equal("brcb01, brcb02", point.AcquisitionShort);
+    }
+
+    [Fact]
+    public void MultiRcbEventShowsAllObservedNamesButRetainsExactSourceAndRptId()
+    {
+        var e = new Iec61850EventEntry
+        {
+            SourceMode = "Static DataSet: StaticBrcb",
+            ReportId = "Rpt_0",
+            ReportControlReference = "ZIVAVRLD1/LLN0.BR.brcb02",
+            RoutedReportControlReferences = new[]
+            {
+                "ZIVAVRLD1/LLN0.BR.brcb02",
+                "ZIVAVRLD1/LLN0.BR.brcb01"
+            }
+        };
+        Assert.Equal("brcb01, brcb02", e.AcquisitionShort);
+        Assert.Equal("Rpt_0", e.ReportId);
+        Assert.Equal("ZIVAVRLD1/LLN0.BR.brcb02", e.ReportControlReference);
     }
 
     [Fact]
@@ -120,9 +144,11 @@ public sealed class P109YEventProvenanceTests
             StringSplitOptions.None).Length - 1);
         Assert.DoesNotContain("Header=\"Acquisition\" Binding=\"{Binding SourceMode}\"", xaml);
         Assert.Contains("if (!string.IsNullOrWhiteSpace(snapshot.ReportControlReference))", ui);
-        Assert.Contains("point.LastLiveReportControlReference = snapshot.ReportControlReference;", ui);
-        Assert.Contains("ReportControlReference = state.LastLiveReportControlReference", runtime);
+        Assert.Contains("point.RoutedReportControlReferences = snapshot.RoutedReportControlReferences;", ui);
+        Assert.Contains("RoutedReportControlReferences = state.RoutedReportControlReferences", runtime);
         Assert.Contains("var reportRcbChanged = trustReportEdge", runtime);
+        Assert.Contains("state.RoutedReportControlReferences.Add(reportControlReference.Trim())", runtime);
+        Assert.Contains("RoutedReportControlReferences = state.RoutedReportControlReferences", runtime);
         Assert.Contains("point.ReportControlReference = result.ReportControlReference", runtime);
     }
 
