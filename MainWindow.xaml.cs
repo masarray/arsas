@@ -1019,8 +1019,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return await ConnectAndConfigureDeviceAsync(device, openWizard: true, selectDevice: selectDevice);
 
         ResetControlReadinessForNewAssociation(device);
-        RemoveDevicePoints(device.DeviceId);
-        device.Points.Clear();
+        // Keep last-seen rows muted during fast reconnect. Replace them only
+        // after a new monitor session has successfully built its point model.
+        MarkDevicePointsInactive(device, disconnected: true);
+        EnsureOfflinePointProjection(device);
         device.RefreshComputed();
         if (selectDevice)
             SelectedDevice = device;
@@ -1289,9 +1291,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        if (device.IsMonitoring)
-            await StopDeviceMonitorAsync(device);
-        else if (device.IsConnected)
+        // One Stop = one complete disconnect. The independent pause-monitor
+        // action remains available elsewhere; the IED card never requires
+        // a second Stop to release its MMS association.
+        if (device.IsConnected || device.IsMonitoring)
             await StopDeviceConnectionAsync(device);
     }
 
@@ -2197,11 +2200,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         device.ReportPulseActive = false;
         _reportPulseUntil.Remove(device.DeviceId);
         RemoveDeviceHighlights(device.DeviceId);
-        RemoveDevicePoints(device.DeviceId);
-        device.Points.Clear();
+        MarkDevicePointsInactive(device, disconnected: false);
+        EnsureOfflinePointProjection(device);
         device.RefreshComputed();
         RaiseWorkspaceCounts();
-        SetStatus($"{device.Name}: monitoring stopped; MMS connection remains available.");
+        SetStatus($"{device.Name}: monitoring paused; last observed values are not live.");
     }
 
     private static void ResetControlReadinessForNewAssociation(Iec61850MonitorDevice device)
@@ -2219,23 +2222,97 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async Task StopDeviceConnectionAsync(Iec61850MonitorDevice device)
     {
-        await _runtime.StopDeviceAsync(device.DeviceId);
-        ResetControlReadinessForNewAssociation(device);
-        device.HasReportStream = false;
-        device.ReportPulseActive = false;
-        _reportPulseUntil.Remove(device.DeviceId);
-        RemoveDeviceHighlights(device.DeviceId);
-        RemoveDevicePoints(device.DeviceId);
-        device.Points.Clear();
-        if (device.HasDiscoveryCache)
+        try
         {
-            device.Status = "Saved model ready";
-            device.Detail = "Press Play for fast reconnect and live values. Use Re-scan only when the IED model changes.";
-            device.AcquisitionMode = "Saved model • fast connect";
+            await _runtime.StopDeviceAsync(device.DeviceId);
         }
+        catch (Exception ex)
+        {
+            // A failed native teardown must never prevent the operator from
+            // pressing Play again. The runtime evicts the association first.
+            AddLog("WARN", device.Name, $"Disconnect cleanup: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            ResetControlReadinessForNewAssociation(device);
+            device.IsMonitoring = false;
+            device.IsConnected = false;
+            device.HasReportStream = false;
+            device.ReportPulseActive = false;
+            _reportPulseUntil.Remove(device.DeviceId);
+            RemoveDeviceHighlights(device.DeviceId);
+            MarkDevicePointsInactive(device, disconnected: true);
+            EnsureOfflinePointProjection(device);
+            if (device.HasDiscoveryCache)
+            {
+                device.Status = "Offline • saved model";
+                device.Detail = "Last observed values are offline. Press Play on this IED to reconnect.";
+                device.AcquisitionMode = "Saved model • offline";
+            }
+            device.RefreshComputed();
+            RaiseWorkspaceCounts();
+            SetStatus($"{device.Name}: disconnected; values retained as offline. Press Play to reconnect.");
+        }
+    }
+
+    // Offline is a display state, not an IEC 61850 quality claim or a fresh
+    // process measurement. Retain old values/timestamps, but never present
+    // them as live data or raise new SOE events during the transition.
+    private void MarkDevicePointsInactive(Iec61850MonitorDevice device, bool disconnected)
+    {
+        var label = disconnected ? "Offline" : "Paused";
+        foreach (var point in device.Points)
+        {
+            point.IsOffline = true;
+            point.IsRecentlyChanged = false;
+            point.SourceMode = label;
+            point.Quality = label;
+            point.Status = disconnected ? "Offline • last known value" : "Paused • last known value";
+        }
+        foreach (var key in _pendingPointSnapshots.Keys.Where(key =>
+                     key.StartsWith(device.DeviceId + "|", StringComparison.OrdinalIgnoreCase)).ToArray())
+            _pendingPointSnapshots.TryRemove(key, out _);
+    }
+
+    // A saved project may be opened with no MMS session and no runtime points.
+    // Materialize *only* the user's already-selected live signals, never new
+    // selections or invented process values. Live Start replaces these rows.
+    private void EnsureOfflinePointProjection(Iec61850MonitorDevice device)
+    {
+        if (device.Points.Count > 0) return;
+        var offlinePoints = device.Signals
+            .Where(signal => signal.IsSelected && signal.CanPublishAsSignal)
+            .GroupBy(signal => NormalizeReference(signal.ObjectReference), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .Select(signal => new Iec61850MonitorPoint
+            {
+                DeviceId = device.DeviceId,
+                DeviceName = device.Name,
+                IpAddress = device.IpAddress,
+                SignalName = string.IsNullOrWhiteSpace(signal.Name) ? signal.ObjectReference : signal.Name,
+                IecReference = signal.ObjectReference,
+                QualityReference = signal.QualityReference,
+                TimestampReference = signal.TimestampReference,
+                FunctionalConstraint = signal.FunctionalConstraint,
+                IecDataType = signal.DataType,
+                Category = signal.Category,
+                Unit = signal.Unit,
+                DataSetReference = signal.DataSetReference,
+                ReportControlReference = signal.ReportControlReference,
+                PollingIntervalMs = PollingIntervalMs,
+                Quality = "Offline",
+                SourceMode = "Offline",
+                Status = "Offline • waiting for Play",
+                IsOffline = true
+            })
+            .ToArray();
+        if (offlinePoints.Length == 0) return;
+        device.Points.AddRange(offlinePoints);
+        GlobalPoints.AddRange(offlinePoints);
+        foreach (var point in offlinePoints)
+            _pointIndex[point.PointKey] = point;
         device.RefreshComputed();
         RaiseWorkspaceCounts();
-        SetStatus($"{device.Name}: connection closed; saved model retained for fast reconnect.");
     }
 
     private void Runtime_PointUpdated(Iec61850PointSnapshot snapshot)
@@ -2292,6 +2369,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             if (pending.HasValueEdge || snapshot.IsValueEdge || uiDetectedEdge)
                 MarkPointRecentlyChanged(point);
             point.Quality = snapshot.Quality;
+            point.IsOffline = false;
             point.DeviceTimestamp = snapshot.DeviceTimestamp;
             point.SourceMode = snapshot.SourceMode;
             point.Reason = snapshot.Reason;
@@ -2573,6 +2651,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     }
                     device.Signals.AddRange(cachedSignals);
                     device.RecountSelectedSignals();
+                    EnsureOfflinePointProjection(device);
                 }
                 else
                 {
