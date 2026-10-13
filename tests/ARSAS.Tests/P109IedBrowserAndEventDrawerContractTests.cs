@@ -22,7 +22,9 @@ public sealed class P109IedBrowserAndEventDrawerContractTests
         Assert.Contains("IedBrowserPresentation.Roots(", code);
         var browserMarkup = xaml.Split("x:Name=\"IedBrowserTab\"")[1];
         Assert.DoesNotContain("DisplayMemberPath=\"Name\"", browserMarkup);
-        Assert.Contains("IedBrowserDetail_SelectionChanged", browserMarkup);
+        Assert.Contains("IedBrowserDetail_DoubleClick", browserMarkup);
+        Assert.Contains("IedBrowserDetailToggle_Click", browserMarkup);
+        Assert.Contains("BrowserFlagGroupRow", browserMarkup);
         Assert.Contains("BrowserObjectRow", browserMarkup);
         Assert.Contains("IedBrowserTreeGrid.SelectedItem = target", code);
     }
