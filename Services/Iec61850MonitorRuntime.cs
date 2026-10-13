@@ -24,7 +24,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public long Sequence { get; set; }
         public string SourceMode { get; set; } = "Waiting";
         public string AcquisitionLabel { get; set; } = "MMS polling";
-        public string LastLiveReportControlReference { get; set; } = string.Empty;
+        // Actual report ingress, scoped to the live MMS association. Multiple
+        // BRCBs/URCBs may publish the same selected DataSet member.
+        public HashSet<string> RoutedReportControlReferences { get; } =
+            new(StringComparer.OrdinalIgnoreCase);
         public string Reason { get; set; } = "-";
         public string Status { get; set; } = "Queued";
         public bool HasValue { get; set; }
@@ -1739,14 +1742,12 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         var oldQuality = state.Quality;
         var displayChanged = hasProcessValue && !string.Equals(oldValue, display, StringComparison.Ordinal);
         var qualityChangedForUi = !string.Equals(oldQuality, quality, StringComparison.OrdinalIgnoreCase);
-        // The reporting RCB may change while the process value is unchanged
-        // (e.g. reconnect chooses a different free BRCB). This is meaningful
-        // UI provenance and must emit a snapshot even with no value edge.
-        var nextRcb = trustReportEdge && !string.IsNullOrWhiteSpace(reportControlReference)
-            ? reportControlReference.Trim()
-            : state.LastLiveReportControlReference;
+        // Many enabled RCBs can produce one signal. Remember every RCB with
+        // *actual* routed ingress, not only the most recently received report.
+        // A new source is UI-relevant even if the process value has not changed.
         var reportRcbChanged = trustReportEdge &&
-            !string.Equals(state.LastLiveReportControlReference, nextRcb, StringComparison.OrdinalIgnoreCase);
+            !string.IsNullOrWhiteSpace(reportControlReference) &&
+            state.RoutedReportControlReferences.Add(reportControlReference.Trim());
         var metadataChanged = reportRcbChanged ||
                               !string.Equals(state.DeviceTimestamp, deviceTimestamp, StringComparison.Ordinal) ||
                               !string.Equals(state.SourceMode, sourceMode, StringComparison.Ordinal) ||
@@ -1777,8 +1778,6 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         state.DeviceTimestamp = deviceTimestamp;
         state.LastUpdateUtc = timestampUtc;
         state.SourceMode = sourceMode;
-        if (trustReportEdge)
-            state.LastLiveReportControlReference = nextRcb;
         state.Reason = reason;
         state.Status = status;
         if (changed)
@@ -1800,7 +1799,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 IsReportTraffic = trustReportEdge,
                 // This is association-local evidence from an actual routed report.
                 // Preserve it through later metadata/status UI coalescing.
-                ReportControlReference = state.LastLiveReportControlReference,
+                RoutedReportControlReferences = state.RoutedReportControlReferences
+                    .OrderBy(reference => reference, StringComparer.OrdinalIgnoreCase).ToArray(),
                 Sequence = state.Sequence
             });
         }
@@ -1852,7 +1852,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             Reason = state.Reason,
             Status = status,
             IsValueEdge = false,
-            ReportControlReference = state.LastLiveReportControlReference,
+            RoutedReportControlReferences = state.RoutedReportControlReferences
+                .OrderBy(reference => reference, StringComparer.OrdinalIgnoreCase).ToArray(),
             Sequence = state.Sequence
         });
     }
