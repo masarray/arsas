@@ -164,7 +164,7 @@ public sealed class IedBrowserPresentationTests
             Inspection = RcbInspectionEvidence.FromSource("ReportIdOne", null) };
         var r2 = new RcbExportRow { Name = "brcb01", Reference = "ZIVLD/LLN0.BR.brcb01",
             Inspection = RcbInspectionEvidence.FromSource("ReportIdTwo", null) };
-        var roots = IedBrowserPresentation.Roots(null, [r1, r2]);
+        var roots = IedBrowserPresentation.Roots(null, [r2, r1]);
         var reports = Assert.Single(roots.Where(r => r.Key == "category/reports"));
         var list = IedBrowserPresentation.Details(reports, null, false);
         Assert.Equal(["urcb01", "brcb01"],
@@ -212,6 +212,18 @@ public sealed class IedBrowserPresentationTests
         Assert.Equal("LLN0.DS_Signal", dsRow.Name);
         Assert.Equal("22 members", dsRow.Value);
         Assert.Equal("DataSet", dsRow.NavigateTo?.Kind);
+
+        var gooseLeaf = IedBrowserPresentation.Details(goose, model, false)
+            .First(row => row.Kind == "Object").NavigateTo!;
+        var gooseDetails = IedBrowserPresentation.Details(gooseLeaf, model, false);
+        Assert.Contains(gooseDetails, row => row.Kind == "Section" &&
+            row.Name == "Control Block attributes");
+        Assert.DoesNotContain(gooseDetails, row => row.Kind == "Object");
+
+        var datasetDetails = IedBrowserPresentation.Details(dsRow.NavigateTo!, model, false);
+        Assert.Contains(datasetDetails, row => row.Kind == "Section" &&
+            row.Name == "DataSet attributes");
+        Assert.DoesNotContain(datasetDetails, row => row.Kind == "Object");
     }
 
     [Fact]
