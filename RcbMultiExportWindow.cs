@@ -277,7 +277,7 @@ public sealed class RcbMultiExportWindow : Window
         base.OnClosed(e);
     }
 
-    private static DataGridTemplateColumn CreateReportIdColumn()
+    private DataGridTemplateColumn CreateReportIdColumn()
     {
         var button = new FrameworkElementFactory(typeof(Button));
         button.SetBinding(System.Windows.Controls.ContentControl.ContentProperty,
