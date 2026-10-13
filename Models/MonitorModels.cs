@@ -668,6 +668,7 @@ public sealed class Iec61850MonitorPoint : ObservableObject
     private string _quality = "Unknown";
     private string _deviceTimestamp = "-";
     private string _sourceMode = "Waiting";
+    private string _lastLiveReportControlReference = string.Empty;
     private string _reason = "-";
     private string _status = "Queued";
     private long _sequence;
@@ -756,7 +757,28 @@ public sealed class Iec61850MonitorPoint : ObservableObject
         IecReference);
     public string Quality { get => _quality; set => Set(ref _quality, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
     public string DeviceTimestamp { get => _deviceTimestamp; set => Set(ref _deviceTimestamp, string.IsNullOrWhiteSpace(value) ? "-" : value); }
-    public string SourceMode { get => _sourceMode; set => Set(ref _sourceMode, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
+    public string SourceMode
+    {
+        get => _sourceMode;
+        set
+        {
+            if (Set(ref _sourceMode, string.IsNullOrWhiteSpace(value) ? "Unknown" : value))
+                Raise(nameof(AcquisitionShort));
+        }
+    }
+    // Proven by a live routed report frame, not a configured/cached RCB hint.
+    // Written on the WPF UI thread from a point snapshot only.
+    public string LastLiveReportControlReference
+    {
+        get => _lastLiveReportControlReference;
+        set
+        {
+            if (Set(ref _lastLiveReportControlReference, value ?? string.Empty))
+                Raise(nameof(AcquisitionShort));
+        }
+    }
+    public string AcquisitionShort => Iec61850EventOriginPolicy.PointAcquisition(
+        LastLiveReportControlReference, SourceMode, IsOffline);
     public string Reason { get => _reason; set => Set(ref _reason, string.IsNullOrWhiteSpace(value) ? "-" : value); }
     public string Status { get => _status; set => Set(ref _status, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
     // Runtime ordering metadata is not rendered. Avoid an unnecessary WPF property-change
@@ -764,7 +786,15 @@ public sealed class Iec61850MonitorPoint : ObservableObject
     public long Sequence { get => _sequence; set => _sequence = value; }
     // Presentation state only: cached/last-seen values cannot be mistaken
     // for fresh IED data when the MMS association has been stopped.
-    public bool IsOffline { get => _isOffline; set => Set(ref _isOffline, value); }
+    public bool IsOffline
+    {
+        get => _isOffline;
+        set
+        {
+            if (Set(ref _isOffline, value))
+                Raise(nameof(AcquisitionShort));
+        }
+    }
     public bool IsRecentlyChanged { get => _isRecentlyChanged; set => Set(ref _isRecentlyChanged, value); }
     public bool IsAnnunciatorSelected { get => _isAnnunciatorSelected; set => Set(ref _isAnnunciatorSelected, value); }
     public bool CanUseAsAnnunciator => FunctionalConstraint.Equals("ST", StringComparison.OrdinalIgnoreCase);
@@ -874,6 +904,8 @@ public sealed class Iec61850PointSnapshot
     /// </summary>
     public bool IsValueEdge { get; init; }
     public bool IsReportTraffic { get; init; }
+    // Routed report identity for this exact point update, not a plan hint.
+    public string ReportControlReference { get; init; } = string.Empty;
     public long Sequence { get; init; }
 }
 
