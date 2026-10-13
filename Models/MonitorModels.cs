@@ -17,6 +17,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     private string _acquisitionMode = "Not started";
     private bool _isConnected;
     private bool _isBusy;
+    private bool _isStopping;
     private bool _isMonitoring;
     private bool _isActive;
     private bool _hasReportStream;
@@ -338,6 +339,17 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         }
     }
 
+    // One disconnect flight at a time; prevents double-click and Play races.
+    public bool IsStopping
+    {
+        get => _isStopping;
+        set
+        {
+            if (Set(ref _isStopping, value))
+                RefreshComputed();
+        }
+    }
+
     public bool IsMonitoring
     {
         get => _isMonitoring;
@@ -480,10 +492,10 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     public bool CanEditSignals => SignalCount > 0 && !IsBusy && !IsMonitoring && !IsDemo;
     public bool CanStartMonitor => IsConnected && SelectedLiveSignalCount > 0 && !IsBusy;
     public bool CanStartOrStopMonitor => !IsBusy && (IsMonitoring || SelectedLiveSignalCount > 0);
-    public bool CanPlayAction => !IsBusy && (!IsConnected || (!IsMonitoring && SelectedLiveSignalCount > 0));
+    public bool CanPlayAction => !IsStopping && !IsBusy && (!IsConnected || (!IsMonitoring && SelectedLiveSignalCount > 0));
     // Stop is intentionally pre-emptive: a hung Connect/Start must not
     // disable the only safe operator exit from an in-flight MMS operation.
-    public bool CanStopAction => IsBusy || IsConnected || IsMonitoring;
+    public bool CanStopAction => !IsStopping && (IsBusy || IsConnected || IsMonitoring);
     public bool CanRescan => !IsBusy && !IsMonitoring && !IsDemo;
     public bool CanSaveScl => !IsBusy && !IsDemo && (SclWorkspace != null || LiveDiscoveryModel != null);
     public string SaveSclToolTip => SclWorkspace != null
@@ -553,7 +565,9 @@ public sealed class Iec61850MonitorDevice : ObservableObject
             : SelectedLiveSignalCount == 0
                 ? $"Choose signals for {Name} first"
                 : $"Start monitoring {Name}";
-    public string StopToolTip => IsMonitoring
+    public string StopToolTip => IsStopping
+        ? $"Disconnecting {Name}…"
+        : IsMonitoring
         ? $"Stop monitoring {Name}"
         : IsConnected
             ? $"Disconnect {Name}"
