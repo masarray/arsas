@@ -109,11 +109,8 @@ public partial class MainWindow
         if (device is null || device.IsDemo || device.IsBusy ||
             _iedBrowserReadOperation is not null)
             return;
-        if (device.IsMonitoring)
-        {
-            IedBrowserSubtitle.Text = "Values follow the active monitor. Stop monitoring before an explicit MMS Read.";
-            return;
-        }
+        // A dedicated read-only MMS association is used if monitoring is active.
+        // Its bounded reads never interfere with the reporting session.
 
         var model = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
         var readAll = sender is Button { Tag: "All" };
@@ -139,7 +136,7 @@ public partial class MainWindow
         var failures = 0;
         device.ResetDiscoveryProgress("Preparing read-only MMS values…",
             readAll ? "Reading all IED values" : "Reading Browser values");
-        device.IsBusy = true; // Existing IED Card progress overlay (not another modal).
+        device.IsBrowserReading = true; // Preserve the ongoing report monitor lifecycle.
         IedBrowserReadPageButton.IsEnabled = false;
         IedBrowserReadAllButton.IsEnabled = false;
         IedBrowserReadRcbButton.IsEnabled = false;
@@ -167,7 +164,10 @@ public partial class MainWindow
                 sourceDevice.LiveValues.Publish(result.Target.Reference,
                     result.Target.FunctionalConstraint, result.Value, result.Quality,
                     result.DeviceTimestamp, "MMS Read");
-                bindingIndex.Apply(result);
+                // Never overwrite a live report point with an unrelated
+                // independent MMS snapshot while the reporter owns acquisition.
+                if (!sourceDevice.IsMonitoring)
+                    bindingIndex.Apply(result);
                 RefreshIedBrowserVisibleValues();
             });
             var readProgress = new Progress<IedBrowserReadProgress>(p =>
@@ -175,8 +175,12 @@ public partial class MainWindow
                 if (!cts.IsCancellationRequested)
                     sourceDevice.ApplyBrowserReadProgress(p.Completed, p.Total);
             });
-            await _runtime.ReadBrowserValuesAsync(device, targets,
-                readValues, readProgress, cts.Token);
+            if (device.IsMonitoring)
+                await ArIED61850Tester.Services.IedBrowserIsolatedReadService.ReadAsync(
+                    device, targets, readValues, readProgress, cts.Token);
+            else
+                await _runtime.ReadBrowserValuesAsync(device, targets,
+                    readValues, readProgress, cts.Token);
             if (!cts.IsCancellationRequested && ReferenceEquals(SelectedDevice, sourceDevice))
             {
                 device.CompleteDiscoveryProgressAnimation();
@@ -202,7 +206,7 @@ public partial class MainWindow
             if (ReferenceEquals(_iedBrowserReadOperation, cts))
                 _iedBrowserReadOperation = null;
             cts.Dispose();
-            sourceDevice.IsBusy = false;
+            sourceDevice.IsBrowserReading = false;
             if (ReferenceEquals(SelectedDevice, sourceDevice))
                 RefreshIedBrowserReadButtons();
         }
@@ -212,7 +216,7 @@ public partial class MainWindow
     private void RefreshIedBrowserReadButtons()
     {
         if (IedBrowserReadPageButton == null) return;
-        var ready = SelectedDevice is { IsBusy: false, IsMonitoring: false, IsDemo: false } &&
+        var ready = SelectedDevice is { IsBusy: false, IsDemo: false, IsBrowserReading: false } &&
             _iedBrowserReadOperation == null;
         IedBrowserReadPageButton.IsEnabled = ready;
         IedBrowserReadAllButton.IsEnabled = ready;
