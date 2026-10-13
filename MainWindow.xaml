@@ -428,6 +428,9 @@
                                                 <Setter TargetName="CardContent" Property="IsHitTestVisible" Value="False"/>
                                                 <Setter TargetName="BusyOverlay" Property="Visibility" Value="Visible"/>
                                             </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsBrowserReading}" Value="True">
+                                                <Setter TargetName="BusyOverlay" Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
                                         </DataTemplate.Triggers>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
