@@ -990,7 +990,7 @@
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="IEC 61850 Sequence of Events" Style="{StaticResource WorkspaceTitle}"/>
-                                <TextBlock Text="SOE edges • process state and signal quality are shown separately. IEC report cause and BRCB/URCB stream are also shown." Style="{StaticResource WorkspaceSubtitle}" Margin="0,2,0,0"/>
+                                <TextBlock Text="SOE edges • process state and signal quality are shown separately." Style="{StaticResource WorkspaceSubtitle}" Margin="0,2,0,0"/>
                             </StackPanel>
                             <WrapPanel Grid.Column="1">
                                 <Button Content="Export CSV" Style="{StaticResource SoftButton}" Click="ExportEvents_Click" Margin="0,0,8,0"/>
@@ -1002,17 +1002,15 @@
                                   VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                                   ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="#" Binding="{Binding Sequence}" Width="65"/>
-                                <DataGridTextColumn Header="IED Timestamp" Binding="{Binding DeviceTimestamp}" Width="185"/>
-                                <DataGridTextColumn Header="IED" Binding="{Binding DeviceName}" Width="120"/>
-                                <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="190"/>
-                                <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="300"/>
-                                <DataGridTemplateColumn Header="Value" Width="150" CellTemplate="{StaticResource ProcessValueBadgeTemplate}"/>
-                                <DataGridTemplateColumn Header="Quality" Width="135" CellTemplate="{StaticResource EventQualityBadgeTemplate}"/>
-                                <DataGridTextColumn Header="Event" Binding="{Binding EventCause}" Width="180" IsReadOnly="True"/>
-                                <DataGridTextColumn Header="Stream" Binding="{Binding ReportChannel}" Width="95" IsReadOnly="True"/>
-                                <DataGridTextColumn Header="Acquisition" Binding="{Binding SourceMode}" Width="190"/>
-                                <DataGridTextColumn Header="Raw Reason" Binding="{Binding Reason}" Width="160"/>
+                                <DataGridTextColumn Header="#" Binding="{Binding Sequence}" Width="55"/>
+                                <DataGridTextColumn Header="IED Timestamp" Binding="{Binding DeviceTimestamp}" Width="177"/>
+                                <DataGridTextColumn Header="IED" Binding="{Binding DeviceName}" Width="105"/>
+                                <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="155"/>
+                                <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="260"/>
+                                <DataGridTemplateColumn Header="Value" Width="130" CellTemplate="{StaticResource ProcessValueBadgeTemplate}"/>
+                                <DataGridTemplateColumn Header="Quality" Width="110" CellTemplate="{StaticResource EventQualityBadgeTemplate}"/>
+                                <DataGridTextColumn Header="Event" Binding="{Binding EventCause}" Width="100" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="Acquisition" Binding="{Binding AcquisitionShort}" Width="*" MinWidth="145" IsReadOnly="True"/>
                             </DataGrid.Columns>
                         </DataGrid>
                     </DockPanel>
