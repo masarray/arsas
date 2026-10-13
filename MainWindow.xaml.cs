@@ -120,6 +120,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public MainWindow()
     {
         InitializeComponent();
+        // Use the actual compiled ARSAS assembly version, not a duplicated
+        // title-bar constant that can drift from the installed package.
+        var installedVersion = typeof(MainWindow).Assembly.GetName().Version;
+        Title = installedVersion is { Build: >= 0 }
+            ? $"ARSAS v{installedVersion.ToString(3)} — Smart IEC 61850 Communication Tester"
+            : "ARSAS — Smart IEC 61850 Communication Tester";
         DataContext = this;
         _controlShoutTimer.Tick += (_, _) =>
         {
