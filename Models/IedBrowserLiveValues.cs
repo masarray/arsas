@@ -71,7 +71,8 @@ public sealed class IedBrowserLiveValues
         // whereas a browser DA may be the exact child stVal. These aliases
         // are unambiguous IEC value companions, not a prefix-wide guess.
         var normalized = CanonicalReference(reference);
-        foreach (var suffix in new[] { ".stVal", ".mag.f", ".instMag.f", ".cVal.mag.f" })
+        foreach (var suffix in new[] { ".stVal", ".posVal", ".valWTr", ".general", ".mag.f",
+                                      ".instMag.f", ".cVal.mag.f" })
         {
             if (_values.TryGetValue(Key(normalized + suffix, fc), out evidence!)) return true;
             if (normalized.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
