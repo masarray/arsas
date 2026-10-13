@@ -2405,7 +2405,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             // Live Monitor and SOE. Browser never has its own report decoder.
             var observedOwner = Devices.FirstOrDefault(d =>
                 string.Equals(d.DeviceId, point.DeviceId, StringComparison.OrdinalIgnoreCase));
-            observedOwner?.LiveValues.PublishReport(point);
+            observedOwner?.LiveValues.PublishReport(point, snapshot.IsReportTraffic);
             if (uiDetectedEdge || pending.HasValueEdge || snapshot.IsValueEdge || qualityChanged)
             {
                 UpdateCommandFeedbackFromLivePoint(point);
