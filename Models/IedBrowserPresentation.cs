@@ -423,6 +423,9 @@ public static class IedBrowserPresentation
         var primary = model.Attributes.FirstOrDefault(attr =>
             attr.FunctionalConstraint is "ST" or "MX" &&
             (attr.AttributePath.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase) ||
+             attr.AttributePath.EndsWith(".posVal", StringComparison.OrdinalIgnoreCase) ||
+             attr.AttributePath.EndsWith(".valWTr", StringComparison.OrdinalIgnoreCase) ||
+             attr.AttributePath.EndsWith(".general", StringComparison.OrdinalIgnoreCase) ||
              attr.AttributePath.EndsWith(".mag.f", StringComparison.OrdinalIgnoreCase) ||
              attr.AttributePath.EndsWith(".instMag.f", StringComparison.OrdinalIgnoreCase)));
         return primary?.FunctionalConstraint ?? "";
