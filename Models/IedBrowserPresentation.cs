@@ -8,7 +8,7 @@ namespace ArIED61850Tester.Models;
 /// Presentation-only node. Child factories materialize model objects on expansion, not when
 /// navigating to the Browser. Stable keys use exact IEC references and never change protocol identity.
 /// </summary>
-public sealed class IedBrowserTreeRow
+public sealed class IedBrowserTreeRow : ObservableObject
 {
     private readonly Func<IReadOnlyList<IedBrowserTreeRow>>? _loadChildren;
     private IReadOnlyList<IedBrowserTreeRow>? _children;
@@ -40,7 +40,12 @@ public sealed class IedBrowserTreeRow
         _ => "·"
     };
 
-    public bool IsExpanded { get; internal set; }
+    private bool _isExpanded;
+    public bool IsExpanded
+    {
+        get => _isExpanded;
+        internal set { if (Set(ref _isExpanded, value)) Raise(nameof(ToggleGlyph)); }
+    }
     public string ToggleGlyph => IsExpanded ? "▾" : "▸";
     internal IReadOnlyList<IedBrowserTreeRow> GetChildren()
         => _children ??= _loadChildren?.Invoke() ?? Array.Empty<IedBrowserTreeRow>();
