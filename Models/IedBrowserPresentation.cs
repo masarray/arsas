@@ -141,6 +141,7 @@ public sealed record IedBrowserDetailRow(
     public IedBrowserTreeRow? NavigateTo { get; init; }
     public Func<IReadOnlyList<IedBrowserDetailRow>>? LoadChildren { get; init; }
     public IReadOnlyList<IedBrowserFlagOption> Flags { get; init; } = Array.Empty<IedBrowserFlagOption>();
+    public string SecondaryText { get; init; } = "";
     public string Glyph => NavigateTo?.Glyph ?? (Kind == "Data" ? "DA" : "");
     public bool HasChildren => LoadChildren is not null;
     public Visibility ChevronVisibility => HasChildren ? Visibility.Visible : Visibility.Hidden;
@@ -330,16 +331,26 @@ public static class IedBrowserPresentation
                     AR.Iec61850.Mms.MmsRcbOperationalAvailability.Unknown => rcb.StatusText,
                 LiveIedLogicalNodeModel ln => ln.LnClass,
                 LiveIedDataSetModel ds => $"{ds.MemberCount} members",
-                LiveIedFileModel file => file.SizeBytes is { } bytes ? $"{bytes:N0} bytes" : "",
+                LiveIedFileModel file => file.SizeBytes is { } bytes ? FormatFileSize(bytes) : "",
                 _ => ""
             };
             // Keep exact reference as tooltip/evidence; list glyph and short
             // name follow the navigation tree, never use RptID as RCB identity.
             rows.Add(new IedBrowserDetailRow("Object", child.Title, descriptor,
-                Source: child.Key) { NavigateTo = child });
+                Source: child.Key)
+            {
+                NavigateTo = child,
+                SecondaryText = child.Payload is LiveIedFileModel file
+                    ? file.LastModified : ""
+            });
         }
         return true;
     }
+
+    private static string FormatFileSize(uint size)
+        => size >= 1_048_576 ? $"{size / 1_048_576d:0.##} MB"
+            : size >= 1_024 ? $"{size / 1_024d:0.##} KB"
+            : $"{size} B";
 
     private static IEnumerable<IedBrowserTreeRow> ServiceObjects(IedBrowserTreeRow parent)
     {
@@ -373,7 +384,28 @@ public static class IedBrowserPresentation
             case RcbExportRow rcb:
                 Section("Control Block attributes");
                 foreach (var prop in rcb.Inspection.Properties(rcb, connected))
+                {
+                    if (prop.Property is "Trigger options" or "Optional fields")
+                        continue; // Never show opaque BER hex as the operator-facing value.
                     Field(prop.Property, prop.Value, prop.Source);
+                }
+                var observed = connected ? rcb.Inspection.ReadOnlyCheck : null;
+                var trgRaw = !string.IsNullOrWhiteSpace(observed?.TriggerOptions)
+                    ? observed.TriggerOptions : rcb.Inspection.Model.TriggerOptions;
+                var optRaw = !string.IsNullOrWhiteSpace(observed?.OptionalFields)
+                    ? observed.OptionalFields : rcb.Inspection.Model.OptionalFields;
+                Section("Trigger options");
+                rows.Add(new IedBrowserDetailRow("FlagGroup", "Trigger options",
+                    Source: $"Raw TrgOps: {trgRaw}; {rcb.Inspection.ModelSource}")
+                {
+                    Flags = IedBrowserReportFlags.TriggerOptions(trgRaw)
+                });
+                Section("Optional fields");
+                rows.Add(new IedBrowserDetailRow("FlagGroup", "Optional fields",
+                    Source: $"Raw OptFlds: {optRaw}; {rcb.Inspection.ModelSource}")
+                {
+                    Flags = IedBrowserReportFlags.OptionalFields(optRaw)
+                });
                 Section("Information received in last Report");
                 rows.Add(new("Message", "No report-reception snapshot is available in this inspector."));
                 Section("Data");
@@ -383,8 +415,7 @@ public static class IedBrowserPresentation
                     rows.Add(new("Message", "DataSet member directory is not available in the current model."));
                 else
                     foreach (var member in linkedDataSet.Members)
-                        Member($"{member.Index}: {member.Reference} [{member.FunctionalConstraint}]",
-                            source: "Ordered DataSet member (not a live read)");
+                        rows.Add(IedBrowserStructuredDetails.Member(member, model));
                 break;
             case LiveIedDataSetModel set:
                 Section("DataSet attributes");
@@ -395,25 +426,62 @@ public static class IedBrowserPresentation
                 Section("Data");
                 rows.Add(new("DataHeader", "Name", "Value"));
                 foreach (var member in set.Members)
-                    Member($"{member.Index}: {member.Reference} [{member.FunctionalConstraint}]",
-                        source: "Ordered DataSet member (not a live read)");
+                    rows.Add(IedBrowserStructuredDetails.Member(member, model));
                 break;
             case LiveIedControlBlockModel block:
-                Section(node.Kind == "SGCB" ? "Setting Group attributes" : "Control Block attributes");
-                Field("Reference", block.Reference);
-                Field("Name", block.Name);
-                Field("Functional constraint", block.FunctionalConstraint);
-                Field("DataSet", block.DataSetReference);
-                Field("Configuration revision", block.ConfRev);
-                Field("Control ID", block.ControlId);
-                Field("APP ID", block.AppId);
-                Field("Discovery status", block.DiscoveryStatus);
-                Section("Attribute inventory");
-                rows.Add(new("DataHeader", "Attribute", "Value"));
-                foreach (var attribute in block.Attributes)
-                    Member(attribute, source: "Inventory only");
+                Section("Control Block attributes");
+                Field("Control Block reference", block.Reference);
                 if (node.Kind == "SGCB")
-                    rows.Add(new("Message", "Setting-group values require an explicit supported engine read."));
+                {
+                    Field("Number of Setting Groups", "Not read");
+                    Field("Active Setting Group", "Not read");
+                    Field("Last changed", "Unknown");
+                    Field("Affected Logical Devices", block.Domain);
+                    Section("Settings");
+                    rows.Add(new("DataHeader", "Name", "Value"));
+                    if (model is not null)
+                    {
+                        var settings = model.LogicalDevices
+                            .Where(ld => string.Equals(ld.MmsDomain, block.Domain, StringComparison.Ordinal))
+                            .SelectMany(ld => ld.LogicalNodes)
+                            .SelectMany(ln => ln.DataObjects)
+                            .SelectMany(obj => obj.Attributes)
+                            .Where(attr => attr.FunctionalConstraint is "SG" or "SE")
+                            .ToArray();
+                        foreach (var attr in settings)
+                            rows.Add(new IedBrowserDetailRow("Data",
+                                $"{attr.ObjectReference}.{attr.AttributePath} [{attr.FunctionalConstraint}]",
+                                "Not read", Source: "SG/SE declaration, no live setting-group read"));
+                        if (settings.Length == 0)
+                            rows.Add(new("Message", "No SG/SE parameters available in this model."));
+                    }
+                    else
+                        rows.Add(new("Message", "No model is available for SG/SE setting attributes."));
+                }
+                else
+                {
+                    Field("Enabled", "Not read");
+                    Field("GOOSE ID", block.ControlId);
+                    Field("DataSet reference", block.DataSetReference);
+                    Field("Application ID", block.AppId);
+                    Field("Configuration revision", block.ConfRev);
+                    Field("Minimum time (ms)", block.MinimumTimeMs);
+                    Field("Maximum time (ms)", block.MaximumTimeMs);
+                    Field("Destination MAC", "Not read");
+                    Field("VLAN ID", "Not read");
+                    Field("VLAN priority", "Not read");
+                    Field("Needs commissioning", "Not read");
+                    Section("Information received in last GOOSE");
+                    rows.Add(new("Message", "No passive GOOSE reception evidence is linked to this model."));
+                    Section("Data");
+                    rows.Add(new("DataHeader", "Name", "Value"));
+                    var linkedGooseSet = FindDataSet(model, block.DataSetReference);
+                    if (linkedGooseSet is null)
+                        rows.Add(new("Message", "No verified DataSet member directory for this GoCB."));
+                    else
+                        foreach (var member in linkedGooseSet.Members)
+                            rows.Add(IedBrowserStructuredDetails.Member(member, model));
+                }
                 break;
             case LiveIedLogicalDeviceModel ld:
                 Section("Logical Device");
@@ -442,10 +510,8 @@ public static class IedBrowserPresentation
                 Field("Type confidence", obj.ConfidenceLevel);
                 Section("Data Attributes");
                 rows.Add(new("DataHeader", "Name", "Type"));
-                foreach (var attr in obj.Attributes)
-                    Member($"{attr.AttributePath} [{attr.FunctionalConstraint}]",
-                        string.IsNullOrWhiteSpace(attr.SclBType) ? attr.MmsType : attr.SclBType,
-                        source: attr.TypeSource);
+                foreach (var attr in IedBrowserStructuredDetails.AttributeRows(obj.Attributes, obj.Name))
+                    rows.Add(attr);
                 break;
             case LiveIedDataAttributeModel attr:
                 Section("Data Attribute");
