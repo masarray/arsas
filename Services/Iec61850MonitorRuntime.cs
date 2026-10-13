@@ -1829,7 +1829,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             SourceMode = sourceMode,
             Reason = reason,
             ReportId = trustReportEdge ? reportId ?? string.Empty : string.Empty,
-            ReportControlReference = trustReportEdge ? reportControlReference ?? string.Empty : string.Empty
+            ReportControlReference = trustReportEdge ? reportControlReference ?? string.Empty : string.Empty,
+            RoutedReportControlReferences = state.RoutedReportControlReferences
+                .OrderBy(reference => reference, StringComparer.OrdinalIgnoreCase).ToArray()
         };
         EventRaised?.Invoke(entry);
     }
