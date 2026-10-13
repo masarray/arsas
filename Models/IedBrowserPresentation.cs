@@ -23,6 +23,7 @@ public sealed class IedBrowserTreeRow : ObservableObject
         _loadChildren = loadChildren;
     }
 
+    public IedBrowserTreeRow? Parent { get; private set; }
     public string Key { get; }
     public string Title { get; }
     public string Kind { get; }
@@ -47,7 +48,13 @@ public sealed class IedBrowserTreeRow : ObservableObject
     }
     public string ToggleGlyph => IsExpanded ? "▾" : "▸";
     internal IReadOnlyList<IedBrowserTreeRow> GetChildren()
-        => _children ??= _loadChildren?.Invoke() ?? Array.Empty<IedBrowserTreeRow>();
+    {
+        if (_children is not null) return _children;
+        var children = _loadChildren?.Invoke() ?? Array.Empty<IedBrowserTreeRow>();
+        foreach (var child in children)
+            child.Parent = this;
+        return _children = children;
+    }
 }
 
 /// <summary>
@@ -74,6 +81,17 @@ public sealed class IedBrowserTreeProjection
 
     public IedBrowserTreeRow? FindVisible(string key)
         => Rows.FirstOrDefault(row => string.Equals(row.Key, key, StringComparison.Ordinal));
+
+    // A detail-grid object points to the identical cached node owned by the tree.
+    // Reveal ancestors on demand; unrelated LD/LN branches stay lazy.
+    public void Reveal(IedBrowserTreeRow row)
+    {
+        var ancestors = new Stack<IedBrowserTreeRow>();
+        for (var parent = row.Parent; parent != null; parent = parent.Parent)
+            ancestors.Push(parent);
+        while (ancestors.Count > 0)
+            Expand(ancestors.Pop());
+    }
 
     public void Toggle(IedBrowserTreeRow row)
     {
@@ -114,6 +132,8 @@ public sealed class IedBrowserTreeProjection
 public sealed record IedBrowserDetailRow(
     string Kind, string Name, string Value = "", int Depth = 0, string Source = "")
 {
+    public IedBrowserTreeRow? NavigateTo { get; init; }
+    public string Glyph => NavigateTo?.Glyph ?? "";
     public double IndentWidth => Depth * 16d;
     public string Tooltip => string.IsNullOrWhiteSpace(Source) ? Name : $"{Name} · {Source}";
 }
@@ -125,12 +145,12 @@ public sealed record IedBrowserDetailRow(
 public static class IedBrowserPresentation
 {
     public static IReadOnlyList<IedBrowserTreeRow> Roots(
-        string iedName, LiveIedModelDiscoveryDocument? model, IReadOnlyList<RcbExportRow> rcbs)
+        LiveIedModelDiscoveryDocument? model, IReadOnlyList<RcbExportRow> rcbs)
     {
-        const int childDepth = 2;
+        const int childDepth = 1;
         IedBrowserTreeRow Category(string name, string key,
             Func<IReadOnlyList<IedBrowserTreeRow>> children)
-            => new("category/" + key, name, "Category", 1, loadChildren: children);
+            => new("category/" + key, name, "Category", 0, loadChildren: children);
 
         var categories = new List<IedBrowserTreeRow>
         {
@@ -144,52 +164,52 @@ public static class IedBrowserPresentation
             Category("DataSets", "datasets", () => DataSetGroups(model?.DataSets)),
             Category("Data Model", "model", () =>
                 model?.LogicalDevices.Select(ld =>
-                    new IedBrowserTreeRow("model/ld/" + ld.MmsDomain, ld.MmsDomain, "LD", 2, ld,
+                    new IedBrowserTreeRow("model/ld/" + ld.MmsDomain, ld.MmsDomain, "LD", 1, ld,
                         () => ld.LogicalNodes.Select(ln =>
                             new IedBrowserTreeRow("model/ln/" + ld.MmsDomain + "/" + ln.Name,
-                                ln.Name, "LN", 3, ln,
+                                ln.Name, "LN", 2, ln,
                                 () => ln.DataObjects.Select(obj =>
-                                    new IedBrowserTreeRow("model/do/" + obj.Reference, obj.Name, "DO", 4, obj,
+                                    new IedBrowserTreeRow("model/do/" + obj.Reference, obj.Name, "DO", 3, obj,
                                         () => obj.Attributes.Select((attr, ordinal) =>
                                             new IedBrowserTreeRow("model/da/" + attr.MmsReference + "/" + ordinal,
-                                                attr.AttributePath, "DA", 5, attr)).ToArray()))
+                                                attr.AttributePath, "DA", 4, attr)).ToArray()))
                                     .ToArray())).ToArray())).ToArray()
                     ?? Array.Empty<IedBrowserTreeRow>())
         };
-        return [new IedBrowserTreeRow("ied", iedName, "IED", 0, model, () => categories)];
+        return categories; // ARSAS IED Explorer already owns device selection; never duplicate it.
     }
 
     private static IReadOnlyList<IedBrowserTreeRow> ReportGroups(IReadOnlyList<RcbExportRow> rcbs)
         => rcbs.GroupBy(row => LogicalDevice(row.Reference), StringComparer.Ordinal)
-            .Select(ld => new IedBrowserTreeRow("reports/ld/" + ld.Key, ld.Key, "LD", 2,
+            .Select(ld => new IedBrowserTreeRow("reports/ld/" + ld.Key, ld.Key, "LD", 1,
                 loadChildren: () => ld.GroupBy(row => LogicalNode(row.Reference), StringComparer.Ordinal)
                     .Select(ln => new IedBrowserTreeRow("reports/ln/" + ld.Key + "/" + ln.Key,
-                        ln.Key, "LN", 3,
+                        ln.Key, "LN", 2,
                         loadChildren: () => ln.Select(row =>
                             new IedBrowserTreeRow("reports/rcb/" + row.SelectionIdentity,
-                                row.Name, "RCB", 4, row)).ToArray())).ToArray())).ToArray();
+                                row.Name, "RCB", 3, row)).ToArray())).ToArray())).ToArray();
 
     private static IReadOnlyList<IedBrowserTreeRow> DataSetGroups(IReadOnlyList<LiveIedDataSetModel>? sets)
         => sets?.GroupBy(set => set.Domain, StringComparer.Ordinal)
-            .Select(ld => new IedBrowserTreeRow("datasets/ld/" + ld.Key, ld.Key, "LD", 2,
+            .Select(ld => new IedBrowserTreeRow("datasets/ld/" + ld.Key, ld.Key, "LD", 1,
                 loadChildren: () => ld.GroupBy(set => set.LogicalNode, StringComparer.Ordinal)
                     .Select(ln => new IedBrowserTreeRow("datasets/ln/" + ld.Key + "/" + ln.Key,
-                        ln.Key, "LN", 3,
+                        ln.Key, "LN", 2,
                         loadChildren: () => ln.Select(set =>
                             new IedBrowserTreeRow("datasets/set/" + set.Reference, set.Name,
-                                "DataSet", 4, set)).ToArray())).ToArray())).ToArray()
+                                "DataSet", 3, set)).ToArray())).ToArray())).ToArray()
             ?? Array.Empty<IedBrowserTreeRow>();
 
     private static IReadOnlyList<IedBrowserTreeRow> BlockGroups(
         IReadOnlyList<LiveIedControlBlockModel>? blocks, string kind)
         => blocks?.GroupBy(block => block.Domain, StringComparer.Ordinal)
-            .Select(ld => new IedBrowserTreeRow(kind + "/ld/" + ld.Key, ld.Key, "LD", 2,
+            .Select(ld => new IedBrowserTreeRow(kind + "/ld/" + ld.Key, ld.Key, "LD", 1,
                 loadChildren: () => ld.GroupBy(block => block.LogicalNode, StringComparer.Ordinal)
                     .Select(ln => new IedBrowserTreeRow(kind + "/ln/" + ld.Key + "/" + ln.Key,
-                        ln.Key, "LN", 3,
+                        ln.Key, "LN", 2,
                         loadChildren: () => ln.Select(block =>
                             new IedBrowserTreeRow(kind + "/" + block.Reference, block.Name,
-                                kind, 4, block)).ToArray())).ToArray())).ToArray()
+                                kind, 3, block)).ToArray())).ToArray())).ToArray()
             ?? Array.Empty<IedBrowserTreeRow>();
 
     private static string LogicalDevice(string reference)
