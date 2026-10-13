@@ -2358,7 +2358,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         foreach (var device in Devices)
         {
-            if (device.IsBusy)
+            if (device.IsBusy || device.IsBrowserReading)
                 device.AdvanceDiscoveryProgressAnimation();
         }
     }
