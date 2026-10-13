@@ -461,6 +461,8 @@ public partial class MainWindow
         if (sender is not Button { Tag: IedBrowserDetailRow detail } || !detail.HasChildren)
             return;
         _iedBrowserDetails.Toggle(detail);
+        _iedBrowserLastLiveVersion = -1;
+        RefreshIedBrowserVisibleValues();
         e.Handled = true;
     }
 
@@ -487,6 +489,8 @@ public partial class MainWindow
         // Quality/time and ordered dataset member rows drill down lazily in place,
         // preserving the selected IEC object and the surrounding report context.
         _iedBrowserDetails.Toggle(detail);
+        _iedBrowserLastLiveVersion = -1;
+        RefreshIedBrowserVisibleValues();
         e.Handled = true;
     }
 
