@@ -72,6 +72,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     public event Action<Iec61850PointSnapshot>? PointUpdated;
     public event Action<Iec61850EventEntry>? EventRaised;
 
+    public IReadOnlySet<string> GetActiveBrowserRcbReferences(string deviceId)
+        => _inner.GetActiveBrowserRcbReferences(deviceId);
+
     public int ConnectedDeviceCount => _inner.ConnectedDeviceCount;
     public int MonitoringDeviceCount => _inner.MonitoringDeviceCount;
 
