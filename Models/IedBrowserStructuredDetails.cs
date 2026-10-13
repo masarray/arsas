@@ -116,6 +116,6 @@ public static class IedBrowserStructuredDetails
     }
 
     private static IReadOnlyList<IedBrowserDetailRow> TimeChildren(int depth)
-        => ["LeapSecondsKnown", "ClockFailure", "ClockNotSynchronized", "TimeAccuracy"]
+        => new[] { "LeapSecondsKnown", "ClockFailure", "ClockNotSynchronized", "TimeAccuracy" }
             .Select(name => new IedBrowserDetailRow("Data", name, "Not read", depth)).ToArray();
 }
