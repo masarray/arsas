@@ -29,7 +29,7 @@ public sealed class P109StableVersionTitleRegressionTests
         Assert.Equal(expected, csproj.Descendants("Version").Single().Value);
         Assert.Equal(expected + ".0", props.Descendants("AssemblyVersion").Single().Value);
         Assert.Equal(expected + ".0", csproj.Descendants("AssemblyVersion").Single().Value);
-        Assert.Contains("\\"version\\": \\"1.6.41\\"", Read(".release/windows.json"), StringComparison.Ordinal);
+        Assert.Contains("\"version\": \"1.6.41\"", Read(".release/windows.json"), StringComparison.Ordinal);
     }
 
     private static string Read(string relative)
