@@ -1460,6 +1460,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     AddLog("WARN", device.Name,
                         $"Position preflight not ready: {signal.ObjectReference}; {signal.ControlInspectionEvidence}");
                     SetStatus($"{device.Name}: {signal.Name} cannot operate — check Diagnostics.");
+                    ShowControlShout(Iec61850ControlShout.FromLocalRejection(
+                        "live typed control preflight did not authorize operation"));
                     return;
                 }
             }
@@ -1470,6 +1472,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 AddLog("WARN", device.Name,
                     $"Position preflight failed: {signal.ObjectReference}; {ex.GetType().Name}: {ex.Message}");
                 SetStatus($"{device.Name}: {signal.Name} verification failed — check Diagnostics.");
+                ShowControlShout(Iec61850ControlShout.FromLocalRejection(
+                    "live control inspection failed"));
                 return;
             }
             finally
@@ -1489,6 +1493,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             AddLog("WARN", device?.Name ?? "IED",
                 $"Control confirmation stage rejected: {signal.ObjectReference}; reason={rejectionReason}.");
             SetStatus($"{device?.Name ?? "IED"}: {signal.Name} command not staged — {rejectionReason}.");
+            ShowControlShout(Iec61850ControlShout.FromLocalRejection(rejectionReason));
             return;
         }
 
@@ -1512,6 +1517,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             AddLog("WARN", device?.Name ?? "IED",
                 $"Confirm rejected: {signal.ObjectReference}; reason={rejectionReason}.");
             SetStatus($"{device?.Name ?? "IED"}: {signal.Name} confirmation rejected — {rejectionReason}.");
+            ShowControlShout(Iec61850ControlShout.FromLocalRejection(rejectionReason));
             return;
         }
 
@@ -1544,6 +1550,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (string.IsNullOrWhiteSpace(requestedValue))
         {
             signal.ControlLastResult = "Enter a setpoint value first.";
+            ShowControlShout(Iec61850ControlShout.FromLocalRejection("enter a setpoint value"));
             return;
         }
 
@@ -1558,6 +1565,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             AddLog("WARN", device?.Name ?? "IED",
                 $"Direct control rejected: {signal.ObjectReference}; reason={rejectionReason}.");
             SetStatus($"{device?.Name ?? "IED"}: {signal.Name} command rejected — {rejectionReason}.");
+            ShowControlShout(Iec61850ControlShout.FromLocalRejection(rejectionReason));
             return;
         }
 
