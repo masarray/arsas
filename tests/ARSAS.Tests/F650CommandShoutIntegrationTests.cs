@@ -24,10 +24,10 @@ public sealed class F650CommandShoutIntegrationTests
     }
 
     [Theory]
-    [InlineData("blocked-by-interlocking", "interlocking")]
-    [InlineData("blocked-by-synchrocheck", "synchrocheck")]
-    [InlineData("blocked-by-mode", "control mode")]
-    [InlineData("no-access-authority", "access authority")]
+    [InlineData("blocked-by-interlocking", "Blocked by interlock")]
+    [InlineData("blocked-by-synchrocheck", "Blocked by synchrocheck")]
+    [InlineData("blocked-by-mode", "Blocked by control mode")]
+    [InlineData("no-access-authority", "Authorization denied by IED")]
     public void ExplicitIedAddCause_IsShoutedAsEngineEvidence(string addCause, string message)
     {
         var result = new Iec61850ControlCommandResult
@@ -37,8 +37,9 @@ public sealed class F650CommandShoutIntegrationTests
             CompletionState = "Rejected"
         };
         var notice = Iec61850ControlShout.FromResult(result);
-        Assert.Contains(message, notice.Title, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("LastApplError AddCause", notice.Detail, StringComparison.Ordinal);
+        Assert.Equal(message, notice.Title);
+        Assert.Contains("IED AddCause", notice.Detail, StringComparison.Ordinal);
+        Assert.Equal(Iec61850ControlNoticeTone.Error, notice.Tone);
         Assert.DoesNotContain("exact cause not supplied", notice.Detail, StringComparison.OrdinalIgnoreCase);
     }
 
