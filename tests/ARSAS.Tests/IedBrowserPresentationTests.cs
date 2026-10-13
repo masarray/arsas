@@ -170,15 +170,15 @@ public sealed class IedBrowserPresentationTests
         Assert.Equal(["urcb01", "brcb01"],
             list.Where(r => r.Kind == "Object").Select(r => r.Name).ToArray());
         Assert.DoesNotContain(list, r => r.Name == "ReportIdOne");
-        var ld = Assert.Single(reports.GetChildren());
-        var ln = Assert.Single(ld.GetChildren());
+        var target = Assert.Single(list.Where(r => r.Name == "brcb01")).NavigateTo!;
+        var ln = target.Parent!;
+        var ld = ln.Parent!;
         Assert.Equal(2, IedBrowserPresentation.Details(ld, null, false)
             .Count(r => r.NavigateTo?.Kind == "RCB"));
         Assert.Equal(2, IedBrowserPresentation.Details(ln, null, false)
             .Count(r => r.NavigateTo?.Kind == "RCB"));
         var projection = new IedBrowserTreeProjection();
         projection.Reset(roots);
-        var target = Assert.Single(list.Where(r => r.Name == "brcb01")).NavigateTo!;
         projection.Reveal(target);
         Assert.Same(target, projection.FindVisible(target.Key));
         Assert.Same(ln, target.Parent);
