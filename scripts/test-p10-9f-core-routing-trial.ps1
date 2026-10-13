@@ -205,11 +205,34 @@ function Test-P109FCoreRoutingTrial {
         [bool]$positionStatus.fullDiscoveryFallbackForbidden -and
         [bool]$positionStatus.cyclicMmsProcessPollingForbidden
     )
+    # P10.9V is the exact CI-qualified, still-unaccepted successor to U.
+    # Its semantic resolver changes no reporting/Operate workflow. Preserve
+    # every historic P10.9T/U, commissioning and physical promotion guard.
+    $typedBsc = $Lock.p109VLiveBscAuthorityTrial
+    $typedBscHead = (
+        $positionHead -and $positionStatusHead -and
+        $null -ne $typedBsc -and
+        [string]$Lock.commit -ceq '036e2c00d83a0815b6160147b14ea05975057965' -and
+        [int]$Lock.sourcePullRequest -eq 169 -and
+        [string]$typedBsc.status -ceq 'engine-ci-success-consumer-ci-pending-not-physical' -and
+        [int]$typedBsc.enginePullRequest -eq 169 -and
+        [int]$typedBsc.consumerPullRequest -eq 543 -and
+        [string]$typedBsc.baseEngineCommit -ceq [string]$positionStatus.exactCommit -and
+        [string]$typedBsc.exactCommit -ceq '036e2c00d83a0815b6160147b14ea05975057965' -and
+        [long]$typedBsc.engineCiRun -eq 38328335496 -and
+        [bool]$typedBsc.staticSpcNeverOverridesExactLiveBsc -and
+        [bool]$typedBsc.typedTwoBitCtlValAndExactStepStatusRequired -and
+        [bool]$typedBsc.wrongOrCrossObjectStatusFailsClosed -and
+        [bool]$typedBsc.physicalQualificationRequired -and
+        [bool]$typedBsc.mainlinePromotionForbidden -and
+        [bool]$typedBsc.cyclicMmsProcessPollingForbidden
+    )
     $simple = $Lock.p109RSimpleCtlModelEditorTrial
     $simpleHead = (
         ([string]$Lock.commit -ceq 'd1dd8fc14e79c5de15fbc52d77aea48a14c7c02b' -or
          ([string]$Lock.commit -ceq '9d82523978c29dcbf38f60cbfb384c3b050eae7c' -and $positionHead) -or
-         ([string]$Lock.commit -ceq 'ad43399ed411cc72e6eb68b67e198db5e7b95381' -and $positionHead -and $positionStatusHead)) -and
+         ([string]$Lock.commit -ceq 'ad43399ed411cc72e6eb68b67e198db5e7b95381' -and $positionHead -and $positionStatusHead) -or
+         $typedBscHead) -and
         [int]$Lock.sourcePullRequest -eq 169 -and
         $zivIntegrityValid -and $null -ne $generic -and
         [string]$generic.exactCommit -ceq 'a43b9b4864a9565c02f544d4135fe157c2fac577' -and
