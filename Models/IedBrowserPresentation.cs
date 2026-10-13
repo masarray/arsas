@@ -176,6 +176,9 @@ public sealed record IedBrowserDetailRow(
     }
     public event PropertyChangedEventHandler? PropertyChanged;
     public string ValueReference { get; init; } = "";
+    // A typed child of a received q/t field; never treat the entire parent
+    // value text as this individual Boolean/time-quality bit.
+    public string EvidenceField { get; init; } = "";
     public string FunctionalConstraint { get; init; } = "";
     private IReadOnlyList<IedBrowserDetailRow>? _children;
     public IedBrowserTreeRow? NavigateTo { get; init; }
