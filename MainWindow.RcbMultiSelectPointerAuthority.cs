@@ -52,8 +52,8 @@ public partial class MainWindow
 
         // Preview input happens before Button.Click, therefore the legacy singular XAML
         // handler cannot open at all on this operator action.
-        e.Handled = true;
-        window.IedEditRcbMulti_Click(button, e);
+        // Release: mouse preview must fall through to the original button Click.
+        return;
     }
 
     private static void RcbExport_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -64,8 +64,8 @@ public partial class MainWindow
             return;
         }
 
-        e.Handled = true;
-        window.IedEditRcbMulti_Click(button, e);
+        // Release: keyboard activation must fall through to the original button Click.
+        return;
     }
 
     private static bool IsProductionRcbButton(Button button)
