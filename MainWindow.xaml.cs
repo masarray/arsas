@@ -2218,6 +2218,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             signal.ClearControlConfirmation();
             signal.ClearLiveControlAuthority();
+            signal.ControlInspectionBusy = false;
             signal.ControlModelText = "Auto-detect";
             signal.ControlInspectionEvidence = "Inspection pending for the current MMS association.";
             signal.ControlLastResult = "Inspection pending for the current MMS association.";
