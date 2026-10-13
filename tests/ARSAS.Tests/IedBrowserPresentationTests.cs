@@ -67,12 +67,12 @@ public sealed class IedBrowserPresentationTests
         var node = new IedBrowserTreeRow("reports/rcb", "brcb01", "RCB", 4, rcb);
         var details = IedBrowserPresentation.Details(node, model, connected: false);
         Assert.Equal(
-            ["Control Block attributes", "Information received in last Report", "Data"],
+            ["Control Block attributes", "Trigger options", "Optional fields", "Information received in last Report", "Data"],
             details.Where(r => r.Kind == "Section").Select(r => r.Name).ToArray());
         var members = details.Where(r => r.Kind == "Data").ToArray();
         Assert.Equal(2, members.Length);
-        Assert.Equal("1: LD/LLN0.A [ST]", members[0].Name);
-        Assert.Equal("2: LD/LLN0.A [ST]", members[1].Name);
+        Assert.Equal("LLN0.A [ST]", members[0].Name);
+        Assert.Equal("LLN0.A [ST]", members[1].Name);
         Assert.All(members, row => Assert.Equal("Not read", row.Value));
         Assert.Contains(details, row => row.Kind == "Message"
             && row.Name.Contains("No report-reception snapshot", StringComparison.Ordinal));
@@ -91,9 +91,9 @@ public sealed class IedBrowserPresentationTests
         };
         var node = new IedBrowserTreeRow("settings/sgcb", "SGCB", "SGCB", 4, sg);
         var details = IedBrowserPresentation.Details(node, null, connected: true);
-        Assert.Contains(details, x => x.Kind == "Section" && x.Name == "Setting Group attributes");
-        Assert.Contains(details, x => x.Kind == "Data" && x.Name == "NumOfSG" && x.Value == "Not read");
-        Assert.Contains(details, x => x.Kind == "Message" && x.Name.Contains("explicit supported engine read"));
+        Assert.Contains(details, x => x.Kind == "Section" && x.Name == "Control Block attributes");
+        Assert.Contains(details, x => x.Kind == "Property" && x.Name == "Number of Setting Groups" && x.Value == "Not read");
+        Assert.Contains(details, x => x.Kind == "Message" && x.Name.Contains("No model is available"));
     }
 
     [Fact]
@@ -255,4 +255,98 @@ public sealed class IedBrowserPresentationTests
         Assert.Single(dos);
         Assert.Equal("Beh", dos[0].Name);
     }
+    [Fact]
+    public void ReportFlags_UseEngineReservedBitMapping_AndUnknownDoesNotMeanDisabled()
+    {
+        // First BER octet is unused-bit count; canonical engine mapping owns bit numbering.
+        var triggers = IedBrowserReportFlags.TriggerOptions("0204");
+        Assert.False(triggers.Single(x => x.Label == "Data change").IsEnabled);
+        Assert.True(triggers.Single(x => x.Label == "General interrogation (GI)").IsEnabled);
+        var options = IedBrowserReportFlags.OptionalFields("067E80");
+        Assert.Equal(9, options.Count);
+        Assert.Contains(options, x => x.IsEnabled == true);
+        Assert.All(IedBrowserReportFlags.TriggerOptions("04FF"), x => Assert.Null(x.IsEnabled));
+        Assert.All(IedBrowserReportFlags.OptionalFields(""), x => Assert.Null(x.IsEnabled));
+        Assert.All(IedBrowserReportFlags.TriggerOptions("mystery-value"), x => Assert.Null(x.IsEnabled));
+        Assert.True(IedBrowserReportFlags.TriggerOptions("dchg, gi")
+            .Single(x => x.Label == "Data change").IsEnabled);
+    }
+
+    [Fact]
+    public void DetailProjection_ExpandsOnlySelectedDataAttribute_AndKeepsQualityUnknown()
+    {
+        var q = new LiveIedDataAttributeModel
+        {
+            ObjectReference = "LD/LLN0.Pos", AttributePath = "Pos.q",
+            FunctionalConstraint = "ST", MmsReference = "LD/LLN0$ST$Pos$q"
+        };
+        var stVal = new LiveIedDataAttributeModel
+        {
+            ObjectReference = "LD/LLN0.Pos", AttributePath = "Pos.stVal",
+            FunctionalConstraint = "ST", MmsReference = "LD/LLN0$ST$Pos$stVal"
+        };
+        var t = new LiveIedDataAttributeModel
+        {
+            ObjectReference = "LD/LLN0.Pos", AttributePath = "Pos.t",
+            FunctionalConstraint = "ST", MmsReference = "LD/LLN0$ST$Pos$t"
+        };
+        var rows = IedBrowserStructuredDetails.AttributeRows([stVal, q, t], "Pos");
+        Assert.Equal(3, rows.Count);
+        var projection = new IedBrowserDetailProjection();
+        projection.Reset(rows);
+        Assert.Equal(3, projection.Rows.Count);
+        var quality = rows.Single(r => r.Name.StartsWith("q "));
+        projection.Toggle(quality);
+        Assert.Equal(8, projection.Rows.Count);
+        Assert.Contains(projection.Rows, r => r.Name == "Validity" && r.Value == "Not read");
+        Assert.Contains(projection.Rows, r => r.Name == "Quality Details" && r.HasChildren);
+        projection.Toggle(quality);
+        Assert.Equal(3, projection.Rows.Count);
+        var timestamp = rows.Single(r => r.Name.StartsWith("t "));
+        projection.Toggle(timestamp);
+        Assert.Contains(projection.Rows, r => r.Name == "ClockNotSynchronized" && r.Value == "Not read");
+    }
+
+    [Fact]
+    public void SettingGroupAndGooseDetails_ExposeRealModelEvidenceWithoutInventedLiveValues()
+    {
+        var settings = new LiveIedDataAttributeModel {
+            ObjectReference = "LD/ATCC1.BndWid", AttributePath = "BndWid.setMag",
+            FunctionalConstraint = "SG", MmsReference = "LD/ATCC1$SG$BndWid$setMag"
+        };
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel
+            {
+                MmsDomain = "LD",
+                LogicalNodes = [new LiveIedLogicalNodeModel
+                {
+                    Name = "ATCC1", DataObjects = [new LiveIedDataObjectModel
+                    {
+                        Name = "BndWid", Reference = "LD/ATCC1.BndWid", Attributes = [settings]
+                    }]
+                }]
+            }],
+            DataSets = [new LiveIedDataSetModel
+            {
+                Reference = "LD/LLN0.Signals", Members = [new LiveIedDataSetMemberModel
+                {
+                    Index = 0, Reference = "LD/ATCC1.BndWid", FunctionalConstraint = "SG"
+                }]
+            }]
+        };
+        var sg = new LiveIedControlBlockModel { Kind = "SGCB", Domain = "LD",
+            Name = "SGCB", Reference = "LD/LLN0.SGCB" };
+        var sgRows = IedBrowserPresentation.Details(
+            new IedBrowserTreeRow("sg", "SGCB", "SGCB", 3, sg), model, true);
+        Assert.Contains(sgRows, r => r.Kind == "Section" && r.Name == "Settings");
+        Assert.Contains(sgRows, r => r.Kind == "Data" && r.Name.Contains("BndWid.setMag") && r.Value == "Not read");
+        var goose = new LiveIedControlBlockModel { Kind = "GOOSE", Domain = "LD",
+            Reference = "LD/LLN0.GO.cb1", DataSetReference = "LD/LLN0.Signals" };
+        var gRows = IedBrowserPresentation.Details(
+            new IedBrowserTreeRow("g", "cb1", "GoCB", 3, goose), model, true);
+        Assert.Contains(gRows, r => r.Kind == "Section" && r.Name == "Information received in last GOOSE");
+        Assert.Contains(gRows, r => r.Kind == "Data" && r.HasChildren && r.Value == "Not read");
+    }
+
 }
