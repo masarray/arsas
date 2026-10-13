@@ -160,7 +160,7 @@ internal static class MainWindowNavigationLayoutFix
 
             // Diagnostics owns a StackPanel containing its text plus the red alert
             // badge. Never replace that Content tree while changing layout density.
-            if (index < labels.Length)
+            if (index != 5 && index < labels.Length)
                 button.Content = labels[index];
 
             button.MinHeight = 40;
