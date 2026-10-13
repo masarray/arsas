@@ -2383,11 +2383,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             point.IsOffline = false;
             point.DeviceTimestamp = snapshot.DeviceTimestamp;
             point.SourceMode = snapshot.SourceMode;
-            // Runtime attaches RCB metadata ONLY after an actual routed
-            // report. Preserve that verified identity even when a later
-            // status snapshot wins the UI batch with the same process value.
-            if (!string.IsNullOrWhiteSpace(snapshot.ReportControlReference))
-                point.LastLiveReportControlReference = snapshot.ReportControlReference;
+            // The immutable runtime snapshot aggregates only RCBs that have
+            // actually delivered this signal on the current association.
+            // A non-value status snapshot cannot erase prior routed sources.
+            point.RoutedReportControlReferences = snapshot.RoutedReportControlReferences;
             point.Reason = snapshot.Reason;
             point.Status = snapshot.Status;
             point.Sequence = snapshot.Sequence;
