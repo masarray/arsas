@@ -51,12 +51,119 @@ public sealed class F650CommandShoutIntegrationTests
         Assert.Contains("Client rejected before MMS Operate", notice.Detail, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Shout_FromSuccess_DoesNotClaimControlRejection()
+    [Theory]
+    [InlineData("Closed [10]", "Position reached")]
+    [InlineData("Open [01]", "Position reached")]
+    [InlineData("Raise", "Tap movement confirmed")]
+    [InlineData("Lower", "Tap movement confirmed")]
+    public void ConfirmedFeedback_ProducesTruthfulSuccessToast(string requested, string expected)
     {
-        var result = new Iec61850ControlCommandResult { IsSuccess = true };
+        var result = new Iec61850ControlCommandResult
+        {
+            IsSuccess = true, ServiceAccepted = true, FeedbackConfirmed = true,
+            RequestedValue = requested, FeedbackValue = requested == "Raise" ? "12" : "Open [01]"
+        };
         var notice = Iec61850ControlShout.FromResult(result);
-        Assert.Equal("Command succeeded", notice.Title);
+        Assert.Equal(expected, notice.Title);
+        Assert.Equal(Iec61850ControlNoticeTone.Success, notice.Tone);
+        Assert.Contains("IED feedback", notice.Detail);
+    }
+
+    [Fact]
+    public void UnverifiedServiceSuccess_NeverClaimsPositionReached()
+    {
+        var result = new Iec61850ControlCommandResult
+        {
+            IsSuccess = true, ServiceAccepted = true,
+            FeedbackConfirmed = false, RequestedValue = "Closed [10]",
+            Stage = "Command accepted"
+        };
+        var notice = Iec61850ControlShout.FromResult(result);
+        Assert.Equal("Command accepted", notice.Title);
+        Assert.Equal(Iec61850ControlNoticeTone.Warning, notice.Tone);
+        Assert.Contains("not confirmed", notice.Detail);
+    }
+
+    [Fact]
+    public void BareSuccessFlag_DoesNotInventMmsCommand()
+    {
+        var notice = Iec61850ControlShout.FromResult(new() { IsSuccess = true });
+        Assert.Equal("Command outcome unverified", notice.Title);
+        Assert.NotEqual(Iec61850ControlNoticeTone.Success, notice.Tone);
+    }
+
+    [Fact]
+    public void AlreadyAtState_ReturnsNeutralNoticeAndNoSentClaim()
+    {
+        var notice = Iec61850ControlShout.FromResult(new()
+        {
+            IsSuccess = true, ServiceAccepted = false, FeedbackConfirmed = true,
+            CompletionState = "NotSent", Stage = "Already at requested state",
+            RequestedValue = "Open [01]", FeedbackValue = "Open [01]"
+        });
+        Assert.Equal("Already at requested state", notice.Title);
+        Assert.Equal(Iec61850ControlNoticeTone.Info, notice.Tone);
+        Assert.Contains("No control command was sent", notice.Detail);
+    }
+
+    [Fact]
+    public void FeedbackTimeout_DistinguishesServiceAcceptanceFromPositionReached()
+    {
+        var notice = Iec61850ControlShout.FromResult(new()
+        {
+            IsSuccess = false, ServiceAccepted = true,
+            FeedbackConfirmed = false, Stage = "Feedback timeout",
+            RequestedValue = "Raise", FeedbackValue = "11"
+        });
+        Assert.Equal("Feedback not confirmed", notice.Title);
+        Assert.Equal(Iec61850ControlNoticeTone.Warning, notice.Tone);
+    }
+
+    [Fact]
+    public void TestModeNeverClaimsPrimaryProcessMovement()
+    {
+        var notice = Iec61850ControlShout.FromResult(new()
+        {
+            IsSuccess = true, ServiceAccepted = true,
+            Stage = "Test command accepted", RequestedValue = "Closed [10]"
+        });
+        Assert.Equal("Test command accepted", notice.Title);
+        Assert.Equal(Iec61850ControlNoticeTone.Info, notice.Tone);
+        Assert.Contains("not verified", notice.Detail);
+    }
+
+    [Fact]
+    public void NegativeTerminationAlwaysRemainsError()
+    {
+        var notice = Iec61850ControlShout.FromResult(new()
+        {
+            ServiceAccepted = true, IsSuccess = false,
+            CommandTerminationReceived = true, PositiveTermination = false
+        });
+        Assert.Equal(Iec61850ControlNoticeTone.Error, notice.Tone);
+        Assert.DoesNotContain("reached", notice.Title, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void NoAccessAuthorityFromIedNeverInventsPhysicalLocalMode()
+    {
+        var notice = Iec61850ControlShout.FromResult(new()
+        {
+            IsSuccess = false, AddCause = "no-access-authority", CompletionState = "Rejected"
+        });
+        Assert.Equal("Authorization denied by IED", notice.Title);
+        Assert.Equal(Iec61850ControlNoticeTone.Error, notice.Tone);
+        Assert.Contains("AddCause", notice.Detail);
+        Assert.DoesNotContain("confirmed Local", notice.Detail, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void LocalPrewireBlockIsNotRepresentedAsIedRejection()
+    {
+        var notice = Iec61850ControlShout.FromLocalRejection("live model is not ready");
+        Assert.Equal("Command not sent", notice.Title);
+        Assert.Equal(Iec61850ControlNoticeTone.Warning, notice.Tone);
+        Assert.Contains("before dispatch", notice.Detail);
     }
 
     [Fact]
@@ -89,6 +196,12 @@ public sealed class F650CommandShoutIntegrationTests
         var code = Read("MainWindow.xaml.cs");
         Assert.Contains("x:Name=\"ControlShoutCard\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Panel.ZIndex=\"90\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsHitTestVisible=\"False\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("HorizontalAlignment=\"Center\" VerticalAlignment=\"Center\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"ControlShoutAccent\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"ControlShoutGlyph\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ShowControlShout(Iec61850ControlShout.FromResult(result));", code, StringComparison.Ordinal);
+        Assert.Contains("if (!result.IsSuccess)", code, StringComparison.Ordinal);
         Assert.Contains("Interval = TimeSpan.FromSeconds(8)", code, StringComparison.Ordinal);
         Assert.Contains("ControlShoutCard.Visibility = Visibility.Collapsed", code, StringComparison.Ordinal);
         Assert.Contains("Dispatcher.CheckAccess()", code, StringComparison.Ordinal);
