@@ -121,6 +121,7 @@ public partial class MainWindow
     {
         var rows = new List<RcbExportRow>();
         var mappedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var sourceReportIds = RcbSclReportIdCatalog.Read(device.SclSourcePath, inventory.ReportControls);
 
         if (availability != null)
         {
@@ -129,14 +130,16 @@ public partial class MainWindow
                 var descriptor = FindSourceDescriptor(snapshot, inventory.ReportControls);
                 if (descriptor == null) continue;
                 mappedKeys.Add(descriptor.SelectionKey);
-                rows.Add(CreateSourceBackedRow(descriptor, snapshot));
+                rows.Add(CreateSourceBackedRow(descriptor, snapshot, device.IsConnected,
+                    sourceReportIds.GetValueOrDefault(descriptor.SelectionKey, string.Empty)));
             }
         }
 
         foreach (var descriptor in inventory.ReportControls)
         {
             if (mappedKeys.Contains(descriptor.SelectionKey)) continue;
-            rows.Add(CreateSourceBackedRow(descriptor, snapshot: null, device.IsConnected));
+            rows.Add(CreateSourceBackedRow(descriptor, snapshot: null, device.IsConnected,
+                sourceReportIds.GetValueOrDefault(descriptor.SelectionKey, string.Empty)));
         }
         return rows;
     }
@@ -144,7 +147,8 @@ public partial class MainWindow
     private static RcbExportRow CreateSourceBackedRow(
         SclReportControlDescriptor descriptor,
         MmsRcbAvailabilitySnapshot? snapshot,
-        bool connected = true)
+        bool connected = true,
+        string sourceReportId = "")
     {
         var probeState = snapshot?.DataSetProbeState ?? MmsRcbDataSetProbeState.NotAttempted;
         var effectiveDataSetReference = RcbExportEvidencePolicy.EffectiveDataSetReference(
@@ -217,7 +221,8 @@ public partial class MainWindow
             Owner = snapshot?.Owner ?? string.Empty,
             HasEvidenceConflict = evidenceConflict,
             IsSourceBacked = true,
-            IsIndexedSource = descriptor.Indexed
+            IsIndexedSource = descriptor.Indexed,
+            Inspection = RcbInspectionEvidence.FromSource(sourceReportId, snapshot)
         };
     }
 
@@ -342,7 +347,8 @@ public partial class MainWindow
                     dataSet != null,
                     members),
                 Owner = snapshot?.Owner ?? string.Empty,
-                IsSourceBacked = false
+                IsSourceBacked = false,
+                Inspection = RcbInspectionEvidence.FromDiscovery(reportControl, snapshot)
             });
         }
         return rows;

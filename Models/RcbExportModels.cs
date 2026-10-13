@@ -32,6 +32,9 @@ public sealed class RcbExportRow : ObservableObject
     public bool HasEvidenceConflict { get; init; }
     public bool IsSourceBacked { get; init; }
     public bool IsIndexedSource { get; init; }
+    public RcbInspectionEvidence Inspection { get; init; } = new();
+    public string ReportIdDisplay => Inspection.ReportIdDisplay;
+    public string ReportIdSource => Inspection.ReportIdSource;
 
     public bool IsSelected { get => _isSelected; set => Set(ref _isSelected, value); }
 

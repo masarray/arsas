@@ -122,7 +122,7 @@ public partial class MainWindow
                         latestAvailability,
                         cancellationToken)
                     .ConfigureAwait(true);
-            })
+            }, device)
         {
             Owner = this
         };
