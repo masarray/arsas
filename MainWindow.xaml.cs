@@ -95,6 +95,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             RaiseWorkspaceCounts();
             TryAutoExpandCommandPanelOnce(_selectedDevice);
             ApplyExplorerLiveSearchFilter();
+            if (MainTabs?.SelectedIndex == IedBrowserWorkspaceIndex)
+                RefreshIedBrowser();
             // ctlModel inspection is preloaded independently of the Expander. Avoid
             // changing the row set after the panel's first frame has already painted.
         }
@@ -788,7 +790,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (sender is not Button button || !int.TryParse(button.Tag?.ToString(), out var index))
             return;
-        index = Math.Clamp(index, 0, NativeFatWorkspaceIndex);
+        index = Math.Clamp(index, 0, IedBrowserWorkspaceIndex);
         MainTabs.SelectedIndex = index;
         UpdateNavigationVisuals(index, animate: true);
     }
@@ -802,10 +804,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (MainTabs.SelectedIndex != GooseSubscriberTabIndex)
             _pendingIedGooseAutoStart = null;
 
+        if (MainTabs.SelectedIndex != 2)
+            HideEventDetails();
+        if (MainTabs.SelectedIndex != IedBrowserWorkspaceIndex)
+            CancelIedBrowserRead();
         if (MainTabs.SelectedIndex == 2)
         {
             foreach (var device in Devices)
                 device.ClearUnreadEvents();
+        }
+        else if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
+        {
+            RefreshIedBrowser();
         }
         else if (MainTabs.SelectedIndex == 4)
         {
@@ -826,18 +836,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (WorkflowPillTranslate == null)
             return;
 
-        index = Math.Clamp(index, 0, NativeFatWorkspaceIndex);
+        index = Math.Clamp(index, 0, IedBrowserWorkspaceIndex);
 
         // MainWindow is the single owner of all seven Engineering destinations.
         // Keep the same density used by the proven workstation shell while allowing
         // enough width for the Explorer label and the new canonical FAT sibling.
         var availableWidth = ActualWidth > 0d ? ActualWidth : 1480d;
-        var shellWidth = availableWidth >= 1700d ? 1085d : availableWidth >= 1380d ? 995d : 805d;
+        var shellWidth = availableWidth >= 1700d ? 1150d : availableWidth >= 1380d ? 1010d : 842d;
         WorkflowNavShell.Width = shellWidth;
         WorkflowNavShell.MinWidth = shellWidth;
 
         var contentWidth = Math.Max(0d, shellWidth - WorkflowNavShell.Padding.Left - WorkflowNavShell.Padding.Right);
-        var cellWidth = contentWidth / 7d;
+        var cellWidth = contentWidth / 8d;
         WorkflowPill.Width = Math.Max(1d, cellWidth - 2d);
         var target = index * cellWidth;
 
@@ -863,7 +873,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             NavAlarmButton,
             NavGooseButton,
             NavDiagnosticsButton,
-            NavNativeFatButton
+            NavNativeFatButton,
+            NavIedBrowserButton
         };
         for (var i = 0; i < buttons.Length; i++)
             buttons[i].Foreground = i == index ? Brushes.White : new SolidColorBrush(Color.FromRgb(71, 84, 103));

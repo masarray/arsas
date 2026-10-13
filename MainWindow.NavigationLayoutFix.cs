@@ -21,9 +21,9 @@ internal static class MainWindowNavigationLayoutFix
 {
     private const double WideBreakpoint = 1700d;
     private const double MediumBreakpoint = 1380d;
-    private const double WideNavWidth = 990d;
-    private const double MediumNavWidth = 900d;
-    private const double CompactNavWidth = 720d;
+    private const double WideNavWidth = 1150d;
+    private const double MediumNavWidth = 1010d;
+    private const double CompactNavWidth = 842d;
 
     private static readonly string[] FullLabels =
     [
@@ -31,7 +31,10 @@ internal static class MainWindowNavigationLayoutFix
         "Live Monitor",
         "Event Log",
         "Alarm",
-        "GOOSE Subscriber"
+        "GOOSE Subscriber",
+        "Diagnostics",
+        "FAT",
+        "IED Browser"
     ];
 
     private static readonly string[] CompactLabels =
@@ -40,7 +43,10 @@ internal static class MainWindowNavigationLayoutFix
         "Live",
         "Events",
         "Alarm",
-        "GOOSE"
+        "GOOSE",
+        "Diagnostics",
+        "FAT",
+        "Browser"
     ];
 
     [ModuleInitializer]
@@ -92,7 +98,7 @@ internal static class MainWindowNavigationLayoutFix
         if (sender is not MainWindow window || e.Source is not Button button)
             return;
 
-        if (button.Name is not ("NavExplorerButton" or "NavLiveButton" or "NavEventsButton" or "NavAlarmButton" or "NavGooseButton" or "NavDiagnosticsButton" or "NavNativeFatButton"))
+        if (button.Name is not ("NavExplorerButton" or "NavLiveButton" or "NavEventsButton" or "NavAlarmButton" or "NavGooseButton" or "NavDiagnosticsButton" or "NavNativeFatButton" or "NavIedBrowserButton"))
             return;
 
         // A repeated click on the already-selected tab does not raise SelectionChanged,
@@ -181,7 +187,8 @@ internal static class MainWindowNavigationLayoutFix
             window.FindName("NavAlarmButton") as Button,
             window.FindName("NavGooseButton") as Button,
             window.FindName("NavDiagnosticsButton") as Button,
-            window.FindName("NavNativeFatButton") as Button
+            window.FindName("NavNativeFatButton") as Button,
+            window.FindName("NavIedBrowserButton") as Button
         ];
 
     private static void UpdatePillGeometry(MainWindow window, double shellWidth)
@@ -190,9 +197,9 @@ internal static class MainWindowNavigationLayoutFix
             return;
 
         // Border padding owns 10 px horizontally. The nav grid itself is divided into
-        // seven equal star columns, so this is the exact width used by each button cell.
+        // eight equal star columns, so this is the exact width used by each button cell.
         var contentWidth = Math.Max(0d, shellWidth - 10d);
-        var cellWidth = contentWidth / 7d;
+        var cellWidth = contentWidth / 8d;
         pill.Width = Math.Max(1d, cellWidth - 2d);
         pill.Height = 36;
         pill.HorizontalAlignment = HorizontalAlignment.Left;
@@ -224,8 +231,8 @@ internal static class MainWindowNavigationLayoutFix
         if (contentWidth <= 0d)
             contentWidth = Math.Max(0d, shell.Width - shell.Padding.Left - shell.Padding.Right);
 
-        var cellWidth = contentWidth / 7d;
-        var target = Math.Clamp(tabs.SelectedIndex, 0, 6) * cellWidth;
+        var cellWidth = contentWidth / 8d;
+        var target = Math.Clamp(tabs.SelectedIndex, 0, 7) * cellWidth;
         pill.Width = Math.Max(1d, cellWidth - 2d);
 
         translate.BeginAnimation(TranslateTransform.XProperty, null);
