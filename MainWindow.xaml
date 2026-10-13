@@ -1806,7 +1806,7 @@
                     </DataTemplate>
                     <DataTemplate x:Key="BrowserObjectRow">
                         <Border MinHeight="23" BorderBrush="#E0E7EF" BorderThickness="0,0,0,1"
-                                Background="{Binding RelativeSource={RelativeSource AncestorType=ListViewItem}, Path=Background}">
+                                Background="Transparent">
                             <Grid Margin="7,1,7,1">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="30"/>
@@ -1952,18 +1952,29 @@
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
                                 <Border Grid.Row="0" Background="#E8EFF7" BorderBrush="#CBD7E4"
-                                        BorderThickness="1,1,1,0" Padding="8,6">
-                                    <StackPanel>
-                                        <TextBlock x:Name="IedBrowserObjectPath" Text="Select an object in the left tree"
-                                                   FontSize="11.2" FontWeight="SemiBold" Foreground="#2B405A"
-                                                   TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock x:Name="IedBrowserDetailStatus" Text="Cached engineering model · read-only navigation"
-                                                   FontSize="10" Foreground="#62758A"
-                                                   TextTrimming="CharacterEllipsis"/>
-                                    </StackPanel>
+                                        BorderThickness="1,1,1,0" Padding="6,5">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button x:Name="IedBrowserBackButton" Grid.Column="0" Content="← Back"
+                                                IsEnabled="False" Click="IedBrowserBack_Click"
+                                                Style="{StaticResource SoftButton}" Margin="0,0,8,0"
+                                                Padding="6,2" FontSize="11"
+                                                ToolTip="Return to the previous Browser folder"/>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock x:Name="IedBrowserObjectPath" Text="Select an object in the left tree"
+                                                       FontSize="11.2" FontWeight="SemiBold" Foreground="#2B405A"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock x:Name="IedBrowserDetailStatus" Text="Cached engineering model · read-only navigation"
+                                                       FontSize="10" Foreground="#62758A"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </Grid>
                                 </Border>
                                 <ListView x:Name="IedBrowserDetailList" Grid.Row="1"
-                                          MouseDoubleClick="IedBrowserDetail_DoubleClick"
+                                          SelectionMode="Single"
                                           AlternationCount="2"
                                           BorderBrush="#CBD7E4" BorderThickness="1"
                                           Background="White" HorizontalContentAlignment="Stretch"
@@ -1972,15 +1983,41 @@
                                           VirtualizingPanel.VirtualizationMode="Recycling">
                                     <ListView.ItemContainerStyle>
                                         <Style TargetType="ListViewItem">
+                                            <EventSetter Event="MouseDoubleClick" Handler="IedBrowserDetailItem_DoubleClick"/>
                                             <Setter Property="Padding" Value="0"/>
                                             <Setter Property="Margin" Value="0"/>
                                             <Setter Property="BorderThickness" Value="0"/>
                                             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                                            <Setter Property="Focusable" Value="False"/>
+                                            <Setter Property="Focusable" Value="True"/>
                                             <Setter Property="Background" Value="#FFFFFF"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ListViewItem">
+                                                        <Border x:Name="SelectionChrome"
+                                                                Background="{TemplateBinding Background}"
+                                                                SnapsToDevicePixels="True">
+                                                            <ContentPresenter HorizontalAlignment="Stretch"
+                                                                              VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="SelectionChrome" Property="Background"
+                                                                        Value="#E5F0FB"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsSelected" Value="True">
+                                                                <Setter TargetName="SelectionChrome" Property="Background"
+                                                                        Value="#C7E1FB"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsSelected" Value="True">
+                                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
                                             <Style.Triggers>
                                                 <Trigger Property="ItemsControl.AlternationIndex" Value="1">
-                                                    <Setter Property="Background" Value="#EEF2F7"/>
+                                                    <Setter Property="Background" Value="#F0F4F9"/>
                                                 </Trigger>
                                                 <DataTrigger Binding="{Binding Kind}" Value="Object">
                                                     <Setter Property="Cursor" Value="Hand"/>
