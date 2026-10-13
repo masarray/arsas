@@ -21,6 +21,8 @@ public partial class MainWindow
     private readonly IedBrowserDetailProjection _iedBrowserDetails = new();
     private readonly IedBrowserNavigationTrail _iedBrowserNavigation = new();
     private bool _iedBrowserSyncingSelection;
+    private IedBrowserTreeRow? _iedBrowserRenderedPage;
+    private bool? _iedBrowserRenderedConnected;
     private bool _iedBrowserForceRefresh;
     private Iec61850MonitorDevice? _iedBrowserCachedDevice;
     private LiveIedModelDiscoveryDocument? _iedBrowserCachedModel;
@@ -152,6 +154,8 @@ public partial class MainWindow
         if (device == null)
         {
             _iedBrowserCachedDevice = null;
+            _iedBrowserRenderedPage = null;
+            _iedBrowserRenderedConnected = null;
             _iedBrowserNavigation.SelectFromTree(null);
             IedBrowserBackButton.IsEnabled = false;
             _iedBrowserTree.Reset([]);
@@ -254,8 +258,12 @@ public partial class MainWindow
             try { IedBrowserTreeGrid.SelectedItem = selected; }
             finally { _iedBrowserSyncingSelection = false; }
         }
-        RenderIedBrowserSelection(_iedBrowserNavigation.Current ?? IedBrowserTreeGrid.SelectedItem as IedBrowserTreeRow,
-            model, device.IsConnected);
+        var currentPage = _iedBrowserNavigation.Current ?? IedBrowserTreeGrid.SelectedItem as IedBrowserTreeRow;
+        // Fast path for routine device notifications: preserve the selected row,
+        // focused cell, expanded q/t descendants and right-pane scroll offset.
+        if (changed || !ReferenceEquals(currentPage, _iedBrowserRenderedPage) ||
+            _iedBrowserRenderedConnected != device.IsConnected)
+            RenderIedBrowserSelection(currentPage, model, device.IsConnected);
     }
 
     private void IedBrowserTreeToggle_Click(object sender, RoutedEventArgs e)
@@ -349,6 +357,8 @@ public partial class MainWindow
     private void RenderIedBrowserSelection(
         IedBrowserTreeRow? row, LiveIedModelDiscoveryDocument? model, bool connected)
     {
+        _iedBrowserRenderedPage = row;
+        _iedBrowserRenderedConnected = connected;
         IedBrowserBackButton.IsEnabled = _iedBrowserNavigation.CanGoBack;
         if (row == null)
         {
