@@ -37,6 +37,7 @@ public partial class MainWindow
     private Iec61850MonitorDevice? _iedBrowserFileOwner;
     private bool _iedBrowserFilesLoaded;
     private bool _iedBrowserFilesLoading;
+    private CancellationTokenSource? _iedBrowserFileReadOperation;
     private CancellationTokenSource? _iedBrowserReadOperation;
 
     internal void OpenIedBrowserRcb(Iec61850MonitorDevice device)
@@ -52,6 +53,8 @@ public partial class MainWindow
         if (_iedBrowserFilesLoading || _iedBrowserReadOperation != null)
             return;
         _iedBrowserFilesLoading = true;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        _iedBrowserFileReadOperation = cts;
         var source = device;
         IedBrowserDetailStatus.Text = "Reading IEC 61850 FileDirectory…";
         try
@@ -61,15 +64,16 @@ public partial class MainWindow
             var files = await Task.Run(async () =>
             {
                 await using var transfer = new ArIED61850Tester.Services.FaultRecordTransferClient();
-                await transfer.ConnectAsync(source.IpAddress, source.Port);
-                var catalog = await transfer.DiscoverAsync(remoteDirectory: null);
+                await transfer.ConnectAsync(source.IpAddress, source.Port, cts.Token);
+                var catalog = await transfer.DiscoverAsync(remoteDirectory: null, cts.Token);
                 return catalog.Records.SelectMany(record => record.Files)
                     .Select(file => new IedBrowserRemoteFile(file.Name, file.RemotePath,
                         file.SizeBytes, file.LastModifiedUtc))
                     .DistinctBy(file => file.RemotePath, StringComparer.OrdinalIgnoreCase)
                     .OrderBy(file => file.Name, StringComparer.OrdinalIgnoreCase).ToArray();
-            }).ConfigureAwait(true);
-            if (!ReferenceEquals(source, SelectedDevice) ||
+            }, cts.Token).ConfigureAwait(true);
+            if (cts.IsCancellationRequested ||
+                !ReferenceEquals(source, SelectedDevice) ||
                 !ReferenceEquals(source, _iedBrowserFileOwner) || !source.IsConnected)
                 return;
             _iedBrowserRemoteFiles = files;
@@ -78,12 +82,24 @@ public partial class MainWindow
             RefreshIedBrowser();
             IedBrowserDetailStatus.Text = $"FileDirectory · {files.Length:N0} remote record file(s)";
         }
+        catch (OperationCanceledException)
+        {
+            if (ReferenceEquals(source, SelectedDevice))
+                IedBrowserDetailStatus.Text = "FileDirectory read cancelled or timed out.";
+        }
         catch (Exception ex)
         {
             if (ReferenceEquals(source, SelectedDevice))
                 IedBrowserDetailStatus.Text = "FileDirectory read failed: " + ex.Message;
         }
-        finally { _iedBrowserFilesLoading = false; }
+        finally
+        {
+            if (ReferenceEquals(_iedBrowserFileReadOperation, cts))
+            {
+                _iedBrowserFileReadOperation = null;
+                _iedBrowserFilesLoading = false;
+            }
+        }
     }
 
     private void IedBrowserBrowseFiles_Click(object sender, RoutedEventArgs e)
@@ -331,6 +347,9 @@ public partial class MainWindow
         CancelIedBrowserRead();
         if (_iedBrowserObservedDevice != null)
             _iedBrowserObservedDevice.PropertyChanged -= IedBrowserDevice_PropertyChanged;
+        _iedBrowserFileReadOperation?.Cancel();
+        _iedBrowserFileReadOperation = null;
+        _iedBrowserFilesLoading = false;
         _iedBrowserObservedDevice = device;
         _iedBrowserSnapshot = null;
         _iedBrowserFileOwner = device;
@@ -361,6 +380,7 @@ public partial class MainWindow
         // A disconnected/replaced association can never supply "live" inspector values.
         if (_iedBrowserObservedDevice?.IsConnected != true)
         {
+            _iedBrowserFileReadOperation?.Cancel();
             if (_iedBrowserFilesLoaded)
             {
                 _iedBrowserFilesLoaded = false;
