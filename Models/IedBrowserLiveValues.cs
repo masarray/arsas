@@ -66,7 +66,17 @@ public sealed class IedBrowserLiveValues
     public bool TryGet(string reference, string fc, out IedBrowserObservedValue evidence)
     {
         if (_values.TryGetValue(Key(reference, fc), out evidence!)) return true;
-        // No FC inference: a given IEC path can have separate ST/MX/SG meanings.
+        // Canonical process points are frequently identified by their DO,
+        // whereas a browser DA may be the exact child stVal. These aliases
+        // are unambiguous IEC value companions, not a prefix-wide guess.
+        var normalized = CanonicalReference(reference);
+        foreach (var suffix in new[] { ".stVal", ".mag.f", ".instMag.f", ".cVal.mag.f" })
+        {
+            if (_values.TryGetValue(Key(normalized + suffix, fc), out evidence!)) return true;
+            if (normalized.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
+                _values.TryGetValue(Key(normalized[..^suffix.Length], fc), out evidence!))
+                return true;
+        }
         evidence = null!;
         return false;
     }
