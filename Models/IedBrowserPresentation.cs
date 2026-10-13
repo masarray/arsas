@@ -29,7 +29,10 @@ public sealed class IedBrowserTreeRow : ObservableObject
     public string Kind { get; }
     public int Depth { get; }
     public object? Payload { get; }
-    public bool HasChildren => _loadChildren is not null;
+    // The left Data Model tree intentionally stops at LN. The lazy DO/DA
+    // factories remain available to the right-hand object browser only.
+    public bool HasChildren => _loadChildren is not null &&
+        !Key.StartsWith("model/ln/", StringComparison.Ordinal);
     public Visibility ChevronVisibility => HasChildren ? Visibility.Visible : Visibility.Hidden;
     public double IndentWidth => Depth * 14d;
     public string Glyph => Kind switch
@@ -300,7 +303,8 @@ public static class IedBrowserPresentation
             "category/settings" or "category/datasets";
         var dataModelContainer = node.Key == "category/model" ||
             node.Key.StartsWith("model/ld/", StringComparison.Ordinal) ||
-            node.Key.StartsWith("model/ln/", StringComparison.Ordinal);
+            node.Key.StartsWith("model/ln/", StringComparison.Ordinal) ||
+            node.Key.StartsWith("model/do/", StringComparison.Ordinal);
         var fileRoot = node.Key == "category/files";
         if (!serviceRoot && !serviceCategory && !dataModelContainer && !fileRoot)
             return false;
