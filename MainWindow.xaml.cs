@@ -1283,7 +1283,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void IedStopAction_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetDeviceFromButton(sender, out var device) || device.IsBusy) return;
+        // Stop is a preemptive safety lane even while Connect/Start is busy.
+        if (!TryGetDeviceFromButton(sender, out var device)) return;
         SelectedDevice = device;
         if (device.IsDemo)
         {
@@ -1294,7 +1295,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // One Stop = one complete disconnect. The independent pause-monitor
         // action remains available elsewhere; the IED card never requires
         // a second Stop to release its MMS association.
-        if (device.IsConnected || device.IsMonitoring)
+        if (device.IsBusy || device.IsConnected || device.IsMonitoring)
             await StopDeviceConnectionAsync(device);
     }
 
@@ -2181,11 +2182,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (OperationCanceledException)
         {
-            SetStatus($"{device.Name}: monitor start cancelled.");
+            EnsureOfflinePointProjection(device);
+            MarkDevicePointsInactive(device, disconnected: !device.IsConnected);
+            SetStatus($"{device.Name}: monitor start cancelled; offline signal catalog retained.");
             return false;
         }
         catch (Exception ex)
         {
+            EnsureOfflinePointProjection(device);
+            MarkDevicePointsInactive(device, disconnected: !device.IsConnected);
             AddLog("ERROR", device.Name, ex.Message);
             SetStatus($"{device.Name}: monitor start failed. Diagnostics is marked with !.");
             MarkDiagnosticAlert();
