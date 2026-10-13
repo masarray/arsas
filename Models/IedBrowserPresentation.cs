@@ -227,6 +227,77 @@ public static class IedBrowserPresentation
         return cut < 0 ? suffix : suffix[..cut];
     }
 
+    // Right pane is an object browser for containers, not a generic metadata form.
+    // Flatten only LD/LN wrappers for service categories (Reports, GOOSE, etc.).
+    // Data Model retains LD -> LN -> DO navigation, so a 100k-DO model is not
+    // eagerly represented when its category or LD is selected.
+    private static bool TryBuildObjectList(
+        IedBrowserTreeRow node, List<IedBrowserDetailRow> rows)
+    {
+        var serviceCategory = node.Key.StartsWith("reports/", StringComparison.Ordinal) ||
+                              node.Key.StartsWith("GoCB/", StringComparison.Ordinal) ||
+                              node.Key.StartsWith("SGCB/", StringComparison.Ordinal) ||
+                              node.Key.StartsWith("datasets/", StringComparison.Ordinal);
+        var serviceRoot = node.Key is "category/reports" or "category/goose" or
+            "category/settings" or "category/datasets";
+        var dataModelContainer = node.Key == "category/model" ||
+            node.Key.StartsWith("model/ld/", StringComparison.Ordinal) ||
+            node.Key.StartsWith("model/ln/", StringComparison.Ordinal);
+        var fileRoot = node.Key == "category/files";
+        if (!serviceRoot && !serviceCategory && !dataModelContainer && !fileRoot)
+            return false;
+
+        var isCategory = node.Kind == "Category";
+        if (isCategory)
+            rows.Add(new("Section", node.Title));
+        else
+            rows.Add(new IedBrowserDetailRow("Object", node.Title, Source: node.Key)
+            {
+                NavigateTo = node
+            });
+
+        var objects = serviceRoot || serviceCategory
+            ? ServiceObjects(node).ToArray()
+            : node.GetChildren();
+
+        if (objects.Count == 0)
+        {
+            rows.Add(new("Message", "No objects available in the current SCL/discovery model."));
+            return true;
+        }
+        foreach (var child in objects)
+        {
+            var descriptor = child.Payload switch
+            {
+                RcbExportRow rcb when rcb.Availability !=
+                    AR.Iec61850.Mms.MmsRcbOperationalAvailability.Unknown => rcb.StatusText,
+                LiveIedLogicalNodeModel ln => ln.LnClass,
+                LiveIedDataSetModel ds => $"{ds.MemberCount} members",
+                LiveIedFileModel file => file.SizeBytes is { } bytes ? $"{bytes:N0} bytes" : "",
+                _ => ""
+            };
+            // Keep exact reference as tooltip/evidence; list glyph and short
+            // name follow the navigation tree, never use RptID as RCB identity.
+            rows.Add(new IedBrowserDetailRow("Object", child.Title, descriptor,
+                Source: child.Key) { NavigateTo = child });
+        }
+        return true;
+    }
+
+    private static IEnumerable<IedBrowserTreeRow> ServiceObjects(IedBrowserTreeRow parent)
+    {
+        foreach (var child in parent.GetChildren())
+        {
+            if (child.Kind is "LD" or "LN")
+            {
+                foreach (var leaf in ServiceObjects(child))
+                    yield return leaf;
+            }
+            else
+                yield return child;
+        }
+    }
+
     public static IReadOnlyList<IedBrowserDetailRow> Details(
         IedBrowserTreeRow node, LiveIedModelDiscoveryDocument? model, bool connected)
     {
@@ -236,6 +307,9 @@ public static class IedBrowserPresentation
             => rows.Add(new("Property", name, value?.ToString() is { Length: > 0 } v ? v : "—", Source: source));
         void Member(string name, string value = "Not read", int depth = 0, string source = "Model")
             => rows.Add(new("Data", name, value, depth, source));
+
+        if (TryBuildObjectList(node, rows))
+            return rows;
 
         switch (node.Payload)
         {
