@@ -2198,6 +2198,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         // credit a future planning attempt after transport loss.
         session.CurrentStaticParityAttemptId = Guid.Empty;
         var wasConnected = session.Device.IsConnected;
+        // A new MMS association has new RCB ownership; report names observed
+        // on the *old* socket cannot be credited to the recovered session.
+        if (wasConnected)
+        {
+            foreach (var state in session.States.Values)
+                state.RoutedReportControlReferences.Clear();
+        }
         session.Device.IsConnected = false;
         session.Device.HasReportStream = false;
         session.Device.ReportPulseActive = false;
