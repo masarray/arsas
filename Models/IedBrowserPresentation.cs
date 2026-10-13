@@ -179,6 +179,8 @@ public sealed record IedBrowserDetailRow(
     // A typed child of a received q/t field; never treat the entire parent
     // value text as this individual Boolean/time-quality bit.
     public string EvidenceField { get; init; } = "";
+    // Schema-qualified presentation type; never infer a q/t bit from a DO name.
+    public string EvidenceKind { get; init; } = "";
     public string FunctionalConstraint { get; init; } = "";
     private IReadOnlyList<IedBrowserDetailRow>? _children;
     public IedBrowserTreeRow? NavigateTo { get; init; }
