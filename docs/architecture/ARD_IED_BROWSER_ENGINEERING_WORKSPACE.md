@@ -4,7 +4,7 @@
 **Version / date:** v1.0 — 2026-10-13  
 **Status:** PROPOSED / DESIGN ONLY (no GUI or engine change authorized by this document)  
 **Owner:** ARSAS consumer; ARIEC61850 protocol engine  
-**Reference:** user-supplied reference workstation interaction recording private user-supplied workflow recording, ARSAS screenshot private user-supplied interface screenshot, reference supplier reference workstation behavior.  
+**Design inputs:** private engineering workflow recording and ARSAS interface screenshot supplied by the maintainer; current ARSAS/ARIEC61850 code audit.
 **Language:** Engineering specification in English; operator-facing copy should use concise, familiar IEC 61850 terminology.
 
 ## 0. Decision record / audit provenance
@@ -43,7 +43,7 @@
 - No silent auto-discovery, auto-reconnect, RCB enable/disable, reservation, GI, GOOSE publisher enable, control operate, setting-group switching, SG/SE write, or file transfer on selection.
 - No change in static DataSet **report-only** acquisition authority or fallback policy.
 - No invented unknown live values, missing report fields, SGCB timestamps or GOOSE addressing.
-- No pixel copying or third-party control/code extraction from reference workstation.
+- No copying third-party proprietary controls, assets or source code.
 
 ## 2. UX shell decision (DEC-01)
 
@@ -362,4 +362,3 @@ Each milestone is its own focused PR with deterministic tests and **before/after
 - [ARIEC61850 live discovery contracts](https://github.com/masarray/ARIEC61850/blob/main/src/AR.Iec61850/Discovery/LiveIedModelDiscoveryModels.cs)
 - [ARIEC61850 exact DataSet directory](https://github.com/masarray/ARIEC61850/blob/main/src/AR.Iec61850/Mms/MmsDataSetDirectory.cs)
 - [ARIEC61850 value detail rows](https://github.com/masarray/ARIEC61850/blob/main/apps/AR.Iec61850.IedDiscovery/ViewModels/DetailRows.cs)
-- [
