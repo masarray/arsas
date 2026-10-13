@@ -441,4 +441,126 @@ public sealed class IedBrowserPresentationTests
         Assert.False(trail.CanGoBack);
     }
 
+    [Fact]
+    public void SharedValueLedger_UsesExactFcAndModelReference_AcrossReportAndRead()
+    {
+        var values = new IedBrowserLiveValues();
+        values.Publish("LD/CSWI1.Pos.stVal", "ST", "on", "good",
+            "2026-10-13 10:00", "Report");
+        Assert.True(values.TryGet("LD/CSWI1.Pos", "ST", out var byDo));
+        Assert.Equal("on", byDo.Value);
+        Assert.False(values.TryGet("LD/CSWI1.Pos", "MX", out _));
+
+        values.Publish("LD/CSWI1$ST$Pos$q", "ST", "good", "", "",
+            "MMS Read");
+        Assert.True(values.TryGet("LD/CSWI1.Pos.q", "ST", out var quality));
+        Assert.Equal("good", quality.Value);
+
+        var versionBefore = values.Version;
+        values.Clear(); // MMS association cannot borrow values from a previous session.
+        Assert.True(values.Version > versionBefore);
+        Assert.False(values.TryGet("LD/CSWI1.Pos.stVal", "ST", out _));
+    }
+
+    [Fact]
+    public void ReportIngress_IsAuthoritative_AndUpdatesSharedLedgerWithoutChangingEventHistory()
+    {
+        var values = new IedBrowserLiveValues();
+        var point = new Iec61850MonitorPoint
+        {
+            IecReference = "LD/CSWI1.Pos", FunctionalConstraint = "ST",
+            QualityReference = "LD/CSWI1.Pos.q", TimestampReference = "LD/CSWI1.Pos.t",
+            Value = "off", Quality = "good", DeviceTimestamp = "10:25:09",
+            SourceMode = "StaticBRCB", IsOffline = false
+        };
+        values.PublishReport(point, observedReportIngress: true);
+        Assert.True(values.TryGet("LD/CSWI1.Pos", "ST", out var status));
+        Assert.Equal("off", status.Value);
+        Assert.Equal("Report", status.Source);
+        Assert.True(values.TryGet("LD/CSWI1.Pos.q", "ST", out var quality));
+        Assert.Equal("good", quality.Value);
+        Assert.True(values.TryGet("LD/CSWI1.Pos.t", "ST", out var time));
+        Assert.Equal("10:25:09", time.Value);
+        point.IsOffline = true;
+        values.PublishReport(point, observedReportIngress: true);
+        Assert.Equal("off", status.Value);
+    }
+
+    [Fact]
+    public void ReadPlan_FollowsExactDataSetMembers_AndReadAllIncludesUnselectedModelLeaves()
+    {
+        var op = new LiveIedDataAttributeModel
+        {
+            ObjectReference = "LD/CSWI1.Pos", AttributePath = "Pos.stVal",
+            MmsReference = "LD/CSWI1$ST$Pos$stVal", FunctionalConstraint = "ST"
+        };
+        var measured = new LiveIedDataAttributeModel
+        {
+            ObjectReference = "LD/MMXU1.TotW", AttributePath = "TotW.mag.f",
+            MmsReference = "LD/MMXU1$MX$TotW$mag$f", FunctionalConstraint = "MX"
+        };
+        var control = new LiveIedDataAttributeModel
+        {
+            ObjectReference = "LD/CSWI1.Pos", AttributePath = "Pos.Oper.ctlVal",
+            MmsReference = "LD/CSWI1$CO$Pos$Oper$ctlVal", FunctionalConstraint = "CO"
+        };
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel
+            {
+                MmsDomain = "LD", LogicalNodes =
+                [
+                    new LiveIedLogicalNodeModel
+                    {
+                        Name = "CSWI1", DataObjects = [new LiveIedDataObjectModel
+                        {
+                            Name = "Pos", Reference = "LD/CSWI1.Pos", Attributes = [op, control]
+                        }]
+                    },
+                    new LiveIedLogicalNodeModel
+                    {
+                        Name = "MMXU1", DataObjects = [new LiveIedDataObjectModel
+                        {
+                            Name = "TotW", Reference = "LD/MMXU1.TotW", Attributes = [measured]
+                        }]
+                    }
+                ]
+            }],
+            DataSets = [new LiveIedDataSetModel
+            {
+                Reference = "LD/LLN0.DS",
+                Members = [new LiveIedDataSetMemberModel
+                {
+                    Index = 0, Reference = "LD/CSWI1.Pos", FunctionalConstraint = "ST"
+                }]
+            }]
+        };
+        var dsNode = new IedBrowserTreeRow("datasets/set", "DS", "DataSet", 2, model.DataSets[0]);
+        var subset = IedBrowserReadPlan.Build(model, dsNode, readAll: false);
+        Assert.Single(subset);
+        Assert.Equal("ST", subset[0].FunctionalConstraint);
+        Assert.Equal("LD/CSWI1$ST$Pos$stVal", subset[0].Reference);
+        var all = IedBrowserReadPlan.Build(model, null, readAll: true);
+        Assert.Equal(2, all.Count);
+        Assert.DoesNotContain(all, x => x.FunctionalConstraint == "CO");
+    }
+
+    [Fact]
+    public void BrowserValueRows_NotifyOnlyOnRealValueChanges()
+    {
+        var row = new IedBrowserDetailRow("Data", "CSWI1.Pos", "Not read")
+        {
+            ValueReference = "LD/CSWI1.Pos", FunctionalConstraint = "ST"
+        };
+        var notifications = 0;
+        row.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(IedBrowserDetailRow.Value)) notifications++;
+        };
+        row.Value = "off";
+        row.Value = "off";
+        row.Value = "on";
+        Assert.Equal(2, notifications);
+    }
+
 }
