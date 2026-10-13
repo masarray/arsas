@@ -119,9 +119,9 @@ public partial class ControlModelWriteWindow : Window
         try
         {
             var result = await ConfigureExactModelAsync(expected, selected.Model, _cancellation.Token);
-            if (!result.ReadbackVerified || result.AfterModel != selected.Model)
+            if (!result.ReadbackVerified || (int)result.AfterModel != (int)selected.Model)
             {
-                ShowWriteFailure(result.Detail, selected.Model, result.AfterModel, result.ReadbackVerified);
+                ShowWriteFailure(result.Detail, (int)selected.Model, (int)result.AfterModel, result.ReadbackVerified);
                 return;
             }
 
@@ -146,8 +146,8 @@ public partial class ControlModelWriteWindow : Window
     }
 
     private void ShowWriteFailure(string? detail,
-        Iec61850ControlModelKind? expected = null,
-        Iec61850ControlModelKind? actual = null, bool readbackVerified = false)
+        int? expected = null,
+        int? actual = null, bool readbackVerified = false)
     {
         if (_cancellation.IsCancellationRequested || !IsLoaded)
             return;
@@ -156,7 +156,7 @@ public partial class ControlModelWriteWindow : Window
             ? "IED did not provide a verified write result."
             : detail.Trim();
         if (readbackVerified && expected.HasValue && actual.HasValue && expected != actual)
-            reason = $"Readback mismatch • Expected {(int)expected.Value}, actual {(int)actual.Value}. {reason}";
+            reason = $"Readback mismatch • Expected {expected.Value}, actual {actual.Value}. {reason}";
 
         FailureDetails.Text = reason;
         FailureDetails.Visibility = Visibility.Visible;
