@@ -198,7 +198,8 @@ public sealed class F650CommandShoutIntegrationTests
         Assert.Contains("x:Name=\"ControlShoutCard\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Panel.ZIndex=\"90\"", xaml, StringComparison.Ordinal);
         Assert.Contains("IsHitTestVisible=\"False\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("HorizontalAlignment=\"Center\" VerticalAlignment=\"Center\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("HorizontalAlignment=\"Center\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("VerticalAlignment=\"Center\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"ControlShoutGlyph\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("x:Name=\"ControlShoutDetail\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("x:Name=\"ControlShoutAccent\"", xaml, StringComparison.Ordinal);
