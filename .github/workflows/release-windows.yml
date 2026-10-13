@@ -76,9 +76,9 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           $proofPath = Join-Path $env:RUNNER_TEMP 'arsas-release-ready.json'
-          python .\ArIED61850Tester\scripts\wait-ci-release-ready.py `
+          python ./ArIED61850Tester/scripts/wait-ci-release-ready.py `
             --repository $env:GITHUB_REPOSITORY `
-            --source-dir .\ArIED61850Tester `
+            --source-dir ./ArIED61850Tester `
             --source-sha $env:GITHUB_SHA `
             --ref-type $env:GITHUB_REF_TYPE `
             --ref-name $env:GITHUB_REF_NAME `
