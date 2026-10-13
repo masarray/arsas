@@ -19,6 +19,8 @@ public partial class MainWindow
     private const int IedBrowserWorkspaceIndex = 7;
     private readonly IedBrowserTreeProjection _iedBrowserTree = new();
     private readonly IedBrowserDetailProjection _iedBrowserDetails = new();
+    private readonly IedBrowserNavigationTrail _iedBrowserNavigation = new();
+    private bool _iedBrowserSyncingSelection;
     private bool _iedBrowserForceRefresh;
     private Iec61850MonitorDevice? _iedBrowserCachedDevice;
     private LiveIedModelDiscoveryDocument? _iedBrowserCachedModel;
@@ -150,6 +152,8 @@ public partial class MainWindow
         if (device == null)
         {
             _iedBrowserCachedDevice = null;
+            _iedBrowserNavigation.SelectFromTree(null);
+            IedBrowserBackButton.IsEnabled = false;
             _iedBrowserTree.Reset([]);
             IedBrowserTreeGrid.ItemsSource = _iedBrowserTree.Rows;
             _iedBrowserDetails.Reset([]);
@@ -244,9 +248,14 @@ public partial class MainWindow
             var selected = priorKey == null ? null : _iedBrowserTree.FindVisible(priorKey);
             selected ??= roots.FirstOrDefault(r => r.Key == "category/reports");
             selected ??= roots.FirstOrDefault();
-            IedBrowserTreeGrid.SelectedItem = selected;
+            // Source identity changed: previous folder objects are no longer authoritative.
+            _iedBrowserNavigation.SelectFromTree(selected);
+            _iedBrowserSyncingSelection = true;
+            try { IedBrowserTreeGrid.SelectedItem = selected; }
+            finally { _iedBrowserSyncingSelection = false; }
         }
-        RenderIedBrowserSelection(IedBrowserTreeGrid.SelectedItem as IedBrowserTreeRow, model, device.IsConnected);
+        RenderIedBrowserSelection(_iedBrowserNavigation.Current ?? IedBrowserTreeGrid.SelectedItem as IedBrowserTreeRow,
+            model, device.IsConnected);
     }
 
     private void IedBrowserTreeToggle_Click(object sender, RoutedEventArgs e)
@@ -260,10 +269,11 @@ public partial class MainWindow
 
     private void IedBrowserTree_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!ReferenceEquals(sender, IedBrowserTreeGrid))
+        if (!ReferenceEquals(sender, IedBrowserTreeGrid) || _iedBrowserSyncingSelection)
             return;
+        _iedBrowserNavigation.SelectFromTree(IedBrowserTreeGrid.SelectedItem as IedBrowserTreeRow);
         var model = SelectedDevice?.LiveDiscoveryModel ?? SelectedDevice?.SclWorkspace?.DesignModel;
-        RenderIedBrowserSelection(IedBrowserTreeGrid.SelectedItem as IedBrowserTreeRow,
+        RenderIedBrowserSelection(_iedBrowserNavigation.Current,
             model, SelectedDevice?.IsConnected == true);
     }
     private void IedBrowserDetailToggle_Click(object sender, RoutedEventArgs e)
@@ -274,35 +284,66 @@ public partial class MainWindow
         e.Handled = true;
     }
 
-    private void IedBrowserDetail_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private void IedBrowserDetailItem_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        if (!ReferenceEquals(sender, IedBrowserDetailList) ||
-            IedBrowserDetailList.SelectedItem is not IedBrowserDetailRow detail)
+        // The ListViewItem is the click source: never open a previously selected row
+        // when an operator double-clicks whitespace or another row.
+        if (sender is not System.Windows.Controls.ListViewItem { DataContext: IedBrowserDetailRow detail })
             return;
 
-        if (detail.HasChildren)
+        if (detail.NavigateTo is { } target)
         {
-            _iedBrowserDetails.Toggle(detail);
+            if (!_iedBrowserNavigation.Enter(target))
+                return;
+            SynchronizeIedBrowserTree(target);
+            var model = SelectedDevice?.LiveDiscoveryModel ?? SelectedDevice?.SclWorkspace?.DesignModel;
+            RenderIedBrowserSelection(target, model, SelectedDevice?.IsConnected == true);
             e.Handled = true;
             return;
         }
 
-        if (detail.NavigateTo is not { } target)
+        if (!detail.HasChildren)
             return;
-        // Double-click goes one semantic level deeper; single-click only selects.
-        // The target object retains its exact canonical IEC identity.
-        _iedBrowserTree.Reveal(target);
-        IedBrowserTreeGrid.SelectedItem = target;
-        IedBrowserTreeGrid.ScrollIntoView(target);
-        var model = SelectedDevice?.LiveDiscoveryModel ?? SelectedDevice?.SclWorkspace?.DesignModel;
-        RenderIedBrowserSelection(target, model, SelectedDevice?.IsConnected == true);
+        // Quality/time and ordered dataset member rows drill down lazily in place,
+        // preserving the selected IEC object and the surrounding report context.
+        _iedBrowserDetails.Toggle(detail);
         e.Handled = true;
     }
 
+    private void IedBrowserBack_Click(object sender, RoutedEventArgs e)
+    {
+        var prior = _iedBrowserNavigation.Back();
+        if (prior == null) return;
+        SynchronizeIedBrowserTree(prior);
+        var model = SelectedDevice?.LiveDiscoveryModel ?? SelectedDevice?.SclWorkspace?.DesignModel;
+        RenderIedBrowserSelection(prior, model, SelectedDevice?.IsConnected == true);
+    }
+
+    private void SynchronizeIedBrowserTree(IedBrowserTreeRow page)
+    {
+        // DO/DA pages live exclusively in the right pane; their owning LN stays
+        // selected in the left tree, avoiding deep or very long Explorer branches.
+        var anchor = page;
+        if (page.Key.StartsWith("model/do/", StringComparison.Ordinal) ||
+            page.Key.StartsWith("model/da/", StringComparison.Ordinal))
+        {
+            while (anchor.Kind != "LN" && anchor.Parent is not null)
+                anchor = anchor.Parent;
+        }
+
+        _iedBrowserTree.Reveal(anchor);
+        var visible = _iedBrowserTree.FindVisible(anchor.Key);
+        if (visible is null) return;
+        _iedBrowserSyncingSelection = true;
+        try { IedBrowserTreeGrid.SelectedItem = visible; }
+        finally { _iedBrowserSyncingSelection = false; }
+        IedBrowserTreeGrid.ScrollIntoView(visible);
+    }
 
     private void RenderIedBrowserSelection(
         IedBrowserTreeRow? row, LiveIedModelDiscoveryDocument? model, bool connected)
     {
+        IedBrowserBackButton.IsEnabled = _iedBrowserNavigation.CanGoBack;
         if (row == null)
         {
             IedBrowserObjectPath.Text = "Select an object in the left tree";
