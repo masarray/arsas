@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.Windows;
 using AR.Iec61850.Discovery;
 
@@ -57,13 +56,11 @@ public sealed class IedBrowserTreeRow : ObservableObject
 /// </summary>
 public sealed class IedBrowserTreeProjection
 {
-    public ObservableCollection<IedBrowserTreeRow> Rows { get; } = new();
+    public BulkObservableCollection<IedBrowserTreeRow> Rows { get; } = new();
 
     public void Reset(IReadOnlyList<IedBrowserTreeRow> roots, IReadOnlySet<string>? restoreExpanded = null)
     {
-        Rows.Clear();
-        foreach (var root in roots)
-            Rows.Add(root);
+        Rows.ReplaceAll(roots);
 
         if (restoreExpanded is null) return;
         // Re-expand only paths visible in this revision of the immutable model.
@@ -90,8 +87,10 @@ public sealed class IedBrowserTreeProjection
         var index = Rows.IndexOf(row);
         if (index < 0) return;
         row.IsExpanded = true;
-        foreach (var child in row.GetChildren())
-            Rows.Insert(++index, child);
+        var updated = Rows.ToList();
+        updated.InsertRange(index + 1, row.GetChildren());
+        // One WPF collection reset rather than one routed update per expanded child.
+        Rows.ReplaceAll(updated);
     }
 
     public void Collapse(IedBrowserTreeRow row)
@@ -103,9 +102,12 @@ public sealed class IedBrowserTreeProjection
         while (descendant < Rows.Count && Rows[descendant].Depth > row.Depth)
         {
             Rows[descendant].IsExpanded = false;
-            Rows.RemoveAt(descendant);
+            descendant++;
         }
+        var updated = Rows.ToList();
+        updated.RemoveRange(index + 1, descendant - index - 1);
         row.IsExpanded = false;
+        Rows.ReplaceAll(updated);
     }
 }
 
@@ -163,8 +165,8 @@ public static class IedBrowserPresentation
                 loadChildren: () => ld.GroupBy(row => LogicalNode(row.Reference), StringComparer.Ordinal)
                     .Select(ln => new IedBrowserTreeRow("reports/ln/" + ld.Key + "/" + ln.Key,
                         ln.Key, "LN", 3,
-                        loadChildren: () => ln.Select((row, i) =>
-                            new IedBrowserTreeRow("reports/rcb/" + row.SelectionIdentity + "/" + i,
+                        loadChildren: () => ln.Select(row =>
+                            new IedBrowserTreeRow("reports/rcb/" + row.SelectionIdentity,
                                 row.Name, "RCB", 4, row)).ToArray())).ToArray())).ToArray();
 
     private static IReadOnlyList<IedBrowserTreeRow> DataSetGroups(IReadOnlyList<LiveIedDataSetModel>? sets)
