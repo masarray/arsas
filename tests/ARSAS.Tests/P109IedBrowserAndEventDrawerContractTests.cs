@@ -13,13 +13,13 @@ public sealed class P109IedBrowserAndEventDrawerContractTests
         Assert.Contains("x:Name=\"IedBrowserTab\" Header=\"IED Browser\"", xaml);
         Assert.Contains("x:Name=\"NavIedBrowserButton\" Grid.Column=\"7\"", xaml);
         Assert.Contains("x:Name=\"NativeFatTab\" Header=\"FAT\"", xaml);
-        Assert.Contains("x:Name=\"IedBrowserRcbGrid\"", xaml);
-        Assert.Contains("x:Name=\"IedBrowserDataSetGrid\"", xaml);
-        Assert.Contains("x:Name=\"IedBrowserModelTree\"", xaml);
-        Assert.Contains("x:Name=\"IedBrowserSignalsGrid\"", xaml);
+        Assert.Contains("x:Name=\"IedBrowserTreeGrid\"", xaml);
+        Assert.Contains("x:Name=\"IedBrowserDetailList\"", xaml);
+        Assert.Contains("GridSplitter Grid.Column=\"1\"", xaml);
+        Assert.DoesNotContain("x:Name=\"IedBrowserSections\"", xaml);
         Assert.Contains("MainTabs.SelectedIndex = IedBrowserWorkspaceIndex", code);
         Assert.Contains("BuildRcbExportRows(device, sourceInventory, _iedBrowserSnapshot)", code);
-        Assert.Contains("IedBrowserSections.SelectedIndex = 0", code);
+        Assert.Contains("IedBrowserPresentation.Roots(", code);
     }
 
     [Fact]
