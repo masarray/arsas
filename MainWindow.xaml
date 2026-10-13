@@ -1776,6 +1776,26 @@
                                        TextWrapping="Wrap"/>
                         </Border>
                     </DataTemplate>
+                    <DataTemplate x:Key="BrowserObjectRow">
+                        <Border MinHeight="23" BorderBrush="#E0E7EF" BorderThickness="0,0,0,1"
+                                Background="{Binding RelativeSource={RelativeSource AncestorType=ListViewItem}, Path=Background}">
+                            <Grid Margin="7,1,7,1">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="30"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{Binding Glyph}" FontSize="10"
+                                           Foreground="#1A71C1" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="{Binding Name}" ToolTip="{Binding Tooltip}"
+                                           FontSize="11.2" Foreground="#273C55" TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="2" Text="{Binding Value}" ToolTip="{Binding Value}"
+                                           FontSize="10.5" Foreground="#63768A" Margin="10,0,0,0"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
                     <Style x:Key="BrowserDetailContentStyle" TargetType="ContentControl">
                         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                         <Setter Property="ContentTemplate" Value="{StaticResource BrowserPropertyRow}"/>
@@ -1791,6 +1811,9 @@
                             </DataTrigger>
                             <DataTrigger Binding="{Binding Kind}" Value="Message">
                                 <Setter Property="ContentTemplate" Value="{StaticResource BrowserMessageRow}"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Kind}" Value="Object">
+                                <Setter Property="ContentTemplate" Value="{StaticResource BrowserObjectRow}"/>
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
@@ -1831,21 +1854,8 @@
                             </Grid.ColumnDefinitions>
                             <!-- A flat, row-virtualized DataGrid behaves as a hierarchical TreeGrid. -->
                             <Grid Grid.Column="0">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="*"/>
-                                </Grid.RowDefinitions>
-                                <Border Grid.Row="0" Background="#EAF0F7" Padding="7,6"
-                                        BorderBrush="#D5DEE9" BorderThickness="1,1,1,0">
-                                    <StackPanel>
-                                        <TextBlock Text="IEDs" FontWeight="SemiBold" FontSize="11.2"
-                                                   Foreground="#344860" Margin="0,0,0,4"/>
-                                        <ComboBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice, Mode=TwoWay}"
-                                                  DisplayMemberPath="Name" Height="26" FontSize="11.4"
-                                                  ToolTip="Select an existing IED session; selection never connects"/>
-                                    </StackPanel>
-                                </Border>
-                                <DataGrid x:Name="IedBrowserTreeGrid" Grid.Row="1"
+                                <!-- Selection belongs exclusively to the outer IED Explorer. -->
+                                <DataGrid x:Name="IedBrowserTreeGrid"
                                           AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
                                           BorderBrush="#D5DEE9" BorderThickness="1" RowHeaderWidth="0"
                                           FontSize="11.2" RowHeight="24" ColumnHeaderHeight="24"
@@ -1907,6 +1917,8 @@
                                     </StackPanel>
                                 </Border>
                                 <ListView x:Name="IedBrowserDetailList" Grid.Row="1"
+                                          SelectionChanged="IedBrowserDetail_SelectionChanged"
+                                          AlternationCount="2"
                                           BorderBrush="#CBD7E4" BorderThickness="1"
                                           Background="White" HorizontalContentAlignment="Stretch"
                                           ScrollViewer.CanContentScroll="True"
@@ -1919,6 +1931,15 @@
                                             <Setter Property="BorderThickness" Value="0"/>
                                             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                                             <Setter Property="Focusable" Value="False"/>
+                                            <Setter Property="Background" Value="#FFFFFF"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                                                    <Setter Property="Background" Value="#EEF2F7"/>
+                                                </Trigger>
+                                                <DataTrigger Binding="{Binding Kind}" Value="Object">
+                                                    <Setter Property="Cursor" Value="Hand"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
                                         </Style>
                                     </ListView.ItemContainerStyle>
                                     <ListView.ItemTemplate>
