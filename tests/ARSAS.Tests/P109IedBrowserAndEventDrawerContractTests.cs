@@ -85,6 +85,27 @@ public sealed class P109IedBrowserAndEventDrawerContractTests
         Assert.DoesNotContain("Header=\"Raw Reason\"", xaml);
     }
 
+
+    [Fact]
+    public void BrowserReadDuringMonitoring_IsIsolatedAndProgressDoesNotStopStaticReporting()
+    {
+        var xaml = Read("MainWindow.xaml");
+        var code = Read("MainWindow.IedBrowser.cs");
+        var device = Read("Models/MonitorModels.cs");
+        var service = Read("Services/IedBrowserIsolatedReadService.cs");
+        Assert.Contains("IedBrowserIsolatedReadService.ReadAsync(", code);
+        Assert.Contains("device.IsBrowserReading = true", code);
+        Assert.DoesNotContain("device.IsBusy = true", code.Split("private async void IedBrowserReadValues_Click")[1]
+            .Split("private void RefreshIedBrowserReadButtons")[0]);
+        Assert.Contains("IsBrowserReading", device);
+        Assert.Contains("Binding IsBrowserReading", xaml);
+        Assert.Contains("ReadValueAsync(", service);
+        Assert.DoesNotContain("StartReport", service);
+        Assert.DoesNotContain("WriteAsync(", service);
+        Assert.Contains("BrowseIedBrowserFilesAsync", code);
+        Assert.Contains("FaultRecordTransferClient", code);
+    }
+
     private static string Read(string path)
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
