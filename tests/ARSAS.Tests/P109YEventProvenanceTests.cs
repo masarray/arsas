@@ -25,7 +25,7 @@ public sealed class P109YEventProvenanceTests
     }
 
     [Fact]
-    public void DecodedReportIdWinsOverRcbNameAndGenericStaticMode()
+    public void RoutingRcbWinsOverDistinctWireReportIdAndGenericStaticMode()
     {
         var entry = new Iec61850EventEntry
         {
@@ -35,7 +35,8 @@ public sealed class P109YEventProvenanceTests
             ReportControlReference = "BCUGELD/LLN0$RP$Unbuffer01"
         };
         Assert.Equal("Spont", entry.EventCause);
-        Assert.Equal("urcbA01", entry.AcquisitionShort);
+        Assert.Equal("Unbuffer01", entry.AcquisitionShort);
+        Assert.Equal("urcbA01", entry.ReportId);
         Assert.Equal("BCUGELD/LLN0$RP$Unbuffer01", entry.ReportControlReference);
     }
 
@@ -43,7 +44,7 @@ public sealed class P109YEventProvenanceTests
     [InlineData("ZIVLD/LLN0$BR$Buffer01", "Buffer01")]
     [InlineData("ZIVLD/LLN0.BR.Buffer02", "Buffer02")]
     [InlineData("F650LD/LLN0$RP$urcbA01", "urcbA01")]
-    public void MissingReportIdFallsBackToActualMatchedRcbName(string reference, string expected)
+    public void ActualMatchedRcbNameDisplaysWithoutWireReportId(string reference, string expected)
     {
         var entry = new Iec61850EventEntry
         {
@@ -51,6 +52,78 @@ public sealed class P109YEventProvenanceTests
             ReportControlReference = reference
         };
         Assert.Equal(expected, entry.AcquisitionShort);
+    }
+
+    [Fact]
+    public void ZivAvrRptIdIsNotTheActualRcbObjectName()
+    {
+        var e = new Iec61850EventEntry
+        {
+            DeviceName = "ZIVAVR",
+            SourceMode = "Static DataSet: StaticBrcb",
+            ReportId = "Rpt_0",
+            ReportControlReference = "ZIVAVRLD1/LLN0.BR.brcb01"
+        };
+        Assert.Equal("brcb01", e.AcquisitionShort);
+        Assert.Equal("Rpt_0", e.ReportId);
+        Assert.Equal("ZIVAVRLD1/LLN0.BR.brcb01", e.ReportControlReference);
+    }
+
+    [Fact]
+    public void ReportIdWithoutRcbCannotInventAnRcbName()
+    {
+        var e = new Iec61850EventEntry
+        {
+            SourceMode = "Static DataSet: StaticBrcb",
+            ReportId = "Rpt_0"
+        };
+        Assert.Equal("BRCB", e.AcquisitionShort);
+        Assert.DoesNotContain("Rpt_0", e.AcquisitionShort);
+    }
+
+    [Fact]
+    public void ExplorerShowsOnlyProvenRcbOrExplicitPendingAndOffline()
+    {
+        var p = new Iec61850MonitorPoint { SourceMode = "Static DataSet: StaticBrcb" };
+        Assert.Equal("RCB pending", p.AcquisitionShort);
+        p.LastLiveReportControlReference = "ZIVAVRLD1/LLN0.BR.brcb01";
+        Assert.Equal("brcb01", p.AcquisitionShort);
+        p.LastLiveReportControlReference = "ZIVAVRLD1/LLN0.BR.brcb02";
+        Assert.Equal("brcb02", p.AcquisitionShort);
+        p.IsOffline = true;
+        Assert.Equal("Offline", p.AcquisitionShort);
+        p.IsOffline = false;
+        p.SourceMode = "MMS polling";
+        Assert.Equal("MMS Polling", p.AcquisitionShort);
+    }
+
+    [Fact]
+    public void ExplorerAndGlobalGridUseTheSameSnapshotRcbAuthority()
+    {
+        string Read(string path)
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null)
+            {
+                var candidate = Path.Combine(dir.FullName, path);
+                if (File.Exists(candidate)) return File.ReadAllText(candidate);
+                dir = dir.Parent;
+            }
+            throw new FileNotFoundException(path);
+        }
+
+        var xaml = Read("MainWindow.xaml");
+        var ui = Read("MainWindow.xaml.cs");
+        var runtime = Read("Services/Iec61850MonitorRuntime.cs");
+        Assert.Equal(3, xaml.Split(
+            "Header=\"Acquisition\" Binding=\"{Binding AcquisitionShort}\"",
+            StringSplitOptions.None).Length - 1);
+        Assert.DoesNotContain("Header=\"Acquisition\" Binding=\"{Binding SourceMode}\"", xaml);
+        Assert.Contains("snapshot.IsReportTraffic && !string.IsNullOrWhiteSpace(snapshot.ReportControlReference)", ui);
+        Assert.Contains("point.LastLiveReportControlReference = snapshot.ReportControlReference;", ui);
+        Assert.Contains("ReportControlReference = trustReportEdge ? state.LastLiveReportControlReference", runtime);
+        Assert.Contains("var reportRcbChanged = trustReportEdge", runtime);
+        Assert.Contains("point.ReportControlReference = result.ReportControlReference", runtime);
     }
 
     [Fact]
