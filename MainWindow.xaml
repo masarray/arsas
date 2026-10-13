@@ -594,7 +594,7 @@
                                             </DataGridTemplateColumn>
                                             <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="0.72*" MinWidth="105"/>
                                             <DataGridTextColumn Header="IED Timestamp" Binding="{Binding DeviceTimestamp}" Width="1.05*" MinWidth="155"/>
-                                            <DataGridTextColumn Header="Acquisition" Binding="{Binding SourceMode}" Width="1.05*" MinWidth="150"/>
+                                            <DataGridTextColumn Header="Acquisition" Binding="{Binding AcquisitionShort}" Width="1.05*" MinWidth="150"/>
                                         </DataGrid.Columns>
                                     </DataGrid>
 
@@ -983,7 +983,7 @@
                                 <DataGridTemplateColumn Header="Value" Width="125" CellTemplate="{StaticResource ProcessValueBadgeTemplate}"/>
                                 <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="155"/>
                                 <DataGridTextColumn Header="IED Timestamp" Binding="{Binding DeviceTimestamp}" Width="185"/>
-                                <DataGridTextColumn Header="Acquisition" Binding="{Binding SourceMode}" Width="190"/>
+                                <DataGridTextColumn Header="Acquisition" Binding="{Binding AcquisitionShort}" Width="190"/>
                             </DataGrid.Columns>
                         </DataGrid>
                     </DockPanel>
