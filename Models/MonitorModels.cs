@@ -330,7 +330,11 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         set
         {
             if (Set(ref _isConnected, value))
+            {
+                // Explicit MMS and report observations never cross associations.
+                if (!value) LiveValues.Clear();
                 RefreshComputed();
+            }
         }
     }
 
