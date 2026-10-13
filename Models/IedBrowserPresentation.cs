@@ -363,10 +363,24 @@ public static class IedBrowserPresentation
                 SecondaryText = child.Payload is LiveIedFileModel detailFile
                     ? detailFile.LastModified : "",
                 ValueReference = child.Payload is LiveIedDataObjectModel doModel
-                    ? doModel.Reference : ""
+                    ? doModel.Reference : "",
+                FunctionalConstraint = child.Payload is LiveIedDataObjectModel sourceDo
+                    ? PrimaryValueFunctionalConstraint(sourceDo) : ""
             });
         }
         return true;
+    }
+
+    private static string PrimaryValueFunctionalConstraint(LiveIedDataObjectModel model)
+    {
+        // A DO can contain ST, MX, CF and CO together. Use only its proven
+        // process-value leaf; never borrow a setting or control FC implicitly.
+        var primary = model.Attributes.FirstOrDefault(attr =>
+            attr.FunctionalConstraint is "ST" or "MX" &&
+            (attr.AttributePath.EndsWith(".stVal", StringComparison.OrdinalIgnoreCase) ||
+             attr.AttributePath.EndsWith(".mag.f", StringComparison.OrdinalIgnoreCase) ||
+             attr.AttributePath.EndsWith(".instMag.f", StringComparison.OrdinalIgnoreCase)));
+        return primary?.FunctionalConstraint ?? "";
     }
 
     private static string FormatFileSize(uint size)
