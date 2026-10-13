@@ -563,4 +563,84 @@ public sealed class IedBrowserPresentationTests
         Assert.Equal(2, notifications);
     }
 
+    [Fact]
+    public void StaticReportProjection_UsesDatasetMembership_ForUnselectedSignalValues()
+    {
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            DataSets = [new LiveIedDataSetModel
+            {
+                Reference = "LD/LLN0.DS_Signal",
+                Members = [
+                    new LiveIedDataSetMemberModel { Index = 0, Reference = "LD/ATCC1.TapChg", FunctionalConstraint = "ST" },
+                    new LiveIedDataSetMemberModel { Index = 1, Reference = "LD/MMXU1.TotW", FunctionalConstraint = "MX" }
+                ]
+            }]
+        };
+        Assert.True(IedBrowserReportValueAuthority.TryResolveFunctionalConstraint(
+            model, "LD/LLN0.DS_Signal", "LD/ATCC1.TapChg.posVal", out var fc));
+        Assert.Equal("ST", fc);
+        Assert.True(IedBrowserReportValueAuthority.TryResolveFunctionalConstraint(
+            model, "LD/LLN0.DS_Signal", "LD/MMXU1.TotW.mag.f", out var mxFc));
+        Assert.Equal("MX", mxFc);
+        Assert.False(IedBrowserReportValueAuthority.TryResolveFunctionalConstraint(
+            model, "LD/LLN0.DS_Signal", "LD/CSWI1.Pos.stVal", out _));
+        Assert.True(IedBrowserReportValueAuthority.SafeScalar("16"));
+        Assert.False(IedBrowserReportValueAuthority.SafeScalar("{ raw MMS struct }"));
+    }
+
+    [Fact]
+    public void QualityDetailRows_UseRealObservedQualityReference_NotPermanentUnboundPlaceholder()
+    {
+        var q = new LiveIedDataAttributeModel
+        {
+            ObjectReference = "LD/CSWI1.Pos", AttributePath = "Pos.q",
+            MmsReference = "LD/CSWI1$ST$Pos$q", FunctionalConstraint = "ST"
+        };
+        var qualityRow = Assert.Single(IedBrowserStructuredDetails.AttributeRows([q], "Pos"));
+        var projection = new IedBrowserDetailProjection();
+        projection.Reset([qualityRow]);
+        projection.Toggle(qualityRow);
+        var validity = Assert.Single(projection.Rows.Where(x => x.Name == "Validity"));
+        Assert.Equal("Validity", validity.EvidenceField);
+        Assert.Equal(q.MmsReference, validity.ValueReference);
+        Assert.Equal("ST", validity.FunctionalConstraint);
+        var group = Assert.Single(projection.Rows.Where(x => x.Name == "Quality Details"));
+        projection.Toggle(group);
+        var overflow = Assert.Single(projection.Rows.Where(x => x.Name == "Overflow"));
+        Assert.Equal(q.MmsReference, overflow.ValueReference);
+        Assert.Equal("Overflow", overflow.EvidenceField);
+    }
+
+    [Fact]
+    public void BufferedAndUnbufferedBadges_Differ_AndDoNotInventOccupancy()
+    {
+        var buffered = new RcbExportRow { Name = "brcb01", Reference = "LD/LLN0.BR.brcb01", Buffered = true };
+        var unbuffered = new RcbExportRow { Name = "urcb01", Reference = "LD/LLN0.RP.urcb01", Buffered = false };
+        var b = new IedBrowserTreeRow("b", buffered.Name, "RCB", 3, buffered);
+        var u = new IedBrowserTreeRow("u", unbuffered.Name, "RCB", 3, unbuffered);
+        Assert.NotSame(b.GlyphBrush, u.GlyphBrush);
+        Assert.Equal("", b.RcbUsageGlyph);
+        buffered.Availability = AR.Iec61850.Mms.MmsRcbOperationalAvailability.UsedByCaller;
+        unbuffered.Availability = AR.Iec61850.Mms.MmsRcbOperationalAvailability.InUse;
+        Assert.Equal("●", b.RcbUsageGlyph);
+        Assert.Equal("◆", u.RcbUsageGlyph);
+    }
+
+    [Fact]
+    public void RemoteComtradeFiles_AreIncludedInFilesCategoryWithActualMetadata()
+    {
+        var remote = new IedBrowserRemoteFile("FRA00029.cfg", "fault/FRA00029.cfg", 3072L,
+            new DateTimeOffset(2026, 10, 13, 10, 20, 0, TimeSpan.Zero));
+        var files = IedBrowserPresentation.Roots(null, [], [remote])
+            .Single(row => row.Key == "category/files");
+        var row = Assert.Single(IedBrowserPresentation.Details(files, null, true)
+            .Where(r => r.Kind == "Object" && r.NavigateTo?.Kind == "File"));
+        Assert.Equal("3 KB", row.Value);
+        Assert.NotEmpty(row.SecondaryText);
+        var details = IedBrowserPresentation.Details(row.NavigateTo!, null, true);
+        Assert.Contains(details, x => x.Kind == "Property" && x.Name == "Path" &&
+                                      x.Value == "fault/FRA00029.cfg");
+    }
+
 }
