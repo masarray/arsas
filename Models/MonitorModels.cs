@@ -668,7 +668,7 @@ public sealed class Iec61850MonitorPoint : ObservableObject
     private string _quality = "Unknown";
     private string _deviceTimestamp = "-";
     private string _sourceMode = "Waiting";
-    private string _lastLiveReportControlReference = string.Empty;
+    private IReadOnlyList<string> _routedReportControlReferences = Array.Empty<string>();
     private string _reason = "-";
     private string _status = "Queued";
     private long _sequence;
@@ -768,17 +768,23 @@ public sealed class Iec61850MonitorPoint : ObservableObject
     }
     // Proven by a live routed report frame, not a configured/cached RCB hint.
     // Written on the WPF UI thread from a point snapshot only.
-    public string LastLiveReportControlReference
+    // Association-scoped actual report ingress; an IEC DataSet member may be
+    // published by multiple distinct enabled RCBs. This is NOT the set of all
+    // merely configured RCBs or the last wire RptID.
+    public IReadOnlyList<string> RoutedReportControlReferences
     {
-        get => _lastLiveReportControlReference;
+        get => _routedReportControlReferences;
         set
         {
-            if (Set(ref _lastLiveReportControlReference, value ?? string.Empty))
+            var next = value?.ToArray() ?? Array.Empty<string>();
+            if (_routedReportControlReferences.SequenceEqual(next, StringComparer.OrdinalIgnoreCase))
+                return;
+            if (Set(ref _routedReportControlReferences, next))
                 Raise(nameof(AcquisitionShort));
         }
     }
     public string AcquisitionShort => Iec61850EventOriginPolicy.PointAcquisition(
-        LastLiveReportControlReference, SourceMode, IsOffline);
+        RoutedReportControlReferences, SourceMode, IsOffline);
     public string Reason { get => _reason; set => Set(ref _reason, string.IsNullOrWhiteSpace(value) ? "-" : value); }
     public string Status { get => _status; set => Set(ref _status, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
     // Runtime ordering metadata is not rendered. Avoid an unnecessary WPF property-change
@@ -904,8 +910,9 @@ public sealed class Iec61850PointSnapshot
     /// </summary>
     public bool IsValueEdge { get; init; }
     public bool IsReportTraffic { get; init; }
-    // Routed report identity for this exact point update, not a plan hint.
-    public string ReportControlReference { get; init; } = string.Empty;
+    // Association-local aggregate sourced only from real decoded report ingress.
+    // Immutable copy when published: safe across the runtime / WPF dispatcher.
+    public IReadOnlyList<string> RoutedReportControlReferences { get; init; } = Array.Empty<string>();
     public long Sequence { get; init; }
 }
 
@@ -929,11 +936,12 @@ public sealed class Iec61850EventEntry
     // fabricated from static DataSet labels or a process-value edge.
     public string ReportId { get; init; } = string.Empty;
     public string ReportControlReference { get; init; } = string.Empty;
+    public IReadOnlyList<string> RoutedReportControlReferences { get; init; } = Array.Empty<string>();
     // Operator labels are deliberately short. Full source evidence remains
     // available in the export and the native report diagnostics.
     public string EventCause => Iec61850EventOriginPolicy.Cause(Reason, SourceMode);
     public string AcquisitionShort => Iec61850EventOriginPolicy.Acquisition(
-        ReportId, ReportControlReference, SourceMode);
+        ReportId, ReportControlReference, SourceMode, RoutedReportControlReferences);
     public string ReportChannel => Iec61850EventOriginPolicy.Channel(SourceMode);
     public string EdgeType
     {
