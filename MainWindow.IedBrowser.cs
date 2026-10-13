@@ -17,6 +17,13 @@ namespace ArIED61850Tester;
 public partial class MainWindow
 {
     private const int IedBrowserWorkspaceIndex = 7;
+    private readonly IedBrowserTreeProjection _iedBrowserTree = new();
+    private Iec61850MonitorDevice? _iedBrowserCachedDevice;
+    private LiveIedModelDiscoveryDocument? _iedBrowserCachedModel;
+    private MmsRcbAvailabilityResult? _iedBrowserCachedSnapshot;
+    private IReadOnlyList<RcbExportRow> _iedBrowserCachedRcbRows = Array.Empty<RcbExportRow>();
+    private string _iedBrowserCachedSourcePath = string.Empty;
+    private DateTime _iedBrowserCachedSourceStamp;
     private Iec61850MonitorDevice? _iedBrowserObservedDevice;
     private MmsRcbAvailabilityResult? _iedBrowserSnapshot;
     private CancellationTokenSource? _iedBrowserReadOperation;
@@ -26,13 +33,13 @@ public partial class MainWindow
         ArgumentNullException.ThrowIfNull(device);
         SelectedDevice = device;
         MainTabs.SelectedIndex = IedBrowserWorkspaceIndex;
-        IedBrowserSections.SelectedIndex = 0;
         RefreshIedBrowser();
     }
 
     private void IedBrowserRefresh_Click(object sender, RoutedEventArgs e)
     {
-        // Read from existing memory/source SCL only, never an MMS request.
+        // The operator explicitly requested a new local projection, not MMS discovery.
+        _iedBrowserCachedDevice = null;
         RefreshIedBrowser();
     }
 
@@ -132,29 +139,23 @@ public partial class MainWindow
     {
         if (IedBrowserTab == null || MainTabs.SelectedIndex != IedBrowserWorkspaceIndex)
             return;
+
         var device = SelectedDevice;
         ObserveIedBrowserDevice(device);
-        IedBrowserRcbGrid.ItemsSource = null;
-        IedBrowserRcbProperties.ItemsSource = null;
-        IedBrowserRcbEvidence.Text = "Select a Report Control Block to inspect properties.";
-        IedBrowserDataSetGrid.ItemsSource = null;
-        IedBrowserDataSetMembers.ItemsSource = null;
-        IedBrowserDataSetEvidence.Text = "Select a DataSet to inspect the exact FCDA members.";
-        IedBrowserModelTree.Items.Clear();
-        IedBrowserModelProperties.ItemsSource = null;
-        IedBrowserSignalsGrid.ItemsSource = null;
-
+        IedBrowserReadRcbButton.IsEnabled = device?.IsConnected == true &&
+                                            device.IsBusy == false && _iedBrowserReadOperation == null;
+        IedBrowserExportRcbButton.IsEnabled = device is { IsBusy: false, IsDemo: false };
         if (device == null)
         {
-            IedBrowserSubtitle.Text = "Select an IED in Explorer. Inspection does not initiate a connection.";
-            IedBrowserReadRcbButton.IsEnabled = false;
-            IedBrowserExportRcbButton.IsEnabled = false;
+            _iedBrowserCachedDevice = null;
+            _iedBrowserTree.Reset([]);
+            IedBrowserTreeGrid.ItemsSource = _iedBrowserTree.Rows;
+            IedBrowserDetailList.ItemsSource = null;
+            IedBrowserSubtitle.Text = "Select an IED in Explorer. Browsing does not open MMS sessions.";
+            IedBrowserObjectPath.Text = "No IED selected";
+            IedBrowserDetailStatus.Text = "Select an existing engineering model";
             return;
         }
-
-        IedBrowserReadRcbButton.IsEnabled = device.IsConnected && !device.IsBusy &&
-                                            _iedBrowserReadOperation == null;
-        IedBrowserExportRcbButton.IsEnabled = !device.IsBusy && !device.IsDemo;
 
         var model = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
         IedBrowserSubtitle.Text = $"{device.Name} · {device.EndpointText} · " +
@@ -162,141 +163,125 @@ public partial class MainWindow
             $" · {model?.LogicalDevices.Count ?? 0} LD / {model?.DataSets.Count ?? 0} DataSets / " +
             $"{model?.ReportControls.Count ?? 0} RCB";
 
-        SclReportControlInventoryResult? sourceInventory = null;
-        if (!string.IsNullOrWhiteSpace(device.SclSourcePath) && File.Exists(device.SclSourcePath))
+        // Source SCL parsing and hierarchical projection are performed only when
+        // device/model/check/source really changes, not on every IsBusy/connection notification.
+        var sourcePath = device.SclSourcePath ?? string.Empty;
+        var stamp = DateTime.MinValue;
+        try
         {
-            try
-            {
-                sourceInventory = SclReportControlFilter.InspectFile(
-                    device.SclSourcePath, EffectiveSclIedName(device), device.SclAccessPointName);
-            }
-            catch (Exception ex)
-            {
-                IedBrowserRcbEvidence.Text = $"Source SCL RCB inventory: {ex.Message}";
-            }
+            if (sourcePath.Length > 0 && File.Exists(sourcePath))
+                stamp = File.GetLastWriteTimeUtc(sourcePath);
         }
+        catch (IOException) { /* An unavailable source file cannot poison in-memory browsing. */ }
+        catch (UnauthorizedAccessException) { /* Still show the cached/discovered model. */ }
 
-        var rows = BuildRcbExportRows(device, sourceInventory, _iedBrowserSnapshot);
-        if (rows.Count == 0 && model != null)
-            rows = BuildLiveModelRcbRows(model, _iedBrowserSnapshot);
-        IedBrowserRcbGrid.ItemsSource = rows;
-        IedBrowserDataSetGrid.ItemsSource = model?.DataSets;
-        IedBrowserSignalsGrid.ItemsSource = device.Signals;
-
-        if (model == null)
-            return;
-
-        // Create only LD/LN nodes now. DO and DA children are materialized upon expansion
-        // so large 1000+ DO IEDs do not freeze the WPF dispatcher.
-        foreach (var ld in model.LogicalDevices)
+        var changed = !ReferenceEquals(device, _iedBrowserCachedDevice) ||
+                      !ReferenceEquals(model, _iedBrowserCachedModel) ||
+                      !ReferenceEquals(_iedBrowserSnapshot, _iedBrowserCachedSnapshot) ||
+                      !string.Equals(sourcePath, _iedBrowserCachedSourcePath, StringComparison.Ordinal) ||
+                      stamp != _iedBrowserCachedSourceStamp;
+        if (changed)
         {
-            var deviceNode = new TreeViewItem
+            var sameDevice = ReferenceEquals(device, _iedBrowserCachedDevice);
+            var priorKey = sameDevice
+                ? (IedBrowserTreeGrid.SelectedItem as IedBrowserTreeRow)?.Key
+                : null;
+            var expandedKeys = sameDevice
+                ? _iedBrowserTree.ExpandedKeys()
+                : new HashSet<string>(StringComparer.Ordinal);
+
+            SclReportControlInventoryResult? inventory = null;
+            if (stamp != DateTime.MinValue)
             {
-                Header = $"{ld.MmsDomain} · {ld.LogicalNodes.Count} LN",
-                Tag = ld
-            };
-            foreach (var ln in ld.LogicalNodes)
-            {
-                var node = new TreeViewItem
+                try
                 {
-                    Header = $"{ln.Name} · {ln.DataObjects.Count} DO",
-                    Tag = ln
-                };
-                if (ln.DataObjects.Count > 0)
-                    node.Items.Add(new TreeViewItem { Header = "Loading…" });
-                deviceNode.Items.Add(node);
-            }
-            IedBrowserModelTree.Items.Add(deviceNode);
-        }
-    }
-
-    private void IedBrowserRcb_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (IedBrowserRcbGrid.SelectedItem is not RcbExportRow row)
-            return;
-        var connected = SelectedDevice?.IsConnected == true;
-        IedBrowserRcbEvidence.Text = row.Inspection.Summary(connected) +
-            " · Unavailable means not measured (not zero). No RCB write on inspect.";
-        IedBrowserRcbProperties.ItemsSource = row.Inspection.Properties(row, connected);
-    }
-
-    private void IedBrowserDataSet_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (IedBrowserDataSetGrid.SelectedItem is not LiveIedDataSetModel set)
-            return;
-        IedBrowserDataSetEvidence.Text = $"{set.Reference} · {set.MemberCount} FCDA" +
-            (set.IsDeletable.HasValue ? $" · deletable={set.IsDeletable.Value}" : "") +
-            " · saved SCL/discovery membership";
-        IedBrowserDataSetMembers.ItemsSource = set.Members;
-    }
-
-    private void IedBrowserModelNode_Expanded(object sender, RoutedEventArgs e)
-    {
-        if (e.OriginalSource is not TreeViewItem item ||
-            item.Items.Count != 1 || item.Items[0] is not TreeViewItem { Tag: null })
-            return;
-
-        if (item.Tag is LiveIedLogicalNodeModel ln)
-        {
-            item.Items.Clear();
-            foreach (var data in ln.DataObjects)
-            {
-                var node = new TreeViewItem
+                    inventory = SclReportControlFilter.InspectFile(
+                        sourcePath, EffectiveSclIedName(device), device.SclAccessPointName);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                                             or InvalidDataException or ArgumentException)
                 {
-                    Header = $"{data.Name} · {data.InferredCdc}",
-                    Tag = data
-                };
-                if (data.Attributes.Count > 0)
-                    node.Items.Add(new TreeViewItem { Header = "Loading…" });
-                item.Items.Add(node);
+                    IedBrowserDetailStatus.Text = "Source inventory unavailable: " + ex.Message;
+                }
             }
+
+            var rcbs = BuildRcbExportRows(device, inventory, _iedBrowserSnapshot);
+            if (rcbs.Count == 0 && model != null)
+                rcbs = BuildLiveModelRcbRows(model, _iedBrowserSnapshot);
+            _iedBrowserCachedRcbRows = rcbs;
+            _iedBrowserCachedDevice = device;
+            _iedBrowserCachedModel = model;
+            _iedBrowserCachedSnapshot = _iedBrowserSnapshot;
+            _iedBrowserCachedSourcePath = sourcePath;
+            _iedBrowserCachedSourceStamp = stamp;
+
+            var roots = IedBrowserPresentation.Roots(device.Name, model, _iedBrowserCachedRcbRows);
+            _iedBrowserTree.Reset(roots, expandedKeys);
+            if (roots.Count > 0 && _iedBrowserTree.Rows.Count == 1)
+            {
+                _iedBrowserTree.Expand(roots[0]);
+                // The initial selection is an RCB when present, keeping the existing
+                // Explorer "Browse RCB" launcher familiar and functional.
+                var reports = _iedBrowserTree.Rows.FirstOrDefault(r => r.Key == "category/reports");
+                if (reports != null) _iedBrowserTree.Expand(reports);
+            }
+
+            IedBrowserTreeGrid.ItemsSource = _iedBrowserTree.Rows;
+            var selected = priorKey == null ? null : _iedBrowserTree.FindVisible(priorKey);
+            selected ??= _iedBrowserTree.Rows.FirstOrDefault(r => r.Kind == "RCB");
+            selected ??= _iedBrowserTree.Rows.FirstOrDefault(r => r.Key == "category/reports");
+            selected ??= roots.FirstOrDefault();
+            IedBrowserTreeGrid.SelectedItem = selected;
         }
-        else if (item.Tag is LiveIedDataObjectModel obj)
-        {
-            item.Items.Clear();
-            foreach (var attribute in obj.Attributes)
-                item.Items.Add(new TreeViewItem
-                {
-                    Header = $"[{attribute.FunctionalConstraint}] {attribute.AttributePath}",
-                    Tag = attribute
-                });
-        }
+        RenderIedBrowserSelection(IedBrowserTreeGrid.SelectedItem as IedBrowserTreeRow, model, device.IsConnected);
     }
 
-    private void IedBrowserModelTree_SelectedItemChanged(object sender,
-        RoutedPropertyChangedEventArgs<object> e)
+    private void IedBrowserTreeToggle_Click(object sender, RoutedEventArgs e)
     {
-        if (e.NewValue is not TreeViewItem item)
+        if (sender is not Button { Tag: IedBrowserTreeRow row })
             return;
-        static RcbInspectionProperty P(string name, string value)
-            => new(name, string.IsNullOrWhiteSpace(value) ? "—" : value, "Saved model");
-        IedBrowserModelProperties.ItemsSource = item.Tag switch
+        _iedBrowserTree.Toggle(row);
+        IedBrowserTreeGrid.SelectedItem = row;
+        e.Handled = true;
+    }
+
+    private void IedBrowserTree_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!ReferenceEquals(sender, IedBrowserTreeGrid))
+            return;
+        var model = SelectedDevice?.LiveDiscoveryModel ?? SelectedDevice?.SclWorkspace?.DesignModel;
+        RenderIedBrowserSelection(IedBrowserTreeGrid.SelectedItem as IedBrowserTreeRow,
+            model, SelectedDevice?.IsConnected == true);
+    }
+
+    private void RenderIedBrowserSelection(
+        IedBrowserTreeRow? row, LiveIedModelDiscoveryDocument? model, bool connected)
+    {
+        if (row == null)
         {
-            LiveIedLogicalDeviceModel ld => new[]
-            {
-                P("MMS Domain", ld.MmsDomain), P("LDevice instance", ld.Inst),
-                P("Logical Nodes", ld.LogicalNodes.Count.ToString())
-            },
-            LiveIedLogicalNodeModel ln => new[]
-            {
-                P("Logical Node", ln.Name), P("Class", ln.LnClass),
-                P("Type", ln.ProposedLnTypeId), P("Data Objects", ln.DataObjects.Count.ToString())
-            },
-            LiveIedDataObjectModel obj => new[]
-            {
-                P("Reference", obj.Reference), P("Name", obj.Name),
-                P("CDC (inferred)", obj.InferredCdc),
-                P("Confidence", obj.ConfidenceLevel.ToString()),
-                P("Data Attributes", obj.Attributes.Count.ToString())
-            },
-            LiveIedDataAttributeModel attr => new[]
-            {
-                P("Reference", attr.ObjectReference), P("DA path", attr.AttributePath),
-                P("FC", attr.FunctionalConstraint), P("MMS Reference", attr.MmsReference),
-                P("MMS type", attr.MmsType), P("SCL bType", attr.SclBType),
-                P("Type source", attr.TypeSource), P("Confidence", attr.TypeConfidence.ToString())
-            },
-            _ => Array.Empty<RcbInspectionProperty>()
+            IedBrowserObjectPath.Text = "Select an object in the left tree";
+            IedBrowserDetailStatus.Text = "Cached engineering model · read-only navigation";
+            IedBrowserDetailList.ItemsSource = null;
+            return;
+        }
+
+        var reference = row.Payload switch
+        {
+            RcbExportRow rcb => rcb.Reference,
+            LiveIedDataSetModel ds => ds.Reference,
+            LiveIedControlBlockModel block => block.Reference,
+            LiveIedDataObjectModel obj => obj.Reference,
+            LiveIedDataAttributeModel attr => attr.ObjectReference,
+            LiveIedFileModel file => file.Path,
+            _ => row.Title
         };
+        IedBrowserObjectPath.Text = reference;
+        IedBrowserObjectPath.ToolTip = reference;
+        IedBrowserDetailStatus.Text = row.Payload is RcbExportRow r
+            ? r.Inspection.Summary(connected)
+            : connected ? "Connected · cached model metadata (not a live read)"
+                        : "Offline · cached SCL/discovery model";
+        IedBrowserDetailList.ItemsSource = IedBrowserPresentation.Details(row, model, connected);
     }
+
 }
