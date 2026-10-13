@@ -18,7 +18,7 @@ public sealed class F650CommandShoutIntegrationTests
             CompletionState = "Rejected"
         };
         var notice = Iec61850ControlShout.FromResult(result);
-        Assert.Contains("reason unspecified", notice.Title, StringComparison.Ordinal);
+        Assert.Equal("IED rejected command", notice.Title);
         Assert.Contains("Check BCU Local/Remote", notice.Detail, StringComparison.Ordinal);
         Assert.DoesNotContain("IED confirmed Local", notice.Detail, StringComparison.OrdinalIgnoreCase);
     }
