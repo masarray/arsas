@@ -1860,21 +1860,27 @@
                                         <DataGridTemplateColumn Header="Objects" Width="*">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
-                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <Grid VerticalAlignment="Center">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="17"/>
+                                                            <ColumnDefinition Width="34"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
                                                         <Border Width="{Binding IndentWidth}"/>
-                                                        <Button Tag="{Binding}" Content="{Binding ToggleGlyph}"
+                                                        <Button Grid.Column="1" Tag="{Binding}" Content="{Binding ToggleGlyph}"
                                                                 Visibility="{Binding ChevronVisibility}"
                                                                 Click="IedBrowserTreeToggle_Click"
                                                                 Background="Transparent" BorderThickness="0"
                                                                 Width="17" Height="21" FontSize="12" Padding="0"
                                                                 Focusable="False" ToolTip="Expand or collapse"/>
-                                                        <TextBlock Text="{Binding Glyph}" Foreground="#2875B9"
+                                                        <TextBlock Grid.Column="2" Text="{Binding Glyph}" Foreground="#2875B9"
                                                                    FontSize="9.5" FontWeight="SemiBold"
                                                                    Margin="4,0,6,0" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="{Binding Title}" ToolTip="{Binding Key}"
+                                                        <TextBlock Grid.Column="3" Text="{Binding Title}" ToolTip="{Binding Key}"
                                                                    TextTrimming="CharacterEllipsis"
                                                                    Foreground="#243B54" VerticalAlignment="Center"/>
-                                                    </StackPanel>
+                                                    </Grid>
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
