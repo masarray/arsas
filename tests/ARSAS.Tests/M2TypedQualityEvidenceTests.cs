@@ -1,4 +1,6 @@
 using ArIED61850Tester.Protocol.Mms;
+using AR.Iec61850.Discovery;
+using ArIED61850Tester.Models;
 using ArIED61850Tester.Services;
 
 namespace ARSAS.Tests;
@@ -92,4 +94,59 @@ public sealed class M2TypedQualityEvidenceTests
             raw, "BitString", "", "Measurement", "LD/GGIO1.RawBits"));
         Assert.False(MmsQualityDecoder.TryDecodeRendered(raw, out _));
     }
+    [Fact]
+    public void MmsRead_EnforcesDeclaredTypeInsteadOfReinterpretingWrongWidth()
+    {
+        // Minimal confirmed-response envelope; the decoder sees the exact
+        // MMS Data BIT STRING encoded at the normal constructed response seam.
+        var position = MmsReadResponseDecoder.DecodeSingleVariable(
+            new byte[] { 0xA1, 0x07, 0x02, 0x01, 0x01, 0x84, 0x02, 0x06, 0x40 }, "Dbpos");
+        Assert.True(position.IsSuccess, position.Message);
+        Assert.Equal("Open [01]", position.Value);
+
+        var quality = MmsReadResponseDecoder.DecodeSingleVariable(
+            new byte[] { 0xA1, 0x08, 0x02, 0x01, 0x01, 0x84, 0x03, 0x03, 0x00, 0x00 }, "Quality");
+        Assert.True(quality.IsSuccess, quality.Message);
+        Assert.Equal("Good", quality.Value);
+
+        var wrongDbpos = MmsReadResponseDecoder.DecodeSingleVariable(
+            new byte[] { 0xA1, 0x08, 0x02, 0x01, 0x01, 0x84, 0x03, 0x03, 0x00, 0x00 }, "Dbpos");
+        Assert.False(wrongDbpos.IsSuccess);
+        Assert.Contains("width", wrongDbpos.Message, StringComparison.OrdinalIgnoreCase);
+
+        var wrongQuality = MmsReadResponseDecoder.DecodeSingleVariable(
+            new byte[] { 0xA1, 0x07, 0x02, 0x01, 0x01, 0x84, 0x02, 0x06, 0x40 }, "Quality");
+        Assert.False(wrongQuality.IsSuccess);
+    }
+
+    [Fact]
+    public void BrowserAttributeRows_CarrySchemaBasedQualityEvidenceIdentity()
+    {
+        var data = new[] {
+            new LiveIedDataAttributeModel {
+                AttributePath = "Pos.q", ObjectReference = "LD/CSWI1.Pos",
+                MmsReference = "LD/CSWI1$ST$Pos$q", FunctionalConstraint = "ST"
+            },
+            new LiveIedDataAttributeModel {
+                AttributePath = "Pos.t", ObjectReference = "LD/CSWI1.Pos",
+                MmsReference = "LD/CSWI1$ST$Pos$t", FunctionalConstraint = "ST"
+            },
+            new LiveIedDataAttributeModel {
+                AttributePath = "Pos.stVal", ObjectReference = "LD/CSWI1.Pos",
+                MmsReference = "LD/CSWI1$ST$Pos$stVal", FunctionalConstraint = "ST"
+            }
+        };
+        var rows = IedBrowserStructuredDetails.AttributeRows(data, "Pos");
+        var q = Assert.Single(rows.Where(row => row.Name == "q [ST]"));
+        var t = Assert.Single(rows.Where(row => row.Name == "t [ST]"));
+        var process = Assert.Single(rows.Where(row => row.Name == "stVal [ST]"));
+        Assert.Equal("Quality", q.EvidenceKind);
+        Assert.Equal("Timestamp", t.EvidenceKind);
+        Assert.Empty(process.EvidenceKind);
+        var children = q.GetChildren();
+        Assert.Contains(children, row => row.EvidenceKind == "Quality" && row.EvidenceField == "Validity");
+        Assert.Contains(children, row => row.EvidenceKind == "Quality" && row.EvidenceField == "Source");
+        Assert.All(t.GetChildren(), row => Assert.Equal("Timestamp", row.EvidenceKind));
+    }
+
 }
