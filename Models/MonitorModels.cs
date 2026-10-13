@@ -19,6 +19,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     private bool _isBusy;
     private bool _isStopping;
     private bool _isMonitoring;
+    private bool _isBrowserReading;
     private bool _isActive;
     private bool _hasReportStream;
     private bool _isDemo;
@@ -357,6 +358,13 @@ public sealed class Iec61850MonitorDevice : ObservableObject
             if (Set(ref _isStopping, value))
                 RefreshComputed();
         }
+    }
+
+    // Independent read-only association may run while static reporting stays live.
+    public bool IsBrowserReading
+    {
+        get => _isBrowserReading;
+        set => Set(ref _isBrowserReading, value);
     }
 
     public bool IsMonitoring
