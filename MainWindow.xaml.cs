@@ -2664,7 +2664,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         try
         {
             var csv = new StringBuilder();
-            csv.AppendLine("Sequence,DeviceTimestamp,IED,IP,Signal,Value,PreviousValue,Transition,Quality,Acquisition,IECTelegram");
+            csv.AppendLine("Sequence,DeviceTimestamp,IED,IP,Signal,Value,PreviousValue,Transition,Quality,Event,Stream,Acquisition,RawReason,IECTelegram");
             foreach (var entry in Events.OrderBy(item => item.Sequence))
             {
                 csv.AppendLine(string.Join(',', new[]
@@ -2678,7 +2678,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     Csv(entry.OldValue),
                     Csv(entry.EdgeType),
                     Csv(entry.Quality),
+                    Csv(entry.EventCause),
+                    Csv(entry.ReportChannel),
                     Csv(entry.SourceMode),
+                    Csv(entry.Reason),
                     Csv(entry.IecTelegram)
                 }));
             }
