@@ -99,10 +99,10 @@ internal static class Iec61850ControlShout
         var otherTitle = explanation.Confidence switch
         {
             "ConfirmedClient" => "Command not sent",
-            "LocalValidation" => "Command not sent — validation failed",
-            "MmsServiceOnly" => "IED rejected command — reason unspecified",
-            "TerminationOnly" => "IED reported negative command termination",
-            _ => "Command failed — reason unavailable"
+            "LocalValidation" => "Command not sent",
+            "MmsServiceOnly" => "IED rejected command",
+            "TerminationOnly" => "Command termination failed",
+            _ => "Command failed"
         };
         var detail = explanation.Confidence == "MmsServiceOnly"
             ? "MMS access denied; exact cause not supplied. Check BCU Local/Remote, authorization and interlocks."
