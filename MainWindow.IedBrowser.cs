@@ -319,7 +319,8 @@ public partial class MainWindow
     private void IedBrowserDevice_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is not (nameof(Iec61850MonitorDevice.IsConnected)
-                                    or nameof(Iec61850MonitorDevice.IsBusy)))
+                                    or nameof(Iec61850MonitorDevice.IsBusy)
+                                    or nameof(Iec61850MonitorDevice.IsMonitoring)))
             return;
         if (!Dispatcher.CheckAccess())
         {
@@ -330,6 +331,8 @@ public partial class MainWindow
 
         if (!ReferenceEquals(sender, _iedBrowserObservedDevice))
             return;
+        if (e.PropertyName is nameof(Iec61850MonitorDevice.IsMonitoring))
+            _iedBrowserForceRefresh = true;
 
         // A disconnected/replaced association can never supply "live" inspector values.
         if (_iedBrowserObservedDevice?.IsConnected != true)
@@ -428,6 +431,19 @@ public partial class MainWindow
             var rcbs = BuildRcbExportRows(device, inventory, _iedBrowserSnapshot);
             if (rcbs.Count == 0 && model != null)
                 rcbs = BuildLiveModelRcbRows(model, _iedBrowserSnapshot);
+            // Only *successfully activated* runtime report plans prove caller
+            // ownership; a configured RCB name alone never does.
+            var callerOwned = _runtime.GetActiveBrowserRcbReferences(device.DeviceId)
+                .Select(NormalizeRcbReference)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var report in rcbs)
+            {
+                if (!callerOwned.Contains(NormalizeRcbReference(report.Reference)))
+                    continue;
+                report.Availability = AR.Iec61850.Mms.MmsRcbOperationalAvailability.UsedByCaller;
+                report.StatusText = "ARSAS active";
+                report.Reason = "Successfully activated by the current ARSAS monitor association.";
+            }
             _iedBrowserCachedRcbRows = rcbs;
             _iedBrowserCachedDevice = device;
             _iedBrowserCachedModel = model;
