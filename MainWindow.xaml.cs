@@ -102,9 +102,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     public string HeaderStatusText => $"{Devices.Count} IED • {(IsDemoMode ? Devices.Count(device => device.IsMonitoring) : _runtime.MonitoringDeviceCount)} monitoring";
     public string DeviceCountText => $"{Devices.Count} device(s)";
-    public string RuntimeSummaryText => $"Connected {(IsDemoMode ? Devices.Count(device => device.IsConnected) : _runtime.ConnectedDeviceCount)} • Monitoring {(IsDemoMode ? Devices.Count(device => device.IsMonitoring) : _runtime.MonitoringDeviceCount)} • Values {GlobalPoints.Count} • Events {Events.Count}";
+    public string RuntimeSummaryText => $"Connected {(IsDemoMode ? Devices.Count(device => device.IsConnected) : _runtime.ConnectedDeviceCount)} • Monitoring {(IsDemoMode ? Devices.Count(device => device.IsMonitoring) : _runtime.MonitoringDeviceCount)} • Values {GlobalPoints.Count(point => !point.IsOffline)} • Events {Events.Count}";
     public string ConnectionInsightText => $"{(IsDemoMode ? Devices.Count(device => device.IsConnected) : _runtime.ConnectedDeviceCount)} connected / {Devices.Count} discovered";
-    public string MonitoringInsightText => $"{(IsDemoMode ? Devices.Count(device => device.IsMonitoring) : _runtime.MonitoringDeviceCount)} monitoring / {GlobalPoints.Count} values";
+    public string MonitoringInsightText => $"{(IsDemoMode ? Devices.Count(device => device.IsMonitoring) : _runtime.MonitoringDeviceCount)} monitoring / {GlobalPoints.Count(point => !point.IsOffline)} live values";
     public string EventInsightText => $"{Events.Count} event(s)";
     public Visibility DiagnosticsAlertVisibility => _hasUnreadDiagnosticError ? Visibility.Visible : Visibility.Collapsed;
     public Visibility EmptyExplorerVisibility => SelectedDevice == null ? Visibility.Visible : Visibility.Collapsed;
@@ -1756,14 +1756,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (device == null)
             return;
 
-        if (!device.IsConnected)
+        // ctlModel writes require an intentionally opened, current association.
+        // Never create a hidden MMS connection from an offline command dock.
+        if (!device.IsConnected || device.IsStopping || device.IsBusy)
         {
-            SetStatus($"{device.Name}: connecting before opening ctlModel editor…");
-            var connected = device.HasDiscoveryCache && device.Signals.Count > 0
-                ? await ConnectUsingSavedModelAsync(device)
-                : await ConnectAndConfigureDeviceAsync(device, openWizard: false);
-            if (!connected)
-                return;
+            SetStatus($"{device.Name}: press Play to connect before editing the control model.");
+            return;
         }
 
         var dialog = new ControlModelWriteWindow(_runtime, device, signal)
