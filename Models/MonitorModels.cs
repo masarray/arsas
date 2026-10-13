@@ -873,6 +873,10 @@ public sealed class Iec61850EventEntry
     public string Quality { get; init; } = "Unknown";
     public string SourceMode { get; init; } = string.Empty;
     public string Reason { get; init; } = string.Empty;
+    // Display-only classification. Command outcomes are a distinct event
+    // source and must never be inferred from a process-value edge.
+    public string EventCause => Iec61850EventOriginPolicy.Cause(Reason, SourceMode);
+    public string ReportChannel => Iec61850EventOriginPolicy.Channel(SourceMode);
     public string EdgeType
     {
         get
