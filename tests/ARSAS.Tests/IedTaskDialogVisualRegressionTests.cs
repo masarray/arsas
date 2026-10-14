@@ -113,7 +113,7 @@ public sealed class IedTaskDialogVisualRegressionTests
         var code = File.ReadAllText(Find("SclSignalSelectionModeWindow.xaml.cs"));
         foreach (var action in new[]
         {
-            "MonitorStaticDataSet_Click", "MonitorManual_Click",
+            "MonitorStaticDataSet_Click", "BrowseIed_Click", "MonitorManual_Click",
             "RcbEngineering_Click", "DownloadComtrade_Click", "BrowseOffline_Click"
         })
             Assert.Contains($"Click=\"{action}\"", xml, StringComparison.Ordinal);
@@ -123,7 +123,9 @@ public sealed class IedTaskDialogVisualRegressionTests
         Assert.Contains("ContextHeading", xml, StringComparison.Ordinal);
         Assert.Contains("ImportScopeText", xml, StringComparison.Ordinal);
         Assert.Contains("reportBackedCount > 0", code, StringComparison.Ordinal);
-        Assert.Contains("UseStaticDataSet => _useStaticDataSet", code, StringComparison.Ordinal);
+        Assert.Contains("UseStaticDataSet => Selection == IedWorkspaceTaskChoice.StaticDataSet", code, StringComparison.Ordinal);
+        Assert.Contains("Selection = IedWorkspaceTaskChoice.BrowseIed", code, StringComparison.Ordinal);
+        Assert.Contains("Click=\"BrowseIed_Click\"", xml, StringComparison.Ordinal);
         Assert.DoesNotContain("Signal selection is shared with FAT, but", xml, StringComparison.Ordinal);
         Assert.DoesNotContain("task-scoped MMS file-transfer connection", xml, StringComparison.Ordinal);
     }
