@@ -382,10 +382,11 @@ public static class IedBrowserPresentation
              node.Key.StartsWith("datasets/", StringComparison.Ordinal));
         var serviceRoot = node.Key is "category/reports" or "category/goose" or
             "category/settings" or "category/datasets";
+        // LN and DO must use the SAME real hierarchical data projection as
+        // DataSets, not this generic navigation-card list. Those pages contain
+        // actual expandable DO/DA/BDA with live Report/Read evidence.
         var dataModelContainer = node.Key == "category/model" ||
-            node.Key.StartsWith("model/ld/", StringComparison.Ordinal) ||
-            node.Key.StartsWith("model/ln/", StringComparison.Ordinal) ||
-            node.Key.StartsWith("model/do/", StringComparison.Ordinal);
+            node.Key.StartsWith("model/ld/", StringComparison.Ordinal);
         var fileRoot = node.Key == "category/files";
         if (!serviceRoot && !serviceCategory && !dataModelContainer && !fileRoot)
             return false;
@@ -607,22 +608,24 @@ public static class IedBrowserPresentation
                     Member(ln.Name, ln.LnClass, source: "Model");
                 break;
             case LiveIedLogicalNodeModel ln:
-                Section("Logical Node");
-                Field("Name", ln.Name);
+                Section("Logical Node · " + ln.Name);
                 Field("Class", ln.LnClass);
                 Field("LN type", ln.ProposedLnTypeId);
                 Section("Data Objects");
-                rows.Add(new("DataHeader", "Name", "CDC"));
+                rows.Add(new("DataHeader", "Name", "Live value · provenance"));
+                // O(number of DO), with lazy expansion of each selected DO.
+                // No recursive UI object creation for a large IED namespace.
                 foreach (var obj in ln.DataObjects)
-                    Member(obj.Name, obj.InferredCdc);
+                    rows.Add(IedBrowserStructuredDetails.DataObject(
+                        obj, PrimaryValueFunctionalConstraint(obj)));
                 break;
             case LiveIedDataObjectModel obj:
-                Section("Data Object");
+                Section("Data Object · " + obj.Name);
                 Field("Reference", obj.Reference);
                 Field("CDC", obj.InferredCdc);
                 Field("Type confidence", obj.ConfidenceLevel);
-                Section("Data Attributes");
-                rows.Add(new("DataHeader", "Name", "Type"));
+                Section("Data");
+                rows.Add(new("DataHeader", "Name", "Live value · provenance"));
                 foreach (var attr in IedBrowserStructuredDetails.AttributeRows(obj.Attributes, obj.Name))
                     rows.Add(attr);
                 break;
