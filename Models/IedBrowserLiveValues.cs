@@ -91,7 +91,7 @@ public sealed class IedBrowserLiveValues
     public void Publish(string reference, string fc, string? value, string? quality,
         string? timestamp, string source)
         => TryPublish(reference, fc, value, quality, timestamp, source, expectedAssociation: null,
-            utcTimeEvidence: null);
+            utcTimeEvidence: null, qualityEvidence: null);
 
     /// <summary>
     /// Ordered, association-bound publication. A callback from a cancelled or
@@ -99,13 +99,15 @@ public sealed class IedBrowserLiveValues
     /// </summary>
     public bool PublishForAssociation(long association, string reference, string fc,
         string? value, string? quality, string? timestamp, string source,
-        Iec61850UtcTimeEvidence? utcTimeEvidence = null)
+        Iec61850UtcTimeEvidence? utcTimeEvidence = null,
+        MmsQualityEvidence? qualityEvidence = null)
         => TryPublish(reference, fc, value, quality, timestamp, source, association,
-            utcTimeEvidence);
+            utcTimeEvidence, qualityEvidence);
 
     private bool TryPublish(string reference, string fc, string? value, string? quality,
         string? timestamp, string source, long? expectedAssociation,
-        Iec61850UtcTimeEvidence? utcTimeEvidence)
+        Iec61850UtcTimeEvidence? utcTimeEvidence,
+        MmsQualityEvidence? qualityEvidence)
     {
         if (string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(fc) ||
             string.IsNullOrWhiteSpace(value) ||
@@ -124,9 +126,10 @@ public sealed class IedBrowserLiveValues
             channels ??= new IedBrowserObservationChannels();
             var observed = new IedBrowserObservedValue(value.Trim(), quality ?? "",
                 timestamp ?? "", source, DateTime.UtcNow, _version + 1, _association,
-                QualityBits: IsQualityReference(key) &&
-                    MmsQualityDecoder.TryDecodeRendered(value, out var decodedQuality)
-                        ? decodedQuality : null,
+                QualityBits: IsQualityReference(key)
+                    ? qualityEvidence ?? (MmsQualityDecoder.TryDecodeRendered(value,
+                        out var decodedQuality) ? decodedQuality : null)
+                    : null,
                 TimeBits: IsTimeReference(key) &&
                     utcTimeEvidence is { IsDecoded: true, HasWireProvenance: true }
                         ? utcTimeEvidence : null);
