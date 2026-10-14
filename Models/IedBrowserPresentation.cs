@@ -174,6 +174,29 @@ public sealed record IedBrowserDetailRow(
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Value)));
         }
     }
+    private string _observationSource = "";
+    private string _observationTooltip = "";
+    /// <summary>Explicit observation channel, never model metadata or a source guess.</summary>
+    public string ObservationSource
+    {
+        get => _observationSource;
+        set
+        {
+            if (_observationSource == value) return;
+            _observationSource = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ObservationSource)));
+        }
+    }
+    public string ObservationTooltip
+    {
+        get => _observationTooltip.Length != 0 ? _observationTooltip : Tooltip;
+        set
+        {
+            if (_observationTooltip == value) return;
+            _observationTooltip = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ObservationTooltip)));
+        }
+    }
     public event PropertyChangedEventHandler? PropertyChanged;
     public string ValueReference { get; init; } = "";
     // A typed child of a received q/t field; never treat the entire parent
