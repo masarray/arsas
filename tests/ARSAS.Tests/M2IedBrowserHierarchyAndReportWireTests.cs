@@ -255,53 +255,7 @@ public sealed class M2IedBrowserHierarchyAndReportWireTests
             ObjectReference = owner,
             AttributePath = "phsCA." + path,
             FunctionalConstraint = "MX",
-            MmsReference = "LD/MMXU1$MX$PPV$phsCA$" + path.Replace('.', '
-    {
-        var obj = ModelDo();
-        var ln = new LiveIedLogicalNodeModel
-        {
-            Name = "CSWI1", LnClass = "CSWI", DataObjects = [obj]
-        };
-        var page = new IedBrowserTreeRow(
-            "model/ln/LD/CSWI1", "CSWI1", "LN", 2, ln);
-        var rows = IedBrowserPresentation.Details(page, null, connected: true);
-        var doRow = Assert.Single(rows.Where(row => row.IsDataObject));
-        Assert.Equal("Pos", doRow.Name);
-        Assert.True(doRow.HasChildren);
-        Assert.Equal("DO", doRow.Glyph);
-        Assert.DoesNotContain(rows, row => row.Kind == "Object" && row.Name == "Pos");
-        var tree = new IedBrowserDetailProjection();
-        tree.Reset(rows);
-        tree.Toggle(doRow);
-        Assert.Contains(tree.Rows, row => row.Name == "stVal [ST]");
-        Assert.Contains(tree.Rows, row => row.Name == "q [ST]");
-        Assert.Contains(tree.Rows, row => row.Name == "t [ST]");
-        var origin = Assert.Single(tree.Rows.Where(row => row.Name == "origin [ST]"));
-        Assert.True(origin.HasChildren);
-        tree.Toggle(origin);
-        Assert.Contains(tree.Rows, row => row.Name == "orCat [ST]");
-    }
-
-    [Fact]
-    public void DataModel_DoPageUsesStructuredHierarchyInsteadOfFlatteningDottedDaNames()
-    {
-        var obj = ModelDo();
-        var page = new IedBrowserTreeRow(
-            "model/do/LD/CSWI1.Pos", "Pos", "DO", 3, obj);
-        var rows = IedBrowserPresentation.Details(page, null, connected: true);
-        Assert.DoesNotContain(rows, row => row.Kind == "Object");
-        var sbow = Assert.Single(rows.Where(row => row.Name == "SBOw [CO]"));
-        var tree = new IedBrowserDetailProjection();
-        tree.Reset(rows);
-        tree.Toggle(sbow);
-        var nested = Assert.Single(tree.Rows.Where(row => row.Name == "origin [CO]"));
-        tree.Toggle(nested);
-        Assert.Contains(tree.Rows, row => row.Name == "orCat [CO]");
-        Assert.DoesNotContain(tree.Rows,
-            row => row.Name == "SBOw.origin.orCat [CO]");
-    }
-}
-)
+            MmsReference = "LD/MMXU1$MX$PPV$phsCA$" + path.Replace('.', '$')
         };
         var obj = new LiveIedDataObjectModel
         {
