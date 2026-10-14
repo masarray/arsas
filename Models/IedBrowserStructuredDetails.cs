@@ -21,6 +21,7 @@ public static class IedBrowserStructuredDetails
         // can have a single schema-verified FC for independently observed
         // phase vectors. Never infer this FC from the object's label.
         var candidateFcs = obj.Attributes
+            .Where(a => a.FunctionalConstraint is "MX" or "ST")
             .Select(a => (a.FunctionalConstraint ?? "").Trim().ToUpperInvariant())
             .Where(fc => fc.Length > 0)
             .Distinct(StringComparer.Ordinal)

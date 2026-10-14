@@ -30,7 +30,9 @@ public sealed class IedBrowserObservedVectorM213HTests
                 Attribute("phsB.cVal.mag.f"), Attribute("phsB.cVal.ang.f"),
                 Attribute("phsC.cVal.mag.f"), Attribute("phsC.cVal.ang.f"),
                 Attribute("phsC.q"), Attribute("phsC.t"),
-                Attribute("phsC.instCVal.mag.f")
+                Attribute("phsC.instCVal.mag.f"),
+                Attribute("phsC.units.SIUnit", "CF"),
+                Attribute("phsC.units.multiplier", "CF")
             ]
         };
 
@@ -48,6 +50,9 @@ public sealed class IedBrowserObservedVectorM213HTests
         Assert.Equal("MX", root.FunctionalConstraint);
         Assert.Equal(["phsA", "phsB", "phsC"],
             root.VectorComponents.Select(x => x.Label).ToArray());
+        // Configuration companions (CF) must never disqualify the exact MX
+        // process vectors nor be interpreted as raw process observations.
+        Assert.All(root.VectorComponents, c => Assert.Equal("MX", c.Fc));
         var projection = new IedBrowserDetailProjection();
         projection.Reset(IedBrowserStructuredDetails.AttributeRows(obj.Attributes, obj.Name));
         var phase = Assert.Single(projection.Rows, r => r.Name == "phsC [MX]");
@@ -133,6 +138,23 @@ public sealed class IedBrowserObservedVectorM213HTests
             values, row.VectorComponents, Units(), true, out _));
         Assert.False(values.PublishForAssociation(session, leaf, "MX",
             "9999", "", "", "Report"));
+    }
+
+
+    [Fact]
+    public void IncompatibleVectorStructureDoesNotPairAngleFromAnotherOwner()
+    {
+        var obj = new LiveIedDataObjectModel
+        {
+            Name = "PhV", Reference = Owner,
+            Attributes =
+            [
+                Attribute("phsC.mag.f"),
+                Attribute("phsC.cVal.ang.f")
+            ]
+        };
+        var root = IedBrowserStructuredDetails.DataObject(obj, "MX");
+        Assert.Empty(root.VectorComponents);
     }
 
     [Fact]
