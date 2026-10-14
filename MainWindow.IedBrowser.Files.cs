@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -17,6 +19,10 @@ public partial class MainWindow
 {
     private IedBrowserFileCatalog? _iedBrowserFileCatalog;
     private CancellationTokenSource? _iedBrowserFileTransferOperation;
+    private IedBrowserFileCatalog? _iedBrowserShownCatalog;
+    private AR.Iec61850.Discovery.LiveIedModelDiscoveryDocument? _iedBrowserShownFileModel;
+    private Iec61850MonitorDevice? _iedBrowserShownFileOwner;
+    private bool _iedBrowserUpdatingFileSelection;
     private static string BrowserRecordDestinationRoot => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
         "ARSAS Fault Records");
@@ -34,8 +40,19 @@ public partial class MainWindow
             IedBrowserFileTransferOverlay.Visibility = Visibility.Collapsed;
         }
         IedBrowserDetailList.Visibility = isFiles ? Visibility.Collapsed : Visibility.Visible;
-        IedBrowserFilesGrid.Visibility = isFiles ? Visibility.Visible : Visibility.Collapsed;
+        IedBrowserFilesPanel.Visibility = isFiles ? Visibility.Visible : Visibility.Collapsed;
         if (!isFiles) return;
+        if (ReferenceEquals(_iedBrowserShownFileOwner, SelectedDevice) &&
+            ReferenceEquals(_iedBrowserShownFileModel, model) &&
+            ReferenceEquals(_iedBrowserShownCatalog, _iedBrowserFileCatalog) &&
+            IedBrowserFilesGrid.ItemsSource is not null)
+        {
+            RefreshIedBrowserFileSelection();
+            return; // never rebuild the grid for a reporting/live-value tick
+        }
+        var previousPath = ReferenceEquals(_iedBrowserShownFileOwner, SelectedDevice)
+            ? (IedBrowserFilesGrid.SelectedItem as IedBrowserRemoteFile)?.RemotePath
+            : null;
 
         // Do not merge SCL-only files with live file identities of different
         // sources as though they were the same verified MMS directory entry.
@@ -51,10 +68,60 @@ public partial class MainWindow
                 file.SizeBytes, DateTimeOffset.TryParse(file.LastModified,
                     out var modified) ? modified : null))
             ?? Enumerable.Empty<IedBrowserRemoteFile>();
-        IedBrowserFilesGrid.ItemsSource = live.Concat(inferred)
+        var rows = live.Concat(inferred)
             .OrderBy(file => file.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(file => file.RemotePath, StringComparer.Ordinal)
             .ToArray();
+        _iedBrowserUpdatingFileSelection = true;
+        try
+        {
+            IedBrowserFilesGrid.ItemsSource = rows;
+            _iedBrowserShownFileOwner = SelectedDevice;
+            _iedBrowserShownFileModel = model;
+            _iedBrowserShownCatalog = _iedBrowserFileCatalog;
+            // First file is visibly selected on initial browse, with a stable
+            // identity-based restore across refresh. Never carry another IED's
+            // previous row selection into this workspace.
+            IedBrowserFilesGrid.SelectedItem = rows.FirstOrDefault(row =>
+                previousPath != null &&
+                string.Equals(row.RemotePath, previousPath, StringComparison.Ordinal)) ??
+                rows.FirstOrDefault();
+        }
+        finally { _iedBrowserUpdatingFileSelection = false; }
+        RefreshIedBrowserFileSelection();
+    }
+
+    private void IedBrowserFiles_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_iedBrowserUpdatingFileSelection && ReferenceEquals(sender, IedBrowserFilesGrid))
+            RefreshIedBrowserFileSelection();
+    }
+
+    private void RefreshIedBrowserFileSelection()
+    {
+        if (IedBrowserFileSelectionText == null || IedBrowserFilesDownloadSelectedButton == null)
+            return;
+        var selected = IedBrowserFilesGrid.SelectedItem as IedBrowserRemoteFile;
+        var canDownload = selected is not null &&
+            _iedBrowserFileCatalog?.TryGetRecord(selected.RemotePath, out _, out _) == true;
+        IedBrowserFilesDownloadSelectedButton.IsEnabled = canDownload &&
+            _iedBrowserFileTransferOperation is null;
+        IedBrowserFileSelectionText.Text = selected is null
+            ? "No file selected · Click to select · Double-click to open"
+            : $"Selected: {selected.Name} · Double-click to open · Right-click to download";
+        IedBrowserFileSelectionText.ToolTip = selected?.RemotePath;
+    }
+
+    private void IedBrowserFile_RightClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is DataGridRow { DataContext: IedBrowserRemoteFile file })
+            IedBrowserFilesGrid.SelectedItem = file;
+    }
+
+    private async void IedBrowserDownloadSelected_Click(object sender, RoutedEventArgs e)
+    {
+        if (IedBrowserFilesGrid.SelectedItem is IedBrowserRemoteFile file)
+            await TransferOrOpenIedBrowserFileAsync(file, openAfterDownload: false);
     }
 
     private void IedBrowserFile_LoadingRow(object sender, DataGridRowEventArgs e)
@@ -72,6 +139,7 @@ public partial class MainWindow
     {
         if (sender is not DataGridRow { DataContext: IedBrowserRemoteFile file })
             return;
+        IedBrowserFilesGrid.SelectedItem = file;
         e.Handled = true;
         await TransferOrOpenIedBrowserFileAsync(file, openAfterDownload: true);
     }
@@ -96,6 +164,22 @@ public partial class MainWindow
         IedBrowserFileTransferProgress.Value = Math.Clamp(progress, 0d, 100d);
     }
 
+    private static void OpenIedBrowserDownloadedFolder(string directory)
+    {
+        if (!Directory.Exists(directory))
+            throw new DirectoryNotFoundException("Verified COMTRADE folder no longer exists.");
+        if (!OperatingSystem.IsWindows())
+            throw new PlatformNotSupportedException("Windows Explorer is required to reveal the folder.");
+        using var explorer = Process.Start(new ProcessStartInfo
+        {
+            FileName = Path.GetFullPath(directory),
+            UseShellExecute = true,
+            Verb = "open"
+        });
+        if (explorer is null)
+            throw new Win32Exception("Windows Explorer could not open the COMTRADE folder.");
+    }
+
     private async Task TransferOrOpenIedBrowserFileAsync(
         IedBrowserRemoteFile file, bool openAfterDownload)
     {
@@ -115,25 +199,36 @@ public partial class MainWindow
             return;
         }
 
-        if (!openAfterDownload && IedBrowserLocalRecordEvidence.TryFindComplete(
-                record, BrowserRecordDestinationRoot, out var prior))
+        if (string.IsNullOrWhiteSpace(device.IpAddress))
         {
-            IedBrowserDetailStatus.Text = $"Already downloaded: {prior}";
+            IedBrowserDetailStatus.Text = "An MMS IP address is required for verified file downloads.";
             return;
         }
+        var destination = IedBrowserRecordProvenanceCache.DeviceRoot(
+            BrowserRecordDestinationRoot, device.Name, device.IpAddress, device.Port);
 
         var cts = CancellationTokenSource.CreateLinkedTokenSource(_applicationCancellation.Token);
         cts.CancelAfter(TimeSpan.FromMinutes(10));
         _iedBrowserFileTransferOperation = cts;
+        RefreshIedBrowserFileSelection();
         var source = device;
         var currentRecord = record;
         ShowBrowserFileTransfer($"Preparing {currentRecord.BaseName}…", indeterminate: true);
         try
         {
             string localDirectory;
-            if (IedBrowserLocalRecordEvidence.TryFindComplete(
-                    currentRecord, BrowserRecordDestinationRoot, out var existing))
-                localDirectory = existing; // no re-transfer of verified package
+            // Fingerprint complete local files off the dispatcher before reuse.
+            // A cached package MUST match this IED+endpoint, MMS record identity,
+            // timestamp and SHA-256 for every associated remote member.
+            var cached = await Task.Run(() =>
+            {
+                var found = IedBrowserRecordProvenanceCache.TryFindVerified(
+                    currentRecord, destination, out var existingPath);
+                return (found, existingPath);
+            }, cts.Token);
+            cts.Token.ThrowIfCancellationRequested();
+            if (cached.found)
+                localDirectory = cached.existingPath;
             else
             {
                 if (string.IsNullOrWhiteSpace(source.IpAddress))
@@ -155,12 +250,17 @@ public partial class MainWindow
                 await using var transfer = new FaultRecordTransferClient();
                 await transfer.ConnectAsync(source.IpAddress, source.Port, cts.Token);
                 var result = await transfer.DownloadAsync(
-                    currentRecord, BrowserRecordDestinationRoot, progress, cts.Token);
+                    currentRecord, destination, progress, cts.Token);
                 cts.Token.ThrowIfCancellationRequested();
                 if (!IedBrowserLocalRecordEvidence.ValidateFresh(currentRecord, result,
                         out var validationError))
                     throw new InvalidDataException(validationError);
                 localDirectory = result.DestinationDirectory;
+                // Atomic local provenance sidecar, created only for a completely
+                // validated package. Unknown/stale source metadata cannot be
+                // treated as a reusable download on a later session.
+                await Task.Run(() => IedBrowserRecordProvenanceCache.RecordVerifiedTransfer(
+                    currentRecord, destination, localDirectory), cts.Token);
             }
 
             cts.Token.ThrowIfCancellationRequested();
@@ -171,7 +271,11 @@ public partial class MainWindow
 
             if (!openAfterDownload)
             {
-                IedBrowserDetailStatus.Text = $"Download complete · {currentRecord.BaseName}";
+                // Operator explicitly chose Download rather than Open. Reveal the
+                // actual COMPLETE record folder in Windows Explorer, never a
+                // process-launchable remote path or a partial staging directory.
+                OpenIedBrowserDownloadedFolder(localDirectory);
+                IedBrowserDetailStatus.Text = $"Downloaded · {currentRecord.BaseName} · {localDirectory}";
                 return;
             }
             if (!ArdIrecViewerLauncher.TryResolveComtradeCfg(
@@ -226,6 +330,7 @@ public partial class MainWindow
             {
                 _iedBrowserFileTransferOperation = null;
                 IedBrowserFileTransferOverlay.Visibility = Visibility.Collapsed;
+                RefreshIedBrowserFileSelection();
             }
             cts.Dispose();
         }
