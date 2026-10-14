@@ -125,6 +125,10 @@ public sealed class M2IedSchemaIndexTests
         Assert.Equal(Position + ".q", quality);
         Assert.True(index.TryGetQualityCompanion(Position, "ST", out quality));
         Assert.Equal(Position + ".q", quality);
+        Assert.True(index.TryGetDerivedQualityCompanion(Position + ".stVal", "ST",
+            out quality));
+        Assert.Equal(Position + ".q", quality);
+        Assert.False(index.TryGetDerivedQualityCompanion(Position + ".q", "ST", out _));
         Assert.False(index.TryGetQualityCompanion(Position + ".mag.f", "MX", out _));
         Assert.False(index.TryGetQualityCompanion("LD/CSWI10.Pos.stVal", "ST", out _));
         Assert.False(index.TryGetQualityCompanion("LD/CSWI1.pos.stVal", "ST", out _));
