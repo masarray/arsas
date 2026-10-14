@@ -243,7 +243,10 @@ public partial class MainWindow
         // can finish before the final posted callbacks execute. Ingestion
         // must be synchronous on the producer side, with coalesced UI drain
         // and a final drain BEFORE disposing the operation token.
-        var readValues = new IedBrowserReadResultInbox(() =>
+        // Declare before binding the callback: a local drain function closes
+        // over this inbox and C# definite-assignment rules require the slot.
+        IedBrowserReadResultInbox readValues = null!;
+        readValues = new IedBrowserReadResultInbox(() =>
         {
             Dispatcher.BeginInvoke(DispatcherPriority.Background,
                 new Action(DrainReadResults));
