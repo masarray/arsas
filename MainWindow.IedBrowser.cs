@@ -27,6 +27,7 @@ public partial class MainWindow
     private bool _iedBrowserForceRefresh;
     private Iec61850MonitorDevice? _iedBrowserCachedDevice;
     private LiveIedModelDiscoveryDocument? _iedBrowserCachedModel;
+    private IedBrowserSchemaIndex? _iedBrowserValueSchemaIndex;
     private MmsRcbAvailabilityResult? _iedBrowserCachedSnapshot;
     private IReadOnlyList<RcbExportRow> _iedBrowserCachedRcbRows = Array.Empty<RcbExportRow>();
     private string _iedBrowserCachedSourcePath = string.Empty;
@@ -311,7 +312,8 @@ public partial class MainWindow
             if (string.IsNullOrWhiteSpace(row.ValueReference)) continue;
             if (!device.LiveValues.TryGet(row.ValueReference,
                     row.FunctionalConstraint, out var live,
-                    preferReport: device.IsMonitoring))
+                    preferReport: device.IsMonitoring,
+                    schema: _iedBrowserValueSchemaIndex))
             {
                 row.Value = "Not read";
                 continue;
@@ -433,6 +435,12 @@ public partial class MainWindow
         }
         catch (IOException) { /* An unavailable source file cannot poison in-memory browsing. */ }
         catch (UnauthorizedAccessException) { /* Still show the cached/discovered model. */ }
+
+        // Model index is immutable and independent from transient report/RCB
+        // refreshes. Build once per actual engineering schema object.
+        if (!ReferenceEquals(_iedBrowserValueSchemaIndex?.SourceModel, model))
+            _iedBrowserValueSchemaIndex = model is null
+                ? null : new IedBrowserSchemaIndex(model);
 
         var changed = _iedBrowserForceRefresh ||
                       !ReferenceEquals(device, _iedBrowserCachedDevice) ||

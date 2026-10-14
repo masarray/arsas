@@ -52,10 +52,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         // Successful runtime activation only; never inferred from SCL definitions.
         public ConcurrentDictionary<string, byte> BrowserActiveRcbs { get; } =
             new(StringComparer.OrdinalIgnoreCase);
-        // Per-association caches keep report projection independent of UI size.
-        public Dictionary<string, string> BrowserReportFcCache { get; } =
-            new(StringComparer.OrdinalIgnoreCase);
-        public HashSet<string>? BrowserDataObjects { get; set; }
+        // Immutable engineering authority shared across observed report frames.
+        // Rebuilt only if the owner changes its SCL/discovery model object.
+        public IedBrowserSchemaIndex? BrowserSchema { get; set; }
         // Captured on association acceptance; old receive pumps cannot publish
         // into a newer connection even if the IED identity is the same.
         public long BrowserObservationAssociation { get; set; }
@@ -636,8 +635,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.States.Clear();
         session.ActiveReportPlans.Clear();
         session.BrowserActiveRcbs.Clear();
-        session.BrowserReportFcCache.Clear();
-        session.BrowserDataObjects = null;
+        session.BrowserSchema = null;
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
         session.ReportReferenceIndex.Clear();
@@ -1423,15 +1421,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     // selected-SCADA-point filtering, without triggering reads or GI.
                     var reportModel = session.Device.SclWorkspace?.DesignModel ??
                                       session.Device.LiveDiscoveryModel;
-                    var memberKey = plan.DataSetReference + "|" +
-                        IedBrowserLiveValues.CanonicalReference(update.Reference);
-                    if (!session.BrowserReportFcCache.TryGetValue(memberKey, out var reportFc))
-                    {
-                        reportFc = IedBrowserReportValueAuthority.TryResolveFunctionalConstraint(
-                            reportModel, plan.DataSetReference, update.Reference,
+                    if (!ReferenceEquals(session.BrowserSchema?.SourceModel, reportModel))
+                        session.BrowserSchema = reportModel is null
+                            ? null : new IedBrowserSchemaIndex(reportModel);
+                    var schema = session.BrowserSchema;
+                    var reportFc = schema != null &&
+                        schema.TryResolveReportFc(plan.DataSetReference, update.Reference,
                             out var resolvedFc) ? resolvedFc : "";
-                        session.BrowserReportFcCache[memberKey] = reportFc;
-                    }
                     if (reportFc.Length > 0)
                     {
                         if (update.HasValue &&
@@ -1446,23 +1442,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                         if (update.HasQuality &&
                             IedBrowserReportValueAuthority.SafeScalar(update.Quality))
                         {
-                            var normalizedRef = IedBrowserLiveValues.CanonicalReference(update.Reference);
-                            session.BrowserDataObjects ??= reportModel?.LogicalDevices
-                                .SelectMany(ld => ld.LogicalNodes)
-                                .SelectMany(ln => ln.DataObjects)
-                                .Select(obj => IedBrowserLiveValues.CanonicalReference(obj.Reference))
-                                .ToHashSet(StringComparer.OrdinalIgnoreCase)
-                                ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                            var owner = normalizedRef;
-                            while (!session.BrowserDataObjects.Contains(owner))
-                            {
-                                var dot = owner.LastIndexOf('.');
-                                if (dot <= owner.IndexOf('/')) { owner = ""; break; }
-                                owner = owner[..dot];
-                            }
-                            if (owner.Length > 0)
+                            // The quality belongs to this exact declared DO/FC,
+                            // not the nearest name-like prefix or another FC.
+                            if (schema != null &&
+                                schema.TryGetDerivedQualityCompanion(
+                                    update.Reference, reportFc, out var qualityReference))
                                 session.Device.LiveValues.PublishForAssociation(
-                                    session.BrowserObservationAssociation, owner + ".q",
+                                    session.BrowserObservationAssociation, qualityReference,
                                     reportFc, update.Quality, "", update.Timestamp, "Report quality");
                         }
                     }
@@ -2161,8 +2147,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         // slow vendor RCB read/write can never hold the reconnect state machine hostage.
         session.ActiveReportPlans.Clear();
         session.BrowserActiveRcbs.Clear();
-        session.BrowserReportFcCache.Clear();
-        session.BrowserDataObjects = null;
+        session.BrowserSchema = null;
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
         session.ReportStreams.Clear();
@@ -2478,8 +2463,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.MonitorTask = null;
         session.ActiveReportPlans.Clear();
         session.BrowserActiveRcbs.Clear();
-        session.BrowserReportFcCache.Clear();
-        session.BrowserDataObjects = null;
+        session.BrowserSchema = null;
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
         session.StaticReportProjection.Reset();
