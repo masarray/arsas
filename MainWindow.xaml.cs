@@ -272,8 +272,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             SetStatus(status);
             AddLog("INFO", "SCL", status);
 
+            // A valid discovered/SCL IED schema is enough to browse even when
+            // no process signals were materialized into the SCADA catalog.
             var selectableDevices = importedDevices
-                .Where(device => device.Signals.Count > 0)
+                .Where(device => device.Signals.Count > 0 ||
+                    (device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel)
+                        is { LogicalDevices.Count: > 0 })
                 .Distinct()
                 .ToArray();
             SclSignalSelectionMode? sharedSelectionMode = null;
@@ -957,7 +961,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             device.RefreshComputed();
 
             var discoveredDataSetCount = device.LiveDiscoveryModel?.DataSets.Count ?? 0;
-            if (openWizard && (device.SignalCount > 0 || discoveredDataSetCount > 0))
+            var discoveredLdCount = device.LiveDiscoveryModel?.LogicalDevices.Count ?? 0;
+            if (openWizard && (device.SignalCount > 0 ||
+                               discoveredDataSetCount > 0 || discoveredLdCount > 0))
             {
                 if ((selectDevice || ReferenceEquals(SelectedDevice, device)) && !_signalSelectionWizardOpen)
                 {
