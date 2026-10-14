@@ -250,10 +250,14 @@ public sealed class IedBrowserPresentationTests
         var lns = IedBrowserPresentation.Details(ld.NavigateTo!, model, false)
             .Where(r => r.NavigateTo?.Kind == "LN").ToArray();
         Assert.Equal(["LLN0", "ATCC1"], lns.Select(r => r.Name).ToArray());
-        var dos = IedBrowserPresentation.Details(lns[0].NavigateTo!, model, false)
-            .Where(r => r.NavigateTo?.Kind == "DO").ToArray();
-        Assert.Single(dos);
-        Assert.Equal("Beh", dos[0].Name);
+        // M2.6B: LN's right pane projects real DO→DA/BDA data rows, not
+        // navigation cards. The left tree still stops at LN.
+        var details = IedBrowserPresentation.Details(lns[0].NavigateTo!, model, false);
+        var doRow = Assert.Single(details.Where(r => r.IsDataObject));
+        Assert.Equal("Beh", doRow.Name);
+        Assert.Equal("DO", doRow.Glyph);
+        Assert.Equal("ZIVLD/LLN0.Beh", doRow.ValueReference);
+        Assert.DoesNotContain(details, r => r.NavigateTo?.Kind == "DO");
     }
     [Fact]
     public void ReportFlags_UseEngineReservedBitMapping_AndUnknownDoesNotMeanDisabled()
@@ -392,16 +396,21 @@ public sealed class IedBrowserPresentationTests
         tree.Expand(ln); // Cannot add DO/DA to the left pane, even via API.
         Assert.DoesNotContain(tree.Rows, r => r.Kind is "DO" or "DA");
 
-        var doRow = Assert.Single(IedBrowserPresentation.Details(ln, model, false)
-            .Where(r => r.NavigateTo?.Kind == "DO"));
-        var doPage = doRow.NavigateTo!;
-        Assert.Same(ln, doPage.Parent);
-        var daRow = Assert.Single(IedBrowserPresentation.Details(doPage, model, false)
-            .Where(r => r.NavigateTo?.Kind == "DA"));
-        Assert.Equal("Pos.stVal", daRow.Name);
-        Assert.Same(doPage, daRow.NavigateTo!.Parent);
-        Assert.Contains(IedBrowserPresentation.Details(daRow.NavigateTo!, model, false),
-            r => r.Kind == "Property" && r.Name == "FC" && r.Value == "ST");
+        // The LN detail pane now expands DO and DA natively, without
+        // manufacturing a duplicate navigation hierarchy in the left tree.
+        var rows = IedBrowserPresentation.Details(ln, model, false);
+        var doRow = Assert.Single(rows.Where(r => r.IsDataObject));
+        Assert.Equal("Pos", doRow.Name);
+        Assert.Equal("DO", doRow.Glyph);
+        Assert.True(doRow.HasChildren);
+        Assert.Null(doRow.NavigateTo);
+        var hierarchy = new IedBrowserDetailProjection();
+        hierarchy.Reset(rows);
+        hierarchy.Toggle(doRow);
+        var daRow = Assert.Single(hierarchy.Rows.Where(r => r.Name == "stVal [ST]"));
+        Assert.Equal("LD/CSWI1$ST$Pos$stVal", daRow.ValueReference);
+        Assert.Equal("ST", daRow.FunctionalConstraint);
+        Assert.Equal("DA", daRow.Glyph);
         Assert.DoesNotContain(tree.Rows, r => r.Kind is "DO" or "DA");
     }
 
