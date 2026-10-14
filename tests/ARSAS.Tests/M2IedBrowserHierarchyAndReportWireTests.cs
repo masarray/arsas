@@ -299,6 +299,96 @@ public sealed class M2IedBrowserHierarchyAndReportWireTests
         Assert.Equal(owner + ".cVal", ambiguous[0].ValueReference);
     }
 
+    [Theory]
+    [InlineData("TotW", "mag.f", "instMag.f")]
+    [InlineData("phsA", "cVal.mag.f", "instCVal.mag.f")]
+    public void MeasuredValueNormalAndInstantaneousPair_ResolveExactParentWithoutFabrication(
+        string doName, string normalRelative, string instantRelative)
+    {
+        var owner = "LD/MMXU1." + doName;
+        LiveIedDataAttributeModel Attr(string relative) => new()
+        {
+            ObjectReference = owner,
+            AttributePath = doName + "." + relative,
+            FunctionalConstraint = "MX",
+            MmsReference = "LD/MMXU1$MX$" + doName + "$" +
+                relative.Replace('.', '$')
+        };
+        var obj = new LiveIedDataObjectModel
+        {
+            Name = doName, Reference = owner,
+            Attributes = [Attr(instantRelative), Attr(normalRelative),
+                Attr("q"), Attr("t")]
+        };
+        var normal = owner + "." + normalRelative;
+        var instant = owner + "." + instantRelative;
+        Assert.True(IedBrowserSchemaIndex.TryGetUniqueProcessLeaf(
+            obj, out var selected, out var fc));
+        Assert.Equal(normal, selected);
+        Assert.Equal("MX", fc);
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel
+            {
+                LogicalNodes = [new LiveIedLogicalNodeModel { DataObjects = [obj] }]
+            }]
+        };
+        var schema = new IedBrowserSchemaIndex(model);
+        Assert.True(schema.TryGetPrimaryLeaf(owner, "MX", out var primary));
+        Assert.Equal(normal, primary);
+        var dataSetRow = IedBrowserStructuredDetails.Member(
+            new LiveIedDataSetMemberModel
+            {
+                Reference = owner, FunctionalConstraint = "MX"
+            }, model);
+        var modelRow = IedBrowserStructuredDetails.DataObject(obj, "MX");
+        Assert.Equal(normal, dataSetRow.ValueReference);
+        Assert.Equal(normal, modelRow.ValueReference);
+
+        var live = new IedBrowserLiveValues();
+        var association = live.BeginAssociation();
+        Assert.True(live.PublishForAssociation(association, instant,
+            "MX", "99", "", "", "MMS Read"));
+        // Parent never borrows the instantaneous value before its normal
+        // IEC process magnitude has real observation evidence.
+        Assert.False(live.TryGet(owner, "MX", out _,
+            schema: schema));
+        Assert.True(live.PublishForAssociation(association, normal,
+            "MX", "0", "", "", "Report"));
+        Assert.True(live.TryGet(owner, "MX", out var observed,
+            schema: schema));
+        Assert.Equal("0", observed.Value);
+        Assert.Equal("Report", observed.Source);
+        Assert.True(live.TryGet(instant, "MX", out var instantObserved));
+        Assert.Equal("99", instantObserved.Value);
+    }
+
+    [Fact]
+    public void UnrelatedProcessLeavesAndCrossFcCandidates_DoNotSelectArbitraryValue()
+    {
+        const string owner = "LD/CSWI1.Pos";
+        LiveIedDataAttributeModel Attr(string fc, string leaf) => new()
+        {
+            ObjectReference = owner, FunctionalConstraint = fc,
+            AttributePath = "Pos." + leaf,
+            MmsReference = "LD/CSWI1$" + fc + "$Pos$" + leaf
+        };
+        var ambiguous = new LiveIedDataObjectModel
+        {
+            Name = "Pos", Reference = owner,
+            Attributes = [Attr("ST", "stVal"), Attr("ST", "posVal")]
+        };
+        Assert.False(IedBrowserSchemaIndex.TryGetUniqueProcessLeaf(
+            ambiguous, out _, out _));
+        var differentFc = new LiveIedDataObjectModel
+        {
+            Name = "Pos", Reference = owner,
+            Attributes = [Attr("ST", "stVal"), Attr("MX", "posVal")]
+        };
+        Assert.False(IedBrowserSchemaIndex.TryGetUniqueProcessLeaf(
+            differentFc, out _, out _));
+    }
+
     [Fact]
     public void DataModel_LnPageShowsExpandableDosAndNestedAttributes_NotFlatNavigation()
     {

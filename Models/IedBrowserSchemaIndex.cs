@@ -21,7 +21,7 @@ public sealed class IedBrowserSchemaIndex
         new(StringComparer.Ordinal);
 
     private static readonly HashSet<string> ProcessLeaves =
-        new(["stVal", "posVal", "valWTr", "general", "mag.f", "instMag.f", "cVal.mag.f"],
+        new(["stVal", "posVal", "valWTr", "general", "mag.f", "instMag.f", "cVal.mag.f", "instCVal.mag.f"],
             StringComparer.Ordinal);
 
     public LiveIedModelDiscoveryDocument SourceModel { get; }
@@ -78,18 +78,20 @@ public sealed class IedBrowserSchemaIndex
                 }
                 paths.Add(reference);
             }
-            // If an FC has more than one process candidate, there is no
-            // unambiguous scalar DO alias. Leave the DO unobserved instead.
+            // Only IEC-defined steady/instantaneous magnitude alternatives
+            // permit deterministic scalar display priority. Unrelated process
+            // leaves remain ambiguous and are never merged.
             foreach (var (fc, paths) in primaries)
-                if (paths.Count == 1)
-                    _primaryLeaves[Key(owner, fc)] = paths.First();
+                if (TrySelectDisplayLeaf(owner, paths, out var primary))
+                    _primaryLeaves[Key(owner, fc)] = primary;
         }
     }
 
     /// <summary>
-    /// The only safe DO display alias is one unique process DA across all FCs.
-    /// It must already be declared inside the exact DO; never use a first-match
-    /// stVal suffix or borrow another object's leaf.
+    /// Resolve the one model-proven display process DA. IEC magnitude and
+    /// instantaneous magnitude are one explicitly sanctioned alternative pair:
+    /// the steady `mag/cVal` is the preferred displayed value. Other pairs
+    /// (such as stVal/posVal) remain ambiguous. No observed value is invented.
     /// </summary>
     public static bool TryGetUniqueProcessLeaf(
         LiveIedDataObjectModel obj, out string leaf, out string fc)
@@ -106,12 +108,52 @@ public sealed class IedBrowserSchemaIndex
             .Where(attr => attr.Reference.StartsWith(owner + ".", StringComparison.Ordinal)
                 && ProcessLeaves.Contains(attr.Reference[(owner.Length + 1)..]))
             .Distinct()
-            .Take(2)
+            .Take(3)
             .ToArray();
-        if (candidates.Length != 1) return false;
-        leaf = candidates[0].Reference;
+        if (candidates.Length == 0 || candidates.Select(x => x.Fc).Distinct().Count() != 1)
+            return false;
+        if (!TrySelectDisplayLeaf(owner, candidates.Select(x => x.Reference),
+            out leaf))
+            return false;
         fc = candidates[0].Fc;
         return true;
+    }
+
+    private static bool TrySelectDisplayLeaf(
+        string owner, IEnumerable<string> candidates, out string leaf)
+    {
+        leaf = "";
+        var paths = candidates.Distinct(StringComparer.Ordinal).Take(3).ToArray();
+        if (paths.Length == 1)
+        {
+            leaf = paths[0];
+            return true;
+        }
+        if (paths.Length != 2)
+            return false;
+
+        // IEC 61850 MX: magnitude (mag/cVal) and instantaneous magnitude
+        // (instMag/instCVal) are alternatives of the SAME measurement DO.
+        // Prefer the normal engineering measurement; retain the instantaneous
+        // attribute independently in the drill-down. Never select an arbitrary
+        // member of a multi-phase/vector/compound object.
+        var normal = owner + ".mag.f";
+        var instant = owner + ".instMag.f";
+        if (paths.Contains(normal, StringComparer.Ordinal) &&
+            paths.Contains(instant, StringComparer.Ordinal))
+        {
+            leaf = normal;
+            return true;
+        }
+        normal = owner + ".cVal.mag.f";
+        instant = owner + ".instCVal.mag.f";
+        if (paths.Contains(normal, StringComparer.Ordinal) &&
+            paths.Contains(instant, StringComparer.Ordinal))
+        {
+            leaf = normal;
+            return true;
+        }
+        return false;
     }
 
     private static string NormalizeFc(string? fc)
