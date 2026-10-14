@@ -33,10 +33,23 @@ public static class IedBrowserStructuredDetails
         var name = member.Reference;
         var slash = name.IndexOf('/');
         if (slash >= 0 && slash + 1 < name.Length) name = name[(slash + 1)..];
+        // Static FCD reports can expose only a scalar semantic descendant.
+        // Resolve a unique IEC process leaf once from the exact model owner.
+        var identity = IedBrowserLiveValues.CanonicalReference(member.Reference);
+        var exactObject = model?.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
+            .SelectMany(ln => ln.DataObjects)
+            .FirstOrDefault(obj => string.Equals(
+                IedBrowserLiveValues.CanonicalReference(obj.Reference), identity,
+                StringComparison.Ordinal));
+        var foundLeaf = exactObject is not null &&
+            IedBrowserSchemaIndex.TryGetUniqueProcessLeaf(
+                exactObject, out var leaf, out var leafFc) &&
+            string.Equals(leafFc, member.FunctionalConstraint,
+                StringComparison.OrdinalIgnoreCase);
         return new IedBrowserDetailRow("Data", $"{name} [{member.FunctionalConstraint}]", "Not read",
             depth, "DataSet directory; observed live values or explicit MMS read")
         {
-            ValueReference = member.Reference,
+            ValueReference = foundLeaf ? leaf : member.Reference,
             FunctionalConstraint = member.FunctionalConstraint,
             LoadChildren = () => DataSetMemberChildren(member, model, depth + 1)
         };
@@ -106,6 +119,10 @@ public static class IedBrowserStructuredDetails
             var hasDirect = matching.attr is not null;
             var attr = hasDirect ? matching.attr : groupArray[0].attr;
             var descendants = groupArray.Where(x => x.parts.Length > pathIndex + 1).ToArray();
+            // An intermediate DA (cVal/mag) may reflect its only descendant
+            // leaf; never choose among two siblings or cross an FC boundary.
+            var singleLeaf = !hasDirect && descendants.Length == 1
+                ? descendants[0].attr.MmsReference : null;
             Func<IReadOnlyList<IedBrowserDetailRow>>? children = null;
             if (descendants.Length > 0)
                 children = () => BuildAt(descendants, pathIndex + 1, depth + 1);
@@ -123,8 +140,8 @@ public static class IedBrowserStructuredDetails
                 // that exact depth. Keep the verified parent reference/FC.
                 ValueReference = hasDirect
                     ? attr.MmsReference
-                    : attr.ObjectReference + "." +
-                        string.Join(".", groupArray[0].parts.Take(pathIndex + 1)),
+                    : singleLeaf ?? (attr.ObjectReference + "." +
+                        string.Join(".", groupArray[0].parts.Take(pathIndex + 1))),
                 EvidenceKind = hasDirect && name == "q" ? "Quality" :
                     hasDirect && name == "t" ? "Timestamp" : "",
                 FunctionalConstraint = groupArray.All(x =>

@@ -21,6 +21,7 @@ public partial class MainWindow
     private readonly IedBrowserDetailProjection _iedBrowserDetails = new();
     private readonly IedBrowserNavigationTrail _iedBrowserNavigation = new();
     private bool _iedBrowserSyncingSelection;
+    private int _iedBrowserNavigationRenderTicket;
     private long _iedBrowserLastLiveVersion = -1;
     private IedBrowserTreeRow? _iedBrowserRenderedPage;
     private bool? _iedBrowserRenderedConnected;
@@ -474,8 +475,7 @@ public partial class MainWindow
             IedBrowserBackButton.IsEnabled = false;
             _iedBrowserTree.Reset([]);
             IedBrowserTreeGrid.ItemsSource = _iedBrowserTree.Rows;
-            _iedBrowserDetails.Reset([]);
-            IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
+            ReplaceIedBrowserDetails([]);
             UpdateIedBrowserFilesView(null, null);
             IedBrowserSubtitle.Text = "Select an IED in Explorer. Browsing does not open MMS sessions.";
             IedBrowserObjectPath.Text = "No IED selected";
@@ -614,22 +614,33 @@ public partial class MainWindow
     {
         if (!ReferenceEquals(sender, IedBrowserTreeGrid) || _iedBrowserSyncingSelection)
             return;
-        _iedBrowserNavigation.SelectFromTree(IedBrowserTreeGrid.SelectedItem as IedBrowserTreeRow);
-        var model = SelectedDevice?.LiveDiscoveryModel ?? SelectedDevice?.SclWorkspace?.DesignModel;
-        RenderIedBrowserSelection(_iedBrowserNavigation.Current,
-            model, SelectedDevice?.IsConnected == true);
-        if (_iedBrowserNavigation.Current?.Key == "category/files" &&
-            SelectedDevice is { IsConnected: true } fileDevice &&
-            !_iedBrowserFilesLoaded && !_iedBrowserFilesLoading)
-            _ = BrowseIedBrowserFilesAsync(fileDevice);
+        var chosen = IedBrowserTreeGrid.SelectedItem as IedBrowserTreeRow;
+        _iedBrowserNavigation.SelectFromTree(chosen);
+        var owner = SelectedDevice;
+        var ticket = ++_iedBrowserNavigationRenderTicket;
+        // The DataGrid mouse selection and WPF Selector storage are still in
+        // transition: never Reset the bound detail ListView in this event.
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            if (ticket != _iedBrowserNavigationRenderTicket ||
+                MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
+                !ReferenceEquals(SelectedDevice, owner) ||
+                !ReferenceEquals(_iedBrowserNavigation.Current, chosen) ||
+                !ReferenceEquals(IedBrowserTreeGrid.SelectedItem, chosen))
+                return;
+            var model = owner?.LiveDiscoveryModel ?? owner?.SclWorkspace?.DesignModel;
+            RenderIedBrowserSelection(chosen, model, owner?.IsConnected == true);
+            if (chosen?.Key == "category/files" &&
+                owner is { IsConnected: true } fileDevice &&
+                !_iedBrowserFilesLoaded && !_iedBrowserFilesLoading)
+                _ = BrowseIedBrowserFilesAsync(fileDevice);
+        }));
     }
     private void IedBrowserDetailToggle_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: IedBrowserDetailRow detail } || !detail.HasChildren)
             return;
-        _iedBrowserDetails.Toggle(detail);
-        _iedBrowserLastLiveVersion = -1;
-        RefreshIedBrowserVisibleValues();
+        ToggleIedBrowserDetails(detail);
         e.Handled = true;
     }
 
@@ -655,9 +666,7 @@ public partial class MainWindow
             return;
         // Quality/time and ordered dataset member rows drill down lazily in place,
         // preserving the selected IEC object and the surrounding report context.
-        _iedBrowserDetails.Toggle(detail);
-        _iedBrowserLastLiveVersion = -1;
-        RefreshIedBrowserVisibleValues();
+        ToggleIedBrowserDetails(detail);
         e.Handled = true;
     }
 
@@ -697,6 +706,33 @@ public partial class MainWindow
         finally { _iedBrowserSyncingSelection = false; }
     }
 
+    private void ReplaceIedBrowserDetails(IReadOnlyList<IedBrowserDetailRow> rows)
+    {
+        // Disconnect ListView selection before raising NotifyCollectionChanged
+        // Reset. A bound reset during routed selection can corrupt ItemInfo.
+        IedBrowserDetailList.SelectedItem = null;
+        IedBrowserDetailList.ItemsSource = null;
+        _iedBrowserDetails.Reset(rows);
+        IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
+    }
+
+    private void ToggleIedBrowserDetails(IedBrowserDetailRow row)
+    {
+        var owner = SelectedDevice;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            if (MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
+                !ReferenceEquals(owner, SelectedDevice) ||
+                !_iedBrowserDetails.Rows.Contains(row)) return;
+            IedBrowserDetailList.SelectedItem = null;
+            IedBrowserDetailList.ItemsSource = null;
+            _iedBrowserDetails.Toggle(row);
+            IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
+            _iedBrowserLastLiveVersion = -1;
+            RefreshIedBrowserVisibleValues();
+        }));
+    }
+
     private void RenderIedBrowserSelection(
         IedBrowserTreeRow? row, LiveIedModelDiscoveryDocument? model, bool connected)
     {
@@ -708,8 +744,7 @@ public partial class MainWindow
         {
             IedBrowserObjectPath.Text = "Select an object in the left tree";
             IedBrowserDetailStatus.Text = "Cached engineering model · read-only navigation";
-            _iedBrowserDetails.Reset([]);
-            IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
+            ReplaceIedBrowserDetails([]);
             return;
         }
 
@@ -733,8 +768,7 @@ public partial class MainWindow
             ? r.Inspection.Summary(connected)
             : connected ? "Connected · cached model metadata (not a live read)"
                         : "Offline · cached SCL/discovery model";
-        _iedBrowserDetails.Reset(IedBrowserPresentation.Details(row, model, connected));
-        IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
+        ReplaceIedBrowserDetails(IedBrowserPresentation.Details(row, model, connected));
         _iedBrowserLastLiveVersion = -1;
         RefreshIedBrowserVisibleValues();
         // Folder entry opens at its first child, regardless of the scroll

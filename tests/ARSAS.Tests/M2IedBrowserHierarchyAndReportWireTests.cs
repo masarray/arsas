@@ -247,6 +247,105 @@ public sealed class M2IedBrowserHierarchyAndReportWireTests
     }
 
     [Fact]
+    public void AnalogDataSetFcdAndSingleLeafParentsBindToActualReportedMmsValue()
+    {
+        const string owner = "LD/MMXU1.PPV.phsCA";
+        LiveIedDataAttributeModel Attr(string path) => new()
+        {
+            ObjectReference = owner,
+            AttributePath = "phsCA." + path,
+            FunctionalConstraint = "MX",
+            MmsReference = "LD/MMXU1$MX$PPV$phsCA$" + path.Replace('.', '
+    {
+        var obj = ModelDo();
+        var ln = new LiveIedLogicalNodeModel
+        {
+            Name = "CSWI1", LnClass = "CSWI", DataObjects = [obj]
+        };
+        var page = new IedBrowserTreeRow(
+            "model/ln/LD/CSWI1", "CSWI1", "LN", 2, ln);
+        var rows = IedBrowserPresentation.Details(page, null, connected: true);
+        var doRow = Assert.Single(rows.Where(row => row.IsDataObject));
+        Assert.Equal("Pos", doRow.Name);
+        Assert.True(doRow.HasChildren);
+        Assert.Equal("DO", doRow.Glyph);
+        Assert.DoesNotContain(rows, row => row.Kind == "Object" && row.Name == "Pos");
+        var tree = new IedBrowserDetailProjection();
+        tree.Reset(rows);
+        tree.Toggle(doRow);
+        Assert.Contains(tree.Rows, row => row.Name == "stVal [ST]");
+        Assert.Contains(tree.Rows, row => row.Name == "q [ST]");
+        Assert.Contains(tree.Rows, row => row.Name == "t [ST]");
+        var origin = Assert.Single(tree.Rows.Where(row => row.Name == "origin [ST]"));
+        Assert.True(origin.HasChildren);
+        tree.Toggle(origin);
+        Assert.Contains(tree.Rows, row => row.Name == "orCat [ST]");
+    }
+
+    [Fact]
+    public void DataModel_DoPageUsesStructuredHierarchyInsteadOfFlatteningDottedDaNames()
+    {
+        var obj = ModelDo();
+        var page = new IedBrowserTreeRow(
+            "model/do/LD/CSWI1.Pos", "Pos", "DO", 3, obj);
+        var rows = IedBrowserPresentation.Details(page, null, connected: true);
+        Assert.DoesNotContain(rows, row => row.Kind == "Object");
+        var sbow = Assert.Single(rows.Where(row => row.Name == "SBOw [CO]"));
+        var tree = new IedBrowserDetailProjection();
+        tree.Reset(rows);
+        tree.Toggle(sbow);
+        var nested = Assert.Single(tree.Rows.Where(row => row.Name == "origin [CO]"));
+        tree.Toggle(nested);
+        Assert.Contains(tree.Rows, row => row.Name == "orCat [CO]");
+        Assert.DoesNotContain(tree.Rows,
+            row => row.Name == "SBOw.origin.orCat [CO]");
+    }
+}
+)
+        };
+        var obj = new LiveIedDataObjectModel
+        {
+            Name = "phsCA", Reference = owner,
+            Attributes = [Attr("cVal.mag.f"), Attr("q"), Attr("t")]
+        };
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel
+            {
+                LogicalNodes = [new LiveIedLogicalNodeModel { DataObjects = [obj] }]
+            }]
+        };
+        var member = new LiveIedDataSetMemberModel
+        {
+            Reference = "LD/MMXU1$MX$PPV$phsCA", FunctionalConstraint = "MX"
+        };
+        var root = IedBrowserStructuredDetails.Member(member, model);
+        Assert.Equal(owner + ".cVal.mag.f", root.ValueReference);
+
+        var rows = new IedBrowserDetailProjection();
+        rows.Reset(IedBrowserStructuredDetails.DataSetMemberChildren(member, model, 1));
+        var cval = Assert.Single(rows.Rows.Where(r => r.Name == "cVal [MX]"));
+        Assert.Equal(root.ValueReference, cval.ValueReference);
+        rows.Toggle(cval);
+        var mag = Assert.Single(rows.Rows.Where(r => r.Name == "mag [MX]"));
+        Assert.Equal(root.ValueReference, mag.ValueReference);
+        rows.Toggle(mag);
+        var f = Assert.Single(rows.Rows.Where(r => r.Name == "f [MX]"));
+        var live = new IedBrowserLiveValues();
+        var session = live.BeginAssociation();
+        Assert.True(live.PublishForAssociation(session, "LD/MMXU1$MX$PPV$phsCA$cVal$mag$f",
+            "MX", "0", "", "", "Report"));
+        foreach (var row in new[] { root, cval, mag, f })
+        {
+            Assert.True(live.TryGet(row.ValueReference, row.FunctionalConstraint, out var evidence));
+            Assert.Equal("0", evidence.Value);
+        }
+        var ambiguous = IedBrowserStructuredDetails.AttributeRows(
+            [Attr("cVal.mag.f"), Attr("cVal.ang.f")], "phsCA");
+        Assert.Equal(owner + ".cVal", ambiguous[0].ValueReference);
+    }
+
+    [Fact]
     public void DataModel_LnPageShowsExpandableDosAndNestedAttributes_NotFlatNavigation()
     {
         var obj = ModelDo();
