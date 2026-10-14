@@ -76,9 +76,18 @@ public sealed class IedBrowserReadResultInboxTests
         Assert.DoesNotContain("new Progress<IedBrowserReadResult>", source);
         // Checkout on Windows uses CRLF; source-based contracts are newline-neutral.
         var normalized = source.Replace("\r\n", "\n", StringComparison.Ordinal);
-        var finalDrain = normalized.IndexOf("DrainReadResults();\n            if (!cts.IsCancellationRequested", StringComparison.Ordinal);
+        // Guarding a replaced model after the synchronous drain is valid and
+        // mandatory; the final drain must precede the success summary, not
+        // necessarily be adjacent to the success conditional.
+        var finishedProducers = normalized.IndexOf(
+            "// All producers have returned:", StringComparison.Ordinal);
+        var finalDrain = normalized.IndexOf(
+            "            DrainReadResults();", finishedProducers, StringComparison.Ordinal);
+        var catalogFence = normalized.IndexOf(
+            "if (bindingIndex is not { IsCurrent: true })", finalDrain, StringComparison.Ordinal);
         var summary = normalized.IndexOf("Read complete ·", StringComparison.Ordinal);
-        Assert.True(finalDrain >= 0 && summary > finalDrain);
+        Assert.True(finishedProducers >= 0 && finalDrain > finishedProducers &&
+                    catalogFence > finalDrain && summary > catalogFence);
         Assert.Contains("sourceDevice.LiveValues.Association != readAssociation", source);
     }
 }

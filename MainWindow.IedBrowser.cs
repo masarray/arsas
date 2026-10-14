@@ -248,7 +248,9 @@ public partial class MainWindow
             return;
         }
 
-        var bindingIndex = new IedBrowserReadBindingIndex(device);
+        // Build after a possible cached-model connect; connection may replace
+        // the catalog and invalidate a pre-connect binding snapshot.
+        IedBrowserReadBindingIndex? bindingIndex = null;
         var cts = CancellationTokenSource.CreateLinkedTokenSource(_applicationCancellation.Token);
         // Read All may include thousands of attributes. It is cancellable by the
         // operator, never a new continuous acquisition/polling process.
@@ -275,8 +277,9 @@ public partial class MainWindow
             readValues.Drain(result =>
             {
                 if (!ReferenceEquals(_iedBrowserReadOperation, cts) ||
-                    sourceDevice.LiveValues.Association != readAssociation)
-                    return; // new association or replaced read flight
+                    sourceDevice.LiveValues.Association != readAssociation ||
+                    bindingIndex is not { IsCurrent: true })
+                    return; // superseded association, catalog or read flight
                 if (result.Error.Length != 0 || string.IsNullOrWhiteSpace(result.Value))
                 {
                     failures++;
@@ -314,7 +317,14 @@ public partial class MainWindow
                     throw new InvalidOperationException("MMS connection was not established.");
             }
 
+            // A cached connect may rebuild schema/model. Never execute Read
+            // targets from a superseded model against the new association.
+            if (!ReferenceEquals(model,
+                    sourceDevice.LiveDiscoveryModel ?? sourceDevice.SclWorkspace?.DesignModel))
+                throw new InvalidOperationException(
+                    "Browser model changed during connection; select the current model and retry Read.");
             readAssociation = sourceDevice.LiveValues.Association;
+            bindingIndex = new IedBrowserReadBindingIndex(sourceDevice);
             var readProgress = new Progress<IedBrowserReadProgress>(p =>
             {
                 if (ReferenceEquals(_iedBrowserReadOperation, cts) &&
@@ -332,6 +342,9 @@ public partial class MainWindow
             // All producers have returned: consume the final queued results
             // synchronously before calculating counts and closing this flight.
             DrainReadResults();
+            if (bindingIndex is not { IsCurrent: true })
+                throw new InvalidOperationException(
+                    "Browser catalog changed during Read; obsolete result rows were not admitted.");
             if (!cts.IsCancellationRequested && ReferenceEquals(SelectedDevice, sourceDevice))
             {
                 device.ApplyBrowserReadProgress(targets.Count, targets.Count);

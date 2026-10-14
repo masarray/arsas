@@ -10,6 +10,11 @@ namespace ArIED61850Tester.Models;
 public sealed class IedBrowserReadBindingIndex
 {
     private readonly Iec61850MonitorDevice _device;
+    private readonly long _projectionEpoch;
+
+    // Fail closed when the engineering catalog or its bound rows are replaced.
+    // Comparing one monotonic epoch costs O(1) on each Report/Read projection.
+    public bool IsCurrent => _projectionEpoch == _device.BrowserProjectionEpoch;
     private readonly Dictionary<string, SignalDefinition[]> _signals;
     private readonly Dictionary<string, Iec61850MonitorPoint[]> _points;
 
@@ -45,6 +50,7 @@ public sealed class IedBrowserReadBindingIndex
                 StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(),
                 StringComparer.Ordinal);
+        _projectionEpoch = device.BrowserProjectionEpoch;
     }
 
     private static void Add(Dictionary<string, List<SignalDefinition>> index,
@@ -69,7 +75,7 @@ public sealed class IedBrowserReadBindingIndex
     {
         ArgumentNullException.ThrowIfNull(read);
         ArgumentNullException.ThrowIfNull(live);
-        if (_device.IsMonitoring || !_device.IsConnected ||
+        if (!IsCurrent || _device.IsMonitoring || !_device.IsConnected ||
             !string.IsNullOrWhiteSpace(read.Error) ||
             string.IsNullOrWhiteSpace(read.Value) ||
             live.Association != association ||
@@ -118,7 +124,7 @@ public sealed class IedBrowserReadBindingIndex
         string reference, string fc)
     {
         ArgumentNullException.ThrowIfNull(live);
-        if (!_device.IsMonitoring || !_device.IsConnected ||
+        if (!IsCurrent || !_device.IsMonitoring || !_device.IsConnected ||
             association != live.Association || live.IsOffline ||
             string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(fc) ||
             !_signals.TryGetValue(Key(reference, fc), out var signals) ||
