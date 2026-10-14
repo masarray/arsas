@@ -1,30 +1,54 @@
-using System.Collections.Concurrent;
+using AR.Iec61850.Mms;
+using ArIED61850Tester.Protocol.Mms;
 
 namespace ArIED61850Tester.Models;
 
 /// <summary>
-/// Device-scoped process-value authority. Report ingress and explicit read-only MMS
-/// reads publish to the same exact IEC reference/FC registry. It never constructs
-/// values from a declaration, Report ID or guessed DataSet position.
+/// Immutable evidence captured by one successful, explicit observation.
+/// A quality or UTC evidence object is present only when the raw field was
+/// actually decoded; a normalized legacy label never proves individual bits.
 /// </summary>
 public sealed record IedBrowserObservedValue(
-    string Value, string Quality, string DeviceTimestamp, string Source, DateTime ObservedUtc);
+    string Value, string Quality, string DeviceTimestamp, string Source, DateTime ObservedUtc,
+    long Revision = 0, long Association = 0, bool IsStale = false,
+    MmsQualityEvidence? QualityBits = null,
+    Iec61850UtcTimeEvidence? TimeBits = null);
 
+internal sealed record IedBrowserObservationChannels(
+    IedBrowserObservedValue? Report = null,
+    IedBrowserObservedValue? Read = null);
+
+/// <summary>
+/// One bounded-to-observed-references registry per IED. Report and manual Read
+/// remain separate, so a late Read can never overwrite report evidence during
+/// monitoring. One short lock makes publication, version and association
+/// transitions atomic, without UI callbacks, model walks, or network work.
+/// </summary>
 public sealed class IedBrowserLiveValues
 {
-    private readonly ConcurrentDictionary<string, IedBrowserObservedValue> _values =
-        new(StringComparer.OrdinalIgnoreCase);
+    private static readonly string[] ProcessLeafSuffixes =
+    [
+        ".stVal", ".posVal", ".valWTr", ".general", ".mag.f", ".instMag.f", ".cVal.mag.f"
+    ];
+    private readonly object _gate = new();
+    // IEC object names are case-sensitive. FC labels are separately normalized.
+    private readonly Dictionary<string, IedBrowserObservationChannels> _values =
+        new(StringComparer.Ordinal);
     private long _version;
-    public long Version => Interlocked.Read(ref _version);
+    private long _association;
+    private bool _offline;
+    public long Version { get { lock (_gate) return _version; } }
+    public long Association { get { lock (_gate) return _association; } }
+    public bool IsOffline { get { lock (_gate) return _offline; } }
 
     public static string CanonicalReference(string? reference)
     {
         var input = (reference ?? "").Trim();
         var dollar = input.IndexOf('$');
-        if (dollar < 0) return input.Replace('$', '.');
+        if (dollar < 0) return input;
         var domainLn = input[..dollar];
         var segments = input[(dollar + 1)..].Split('$', StringSplitOptions.RemoveEmptyEntries);
-        // Standard MMS variable name: LN$FC$DO$DA. Remove FC, never LD/LN.
+        // MMS LN$FC$DO$DA: remove FC exactly, not LD/LN or the object identity.
         return segments.Length >= 2
             ? domainLn + "." + string.Join(".", segments.Skip(1))
             : input.Replace('$', '.');
@@ -33,17 +57,89 @@ public sealed class IedBrowserLiveValues
     private static string Key(string reference, string fc)
         => CanonicalReference(reference) + "|" + (fc ?? "").Trim().ToUpperInvariant();
 
-    public void Publish(
-        string reference, string fc, string? value, string? quality,
-        string? timestamp, string source)
+    /// <summary>New association invalidates old observations, including queued reads.</summary>
+    public long BeginAssociation()
     {
-        if (string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(value) ||
+        lock (_gate)
+        {
+            _association++;
+            _offline = false;
+            _values.Clear();
+            _version++;
+            return _association;
+        }
+    }
+
+    /// <summary>Keep last-seen evidence only as explicitly offline/stale history.</summary>
+    public void MarkOffline()
+    {
+        lock (_gate)
+        {
+            _offline = true;
+            _association++; // invalidate in-flight callbacks even before reconnect
+            _version++;
+        }
+    }
+
+    public void Clear()
+    {
+        lock (_gate)
+        {
+            _association++;
+            _offline = true;
+            _values.Clear();
+            _version++;
+        }
+    }
+
+    public void Publish(string reference, string fc, string? value, string? quality,
+        string? timestamp, string source)
+        => TryPublish(reference, fc, value, quality, timestamp, source, expectedAssociation: null);
+
+    /// <summary>
+    /// Ordered, association-bound publication. A callback from a cancelled or
+    /// replaced MMS session cannot publish into a new association's evidence.
+    /// </summary>
+    public bool PublishForAssociation(long association, string reference, string fc,
+        string? value, string? quality, string? timestamp, string source)
+        => TryPublish(reference, fc, value, quality, timestamp, source, association);
+
+    private bool TryPublish(string reference, string fc, string? value, string? quality,
+        string? timestamp, string source, long? expectedAssociation)
+    {
+        if (string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(fc) ||
+            string.IsNullOrWhiteSpace(value) ||
             value.Trim() is "-" or "Not read" or "Unknown")
-            return;
-        var observed = new IedBrowserObservedValue(value.Trim(), quality ?? "",
-            timestamp ?? "", source, DateTime.UtcNow);
-        _values[Key(reference, fc)] = observed;
-        Interlocked.Increment(ref _version);
+            return false;
+
+        var key = Key(reference, fc);
+        var isReport = source.StartsWith("Report", StringComparison.Ordinal);
+        lock (_gate)
+        {
+            if (_offline || (expectedAssociation.HasValue &&
+                             expectedAssociation.Value != _association))
+                return false;
+
+            _values.TryGetValue(key, out var channels);
+            channels ??= new IedBrowserObservationChannels();
+            var observed = new IedBrowserObservedValue(value.Trim(), quality ?? "",
+                timestamp ?? "", source, DateTime.UtcNow, _version + 1, _association,
+                QualityBits: IsQualityReference(key) &&
+                    MmsQualityDecoder.TryDecodeRendered(value, out var decodedQuality)
+                        ? decodedQuality : null);
+            _values[key] = isReport
+                ? channels with { Report = observed }
+                : channels with { Read = observed };
+            _version++;
+            return true;
+        }
+    }
+
+    private static bool IsQualityReference(string key)
+    {
+        var fcIndex = key.LastIndexOf('|');
+        return fcIndex > 2 && key.AsSpan(0, fcIndex).EndsWith(
+            ".q".AsSpan(), StringComparison.Ordinal);
     }
 
     public void PublishReport(Iec61850MonitorPoint point, bool observedReportIngress = false)
@@ -55,7 +151,6 @@ public sealed class IedBrowserLiveValues
             return;
         Publish(point.IecReference, point.FunctionalConstraint, point.Value,
             point.Quality, point.DeviceTimestamp, "Report");
-        // Preserve real point q/t companion evidence, never fabricate sub-flags.
         if (point.Quality is not ("Unknown" or "-"))
             Publish(point.QualityReference, point.FunctionalConstraint, point.Quality,
                 "", point.DeviceTimestamp, "Report quality");
@@ -64,29 +159,58 @@ public sealed class IedBrowserLiveValues
                 "", point.DeviceTimestamp, "Report timestamp");
     }
 
-    public bool TryGet(string reference, string fc, out IedBrowserObservedValue evidence)
+    /// <summary>
+    /// Return the authoritative reported snapshot during monitoring. When the
+    /// monitor is stopped, the newest verified observation wins by revision.
+    /// No chosen source synthesizes SOE or process events.
+    /// </summary>
+    public bool TryGet(string reference, string fc,
+        out IedBrowserObservedValue evidence, bool preferReport = true)
     {
-        if (_values.TryGetValue(Key(reference, fc), out evidence!)) return true;
-        // Canonical process points are frequently identified by their DO,
-        // whereas a browser DA may be the exact child stVal. These aliases
-        // are unambiguous IEC value companions, not a prefix-wide guess.
-        var normalized = CanonicalReference(reference);
-        foreach (var suffix in new[] { ".stVal", ".posVal", ".valWTr", ".general", ".mag.f",
-                                      ".instMag.f", ".cVal.mag.f" })
+        if (string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(fc))
         {
-            if (_values.TryGetValue(Key(normalized + suffix, fc), out evidence!)) return true;
-            if (normalized.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
-                _values.TryGetValue(Key(normalized[..^suffix.Length], fc), out evidence!))
-                return true;
+            evidence = null!;
+            return false;
         }
-        evidence = null!;
-        return false;
+        lock (_gate)
+        {
+            if (TryGetExact(Key(reference, fc), preferReport, out evidence))
+                return true;
+            // M1 backward-compatibility process companion aliases. The M2 schema
+            // index will remove this fallback after all SCL/Discovery paths bind.
+            var normalized = CanonicalReference(reference);
+            foreach (var suffix in ProcessLeafSuffixes)
+            {
+                if (TryGetExact(Key(normalized + suffix, fc), preferReport, out evidence))
+                    return true;
+                if (normalized.EndsWith(suffix, StringComparison.Ordinal) &&
+                    TryGetExact(Key(normalized[..^suffix.Length], fc), preferReport,
+                        out evidence))
+                    return true;
+            }
+            evidence = null!;
+            return false;
+        }
     }
 
-    public void Clear()
+    private bool TryGetExact(string key, bool preferReport, out IedBrowserObservedValue evidence)
     {
-        _values.Clear();
-        Interlocked.Increment(ref _version);
+        if (!_values.TryGetValue(key, out var channels))
+        {
+            evidence = null!;
+            return false;
+        }
+        var selected = preferReport
+            ? channels.Report ?? channels.Read
+            : channels.Report?.Revision > channels.Read?.Revision
+                ? channels.Report : channels.Read ?? channels.Report;
+        if (selected is null)
+        {
+            evidence = null!;
+            return false;
+        }
+        evidence = _offline ? selected with { IsStale = true } : selected;
+        return true;
     }
 }
 
