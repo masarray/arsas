@@ -1922,7 +1922,8 @@
                         <Grid Grid.Row="2">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="285" MinWidth="240"/>
-                                <ColumnDefinition Width="5"/>
+                                <!-- Eight-pixel native resize hitbox, visually only one pixel idle. -->
+                                <ColumnDefinition Width="8"/>
                                 <ColumnDefinition Width="*" MinWidth="400"/>
                             </Grid.ColumnDefinitions>
                             <!-- A flat, row-virtualized DataGrid behaves as a hierarchical TreeGrid. -->
@@ -1979,9 +1980,29 @@
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </Grid>
-                            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                                          Background="#D7E1EC" ShowsPreview="True"
-                                          ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"/>
+                            <!-- Keep GridSplitter as a DIRECT child of the resized Grid.
+                                 The non-hit-test overlay draws its grip without narrowing
+                                 the native drag target or changing panel resize semantics. -->
+                            <GridSplitter Grid.Column="1" x:Name="IedBrowserPaneSplitter" Width="8"
+                                          HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                          Background="Transparent" ShowsPreview="True"
+                                          ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
+                                          ToolTip="Drag to resize Browser panels"/>
+                            <Border Grid.Column="1" IsHitTestVisible="False"
+                                    HorizontalAlignment="Center" VerticalAlignment="Stretch">
+                                <Border.Style>
+                                    <Style TargetType="{x:Type Border}">
+                                        <Setter Property="Background" Value="#C5CFD9"/>
+                                        <Setter Property="Width" Value="1"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsMouseOver, ElementName=IedBrowserPaneSplitter}" Value="True">
+                                                <Setter Property="Background" Value="#17212F"/>
+                                                <Setter Property="Width" Value="3"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
                             <Grid Grid.Column="2">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
