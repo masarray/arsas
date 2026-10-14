@@ -90,18 +90,22 @@ public sealed class IedBrowserLiveValues
 
     public void Publish(string reference, string fc, string? value, string? quality,
         string? timestamp, string source)
-        => TryPublish(reference, fc, value, quality, timestamp, source, expectedAssociation: null);
+        => TryPublish(reference, fc, value, quality, timestamp, source, expectedAssociation: null,
+            utcTimeEvidence: null);
 
     /// <summary>
     /// Ordered, association-bound publication. A callback from a cancelled or
     /// replaced MMS session cannot publish into a new association's evidence.
     /// </summary>
     public bool PublishForAssociation(long association, string reference, string fc,
-        string? value, string? quality, string? timestamp, string source)
-        => TryPublish(reference, fc, value, quality, timestamp, source, association);
+        string? value, string? quality, string? timestamp, string source,
+        Iec61850UtcTimeEvidence? utcTimeEvidence = null)
+        => TryPublish(reference, fc, value, quality, timestamp, source, association,
+            utcTimeEvidence);
 
     private bool TryPublish(string reference, string fc, string? value, string? quality,
-        string? timestamp, string source, long? expectedAssociation)
+        string? timestamp, string source, long? expectedAssociation,
+        Iec61850UtcTimeEvidence? utcTimeEvidence)
     {
         if (string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(fc) ||
             string.IsNullOrWhiteSpace(value) ||
@@ -124,8 +128,8 @@ public sealed class IedBrowserLiveValues
                     MmsQualityDecoder.TryDecodeRendered(value, out var decodedQuality)
                         ? decodedQuality : null,
                 TimeBits: IsTimeReference(key) &&
-                    MmsUtcTimeDecoder.TryDecodeRendered(value, out var decodedTime)
-                        ? decodedTime : null);
+                    utcTimeEvidence is { IsDecoded: true, HasWireProvenance: true }
+                        ? utcTimeEvidence : null);
             _values[key] = isReport
                 ? channels with { Report = observed }
                 : channels with { Read = observed };
