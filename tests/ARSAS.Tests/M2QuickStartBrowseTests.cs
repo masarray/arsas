@@ -28,8 +28,10 @@ public sealed class M2QuickStartBrowseTests
             (string?)browse.Attribute("Style"));
         Assert.Equal("{StaticResource TaskDialogSecondaryAction}",
             (string?)manual.Attribute("Style"));
-        Assert.Contains("Browse IED", browse.Value, StringComparison.Ordinal);
-        Assert.Contains("Explore model and live values", browse.Value, StringComparison.Ordinal);
+        var labels = browse.Descendants(P + "TextBlock")
+            .Select(text => (string?)text.Attribute("Text")).ToArray();
+        Assert.Contains("Browse IED", labels);
+        Assert.Contains("Explore model and live values", labels);
         Assert.Equal("1", (string?)manual.Attribute("Grid.Row"));
         Assert.Contains("Click=\"BrowseIed_Click\"", File.ReadAllText(Find(
             "SclSignalSelectionModeWindow.xaml")), StringComparison.Ordinal);
