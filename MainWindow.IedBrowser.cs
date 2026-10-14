@@ -271,7 +271,7 @@ public partial class MainWindow
                 var accepted = sourceDevice.LiveValues.PublishForAssociation(
                     readAssociation, result.Target.Reference, result.Target.FunctionalConstraint,
                     result.Value, result.Quality, result.DeviceTimestamp, "MMS Read",
-                    result.UtcTimeEvidence);
+                    result.UtcTimeEvidence, result.QualityEvidence);
                 if (!accepted) return; // stale connection or superseded read flight
                 // Never overwrite a report-owned point during live acquisition.
                 if (!sourceDevice.IsMonitoring)
