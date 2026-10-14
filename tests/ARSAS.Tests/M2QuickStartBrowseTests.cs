@@ -109,6 +109,47 @@ public sealed class M2QuickStartBrowseTests
             StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void NativeWpfQuickStart_RealButtonClicksDispatchDistinctTypedTasks()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        foreach (var (buttonName, expected) in new[]
+        {
+            ("BrowseIedActionButton", IedWorkspaceTaskChoice.BrowseIed),
+            ("StaticDataSetActionButton", IedWorkspaceTaskChoice.StaticDataSet),
+            ("ManualSignalsActionButton", IedWorkspaceTaskChoice.ManualSignals)
+        })
+        {
+            Exception? failure = null;
+            var thread = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    var dialog = new ArIED61850Tester.SclSignalSelectionModeWindow(1);
+                    dialog.Loaded += (_, _) => dialog.Dispatcher.BeginInvoke(
+                        System.Windows.Threading.DispatcherPriority.Background,
+                        new Action(() =>
+                        {
+                            var button = Assert.IsType<System.Windows.Controls.Button>(
+                                dialog.FindName(buttonName));
+                            button.RaiseEvent(new System.Windows.RoutedEventArgs(
+                                System.Windows.Controls.Button.ClickEvent, button));
+                        }));
+                    Assert.True(dialog.ShowDialog() == true);
+                    Assert.Equal(expected, dialog.Selection);
+                    dialog.Close();
+                }
+                catch (Exception ex) { failure = ex; }
+            });
+            thread.SetApartmentState(System.Threading.ApartmentState.STA);
+            thread.Start();
+            Assert.True(thread.Join(TimeSpan.FromSeconds(15)),
+                "Native Quick Start click timed out: " + buttonName);
+            Assert.Null(failure);
+        }
+    }
+
     private static string Find(string filename)
     {
         DirectoryInfo? directory = new(AppContext.BaseDirectory);
