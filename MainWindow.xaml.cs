@@ -31,7 +31,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     // Rebuilt after the selected signal/point model is materialized.
     private readonly Dictionary<string, IedBrowserReadBindingIndex> _canonicalSignalProjections =
         new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, Iec61850MonitorPoint> _pointIndex = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Iec61850MonitorPoint> _pointIndex = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentQueue<Iec61850EventEntry> _pendingEvents = new();
     private readonly ConcurrentQueue<DiagnosticEntry> _pendingDiagnostics = new();
     private readonly Dictionary<string, DateTime> _reportPulseUntil = new(StringComparer.OrdinalIgnoreCase);
@@ -2373,7 +2373,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void Runtime_PointUpdated(Iec61850PointSnapshot snapshot)
     {
         _pendingPointSnapshots.AddOrUpdate(
-            snapshot.Point.PointKey,
+            CanonicalPointSnapshotAuthority.UiQueueKey(snapshot.Point),
             _ => new CanonicalPointSnapshotBatch(snapshot, snapshot.IsValueEdge),
             (_, current) => CanonicalPointSnapshotAuthority.Merge(current, snapshot));
     }

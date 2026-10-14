@@ -101,16 +101,31 @@ public sealed class CanonicalLiveValueSsotM213FTests
                 Point = point, ObservationAssociation = association,
                 SnapshotRevision = 1, Sequence = 1, Value = reference
             };
-            batches.AddOrUpdate(point.PointKey,
+            batches.AddOrUpdate(CanonicalPointSnapshotAuthority.UiQueueKey(point),
                 _ => new CanonicalPointSnapshotBatch(snapshot, false),
                 (_, prior) => CanonicalPointSnapshotAuthority.Merge(prior, snapshot));
         }
         Assert.Equal(2, batches.Count);
+        var mx = new Iec61850MonitorPoint
+        {
+            DeviceId = "IED", IecReference = upper, FunctionalConstraint = "MX"
+        };
+        var st = new Iec61850MonitorPoint
+        {
+            DeviceId = "IED", IecReference = upper, FunctionalConstraint = "ST"
+        };
+        Assert.NotEqual(CanonicalPointSnapshotAuthority.UiQueueKey(st),
+            CanonicalPointSnapshotAuthority.UiQueueKey(mx));
+        Assert.NotEqual(CanonicalPointSnapshotAuthority.UiQueueKey(st),
+            CanonicalPointSnapshotAuthority.UiQueueKey(new Iec61850MonitorPoint
+            {
+                DeviceId = "IED", IecReference = lower, FunctionalConstraint = "ST"
+            }));
 
-        // Protect the concrete WPF hot path, not only a test-side dictionary.
+        // Protect the real WPF receive seam rather than only a test dictionary.
         var source = FindSource("MainWindow.xaml.cs");
         Assert.Contains("_pendingPointSnapshots = new(StringComparer.Ordinal);", source);
-        Assert.Contains("_pointIndex = new(StringComparer.Ordinal);", source);
+        Assert.Contains("CanonicalPointSnapshotAuthority.UiQueueKey(snapshot.Point)", source);
     }
 
     [Fact]
