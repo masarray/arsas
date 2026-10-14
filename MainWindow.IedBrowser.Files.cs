@@ -57,6 +57,17 @@ public partial class MainWindow
             .ToArray();
     }
 
+    private void IedBrowserFile_LoadingRow(object sender, DataGridRowEventArgs e)
+    {
+        // DataGrid recycling binds a row to different FileDirectory entries.
+        // Install/rebind its contextual action on each actual row load, not in
+        // a column-level XAML setter or against an earlier SelectedItem.
+        if (e.Row.DataContext is not IedBrowserRemoteFile file) return;
+        var download = new MenuItem { Header = "Download", Tag = file };
+        download.Click += IedBrowserFileDownload_Click;
+        e.Row.ContextMenu = new ContextMenu { Items = { download } };
+    }
+
     private async void IedBrowserFile_DoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (sender is not DataGridRow { DataContext: IedBrowserRemoteFile file })
