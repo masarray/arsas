@@ -55,7 +55,7 @@ public static class IedBrowserObservedVectorPresentation
             }
             if (hasAng)
             {
-                var unit = IedBrowserEngineeringValuePresentation.ResolveUnit(
+                var unit = IedBrowserEngineeringValuePresentation.ResolveVectorAngleUnit(
                     units, part.AngleReference, part.Fc);
                 var rendered = unit == "°" ? angle.Value + "°" :
                     IedBrowserEngineeringValuePresentation.Format(angle.Value, unit);

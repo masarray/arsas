@@ -50,6 +50,26 @@ public static class IedBrowserEngineeringValuePresentation
         return "";
     }
 
+    /// <summary>
+    /// Vector angle may have an explicit unit on ang or ang.f only.
+    /// Inheriting a phase magnitude unit (for example kV) across cVal
+    /// would be dimensionally wrong, even though that ancestor is an
+    /// otherwise valid source for mag.f.
+    /// </summary>
+    public static string ResolveVectorAngleUnit(
+        IReadOnlyDictionary<string, string?> index, string reference, string fc)
+    {
+        var canonical = IedBrowserLiveValues.CanonicalReference(reference);
+        var normalizedFc = (fc ?? "").Trim().ToUpperInvariant();
+        if (!canonical.EndsWith(".ang.f", StringComparison.Ordinal) ||
+            normalizedFc.Length == 0) return "";
+        if (index.TryGetValue(canonical + "|" + normalizedFc, out var exact))
+            return exact ?? "";
+        var angleOwner = canonical[..^2];
+        return index.TryGetValue(angleOwner + "|" + normalizedFc, out var declared)
+            ? declared ?? "" : "";
+    }
+
     public static string Format(string raw, string unit)
     {
         if (string.IsNullOrWhiteSpace(unit) || string.IsNullOrWhiteSpace(raw))
