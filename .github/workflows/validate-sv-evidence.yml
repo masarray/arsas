@@ -18,6 +18,7 @@ on:
       - ".github/actions/resolve-ariec-engine/**"
       - ".github/workflows/build.yml"
       - ".github/workflows/validate-sv-evidence.yml"
+      - "scripts/write-ci-canonical-proof.py"
       - "scripts/verify-ci-canonical-reuse.py"
       - "scripts/test-ci-canonical-reuse.py"
   workflow_dispatch:

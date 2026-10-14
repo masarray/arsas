@@ -184,7 +184,22 @@ jobs:
         self.assertNotIn("tests/ARSAS.Tests/**", paths)
 
         def matches(changed_path: str) -> bool:
-            return any(fnmatch.fnmatchcase(changed_path, pattern) for pattern in paths)
+            # GitHub path filters match segments: "*" cannot cross "/".
+            # Current authority resolver uses a terminal "/**" for descendants.
+            for pattern in paths:
+                if pattern.endswith("/**"):
+                    if changed_path.startswith(pattern[:-3] + "/"):
+                        return True
+                    continue
+                self.assertNotIn("**", pattern, pattern)
+                candidate = changed_path.split("/")
+                glob = pattern.split("/")
+                if len(candidate) == len(glob) and all(
+                    fnmatch.fnmatchcase(part, rule)
+                    for part, rule in zip(candidate, glob)
+                ):
+                    return True
+            return False
 
         for changed_path in (
             "tests/ARSAS.Tests/SmvFastWorkflowTests.cs",
@@ -192,11 +207,15 @@ jobs:
             "tests/ARSAS.Tests/SampledValueFutureRegressionTests.cs",
             "Services/SmvSnapshotCaptureService.cs",
             "Services/SmvSnapshotSafetyAssessment.cs",
+            "Services/SmvViewerWindow.P1Evidence.cs",
+            "tests/ARSAS.Tests/SmvSnapshotEvidenceExporterReviewTests.cs",
+            "tests/ARSAS.Tests/ProcessBusRoutingRegressionTests.cs",
             "MainWindow.IedSmvQuickStart.cs",
             "SmvViewerWindow.xaml.cs",
             "engines/ARIEC61850.lock.json",
             ".github/actions/resolve-ariec-engine/action.yml",
             ".github/workflows/build.yml",
+            "scripts/write-ci-canonical-proof.py",
             "scripts/verify-ci-canonical-reuse.py",
         ):
             self.assertTrue(matches(changed_path), changed_path)
@@ -207,6 +226,8 @@ jobs:
             "tests/ARSAS.Tests/RcbExportEvidenceAcquisitionRegressionTests.cs",
             "Models/IedBrowserPresentation.cs",
             "Services/RcbAvailabilityProbeService.cs",
+            "Services/nested/SmvSnapshotCaptureService.cs",
+            "tests/ARSAS.Tests/nested/SmvFastWorkflowTests.cs",
             "docs/ARSAS_IED_BROWSER_M2_EXECUTION_ARD.md",
         ):
             self.assertFalse(matches(changed_path), changed_path)
