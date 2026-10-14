@@ -2435,16 +2435,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 continue;
             if (snapshot.Sequence < point.Sequence)
                 continue;
-            var currentProcess = CanonicalPointSnapshotAuthority.ProcessDisplay(
+            var presentation = CanonicalPointSnapshotAuthority.Project(
                 observedOwner, point, snapshot);
-            var qualityChanged = !string.Equals(point.Quality, snapshot.Quality, StringComparison.Ordinal);
-            var uiDetectedEdge = point.ApplyProcessValue(currentProcess);
+            var qualityChanged = !string.Equals(
+                point.Quality, presentation.Quality, StringComparison.Ordinal);
+            var uiDetectedEdge = point.ApplyProcessValue(presentation.Value);
             if (pending.HasValueEdge || snapshot.IsValueEdge || uiDetectedEdge)
                 MarkPointRecentlyChanged(point);
-            point.Quality = snapshot.Quality;
+            point.Quality = presentation.Quality;
             point.IsOffline = false;
-            point.DeviceTimestamp = snapshot.DeviceTimestamp;
-            point.SourceMode = snapshot.SourceMode;
+            point.DeviceTimestamp = presentation.DeviceTimestamp;
+            point.SourceMode = presentation.SourceMode;
             // The immutable runtime snapshot aggregates only RCBs that have
             // actually delivered this signal on the current association.
             // A non-value status snapshot cannot erase prior routed sources.

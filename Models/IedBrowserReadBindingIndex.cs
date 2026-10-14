@@ -85,20 +85,20 @@ public sealed class IedBrowserReadBindingIndex
             foreach (var signal in signals)
             {
                 signal.Value = observed.Value;
-                if (!string.IsNullOrWhiteSpace(observed.Quality))
-                    signal.Quality = observed.Quality;
-                if (!string.IsNullOrWhiteSpace(observed.DeviceTimestamp))
-                    signal.DeviceTimestamp = observed.DeviceTimestamp;
+                // A new observation with absent metadata must not retain
+                // the previous observation's quality or timestamp.
+                signal.Quality = CanonicalPointSnapshotAuthority.QualityOrUnknown(observed.Quality);
+                signal.DeviceTimestamp = CanonicalPointSnapshotAuthority.TimestampOrUnavailable(
+                    observed.DeviceTimestamp);
                 updated++;
             }
         if (_points.TryGetValue(key, out var points))
             foreach (var point in points)
             {
                 point.Value = observed.Value;
-                if (!string.IsNullOrWhiteSpace(observed.Quality))
-                    point.Quality = observed.Quality;
-                if (!string.IsNullOrWhiteSpace(observed.DeviceTimestamp))
-                    point.DeviceTimestamp = observed.DeviceTimestamp;
+                point.Quality = CanonicalPointSnapshotAuthority.QualityOrUnknown(observed.Quality);
+                point.DeviceTimestamp = CanonicalPointSnapshotAuthority.TimestampOrUnavailable(
+                    observed.DeviceTimestamp);
                 point.IsOffline = false;
                 point.SourceMode = "MMS Read";
                 point.Status = "Read-only snapshot";
@@ -129,10 +129,9 @@ public sealed class IedBrowserReadBindingIndex
             signal.Value = Iec61850ValueFormatter.FormatReportProcessValue(
                 observed.Value, signal.DataType, signal.Unit,
                 signal.Category, signal.ObjectReference);
-            if (!string.IsNullOrWhiteSpace(observed.Quality))
-                signal.Quality = observed.Quality;
-            if (!string.IsNullOrWhiteSpace(observed.DeviceTimestamp))
-                signal.DeviceTimestamp = observed.DeviceTimestamp;
+            signal.Quality = CanonicalPointSnapshotAuthority.QualityOrUnknown(observed.Quality);
+            signal.DeviceTimestamp = CanonicalPointSnapshotAuthority.TimestampOrUnavailable(
+                observed.DeviceTimestamp);
         }
         return signals.Length;
     }

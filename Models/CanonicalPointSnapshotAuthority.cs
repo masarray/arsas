@@ -7,6 +7,10 @@ namespace ArIED61850Tester.Models;
 /// existing Explorer/Live Monitor point presentation. RuntimePointState still
 /// owns event edges, SOE and RCB mechanics. It cannot mutate the evidence store.
 /// </summary>
+public sealed record CanonicalPointPresentation(
+    string Value, string Quality, string DeviceTimestamp,
+    string SourceMode, bool FromCanonicalReport);
+
 public static class CanonicalPointSnapshotAuthority
 {
     public static Iec61850PointSnapshot NewerSnapshot(
@@ -21,7 +25,12 @@ public static class CanonicalPointSnapshotAuthority
         return incoming.Sequence >= previous.Sequence ? incoming : previous;
     }
 
-    public static string ProcessDisplay(
+    /// <summary>
+    /// The process value and its quality/time/source must be taken from ONE
+    /// accepted observation. Never mix a newer canonical value with quality
+    /// or device time from a different coalesced runtime frame.
+    /// </summary>
+    public static CanonicalPointPresentation Project(
         Iec61850MonitorDevice device, Iec61850MonitorPoint point,
         Iec61850PointSnapshot snapshot)
     {
@@ -29,25 +38,41 @@ public static class CanonicalPointSnapshotAuthority
         ArgumentNullException.ThrowIfNull(point);
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        // Non-monitoring reads, disconnected/reconnecting sessions and
-        // unresolved MMS identities must retain the original runtime snapshot.
+        var fallback = new CanonicalPointPresentation(
+            snapshot.Value, snapshot.Quality, snapshot.DeviceTimestamp,
+            snapshot.SourceMode, false);
         if (!device.IsMonitoring || !device.IsConnected ||
             snapshot.ObservationAssociation == 0 ||
             snapshot.ObservationAssociation != device.LiveValues.Association ||
             string.IsNullOrWhiteSpace(point.IecReference) ||
             string.IsNullOrWhiteSpace(point.FunctionalConstraint))
-            return snapshot.Value;
+            return fallback;
         if (!device.LiveValues.TryGet(point.IecReference, point.FunctionalConstraint,
-                out var canonical, preferReport: true) ||
-            canonical.IsStale ||
-            canonical.Association != snapshot.ObservationAssociation ||
-            !canonical.Source.StartsWith("Report", StringComparison.Ordinal))
-            return snapshot.Value;
+                out var observed, preferReport: true) ||
+            observed.IsStale ||
+            observed.Association != snapshot.ObservationAssociation ||
+            !observed.Source.StartsWith("Report", StringComparison.Ordinal))
+            return fallback;
 
-        // Unit/CDC normalization is a *view*, not a second stored observation.
-        // The exact raw Report evidence remains available to Browser q/t views.
-        return Iec61850ValueFormatter.FormatReportProcessValue(
-            canonical.Value, point.IecDataType, point.Unit,
-            point.Category, point.IecReference);
+        // IEC engineering formatting is presentation only. The raw Report
+        // evidence and typed q/t remain unchanged in the canonical ledger.
+        return new CanonicalPointPresentation(
+            Iec61850ValueFormatter.FormatReportProcessValue(
+                observed.Value, point.IecDataType, point.Unit,
+                point.Category, point.IecReference),
+            QualityOrUnknown(observed.Quality),
+            TimestampOrUnavailable(observed.DeviceTimestamp),
+            snapshot.IsReportTraffic ? snapshot.SourceMode : "Report", true);
     }
+
+    public static string ProcessDisplay(
+        Iec61850MonitorDevice device, Iec61850MonitorPoint point,
+        Iec61850PointSnapshot snapshot)
+        => Project(device, point, snapshot).Value;
+
+    public static string QualityOrUnknown(string? quality)
+        => string.IsNullOrWhiteSpace(quality) ? "Unknown" : quality;
+
+    public static string TimestampOrUnavailable(string? timestamp)
+        => string.IsNullOrWhiteSpace(timestamp) ? "-" : timestamp;
 }
