@@ -273,7 +273,7 @@ public partial class MainWindow
                 successes++;
                 // Never overwrite a report-owned point during live acquisition.
                 if (!sourceDevice.IsMonitoring)
-                    bindingIndex.Apply(result);
+                    bindingIndex.Apply(result, sourceDevice.LiveValues, readAssociation);
                 changed = true;
             });
             if (changed && ReferenceEquals(SelectedDevice, sourceDevice))

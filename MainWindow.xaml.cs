@@ -27,6 +27,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly Dictionary<string, HashSet<string>> _pendingProjectSelections = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<SignalDefinition, Iec61850MonitorDevice> _signalOwners = new();
     private readonly ConcurrentDictionary<string, PendingPointUpdate> _pendingPointSnapshots = new(StringComparer.OrdinalIgnoreCase);
+    // Monitoring-lifetime O(1) immutable reference/FC lookup for SignalDefinition.
+    // Rebuilt after the selected signal/point model is materialized.
+    private readonly Dictionary<string, IedBrowserReadBindingIndex> _canonicalSignalProjections =
+        new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Iec61850MonitorPoint> _pointIndex = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentQueue<Iec61850EventEntry> _pendingEvents = new();
     private readonly ConcurrentQueue<DiagnosticEntry> _pendingDiagnostics = new();
@@ -2201,6 +2205,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             RebuildControlFeedbackIndex(device);
             foreach (var point in points)
                 _pointIndex[point.PointKey] = point;
+            var signalProjection = new IedBrowserReadBindingIndex(device);
+            _canonicalSignalProjections[device.DeviceId] = signalProjection;
+            // A first static Report may arrive before StartMonitoringAsync
+            // returns; seed those existing observations once, not by rereading MMS.
+            var projectionAssociation = device.LiveValues.Association;
+            foreach (var point in points)
+                signalProjection.ProjectReportedSignals(device.LiveValues,
+                    projectionAssociation, point.IecReference, point.FunctionalConstraint);
             device.RefreshComputed();
             RaiseWorkspaceCounts();
             if (navigateToExplorer)
@@ -2233,6 +2245,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         device.ReportPulseActive = false;
         _reportPulseUntil.Remove(device.DeviceId);
         RemoveDeviceHighlights(device.DeviceId);
+        _canonicalSignalProjections.Remove(device.DeviceId);
         MarkDevicePointsInactive(device, disconnected: false);
         EnsureOfflinePointProjection(device);
         device.RefreshComputed();
@@ -2301,6 +2314,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     // them as live data or raise new SOE events during the transition.
     private void MarkDevicePointsInactive(Iec61850MonitorDevice device, bool disconnected)
     {
+        _canonicalSignalProjections.Remove(device.DeviceId);
         var label = disconnected ? "Offline" : "Paused";
         foreach (var point in device.Points)
         {
@@ -2443,6 +2457,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             // Canonical ingress remains first authority. The point snapshot
             // is a compatibility mirror only when Report evidence is absent.
             observedOwner.LiveValues.PublishReport(point, snapshot.IsReportTraffic);
+            // Never mirror the payload into signals directly. Only the actual
+            // canonical Report observation with matching association can feed
+            // selected SignalDefinition presentation rows.
+            if (snapshot.IsReportTraffic &&
+                _canonicalSignalProjections.TryGetValue(observedOwner.DeviceId,
+                    out var signalProjection))
+                signalProjection.ProjectReportedSignals(observedOwner.LiveValues,
+                    snapshot.ObservationAssociation, point.IecReference,
+                    point.FunctionalConstraint);
             if (uiDetectedEdge || pending.HasValueEdge || snapshot.IsValueEdge || qualityChanged)
             {
                 UpdateCommandFeedbackFromLivePoint(point);
@@ -3145,6 +3168,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void RemoveDevicePoints(string deviceId)
     {
+        _canonicalSignalProjections.Remove(deviceId);
         for (var index = GlobalPoints.Count - 1; index >= 0; index--)
         {
             if (GlobalPoints[index].DeviceId.Equals(deviceId, StringComparison.OrdinalIgnoreCase))
