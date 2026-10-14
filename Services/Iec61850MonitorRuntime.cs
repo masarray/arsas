@@ -144,7 +144,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 if (!string.IsNullOrWhiteSpace(display) && display != "-")
                 {
                     values.Report(new IedBrowserReadResult(target, display,
-                        rich?.Quality ?? "", rich?.DeviceTimestamp ?? "", ""));
+                        rich?.Quality ?? "", rich?.DeviceTimestamp ?? "", "",
+                        rich?.UtcTimeEvidence));
                     succeeded++;
                 }
                 else
