@@ -23,7 +23,8 @@ public static class IedBrowserDetailEvidenceResolver
             return false;
 
         var a = values.TryGet(primary, row.FunctionalConstraint, out var first,
-            preferReport: monitoring, schema: schema, requiredEvidence: row.EvidenceKind);
+            preferReport: monitoring, schema: schema,
+            requiredEvidence: row.EvidenceField.Length > 0 ? row.EvidenceKind : "");
         if (alternate.Length == 0 || alternate == primary ||
             row.EvidenceKind is "Quality" or "Timestamp")
         {
