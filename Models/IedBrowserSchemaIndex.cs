@@ -154,6 +154,22 @@ public sealed class IedBrowserSchemaIndex
         return false;
     }
 
+    /// <summary>
+    /// Derive q only for a reported value other than the q leaf itself. A
+    /// directly reported q contains its own payload; companion normalization
+    /// must never erase that stronger raw evidence.
+    /// </summary>
+    public bool TryGetDerivedQualityCompanion(string? reportReference, string? fc,
+        out string quality)
+    {
+        if (TryGetQualityCompanion(reportReference, fc, out quality) &&
+            !string.Equals(quality, IedBrowserLiveValues.CanonicalReference(reportReference),
+                StringComparison.Ordinal))
+            return true;
+        quality = "";
+        return false;
+    }
+
     // Finite, allocation-bounded (by path depth) ancestor traversal: exact
     // reference first, then dot-delimited IEC parents, never substring prefix.
     private static IEnumerable<string> Ancestors(string reference)
