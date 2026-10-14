@@ -1983,7 +1983,7 @@
                             <!-- Keep GridSplitter as a DIRECT child of the resized Grid.
                                  The non-hit-test overlay draws its grip without narrowing
                                  the native drag target or changing panel resize semantics. -->
-                            <GridSplitter x:Name="IedBrowserPaneSplitter" Grid.Column="1" Width="8"
+                            <GridSplitter Grid.Column="1" x:Name="IedBrowserPaneSplitter" Width="8"
                                           HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                                           Background="Transparent" ShowsPreview="True"
                                           ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
