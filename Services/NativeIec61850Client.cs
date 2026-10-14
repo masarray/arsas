@@ -1039,7 +1039,9 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                     attempts.Add($"{candidate.Label}/smart: {smart.ReadResult.Message}");
                     if (smart.ReadResult.IsSuccess)
                     {
-                        var projected = ProjectReadValue(smart.ReadResult.Value, dataType, candidate.Reference, objectReference);
+                        var projected = AttachBrowserTimeEvidence(
+                            ProjectReadValue(smart.ReadResult.Value, dataType, candidate.Reference, objectReference),
+                            smart.ReadResult.Value, objectReference);
                         if (projected != null)
                         {
                             LastErrorMessage = $"ARIEC61850 read OK via {candidate.Label}/smart. {smart.ResolveResult.Message}";
@@ -1064,7 +1066,9 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 attempts.Add($"{candidate.Label}/direct {normalized}: {(result.IsSuccess ? "OK" : result.Message)}");
                 if (result.IsSuccess)
                 {
-                    var projected = ProjectReadValue(result.Value, dataType, candidate.Reference, objectReference);
+                    var projected = AttachBrowserTimeEvidence(
+                        ProjectReadValue(result.Value, dataType, candidate.Reference, objectReference),
+                        result.Value, objectReference);
                     if (projected != null)
                     {
                         LastErrorMessage = $"ARIEC61850 read OK via {candidate.Label}/direct: {normalized}. {result.Message}";
@@ -1084,6 +1088,25 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             ? $"ARIEC61850 read failed for {objectReference}: no read candidates."
             : $"ARIEC61850 read failed for {objectReference}: {string.Join(" | ", attempts.Take(8))}";
         return null;
+    }
+
+    /// <summary>
+    /// A rendered UTC string is never authority for time-quality bits. Only
+    /// the pinned ARIEC decoder's direct MMS UTC-Time value AND original eight
+    /// raw bytes may populate Browser t quality. Structured parent timestamps
+    /// and report TimeOfEntry do not satisfy this leaf-level proof.
+    /// </summary>
+    private static Iec61850ReadValue? AttachBrowserTimeEvidence(
+        Iec61850ReadValue? projected, ArMms.MmsDataValue? raw, string reference)
+    {
+        if (projected is null || raw?.Kind != ArMms.MmsDataKind.UtcTime ||
+            !(reference.EndsWith(".t", StringComparison.Ordinal) ||
+              reference.EndsWith("$t", StringComparison.Ordinal)))
+            return projected;
+        var evidence = ArMms.Iec61850UtcTimeEvidence.Decode(raw);
+        if (evidence.IsDecoded && evidence.HasWireProvenance)
+            projected.UtcTimeEvidence = evidence;
+        return projected;
     }
 
     /// <summary>
