@@ -139,6 +139,39 @@ public sealed class M2IedBrowserHierarchyAndReportWireTests
     }
 
     [Fact]
+    public void IdenticalNestedAttributePathsInDifferentFc_StayInSeparateBranches()
+    {
+        LiveIedDataAttributeModel Attribute(string fc, string suffix) => new()
+        {
+            ObjectReference = "LD/CSWI1.Pos",
+            AttributePath = "Pos.origin." + suffix,
+            MmsReference = "LD/CSWI1$" + fc + "$Pos$origin$" + suffix,
+            FunctionalConstraint = fc
+        };
+
+        // Adversarial model: an identical intermediate DA path is declared
+        // in two FCs. A name-only grouping merges both branches and loses FC.
+        var roots = IedBrowserStructuredDetails.AttributeRows(
+            [Attribute("ST", "orCat"), Attribute("CO", "orIdent")], "Pos");
+        Assert.Equal(["origin [ST]", "origin [CO]"],
+            roots.Select(row => row.Name).ToArray());
+        Assert.Equal(["ST", "CO"],
+            roots.Select(row => row.FunctionalConstraint).ToArray());
+
+        var visible = new IedBrowserDetailProjection();
+        visible.Reset(roots);
+        visible.Toggle(roots[0]);
+        var st = Assert.Single(visible.Rows.Where(row => row.Name == "orCat [ST]"));
+        Assert.Equal("LD/CSWI1$ST$Pos$origin$orCat", st.ValueReference);
+        Assert.DoesNotContain(visible.Rows, row => row.Name == "orIdent [CO]");
+
+        visible.Toggle(roots[1]);
+        var co = Assert.Single(visible.Rows.Where(row => row.Name == "orIdent [CO]"));
+        Assert.Equal("LD/CSWI1$CO$Pos$origin$orIdent", co.ValueReference);
+        Assert.Equal("CO", co.FunctionalConstraint);
+    }
+
+    [Fact]
     public void DataModel_LnPageShowsExpandableDosAndNestedAttributes_NotFlatNavigation()
     {
         var obj = ModelDo();

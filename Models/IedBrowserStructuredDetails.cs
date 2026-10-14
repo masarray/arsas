@@ -87,9 +87,13 @@ public static class IedBrowserStructuredDetails
     {
         var result = new List<IedBrowserDetailRow>();
         foreach (var group in attrs.Where(x => x.parts.Length > pathIndex)
-                     .GroupBy(x => x.parts[pathIndex], StringComparer.Ordinal))
+                     .GroupBy(x => (Name: x.parts[pathIndex],
+                         Fc: (x.attr.FunctionalConstraint ?? string.Empty).Trim().ToUpperInvariant())))
         {
-            var name = group.Key;
+            // IEC attribute paths may exist under different FCs (e.g. ST/CO).
+            // Never merge them into one expandable UI branch: that would
+            // cross-bind children and make the parent FC unknowable.
+            var name = group.Key.Name;
             var groupArray = group.ToArray();
             var matching = groupArray.FirstOrDefault(x => x.parts.Length == pathIndex + 1);
             var hasDirect = matching.attr is not null;
