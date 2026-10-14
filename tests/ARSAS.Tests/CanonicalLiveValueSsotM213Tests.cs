@@ -138,6 +138,10 @@ public sealed class CanonicalLiveValueSsotM213Tests
         Assert.Contains("ObservationAssociation = session.BrowserObservationAssociation", runtime);
         Assert.Contains("CanonicalPointSnapshotAuthority.Project(", ui);
         Assert.Contains("snapshot.ObservationAssociation != observedOwner.LiveValues.Association", ui);
-        Assert.Contains("CanonicalPointSnapshotAuthority.NewerSnapshot(", ui);
+        // The coalescer is a pure model component since M2.13E. Assert the
+        // production UI delegation and the actual authority comparison there.
+        Assert.Contains("CanonicalPointSnapshotAuthority.Merge(current, snapshot)", ui);
+        var authority = Read("Models/CanonicalPointSnapshotAuthority.cs");
+        Assert.Contains("NewerSnapshot(prior.Snapshot, incoming)", authority);
     }
 }
