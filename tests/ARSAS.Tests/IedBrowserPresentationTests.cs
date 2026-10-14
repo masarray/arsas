@@ -447,9 +447,35 @@ public sealed class IedBrowserPresentationTests
         var values = new IedBrowserLiveValues();
         values.Publish("LD/CSWI1.Pos.stVal", "ST", "on", "good",
             "2026-10-13 10:00", "Report");
-        Assert.True(values.TryGet("LD/CSWI1.Pos", "ST", out var byDo));
+        // A DO-to-DA alias is not protocol evidence by itself. It is permitted
+        // only when the actual SCL/discovery model declares a unique scalar leaf.
+        Assert.False(values.TryGet("LD/CSWI1.Pos", "ST", out _));
+        var schema = new IedBrowserSchemaIndex(new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel
+            {
+                MmsDomain = "LD",
+                LogicalNodes = [new LiveIedLogicalNodeModel
+                {
+                    Name = "CSWI1",
+                    DataObjects = [new LiveIedDataObjectModel
+                    {
+                        Name = "Pos", Reference = "LD/CSWI1.Pos",
+                        Attributes = [new LiveIedDataAttributeModel
+                        {
+                            ObjectReference = "LD/CSWI1.Pos",
+                            AttributePath = "Pos.stVal",
+                            FunctionalConstraint = "ST",
+                            MmsReference = "LD/CSWI1$ST$Pos$stVal"
+                        }]
+                    }]
+                }]
+            }]
+        });
+        Assert.True(values.TryGet("LD/CSWI1.Pos", "ST", out var byDo,
+            schema: schema));
         Assert.Equal("on", byDo.Value);
-        Assert.False(values.TryGet("LD/CSWI1.Pos", "MX", out _));
+        Assert.False(values.TryGet("LD/CSWI1.Pos", "MX", out _, schema: schema));
 
         values.Publish("LD/CSWI1$ST$Pos$q", "ST", "good", "", "",
             "MMS Read");
