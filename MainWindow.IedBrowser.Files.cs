@@ -40,10 +40,13 @@ public partial class MainWindow
         // Do not merge SCL-only files with live file identities of different
         // sources as though they were the same verified MMS directory entry.
         var live = _iedBrowserFileCatalog?.Files ?? Array.Empty<IedBrowserRemoteFile>();
+        // Index live identities once: never run a linear search through
+        // 20,000 FileDirectory entries for every SCL-declared file row.
+        var livePaths = live.Select(file => file.RemotePath)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var inferred = model?.FileDirectory.Entries
             .Where(file => !string.IsNullOrWhiteSpace(file.Path))
-            .Where(file => !live.Any(remote =>
-                remote.RemotePath.Equals(file.Path, StringComparison.OrdinalIgnoreCase)))
+            .Where(file => !livePaths.Contains(file.Path))
             .Select(file => new IedBrowserRemoteFile(file.Name, file.Path,
                 file.SizeBytes, DateTimeOffset.TryParse(file.LastModified,
                     out var modified) ? modified : null))
