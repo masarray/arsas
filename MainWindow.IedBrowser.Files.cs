@@ -26,6 +26,13 @@ public partial class MainWindow
     {
         if (IedBrowserFilesGrid == null) return;
         var isFiles = page?.Key == "category/files";
+        if (!isFiles)
+        {
+            // Do not let a transfer complete/open a Viewer after navigating
+            // away from Files while the same IED stays selected.
+            _iedBrowserFileTransferOperation?.Cancel();
+            IedBrowserFileTransferOverlay.Visibility = Visibility.Collapsed;
+        }
         IedBrowserDetailList.Visibility = isFiles ? Visibility.Collapsed : Visibility.Visible;
         IedBrowserFilesGrid.Visibility = isFiles ? Visibility.Visible : Visibility.Collapsed;
         if (!isFiles) return;
@@ -143,8 +150,9 @@ public partial class MainWindow
 
             cts.Token.ThrowIfCancellationRequested();
             if (!ReferenceEquals(source, SelectedDevice) ||
-                MainTabs.SelectedIndex != IedBrowserWorkspaceIndex)
-                return; // never open a stale previous-IED result
+                MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
+                _iedBrowserNavigation.Current?.Key != "category/files")
+                return; // never open a stale previous-IED or previous-panel result
 
             if (!openAfterDownload)
             {
@@ -166,7 +174,8 @@ public partial class MainWindow
             }, cts.Token).ConfigureAwait(true);
             if (cts.IsCancellationRequested ||
                 !ReferenceEquals(source, SelectedDevice) ||
-                MainTabs.SelectedIndex != IedBrowserWorkspaceIndex)
+                MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
+                _iedBrowserNavigation.Current?.Key != "category/files")
             {
                 opened.nativeRecord?.Dispose();
                 return;
