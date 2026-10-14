@@ -418,6 +418,15 @@ public partial class MainWindow
         foreach (var row in _iedBrowserDetails.Rows)
         {
             if (string.IsNullOrWhiteSpace(row.ValueReference)) continue;
+            if (IedBrowserObservedVectorPresentation.TryFormat(
+                    device.LiveValues, row.VectorComponents, engineeringUnits,
+                    device.IsMonitoring, out var vector))
+            {
+                row.Value = vector.IsStale ? "Offline · " + vector.Value : vector.Value;
+                row.ObservationSource = vector.Source;
+                row.ObservationTooltip = vector.Provenance;
+                continue;
+            }
             var found = IedBrowserDetailEvidenceResolver.TryResolve(
                 device.LiveValues, row, _iedBrowserValueSchemaIndex,
                 device.IsMonitoring, out var live, out var observedReference);
