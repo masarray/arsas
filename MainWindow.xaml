@@ -1778,8 +1778,29 @@
                                 </StackPanel>
                             </Border>
                             <Border Grid.Column="1" BorderBrush="#E4EAF2" BorderThickness="0,0,0,1" Padding="8,2">
-                                <TextBlock Text="{Binding Value}" ToolTip="{Binding Tooltip}" FontSize="11.2"
-                                           Foreground="#344860" TextTrimming="CharacterEllipsis"/>
+                                <DockPanel LastChildFill="True">
+                                    <!-- Channel label is shown only for a real Report/Read
+                                         observation; engineering schema alone cannot color
+                                         an unevaluated signal as measured/healthy. -->
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding ObservationSource}"
+                                               ToolTip="{Binding ObservationTooltip}" FontSize="9.8"
+                                               Foreground="#4B6B94" Margin="10,0,0,0"
+                                               VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="{x:Type TextBlock}">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ObservationSource}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding Value}" ToolTip="{Binding ObservationTooltip}"
+                                               FontSize="11.2" Foreground="#344860"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </DockPanel>
                             </Border>
                         </Grid>
                     </DataTemplate>
