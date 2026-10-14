@@ -1600,6 +1600,14 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                             !string.Equals(evidenceFc, evidence.FunctionalConstraint,
                                 StringComparison.OrdinalIgnoreCase))
                             continue;
+                        var isExactDo = evidenceSchema.IsDeclaredDataObject(
+                            evidence.CarrierReference);
+                        var isDirectQuality = evidence.CarrierReference.EndsWith(
+                            ".q", StringComparison.Ordinal);
+                        var isDirectTime = evidence.CarrierReference.EndsWith(
+                            ".t", StringComparison.Ordinal);
+                        if (!isExactDo && !isDirectQuality && !isDirectTime)
+                            continue; // never attribute nested DA evidence to owner DO
                         if (evidence.QualityBits is { } quality &&
                             evidenceSchema.TryGetQualityCompanion(
                                 evidence.CarrierReference, evidenceFc, out var qRef))
