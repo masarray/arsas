@@ -324,8 +324,23 @@ public partial class MainWindow
     private void RefreshIedBrowserReadButtons()
     {
         if (IedBrowserReadPageButton == null) return;
-        var ready = SelectedDevice is { IsBusy: false, IsDemo: false, IsBrowserReading: false } &&
-            _iedBrowserReadOperation == null;
+        var device = SelectedDevice;
+        var connected = device?.IsConnected == true;
+        var hasModel = device?.LiveDiscoveryModel != null ||
+                       device?.SclWorkspace?.DesignModel != null;
+        var canReachIED = connected || !string.IsNullOrWhiteSpace(device?.IpAddress);
+        var ready = device is { IsBusy: false, IsDemo: false, IsBrowserReading: false } &&
+            hasModel && canReachIED && _iedBrowserReadOperation == null;
+        // Opening a browsed SCL is always offline-safe. Explicit Read can then
+        // open a cached-model MMS association; no background connect or polling.
+        IedBrowserReadPageButton.Content = connected ? "Read" : "Connect & Read";
+        IedBrowserReadPageButton.ToolTip = !hasModel
+            ? "Open SCL or discover an IED model before reading values."
+            : !canReachIED
+                ? "Bind an MMS IP address to this IED before reading live values."
+                : connected
+                    ? "Read this model-verified object through bounded MMS reads."
+                    : "Connect using this IED model and read selected values on demand; no RCB or cyclic polling.";
         IedBrowserReadPageButton.IsEnabled = ready;
         IedBrowserReadAllButton.IsEnabled = ready;
         IedBrowserCancelReadButton.IsEnabled = _iedBrowserReadOperation != null;
