@@ -2433,9 +2433,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             // Never re-activate Paused/Offline rows from late runtime callbacks.
             // A real live monitoring association must be stamped at ingress;
             // legacy unstamped snapshots cannot cross a reconnect boundary.
-            if (!observedOwner.IsConnected || !observedOwner.IsMonitoring ||
-                snapshot.ObservationAssociation == 0 ||
-                snapshot.ObservationAssociation != observedOwner.LiveValues.Association)
+            if (!observedOwner.IsConnected || !observedOwner.IsMonitoring)
+                continue;
+            // Demo is an explicitly synthetic UI mode without an MMS
+            // association. Real IED snapshots must carry their exact session
+            // stamp; never treat an unstamped real callback as current.
+            if (!observedOwner.IsDemo &&
+                (snapshot.ObservationAssociation == 0 ||
+                 snapshot.ObservationAssociation != observedOwner.LiveValues.Association))
                 continue;
             if (snapshot.Sequence < point.Sequence)
                 continue;

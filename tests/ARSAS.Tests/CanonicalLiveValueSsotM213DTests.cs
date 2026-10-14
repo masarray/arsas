@@ -105,6 +105,7 @@ public sealed class CanonicalLiveValueSsotM213DTests
         Assert.NotNull(directory);
         var ui = File.ReadAllText(Path.Combine(directory!.FullName, "MainWindow.xaml.cs"));
         Assert.Contains("!observedOwner.IsConnected || !observedOwner.IsMonitoring", ui);
+        Assert.Contains("!observedOwner.IsDemo &&", ui);
         Assert.Contains("snapshot.ObservationAssociation == 0", ui);
         Assert.Contains("snapshot.ObservationAssociation != observedOwner.LiveValues.Association", ui);
         Assert.Contains("_pendingPointSnapshots.TryRemove(key, out _)", ui);
