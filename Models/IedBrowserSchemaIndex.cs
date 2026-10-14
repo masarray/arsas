@@ -142,6 +142,14 @@ public sealed class IedBrowserSchemaIndex
             Key(IedBrowserLiveValues.CanonicalReference(objectReference), fc ?? ""), out leaf!);
 
     /// <summary>
+    /// Raw structured evidence may represent a DO only when the canonical
+    /// reference itself is a declared DO; a nested DA cannot borrow q/t from
+    /// its parent merely because it contains a similar MMS BIT STRING.
+    /// </summary>
+    public bool IsDeclaredDataObject(string? reference)
+        => _dataObjects.Contains(IedBrowserLiveValues.CanonicalReference(reference));
+
+    /// <summary>
     /// Bind a real Report quality payload only to the closest declared owning
     /// DO's q leaf with the identical FC. A similarly named sibling is excluded.
     /// </summary>
