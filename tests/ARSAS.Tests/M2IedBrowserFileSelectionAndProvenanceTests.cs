@@ -130,6 +130,10 @@ public sealed class M2IedBrowserFileSelectionAndProvenanceTests
         var grid = Assert.Single(xaml.Descendants(p + "DataGrid"),
             e => e.Attribute(x + "Name")?.Value == "IedBrowserFilesGrid");
         Assert.Equal("FullRow", (string?)grid.Attribute("SelectionUnit"));
+        Assert.NotEqual("Collapsed", (string?)grid.Attribute("Visibility"));
+        var panel = Assert.Single(xaml.Descendants(p + "Grid"),
+            e => e.Attribute(x + "Name")?.Value == "IedBrowserFilesPanel");
+        Assert.Equal("Collapsed", (string?)panel.Attribute("Visibility"));
         Assert.Contains("IedBrowserFiles_SelectionChanged", grid.ToString(), StringComparison.Ordinal);
         Assert.Contains("IsSelected", grid.ToString(), StringComparison.Ordinal);
         Assert.Contains("#2563EB", grid.ToString(), StringComparison.Ordinal);
