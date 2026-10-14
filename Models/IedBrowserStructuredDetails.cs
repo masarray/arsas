@@ -124,7 +124,8 @@ public static class IedBrowserStructuredDetails
             // An intermediate DA (cVal/mag) may reflect its only descendant
             // leaf; never choose among two siblings or cross an FC boundary.
             var singleLeaf = !hasDirect && descendants.Length == 1
-                ? descendants[0].attr.MmsReference : null;
+                ? IedBrowserLiveValues.CanonicalReference(descendants[0].attr.MmsReference)
+                : null;
             Func<IReadOnlyList<IedBrowserDetailRow>>? children = null;
             if (descendants.Length > 0)
                 children = () => BuildAt(descendants, pathIndex + 1, depth + 1);
