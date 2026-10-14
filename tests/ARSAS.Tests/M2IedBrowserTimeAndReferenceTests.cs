@@ -1,82 +1,92 @@
+using AR.Iec61850.Asn1;
 using AR.Iec61850.Discovery;
+using AR.Iec61850.Mms;
 using ArIED61850Tester.Models;
-using ArIED61850Tester.Protocol.Mms;
 
 namespace ARSAS.Tests;
 
 /// <summary>
-/// M2.6A: evidence must be raw/canonical and identity-exact, never inferred
-/// from a generic timestamp or an IEC name prefix or casing collision.
+/// TimeQuality is evidence from the pinned ARIEC engine's original 8 MMS wire
+/// bytes, not a newly interpreted ISO string. Reference/FC identity is exact.
 /// </summary>
 public sealed class M2IedBrowserTimeAndReferenceTests
 {
-    [Fact]
-    public void UtcTime_ExactEightBytePayload_ProducesRealTimeQuality()
+    private static Iec61850UtcTimeEvidence WireTime(byte quality = 0xE5)
     {
-        byte[] payload = [0, 0, 0, 1, 0, 0, 0, 0xE5];
-        Assert.True(MmsUtcTimeDecoder.TryDecode(payload, out var flags));
-        Assert.True(flags.LeapSecondsKnown);
-        Assert.True(flags.ClockFailure);
-        Assert.True(flags.ClockNotSynchronized);
-        Assert.Equal("5", flags.FormatField("TimeAccuracy"));
-        Assert.Equal("true", flags.FormatField("ClockFailure"));
-        var rendered = MmsUtcTimeDecoder.Decode(payload);
-        Assert.True(MmsUtcTimeDecoder.TryDecodeRendered(rendered, out var roundTrip));
-        Assert.Equal(flags, roundTrip);
-        Assert.False(MmsUtcTimeDecoder.TryDecode(payload[..7], out _));
-        Assert.False(MmsUtcTimeDecoder.TryDecode(new byte[9], out _));
-    }
-
-    [Theory]
-    [InlineData("2026-10-14T10:20:30Z")]
-    [InlineData("2026-10-14 10:20:30.000 UTC")]
-    [InlineData("2026-10-14 10:20:30.000 UTC (accuracy=32)")]
-    [InlineData("2026-10-14 10:20:30.000 UTC (accuracy=05)")]
-    [InlineData("2026-10-14 10:20:30.000 UTC (accuracy=5, inventedFlag)")]
-    [InlineData("2026-10-14 10:20:30.000 UTC (accuracy=5, clockFailure, clockFailure)")]
-    [InlineData("2026-10-14 10:20:30.000 UTC (accuracy=5, notSynchronized, clockFailure)")]
-    public void UtcTime_RejectsAnyNonCanonicalOrInventedTimeQuality(string value)
-        => Assert.False(MmsUtcTimeDecoder.TryDecodeRendered(value, out _));
-
-    [Fact]
-    public void UtcTime_AccuracyCode31IsUnknown_NotAnInventedPrecision()
-    {
-        var payload = new byte[] { 0, 0, 0, 1, 0, 0, 0, 31 };
-        Assert.True(MmsUtcTimeDecoder.TryDecodeRendered(MmsUtcTimeDecoder.Decode(payload),
-            out var observed));
-        Assert.Equal("Unknown (31)", observed.FormatField("TimeAccuracy"));
-        Assert.Equal("false", observed.FormatField("ClockFailure"));
+        byte[] raw = [0, 0, 0, 1, 0, 0, 0, quality];
+        var tag = BerWriter.EncodeIdentifier(BerClass.ContextSpecific, false, 17);
+        var encoded = BerWriter.EncodeTlv(tag, raw);
+        var decoded = Assert.Single(MmsDataCodec.DecodeAllData(encoded));
+        return Iec61850UtcTimeEvidence.Decode(decoded);
     }
 
     [Fact]
-    public void LiveRegistry_TypedTimeOnlyForObservedExactT_AndAssociationFence()
+    public void UtcTime_OriginalEightByteEngineEvidence_ReportsExactClockBitsAndPrecision()
+    {
+        var observed = WireTime();
+        Assert.True(observed.IsDecoded);
+        Assert.True(observed.HasWireProvenance);
+        Assert.Equal("00000001000000E5", observed.RawHex);
+        Assert.True(observed.LeapSecondsKnown);
+        Assert.True(observed.ClockFailure);
+        Assert.True(observed.ClockNotSynchronized);
+        Assert.Equal(5, observed.AccuracyCode);
+        Assert.Equal("2^-5 s", observed.TimeAccuracy);
+        Assert.Equal("true", IedBrowserUtcTimeQualityPresentation.FormatField(observed, "ClockFailure"));
+        Assert.Equal("2^-5 s", IedBrowserUtcTimeQualityPresentation.FormatField(observed, "TimeAccuracy"));
+        Assert.Equal("Not exposed", IedBrowserUtcTimeQualityPresentation.FormatField(observed, "InvalidFlag"));
+    }
+
+    [Fact]
+    public void UtcTime_UnknownAccuracyAndSyntheticData_NeverFakesOriginalWire()
+    {
+        var unknown = WireTime(31);
+        Assert.Equal("unspecified",
+            IedBrowserUtcTimeQualityPresentation.FormatField(unknown, "TimeAccuracy"));
+
+        byte[] raw = [0, 0, 0, 1, 0, 0, 0, 0xE5];
+        var synthetic = Iec61850UtcTimeEvidence.Decode(
+            MmsDataValue.UtcTime(Iec61850UtcTime.FromBytes(raw)));
+        Assert.True(synthetic.IsDecoded);
+        Assert.False(synthetic.HasWireProvenance);
+        Assert.Equal("Not exposed",
+            IedBrowserUtcTimeQualityPresentation.FormatField(synthetic, "ClockFailure"));
+        Assert.Throws<ArgumentException>(() => Iec61850UtcTime.FromBytes(raw[..7]));
+    }
+
+    [Fact]
+    public void LiveRegistry_NeverInfersClockFlagsFromRenderedTextOrDeviceTimestamp()
     {
         var live = new IedBrowserLiveValues();
         var first = live.BeginAssociation();
-        var raw = new byte[] { 0, 0, 0, 1, 0, 0, 0, 0x25 };
-        var canonical = MmsUtcTimeDecoder.Decode(raw);
+        var fakeRenderer = "1970-01-01 00:00:01.000 UTC (accuracy=5, clockFailure)";
         Assert.True(live.PublishForAssociation(first,
-            "LD/CSWI1$ST$Pos$t", "ST", canonical, "", "", "MMS Read"));
-        Assert.True(live.TryGet("LD/CSWI1.Pos.t", "ST", out var value));
-        Assert.Equal("true", value.TimeBits?.FormatField("ClockNotSynchronized"));
-        Assert.Equal("5", value.TimeBits?.FormatField("TimeAccuracy"));
-        Assert.Null(value.QualityBits);
+            "LD/CSWI1$ST$Pos$t", "ST", fakeRenderer, "", "", "MMS Read"));
+        Assert.True(live.TryGet("LD/CSWI1.Pos.t", "ST", out var unverified));
+        Assert.Null(unverified.TimeBits);
 
-        // A process value's associated device timestamp is NOT a received
-        // .t field, even if a renderer-looking string is attached to it.
+        var verified = WireTime(0x25);
         Assert.True(live.PublishForAssociation(first,
-            "LD/CSWI1.Pos.stVal", "ST", "on", "Good", canonical, "Report"));
+            "LD/CSWI1$ST$Pos$t", "ST", fakeRenderer, "", "", "MMS Read", verified));
+        Assert.True(live.TryGet("LD/CSWI1.Pos.t", "ST", out var time));
+        Assert.True(time.TimeBits?.HasWireProvenance);
+        Assert.Equal("true",
+            IedBrowserUtcTimeQualityPresentation.FormatField(time.TimeBits,
+                "ClockNotSynchronized"));
+
+        Assert.True(live.PublishForAssociation(first,
+            "LD/CSWI1.Pos.stVal", "ST", "on", "Good", fakeRenderer, "Report", verified));
         Assert.True(live.TryGet("LD/CSWI1.Pos.stVal", "ST", out var process));
         Assert.Null(process.TimeBits);
         Assert.True(live.PublishForAssociation(first,
-            "LD/CSWI1.Pos.TIME", "ST", canonical, "", "", "MMS Read"));
-        Assert.True(live.TryGet("LD/CSWI1.Pos.TIME", "ST", out var falseSibling));
-        Assert.Null(falseSibling.TimeBits);
+            "LD/CSWI1.Pos.TIME", "ST", fakeRenderer, "", "", "MMS Read", verified));
+        Assert.True(live.TryGet("LD/CSWI1.Pos.TIME", "ST", out var sibling));
+        Assert.Null(sibling.TimeBits);
 
         var next = live.BeginAssociation();
         Assert.NotEqual(first, next);
         Assert.False(live.PublishForAssociation(first,
-            "LD/CSWI1.Pos.t", "ST", canonical, "", "", "MMS Read"));
+            "LD/CSWI1.Pos.t", "ST", fakeRenderer, "", "", "MMS Read", verified));
         Assert.False(live.TryGet("LD/CSWI1.Pos.t", "ST", out _));
     }
 
@@ -155,5 +165,29 @@ public sealed class M2IedBrowserTimeAndReferenceTests
             "false", "", "", ""));
         Assert.Equal("true", upper.Value);
         Assert.Equal("false", lower.Value);
+    }
+
+    [Fact]
+    public void Browser_DataDetail_LabelsOnlyObservedReportOrReadValues()
+    {
+        var xaml = File.ReadAllText(Find("MainWindow.xaml"));
+        var code = File.ReadAllText(Find("MainWindow.IedBrowser.cs"));
+        Assert.Contains("Text=\"{Binding ObservationSource}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ToolTip=\"{Binding ObservationTooltip}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("row.ObservationSource = \"\";", code, StringComparison.Ordinal);
+        Assert.Contains("row.ObservationSource = live.IsStale", code, StringComparison.Ordinal);
+        Assert.Contains("IedBrowserUtcTimeQualityPresentation.FormatField(", code,
+            StringComparison.Ordinal);
+    }
+
+    private static string Find(string name)
+    {
+        for (DirectoryInfo? parent = new(AppContext.BaseDirectory); parent != null;
+             parent = parent.Parent)
+        {
+            var candidate = Path.Combine(parent.FullName, name);
+            if (File.Exists(candidate)) return candidate;
+        }
+        throw new FileNotFoundException(name);
     }
 }
