@@ -479,10 +479,15 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             cancellationToken).ConfigureAwait(false);
 
         var updates = new List<NativeReportValueUpdate>();
+        var wireEvidence = new List<NativeBrowserReportRawEvidence>();
         var frames = new List<NativeReportFrameMetadata>();
         var warnings = new List<string>();
         foreach (var report in slice.Reports)
         {
+            // Engine reports contain MMS raw type/width, which the normalized
+            // value display no longer preserves. Extract before projection,
+            // without any additional association or process polling.
+            wireEvidence.AddRange(IedBrowserReportWireEvidence.Extract(report));
             var header = report.Header;
             // ARIEC already decodes the actual InformationReport OptFlds BIT STRING.
             // Preserve its evidence rather than guessing option presence from a
@@ -577,6 +582,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             Message = slice.Message,
             ReportFrames = frames,
             Updates = updates,
+            BrowserRawEvidence = wireEvidence,
             Warnings = warnings.Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
         };
     }
