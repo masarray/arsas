@@ -14,11 +14,11 @@ public sealed class IedBrowserReadBindingIndex
     {
         ArgumentNullException.ThrowIfNull(device);
         _signals = device.Signals.GroupBy(s => Key(s.ObjectReference, s.FunctionalConstraint),
-                StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.OrdinalIgnoreCase);
+                StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.Ordinal);
         _points = device.Points.GroupBy(p => Key(p.IecReference, p.FunctionalConstraint),
-                StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.OrdinalIgnoreCase);
+                StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.Ordinal);
     }
 
     private static string Key(string reference, string fc)

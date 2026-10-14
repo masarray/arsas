@@ -270,7 +270,8 @@ public partial class MainWindow
                 successes++;
                 var accepted = sourceDevice.LiveValues.PublishForAssociation(
                     readAssociation, result.Target.Reference, result.Target.FunctionalConstraint,
-                    result.Value, result.Quality, result.DeviceTimestamp, "MMS Read");
+                    result.Value, result.Quality, result.DeviceTimestamp, "MMS Read",
+                    result.UtcTimeEvidence);
                 if (!accepted) return; // stale connection or superseded read flight
                 // Never overwrite a report-owned point during live acquisition.
                 if (!sourceDevice.IsMonitoring)
@@ -362,14 +363,25 @@ public partial class MainWindow
                     schema: _iedBrowserValueSchemaIndex))
             {
                 row.Value = "Not read";
+                row.ObservationSource = "";
+                row.ObservationTooltip = "";
                 continue;
             }
+            row.ObservationSource = live.IsStale
+                ? "Stale " + live.Source
+                : live.Source;
+            row.ObservationTooltip =
+                $"{row.ValueReference} [{row.FunctionalConstraint}] · {row.ObservationSource} " +
+                $"· observed {live.ObservedUtc:yyyy-MM-dd HH:mm:ss} UTC · association {live.Association}";
             // Typed Quality is decoded once at ingress, never guessed from
             // valid-looking text. Offline snapshots remain clearly stale.
             string display;
             if (row.EvidenceKind == "Quality")
                 display = live.QualityBits?.FormatField(row.EvidenceField) ??
                     Iec61850QualityPresentation.FormatObserved(live.Value, row.EvidenceField);
+            else if (row.EvidenceKind == "Timestamp" && row.EvidenceField.Length > 0)
+                display = IedBrowserUtcTimeQualityPresentation.FormatField(
+                    live.TimeBits, row.EvidenceField);
             else if (row.EvidenceField.Length == 0)
                 display = live.Value;
             else

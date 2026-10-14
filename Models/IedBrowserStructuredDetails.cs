@@ -28,24 +28,31 @@ public static class IedBrowserStructuredDetails
     {
         if (model is null) return [new("Message", "No model type hierarchy is available.", Depth: depth)];
 
-        // Exact IEC object reference/FC only; do not substitute a guessed LN or
-        // functional constraint when vendor naming is ambiguous.
+        // MMS $FC$ and canonical IEC dotted references must resolve to the
+        // SAME case-sensitive object identity. A string prefix alone is never
+        // enough: Pos.stVal must not expose Pos.stValue/vendor siblings.
+        var memberReference = IedBrowserLiveValues.CanonicalReference(member.Reference);
         var objectModels = model.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
             .SelectMany(ln => ln.DataObjects)
-            .Where(obj => string.Equals(obj.Reference, member.Reference, StringComparison.Ordinal) ||
-                member.Reference.StartsWith(obj.Reference + ".", StringComparison.Ordinal))
+            .Where(obj => string.Equals(obj.Reference, memberReference, StringComparison.Ordinal) ||
+                memberReference.StartsWith(obj.Reference + ".", StringComparison.Ordinal))
             .OrderByDescending(obj => obj.Reference.Length)
             .ToArray();
         if (objectModels.Length == 0)
             return [new("Message", "No exact attribute schema for this DataSet member.", Depth: depth)];
 
         var parent = objectModels[0];
+        var memberCoversObject = string.Equals(
+            memberReference, parent.Reference, StringComparison.Ordinal);
+        var exactDescendantPrefix = memberReference + ".";
         var candidateAttributes = parent.Attributes.Where(attr =>
             string.Equals(attr.FunctionalConstraint, member.FunctionalConstraint,
                 StringComparison.OrdinalIgnoreCase) &&
-            (string.Equals(member.Reference, parent.Reference, StringComparison.Ordinal) ||
-             attr.AttributePath.StartsWith(member.Reference[(parent.Reference.Length + 1)..],
-                 StringComparison.Ordinal))).ToArray();
+            (memberCoversObject ||
+             string.Equals(IedBrowserLiveValues.CanonicalReference(attr.MmsReference),
+                 memberReference, StringComparison.Ordinal) ||
+             IedBrowserLiveValues.CanonicalReference(attr.MmsReference)
+                 .StartsWith(exactDescendantPrefix, StringComparison.Ordinal))).ToArray();
 
         return candidateAttributes.Length == 0
             ? [new("Message", "No exact attributes for the member functional constraint.", Depth: depth)]

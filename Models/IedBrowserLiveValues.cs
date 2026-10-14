@@ -90,18 +90,22 @@ public sealed class IedBrowserLiveValues
 
     public void Publish(string reference, string fc, string? value, string? quality,
         string? timestamp, string source)
-        => TryPublish(reference, fc, value, quality, timestamp, source, expectedAssociation: null);
+        => TryPublish(reference, fc, value, quality, timestamp, source, expectedAssociation: null,
+            utcTimeEvidence: null);
 
     /// <summary>
     /// Ordered, association-bound publication. A callback from a cancelled or
     /// replaced MMS session cannot publish into a new association's evidence.
     /// </summary>
     public bool PublishForAssociation(long association, string reference, string fc,
-        string? value, string? quality, string? timestamp, string source)
-        => TryPublish(reference, fc, value, quality, timestamp, source, association);
+        string? value, string? quality, string? timestamp, string source,
+        Iec61850UtcTimeEvidence? utcTimeEvidence = null)
+        => TryPublish(reference, fc, value, quality, timestamp, source, association,
+            utcTimeEvidence);
 
     private bool TryPublish(string reference, string fc, string? value, string? quality,
-        string? timestamp, string source, long? expectedAssociation)
+        string? timestamp, string source, long? expectedAssociation,
+        Iec61850UtcTimeEvidence? utcTimeEvidence)
     {
         if (string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(fc) ||
             string.IsNullOrWhiteSpace(value) ||
@@ -122,7 +126,10 @@ public sealed class IedBrowserLiveValues
                 timestamp ?? "", source, DateTime.UtcNow, _version + 1, _association,
                 QualityBits: IsQualityReference(key) &&
                     MmsQualityDecoder.TryDecodeRendered(value, out var decodedQuality)
-                        ? decodedQuality : null);
+                        ? decodedQuality : null,
+                TimeBits: IsTimeReference(key) &&
+                    utcTimeEvidence is { IsDecoded: true, HasWireProvenance: true }
+                        ? utcTimeEvidence : null);
             _values[key] = isReport
                 ? channels with { Report = observed }
                 : channels with { Read = observed };
@@ -136,6 +143,13 @@ public sealed class IedBrowserLiveValues
         var fcIndex = key.LastIndexOf('|');
         return fcIndex > 2 && key.AsSpan(0, fcIndex).EndsWith(
             ".q".AsSpan(), StringComparison.Ordinal);
+    }
+
+    private static bool IsTimeReference(string key)
+    {
+        var fcIndex = key.LastIndexOf('|');
+        return fcIndex > 2 && key.AsSpan(0, fcIndex).EndsWith(
+            ".t".AsSpan(), StringComparison.Ordinal);
     }
 
     public void PublishReport(Iec61850MonitorPoint point, bool observedReportIngress = false)
@@ -209,5 +223,6 @@ public sealed class IedBrowserLiveValues
 public sealed record IedBrowserReadTarget(string Reference, string FunctionalConstraint, string DataType);
 public sealed record IedBrowserReadResult(
     IedBrowserReadTarget Target, string Value, string Quality,
-    string DeviceTimestamp, string Error);
+    string DeviceTimestamp, string Error,
+    Iec61850UtcTimeEvidence? UtcTimeEvidence = null);
 public sealed record IedBrowserReadProgress(int Completed, int Total);
