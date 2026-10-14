@@ -216,8 +216,26 @@ public partial class MainWindow
         // A dedicated read-only MMS association is used if monitoring is active.
         // Its bounded reads never interfere with the reporting session.
 
-        var model = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
         var readAll = sender is Button { Tag: "All" };
+        if (!readAll)
+        {
+            switch (IedBrowserReadPlan.SelectionKind(_iedBrowserNavigation.Current))
+            {
+                case IedBrowserReadSelectionKind.ReadOnlyRcb:
+                    if (!device.IsConnected)
+                    {
+                        IedBrowserSubtitle.Text = "Connect the IED before read-only RCB inspection.";
+                        return;
+                    }
+                    IedBrowserReadRcb_Click(sender, e);
+                    return;
+                case IedBrowserReadSelectionKind.GooseInspectionRequiresSubscriber:
+                    IedBrowserSubtitle.Text =
+                        "GoCB state is not a DataSet FC read. Inspect model metadata or start the existing passive GOOSE Subscriber.";
+                    return;
+            }
+        }
+        var model = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
         var targets = IedBrowserReadPlan.Build(model, _iedBrowserNavigation.Current, readAll);
         if (targets.Count == 0)
         {
@@ -362,8 +380,15 @@ public partial class MainWindow
             hasModel && canReachIED && _iedBrowserReadOperation == null;
         // Opening a browsed SCL is always offline-safe. Explicit Read can then
         // open a cached-model MMS association; no background connect or polling.
-        IedBrowserReadPageButton.Content = connected ? "Read" : "Connect & Read";
-        IedBrowserReadPageButton.ToolTip = !hasModel
+        var selectedKind = IedBrowserReadPlan.SelectionKind(_iedBrowserNavigation.Current);
+        IedBrowserReadPageButton.Content = selectedKind == IedBrowserReadSelectionKind.ReadOnlyRcb
+            ? "Inspect RCB"
+            : connected ? "Read" : "Connect & Read";
+        IedBrowserReadPageButton.ToolTip = selectedKind == IedBrowserReadSelectionKind.ReadOnlyRcb
+            ? "Inspect current RCB attributes through explicit read-only MMS."
+            : selectedKind == IedBrowserReadSelectionKind.GooseInspectionRequiresSubscriber
+                ? "GOOSE frames require explicit passive capture, not a generic FC read."
+                : !hasModel
             ? "Open SCL or discover an IED model before reading values."
             : !canReachIED
                 ? "Bind an MMS IP address to this IED before reading live values."

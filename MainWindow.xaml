@@ -1746,7 +1746,7 @@
                     <DataTemplate x:Key="BrowserDataHeaderRow">
                         <Grid MinHeight="24" Background="#EFF3F8">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="340" MinWidth="240" MaxWidth="420"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="{Binding Name}" Margin="8,3" FontSize="11" FontWeight="SemiBold" Foreground="#3B526B"/>
@@ -1757,7 +1757,7 @@
                     <DataTemplate x:Key="BrowserDataRow">
                         <Grid MinHeight="24">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="340" MinWidth="240" MaxWidth="420"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <Border BorderBrush="#E4EAF2" BorderThickness="0,0,1,1" Padding="5,2">

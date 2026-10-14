@@ -400,7 +400,12 @@ public sealed class IedBrowserPresentationTests
         var sgRows = IedBrowserPresentation.Details(
             new IedBrowserTreeRow("sg", "SGCB", "SGCB", 3, sg), model, true);
         Assert.Contains(sgRows, r => r.Kind == "Section" && r.Name == "Settings");
-        Assert.Contains(sgRows, r => r.Kind == "Data" && r.Name.Contains("BndWid.setMag") && r.Value == "Not read");
+        var settingRoot = Assert.Single(sgRows.Where(r => r.Kind == "Data" &&
+            r.Name == "ATCC1.BndWid"));
+        Assert.Equal("Not read", settingRoot.Value);
+        var settingLeaf = Assert.Single(settingRoot.GetChildren());
+        Assert.Equal("setMag [SG]", settingLeaf.Name);
+        Assert.Equal("LD/ATCC1$SG$BndWid$setMag", settingLeaf.ValueReference);
         var goose = new LiveIedControlBlockModel { Kind = "GOOSE", Domain = "LD",
             Reference = "LD/LLN0.GO.cb1", DataSetReference = "LD/LLN0.Signals" };
         var gRows = IedBrowserPresentation.Details(
@@ -732,6 +737,75 @@ public sealed class IedBrowserPresentationTests
         var details = IedBrowserPresentation.Details(row.NavigateTo!, null, true);
         Assert.Contains(details, x => x.Kind == "Property" && x.Name == "Path" &&
                                       x.Value == "fault/FRA00029.cfg");
+    }
+
+    [Fact]
+    public void RcbGooseAndSgcb_HaveDistinctReadSelectionRoutes()
+    {
+        var rcb = new IedBrowserTreeRow("r", "r", "RCB", 3,
+            new RcbExportRow { Reference = "LD/LLN0.RP.r", DataSetReference = "LD/LLN0.DS" });
+        var goose = new IedBrowserTreeRow("g", "g", "GoCB", 3,
+            new LiveIedControlBlockModel { Reference = "LD/LLN0.GO.g",
+                DataSetReference = "LD/LLN0.DS" });
+        var sgcb = new IedBrowserTreeRow("s", "s", "SGCB", 3,
+            new LiveIedControlBlockModel { Reference = "LD/LLN0.SGCB", Domain = "LD" });
+        Assert.Equal(IedBrowserReadSelectionKind.ReadOnlyRcb, IedBrowserReadPlan.SelectionKind(rcb));
+        Assert.Equal(IedBrowserReadSelectionKind.GooseInspectionRequiresSubscriber,
+            IedBrowserReadPlan.SelectionKind(goose));
+        Assert.Equal(IedBrowserReadSelectionKind.SettingGroupAttributes,
+            IedBrowserReadPlan.SelectionKind(sgcb));
+        Assert.Equal(IedBrowserReadSelectionKind.FcAttributes,
+            IedBrowserReadPlan.SelectionKind(null));
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            DataSets = [new LiveIedDataSetModel { Reference = "LD/LLN0.DS" }]
+        };
+        Assert.Empty(IedBrowserReadPlan.Build(model, rcb, readAll: false));
+        Assert.Empty(IedBrowserReadPlan.Build(model, goose, readAll: false));
+    }
+
+    [Fact]
+    public void SettingGroup_ReadPlanAndHierarchy_PreserveExactLdAndFunctionalConstraint()
+    {
+        static LiveIedDataAttributeModel Attr(string ld, string fc) => new()
+        {
+            ObjectReference = ld + "/ATCC1.BndWid", AttributePath = "BndWid.setMag.f",
+            MmsReference = ld + "/ATCC1$" + fc + "$BndWid$setMag$f",
+            FunctionalConstraint = fc
+        };
+        var sg = Attr("LD", "SG");
+        var se = Attr("LD", "SE");
+        var foreign = Attr("LD2", "SG");
+        var mx = Attr("LD", "MX");
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices =
+            [
+                new LiveIedLogicalDeviceModel { MmsDomain = "LD",
+                    LogicalNodes = [new LiveIedLogicalNodeModel { Name = "ATCC1",
+                        DataObjects = [new LiveIedDataObjectModel { Name = "BndWid",
+                            Reference = "LD/ATCC1.BndWid", Attributes = [sg, se, mx] }] }] },
+                new LiveIedLogicalDeviceModel { MmsDomain = "LD2",
+                    LogicalNodes = [new LiveIedLogicalNodeModel { Name = "ATCC1",
+                        DataObjects = [new LiveIedDataObjectModel { Name = "BndWid",
+                            Reference = "LD2/ATCC1.BndWid", Attributes = [foreign] }] }] }
+            ]
+        };
+        var node = new IedBrowserTreeRow("s", "SGCB", "SGCB", 3,
+            new LiveIedControlBlockModel { Reference = "LD/LLN0.SGCB", Domain = "LD" });
+        var targets = IedBrowserReadPlan.Build(model, node, readAll: false);
+        Assert.Equal(2, targets.Count);
+        Assert.Contains(targets, v => v.Reference == sg.MmsReference && v.FunctionalConstraint == "SG");
+        Assert.Contains(targets, v => v.Reference == se.MmsReference && v.FunctionalConstraint == "SE");
+        Assert.DoesNotContain(targets, v => v.Reference == foreign.MmsReference || v.Reference == mx.MmsReference);
+        var rows = IedBrowserPresentation.Details(node, model, connected: true);
+        var root = Assert.Single(rows.Where(v => v.Kind == "Data"));
+        Assert.Equal("ATCC1.BndWid", root.Name);
+        Assert.Equal("", root.ValueReference);
+        var sgGroup = Assert.Single(root.GetChildren().Where(v => v.Name == "setMag [SG]"));
+        var leaf = Assert.Single(sgGroup.GetChildren());
+        Assert.Equal("f [SG]", leaf.Name);
+        Assert.Equal(sg.MmsReference, leaf.ValueReference);
     }
 
 }

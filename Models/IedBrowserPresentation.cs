@@ -581,21 +581,33 @@ public static class IedBrowserPresentation
                     rows.Add(new("DataHeader", "Name", "Value"));
                     if (model is not null)
                     {
+                        // Group by real model DO; never concatenate ObjectReference and
+                        // AttributePath, which can produce duplicate setVal spelling.
                         var settings = model.LogicalDevices
                             .Where(ld => string.Equals(ld.MmsDomain, block.Domain, StringComparison.Ordinal))
                             .SelectMany(ld => ld.LogicalNodes)
-                            .SelectMany(ln => ln.DataObjects)
-                            .SelectMany(obj => obj.Attributes)
-                            .Where(attr => attr.FunctionalConstraint is "SG" or "SE")
+                            .SelectMany(ln => ln.DataObjects.Select(obj => (Ln: ln, Object: obj)))
+                            .Select(x => (x.Ln, x.Object, Attributes: x.Object.Attributes
+                                .Where(a => a.FunctionalConstraint is "SG" or "SE").ToArray()))
+                            .Where(x => x.Attributes.Length > 0)
                             .ToArray();
-                        foreach (var attr in settings)
+                        foreach (var setting in settings)
+                        {
+                            var attributes = setting.Attributes;
+                            var sole = attributes.Length == 1 ? attributes[0] : null;
                             rows.Add(new IedBrowserDetailRow("Data",
-                                $"{attr.ObjectReference}.{attr.AttributePath} [{attr.FunctionalConstraint}]",
-                                "Not read", Source: "SG/SE declaration, no live setting-group read")
+                                $"{setting.Ln.Name}.{setting.Object.Name}", "Not read", 0,
+                                "SG/SE declaration; effective setting group not verified")
                             {
-                                ValueReference = attr.MmsReference,
-                                FunctionalConstraint = attr.FunctionalConstraint
+                                // Never project a multi-leaf parent from an arbitrary child.
+                                ValueReference = sole?.MmsReference ?? "",
+                                FunctionalConstraint = sole?.FunctionalConstraint ?? "",
+                                EngineeringUnitReference = sole?.MmsReference ?? "",
+                                IsEngineeringValue = sole is not null,
+                                LoadChildren = () => IedBrowserStructuredDetails.AttributeRows(
+                                    attributes, setting.Object.Name, 1)
                             });
+                        }
                         if (settings.Length == 0)
                             rows.Add(new("Message", "No SG/SE parameters available in this model."));
                     }
