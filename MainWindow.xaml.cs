@@ -26,12 +26,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly CancellationTokenSource _applicationCancellation = new();
     private readonly Dictionary<string, HashSet<string>> _pendingProjectSelections = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<SignalDefinition, Iec61850MonitorDevice> _signalOwners = new();
-    private readonly ConcurrentDictionary<string, CanonicalPointSnapshotBatch> _pendingPointSnapshots = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, CanonicalPointSnapshotBatch> _pendingPointSnapshots = new(StringComparer.Ordinal);
     // Monitoring-lifetime O(1) immutable reference/FC lookup for SignalDefinition.
     // Rebuilt after the selected signal/point model is materialized.
     private readonly Dictionary<string, IedBrowserReadBindingIndex> _canonicalSignalProjections =
         new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, Iec61850MonitorPoint> _pointIndex = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Iec61850MonitorPoint> _pointIndex = new(StringComparer.Ordinal);
     private readonly ConcurrentQueue<Iec61850EventEntry> _pendingEvents = new();
     private readonly ConcurrentQueue<DiagnosticEntry> _pendingDiagnostics = new();
     private readonly Dictionary<string, DateTime> _reportPulseUntil = new(StringComparer.OrdinalIgnoreCase);

@@ -56,6 +56,21 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     // identical reference/FC keys; not persisted across associations.
     [JsonIgnore]
     public IedBrowserLiveValues LiveValues { get; } = new();
+
+    // Collection-change notifications (including same-count ReplaceAll/Reset)
+    // and schema replacement invalidate captured reference/FC projection indexes.
+    // One monotonic revision avoids scans or per-row event subscriptions on ingress.
+    private long _browserProjectionEpoch;
+    public long BrowserProjectionEpoch =>
+        System.Threading.Interlocked.Read(ref _browserProjectionEpoch);
+
+    public Iec61850MonitorDevice()
+    {
+        Signals.CollectionChanged += (_, _) =>
+            System.Threading.Interlocked.Increment(ref _browserProjectionEpoch);
+        Points.CollectionChanged += (_, _) =>
+            System.Threading.Interlocked.Increment(ref _browserProjectionEpoch);
+    }
     public Iec61850DeviceDiagnosticSnapshot LastDiagnosticSnapshot { get; set; } = new();
 
     [JsonIgnore]
@@ -83,6 +98,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         {
             if (ReferenceEquals(_sclWorkspace, value)) return;
             _sclWorkspace = value;
+            System.Threading.Interlocked.Increment(ref _browserProjectionEpoch);
             RefreshAuthoritativeSclComparison();
             RefreshComputed();
         }
@@ -95,6 +111,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         {
             if (ReferenceEquals(_liveDiscoveryModel, value)) return;
             _liveDiscoveryModel = value;
+            System.Threading.Interlocked.Increment(ref _browserProjectionEpoch);
             RefreshAuthoritativeSclComparison();
             RefreshComputed();
         }

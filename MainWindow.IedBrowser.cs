@@ -230,7 +230,9 @@ public partial class MainWindow
             return;
         }
 
-        var bindingIndex = new IedBrowserReadBindingIndex(device);
+        // Build after a possible cached-model connect; connection may replace
+        // the catalog and invalidate a pre-connect binding snapshot.
+        IedBrowserReadBindingIndex? bindingIndex = null;
         var cts = CancellationTokenSource.CreateLinkedTokenSource(_applicationCancellation.Token);
         // Read All may include thousands of attributes. It is cancellable by the
         // operator, never a new continuous acquisition/polling process.
@@ -257,8 +259,9 @@ public partial class MainWindow
             readValues.Drain(result =>
             {
                 if (!ReferenceEquals(_iedBrowserReadOperation, cts) ||
-                    sourceDevice.LiveValues.Association != readAssociation)
-                    return; // new association or replaced read flight
+                    sourceDevice.LiveValues.Association != readAssociation ||
+                    bindingIndex is not { IsCurrent: true })
+                    return; // superseded association, catalog or read flight
                 if (result.Error.Length != 0 || string.IsNullOrWhiteSpace(result.Value))
                 {
                     failures++;
@@ -297,6 +300,7 @@ public partial class MainWindow
             }
 
             readAssociation = sourceDevice.LiveValues.Association;
+            bindingIndex = new IedBrowserReadBindingIndex(sourceDevice);
             var readProgress = new Progress<IedBrowserReadProgress>(p =>
             {
                 if (ReferenceEquals(_iedBrowserReadOperation, cts) &&
