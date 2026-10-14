@@ -6,6 +6,7 @@ using AR.Iec61850.Discovery;
 using AR.Iec61850.Mms;
 using AR.Iec61850.Scl.Export;
 using ArIED61850Tester.Models;
+using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
 
@@ -467,10 +468,19 @@ public partial class MainWindow
             .Where(item => IedBrowserGooseInspection.Canonical(item.ControlBlockReference) ==
                 IedBrowserGooseInspection.Canonical(block.Reference)).Take(2).ToArray();
         var scl = source is { Length: 1 } ? source[0] : null;
-        if (scl is not null && !string.IsNullOrWhiteSpace(block.DataSetReference) &&
-            IedBrowserGooseInspection.Canonical(block.DataSetReference) !=
-            IedBrowserGooseInspection.Canonical(scl.DataSetReference))
-            scl = null; // conflicting model authorities fail closed
+        var modelAppId = TryParseAppId(block.AppId);
+        var modelConfRev = TryParseUInt(block.ConfRev);
+        if (scl is not null &&
+            ((!string.IsNullOrWhiteSpace(block.DataSetReference) &&
+                IedBrowserGooseInspection.Canonical(block.DataSetReference) !=
+                    IedBrowserGooseInspection.Canonical(scl.DataSetReference)) ||
+             (!string.IsNullOrWhiteSpace(block.ControlId) &&
+                !string.Equals(block.ControlId, scl.GoId, StringComparison.Ordinal)) ||
+             (modelAppId.HasValue && scl.Address.AppId.HasValue &&
+                modelAppId.Value != scl.Address.AppId.Value) ||
+             (modelConfRev.HasValue && scl.ConfigurationRevision.HasValue &&
+                modelConfRev.Value != scl.ConfigurationRevision.Value)))
+            scl = null; // preserve conflicting authorities rather than blind SCL overlay
 
         var dataSet = !string.IsNullOrWhiteSpace(block.DataSetReference)
             ? block.DataSetReference : scl?.DataSetReference ?? "";

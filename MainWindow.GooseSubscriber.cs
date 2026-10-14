@@ -421,6 +421,11 @@ public partial class MainWindow
             GooseFrames = status.GooseFrames;
             GooseOtherFrames = status.OtherFrames;
             GooseStatusText = status.Message;
+            if (!status.IsRunning && MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
+            {
+                _iedBrowserLastLiveVersion = -1;
+                RefreshIedBrowserVisibleValues(); // stale frame cannot remain current
+            }
             if (status.Level.Equals("ERROR", StringComparison.OrdinalIgnoreCase))
             {
                 AddLog("ERROR", "GOOSE", status.Message);
