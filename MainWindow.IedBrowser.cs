@@ -257,31 +257,49 @@ public partial class MainWindow
             }
 
             readAssociation = sourceDevice.LiveValues.Association;
-            var readValues = new Progress<IedBrowserReadResult>(result =>
+            // Progress<T> posts asynchronously to WPF: an awaited read sweep
+            // can finish before the final posted callbacks execute. Ingestion
+            // must be synchronous on the producer side, with coalesced UI drain
+            // and a final drain BEFORE disposing the operation token.
+            var readValues = new IedBrowserReadResultInbox(() =>
             {
-                if (!ReferenceEquals(SelectedDevice, sourceDevice) ||
-                    !ReferenceEquals(_iedBrowserReadOperation, cts) ||
-                    cts.IsCancellationRequested)
-                    return;
-                if (result.Error.Length != 0)
-                {
-                    failures++;
-                    return;
-                }
-                successes++;
-                var accepted = sourceDevice.LiveValues.PublishForAssociation(
-                    readAssociation, result.Target.Reference, result.Target.FunctionalConstraint,
-                    result.Value, result.Quality, result.DeviceTimestamp, "MMS Read",
-                    result.UtcTimeEvidence, result.QualityEvidence);
-                if (!accepted) return; // stale connection or superseded read flight
-                // Never overwrite a report-owned point during live acquisition.
-                if (!sourceDevice.IsMonitoring)
-                    bindingIndex.Apply(result);
-                RefreshIedBrowserVisibleValues();
+                Dispatcher.BeginInvoke(DispatcherPriority.Background,
+                    new Action(DrainReadResults));
             });
+            void DrainReadResults()
+            {
+                var changed = false;
+                readValues.Drain(result =>
+                {
+                    if (!ReferenceEquals(_iedBrowserReadOperation, cts) ||
+                        sourceDevice.LiveValues.Association != readAssociation)
+                        return; // new association or replaced read flight
+                    if (result.Error.Length != 0 || string.IsNullOrWhiteSpace(result.Value))
+                    {
+                        failures++;
+                        return;
+                    }
+                    var accepted = sourceDevice.LiveValues.PublishForAssociation(
+                        readAssociation, result.Target.Reference,
+                        result.Target.FunctionalConstraint, result.Value,
+                        result.Quality, result.DeviceTimestamp, "MMS Read",
+                        result.UtcTimeEvidence, result.QualityEvidence);
+                    if (!accepted) return;
+                    successes++;
+                    // Never overwrite a report-owned point during live acquisition.
+                    if (!sourceDevice.IsMonitoring)
+                        bindingIndex.Apply(result);
+                    changed = true;
+                });
+                if (changed && ReferenceEquals(SelectedDevice, sourceDevice))
+                    RefreshIedBrowserVisibleValues();
+            }
             var readProgress = new Progress<IedBrowserReadProgress>(p =>
             {
-                if (!cts.IsCancellationRequested)
+                if (ReferenceEquals(_iedBrowserReadOperation, cts) &&
+                    ReferenceEquals(SelectedDevice, sourceDevice) &&
+                    !cts.IsCancellationRequested &&
+                    sourceDevice.LiveValues.Association == readAssociation)
                     sourceDevice.ApplyBrowserReadProgress(p.Completed, p.Total);
             });
             if (device.IsMonitoring)
@@ -290,8 +308,12 @@ public partial class MainWindow
             else
                 await _runtime.ReadBrowserValuesAsync(device, targets,
                     readValues, readProgress, cts.Token);
+            // All producers have returned: consume the final queued results
+            // synchronously before calculating counts and closing this flight.
+            DrainReadResults();
             if (!cts.IsCancellationRequested && ReferenceEquals(SelectedDevice, sourceDevice))
             {
+                device.ApplyBrowserReadProgress(targets.Count, targets.Count);
                 device.CompleteDiscoveryProgressAnimation();
                 IedBrowserSubtitle.Text = $"Read complete · {successes:N0} values / {targets.Count:N0} attributes · {failures:N0} unavailable";
                 RefreshIedBrowserVisibleValues();
@@ -299,11 +321,13 @@ public partial class MainWindow
         }
         catch (OperationCanceledException)
         {
+            DrainReadResults(); // retain observations completed before cancellation
             if (ReferenceEquals(SelectedDevice, sourceDevice))
                 IedBrowserSubtitle.Text = $"Read cancelled · {successes:N0} value(s) received; no settings changed.";
         }
         catch (Exception ex)
         {
+            DrainReadResults(); // retain successful prefix before a transport fault
             if (ReferenceEquals(SelectedDevice, sourceDevice))
             {
                 device.MarkDiscoveryFailed(ex.Message);
@@ -312,6 +336,7 @@ public partial class MainWindow
         }
         finally
         {
+            DrainReadResults();
             if (ReferenceEquals(_iedBrowserReadOperation, cts))
                 _iedBrowserReadOperation = null;
             cts.Dispose();
