@@ -60,9 +60,13 @@ public sealed class IedBrowserFileCatalog
             reason = $"Record {selected.BaseName} is incomplete: {selected.Completeness}.";
             return false;
         }
-        if (!selected.Files.Any(file => file.Kind == Iec61850FaultRecordFileKind.Configuration))
+        // The engine also marks CFF/ZIP/vendor packages as complete; that is
+        // download eligibility, NOT proof the current native CFG/DAT viewer can
+        // interpret them. Require both concrete complementary files here.
+        if (!selected.Files.Any(file => file.Kind == Iec61850FaultRecordFileKind.Configuration) ||
+            !selected.Files.Any(file => file.Kind == Iec61850FaultRecordFileKind.Data))
         {
-            reason = "A native COMTRADE configuration (.cfg) is required to open this record.";
+            reason = "The native COMTRADE viewer requires a complete CFG + DAT pair.";
             return false;
         }
         record = selected;
