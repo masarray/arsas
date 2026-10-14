@@ -26,10 +26,6 @@ internal sealed record IedBrowserObservationChannels(
 /// </summary>
 public sealed class IedBrowserLiveValues
 {
-    private static readonly string[] ProcessLeafSuffixes =
-    [
-        ".stVal", ".posVal", ".valWTr", ".general", ".mag.f", ".instMag.f", ".cVal.mag.f"
-    ];
     private readonly object _gate = new();
     // IEC object names are case-sensitive. FC labels are separately normalized.
     private readonly Dictionary<string, IedBrowserObservationChannels> _values =
@@ -165,7 +161,8 @@ public sealed class IedBrowserLiveValues
     /// No chosen source synthesizes SOE or process events.
     /// </summary>
     public bool TryGet(string reference, string fc,
-        out IedBrowserObservedValue evidence, bool preferReport = true)
+        out IedBrowserObservedValue evidence, bool preferReport = true,
+        IedBrowserSchemaIndex? schema = null)
     {
         if (string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(fc))
         {
@@ -176,18 +173,13 @@ public sealed class IedBrowserLiveValues
         {
             if (TryGetExact(Key(reference, fc), preferReport, out evidence))
                 return true;
-            // M1 backward-compatibility process companion aliases. The M2 schema
-            // index will remove this fallback after all SCL/Discovery paths bind.
-            var normalized = CanonicalReference(reference);
-            foreach (var suffix in ProcessLeafSuffixes)
-            {
-                if (TryGetExact(Key(normalized + suffix, fc), preferReport, out evidence))
-                    return true;
-                if (normalized.EndsWith(suffix, StringComparison.Ordinal) &&
-                    TryGetExact(Key(normalized[..^suffix.Length], fc), preferReport,
-                        out evidence))
-                    return true;
-            }
+            // Only the exact engineering schema can authorize an alias from
+            // DO to its unique scalar DA. Do not guess from IEC suffixes and do
+            // not reverse-map DO scalars into unsupported child q/t/DA values.
+            if (schema != null &&
+                schema.TryGetPrimaryLeaf(reference, fc, out var exactLeaf) &&
+                TryGetExact(Key(exactLeaf, fc), preferReport, out evidence))
+                return true;
             evidence = null!;
             return false;
         }
