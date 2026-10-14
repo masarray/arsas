@@ -821,7 +821,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (MainTabs.SelectedIndex != 2)
             HideEventDetails();
         if (MainTabs.SelectedIndex != IedBrowserWorkspaceIndex)
+        {
             CancelIedBrowserRead();
+            _iedBrowserFileTransferOperation?.Cancel();
+        }
         if (MainTabs.SelectedIndex == 2)
         {
             foreach (var device in Devices)

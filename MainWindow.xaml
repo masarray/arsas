@@ -2030,7 +2030,8 @@
                                         </StackPanel>
                                     </Grid>
                                 </Border>
-                                <ListView x:Name="IedBrowserDetailList" Grid.Row="1"
+                                <Grid Grid.Row="1">
+                                <ListView x:Name="IedBrowserDetailList"
                                           SelectionMode="Single"
                                           AlternationCount="2"
                                           BorderBrush="#CBD7E4" BorderThickness="1"
@@ -2089,6 +2090,60 @@
                                         </DataTemplate>
                                     </ListView.ItemTemplate>
                                 </ListView>
+                                <!-- Files are a separate dense 3-column virtualized native grid;
+                                     normal Browser detail rows remain untouched. -->
+                                <DataGrid x:Name="IedBrowserFilesGrid"
+                                          Visibility="Collapsed" AutoGenerateColumns="False"
+                                          IsReadOnly="True" CanUserAddRows="False"
+                                          CanUserDeleteRows="False"
+                                          SelectionMode="Single" HeadersVisibility="Column"
+                                          EnableRowVirtualization="True"
+                                          VirtualizingPanel.IsVirtualizing="True"
+                                          VirtualizingPanel.VirtualizationMode="Recycling"
+                                          BorderBrush="#CBD7E4" BorderThickness="1"
+                                          Background="White" RowHeight="31"
+                                          GridLinesVisibility="None"
+                                          LoadingRow="IedBrowserFile_LoadingRow">
+                                    <DataGrid.RowStyle>
+                                        <Style TargetType="{x:Type DataGridRow}">
+                                            <EventSetter Event="MouseDoubleClick" Handler="IedBrowserFile_DoubleClick"/>
+                                            <Setter Property="ToolTip" Value="{Binding RemotePath}"/>
+                                        </Style>
+                                    </DataGrid.RowStyle>
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Filename" Binding="{Binding Name}"
+                                                            Width="*" MinWidth="185"/>
+                                        <DataGridTextColumn Header="Time" Binding="{Binding ModifiedText}"
+                                                            Width="175" MinWidth="140"/>
+                                        <DataGridTextColumn Header="Size" Binding="{Binding SizeText}"
+                                                            Width="110" MinWidth="95"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                                <!-- Overlay is scoped to Files only, never to monitoring or
+                                     the Explorer. Cancellation reaches the dedicated transfer. -->
+                                <Border x:Name="IedBrowserFileTransferOverlay" Visibility="Collapsed"
+                                        Background="#D9FFFFFF" Panel.ZIndex="3">
+                                    <Border Width="350" MaxWidth="410" VerticalAlignment="Center"
+                                            HorizontalAlignment="Center" Background="White"
+                                            BorderBrush="#CCD8E5" BorderThickness="1"
+                                            CornerRadius="10" Padding="17">
+                                        <StackPanel>
+                                            <TextBlock Text="COMTRADE transfer" FontWeight="SemiBold"
+                                                       FontSize="13" Foreground="#223D5E"/>
+                                            <TextBlock x:Name="IedBrowserFileTransferText"
+                                                       Margin="0,8,0,9" TextWrapping="Wrap"
+                                                       FontSize="11" Foreground="#516780"
+                                                       Text="Preparing record…"/>
+                                            <ProgressBar x:Name="IedBrowserFileTransferProgress"
+                                                         Height="5" Minimum="0" Maximum="100"
+                                                         IsIndeterminate="True"/>
+                                            <Button Content="Cancel" Click="IedBrowserCancelFileTransfer_Click"
+                                                    Style="{StaticResource SoftButton}" Margin="0,12,0,0"
+                                                    Padding="12,4" HorizontalAlignment="Right"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Border>
+                                </Grid>
                             </Grid>
                         </Grid>
                     </Grid>
