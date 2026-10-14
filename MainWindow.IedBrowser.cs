@@ -41,6 +41,38 @@ public partial class MainWindow
     private CancellationTokenSource? _iedBrowserFileReadOperation;
     private CancellationTokenSource? _iedBrowserReadOperation;
 
+    /// <summary>
+    /// Task-first navigation for both Open SCL and IED Discovery. This touches
+    /// only UI selection and the already-built read-only engineering projection;
+    /// connecting/reading still requires the explicit, cancellable Read command.
+    /// </summary>
+    internal void OpenIedBrowserModel(Iec61850MonitorDevice device)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        SelectedDevice = device;
+        MainTabs.SelectedIndex = IedBrowserWorkspaceIndex;
+        UpdateNavigationVisuals(IedBrowserWorkspaceIndex, animate: true);
+        RefreshIedBrowser();
+
+        var category = _iedBrowserTree.FindVisible("category/model");
+        if (category is null) return; // Model unavailable, Browser explains why.
+
+        // Materialize only the first LD and LN. Select its LN to show DO/DA
+        // details immediately, without walking every sibling IED object.
+        _iedBrowserTree.Expand(category);
+        var ld = category.GetChildren().FirstOrDefault();
+        if (ld is not null) _iedBrowserTree.Expand(ld);
+        var firstNode = ld?.GetChildren().FirstOrDefault();
+        var target = firstNode ?? ld ?? category;
+        _iedBrowserNavigation.SelectFromTree(target);
+        SynchronizeIedBrowserTree(target);
+        RenderIedBrowserSelection(target,
+            device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel,
+            device.IsConnected);
+        _iedBrowserLastLiveVersion = -1;
+        RefreshIedBrowserVisibleValues();
+    }
+
     internal void OpenIedBrowserRcb(Iec61850MonitorDevice device)
     {
         ArgumentNullException.ThrowIfNull(device);
