@@ -122,7 +122,10 @@ public sealed class IedBrowserLiveValues
                 timestamp ?? "", source, DateTime.UtcNow, _version + 1, _association,
                 QualityBits: IsQualityReference(key) &&
                     MmsQualityDecoder.TryDecodeRendered(value, out var decodedQuality)
-                        ? decodedQuality : null);
+                        ? decodedQuality : null,
+                TimeBits: IsTimeReference(key) &&
+                    MmsUtcTimeDecoder.TryDecodeRendered(value, out var decodedTime)
+                        ? decodedTime : null);
             _values[key] = isReport
                 ? channels with { Report = observed }
                 : channels with { Read = observed };
@@ -136,6 +139,13 @@ public sealed class IedBrowserLiveValues
         var fcIndex = key.LastIndexOf('|');
         return fcIndex > 2 && key.AsSpan(0, fcIndex).EndsWith(
             ".q".AsSpan(), StringComparison.Ordinal);
+    }
+
+    private static bool IsTimeReference(string key)
+    {
+        var fcIndex = key.LastIndexOf('|');
+        return fcIndex > 2 && key.AsSpan(0, fcIndex).EndsWith(
+            ".t".AsSpan(), StringComparison.Ordinal);
     }
 
     public void PublishReport(Iec61850MonitorPoint point, bool observedReportIngress = false)
