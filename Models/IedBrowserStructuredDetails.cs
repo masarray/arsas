@@ -8,6 +8,18 @@ namespace ArIED61850Tester.Models;
 /// </summary>
 public static class IedBrowserStructuredDetails
 {
+    /// <summary>One DO row; child DAs/BDAs materialize only when expanded.</summary>
+    public static IedBrowserDetailRow DataObject(
+        LiveIedDataObjectModel obj, string? uniqueProcessFc, int depth = 0)
+        => new("Data", obj.Name, "Not read", depth,
+            $"IEC DO declaration · {obj.Reference} · CDC {obj.InferredCdc}")
+        {
+            IsDataObject = true,
+            ValueReference = obj.Reference,
+            FunctionalConstraint = uniqueProcessFc ?? "",
+            LoadChildren = () => AttributeRows(obj.Attributes, obj.Name, depth + 1)
+        };
+
     public static IedBrowserDetailRow Member(LiveIedDataSetMemberModel member,
         LiveIedModelDiscoveryDocument? model, int depth = 0)
     {
