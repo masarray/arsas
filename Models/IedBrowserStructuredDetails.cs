@@ -22,6 +22,9 @@ public static class IedBrowserStructuredDetails
         {
             IsDataObject = true,
             ValueReference = hasLeaf ? processLeaf : obj.Reference,
+            FallbackValueReference = hasLeaf ? obj.Reference : "",
+            IsEngineeringValue = hasLeaf,
+            EngineeringUnitReference = hasLeaf ? processLeaf : "",
             FunctionalConstraint = hasLeaf ? processFc : uniqueProcessFc ?? "",
             LoadChildren = () => AttributeRows(obj.Attributes, obj.Name, depth + 1)
         };
@@ -38,20 +41,29 @@ public static class IedBrowserStructuredDetails
         var identity = IedBrowserLiveValues.CanonicalReference(member.Reference);
         var exactObject = model?.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
             .SelectMany(ln => ln.DataObjects)
-            .FirstOrDefault(obj => string.Equals(
-                IedBrowserLiveValues.CanonicalReference(obj.Reference), identity,
-                StringComparison.Ordinal));
-        var leaf = string.Empty;
-        var leafFc = string.Empty;
-        var foundLeaf = exactObject is not null &&
-            IedBrowserSchemaIndex.TryGetUniqueProcessLeaf(
-                exactObject, out leaf, out leafFc) &&
-            string.Equals(leafFc, member.FunctionalConstraint,
-                StringComparison.OrdinalIgnoreCase);
+            .Where(obj => identity == IedBrowserLiveValues.CanonicalReference(obj.Reference) ||
+                identity.StartsWith(IedBrowserLiveValues.CanonicalReference(obj.Reference) + ".",
+                    StringComparison.Ordinal))
+            .OrderByDescending(obj => obj.Reference.Length).FirstOrDefault();
+        // A DataSet FCDA can identify a structured subobject (A.phsA)
+        // while the discovered DO owner is A. Resolve only descendants of
+        // that exact member and matching FC.
+        var leaf = exactObject is null ? null : ChooseEngineeringLeaf(
+            exactObject.Attributes
+                .Where(a => string.Equals(a.FunctionalConstraint, member.FunctionalConstraint,
+                    StringComparison.OrdinalIgnoreCase))
+                .Select(a => (Reference: IedBrowserLiveValues.CanonicalReference(a.MmsReference),
+                    Prefix: identity + "."))
+                .Where(a => a.Reference.StartsWith(a.Prefix, StringComparison.Ordinal))
+                .Select(a => (Reference: a.Reference, Relative: a.Reference[a.Prefix.Length..]))); 
+        var foundLeaf = !string.IsNullOrEmpty(leaf);
         return new IedBrowserDetailRow("Data", $"{name} [{member.FunctionalConstraint}]", "Not read",
             depth, "DataSet directory; observed live values or explicit MMS read")
         {
-            ValueReference = foundLeaf ? leaf : member.Reference,
+            ValueReference = foundLeaf ? leaf! : member.Reference,
+            FallbackValueReference = foundLeaf ? member.Reference : "",
+            EngineeringUnitReference = foundLeaf ? leaf! : "",
+            IsEngineeringValue = foundLeaf,
             FunctionalConstraint = member.FunctionalConstraint,
             LoadChildren = () => DataSetMemberChildren(member, model, depth + 1)
         };
@@ -121,11 +133,12 @@ public static class IedBrowserStructuredDetails
             var hasDirect = matching.attr is not null;
             var attr = hasDirect ? matching.attr : groupArray[0].attr;
             var descendants = groupArray.Where(x => x.parts.Length > pathIndex + 1).ToArray();
-            // An intermediate DA (cVal/mag) may reflect its only descendant
-            // leaf; never choose among two siblings or cross an FC boundary.
-            var singleLeaf = !hasDirect && descendants.Length == 1
-                ? IedBrowserLiveValues.CanonicalReference(descendants[0].attr.MmsReference)
-                : null;
+            // q/t and alternate instantaneous leaves are not blockers for a
+            // model-proven normal engineering value. No first child wins.
+            var scalarLeaf = name is "q" or "t" ? null :
+                ChooseEngineeringLeaf(descendants.Select(x => (
+                    Reference: IedBrowserLiveValues.CanonicalReference(x.attr.MmsReference),
+                    Relative: string.Join(".", x.parts.Skip(pathIndex + 1)))));
             Func<IReadOnlyList<IedBrowserDetailRow>>? children = null;
             if (descendants.Length > 0)
                 children = () => BuildAt(descendants, pathIndex + 1, depth + 1);
@@ -143,8 +156,11 @@ public static class IedBrowserStructuredDetails
                 // that exact depth. Keep the verified parent reference/FC.
                 ValueReference = hasDirect
                     ? attr.MmsReference
-                    : singleLeaf ?? (attr.ObjectReference + "." +
+                    : scalarLeaf ?? (attr.ObjectReference + "." +
                         string.Join(".", groupArray[0].parts.Take(pathIndex + 1))),
+                FallbackValueReference = hasDirect ? scalarLeaf ?? "" : "",
+                EngineeringUnitReference = scalarLeaf ?? "",
+                IsEngineeringValue = scalarLeaf is not null && descendants.Length > 0,
                 EvidenceKind = hasDirect && name == "q" ? "Quality" :
                     hasDirect && name == "t" ? "Timestamp" : "",
                 FunctionalConstraint = groupArray.All(x =>
@@ -155,6 +171,32 @@ public static class IedBrowserStructuredDetails
             });
         }
         return result;
+    }
+
+    // Returns a scalar only when the entire candidate set proves a unique
+    // IEC engineering magnitude. q/t and non-value configuration fields are
+    // deliberately excluded. Magnitude + instantaneous magnitude is an
+    // explicitly recognized IEC pair; other multi-leaf groups fail closed.
+    private static string? ChooseEngineeringLeaf(
+        IEnumerable<(string Reference, string Relative)> rows)
+    {
+        var candidates = rows.Where(x => !string.IsNullOrWhiteSpace(x.Reference) &&
+                x.Relative is "f" or "stVal" or "posVal" or "general" or
+                    "valWTr" or "mag.f" or "instMag.f" or "cVal.mag.f" or
+                    "instCVal.mag.f" or "ang.f" or "cVal.ang.f")
+            .DistinctBy(x => x.Reference, StringComparer.Ordinal)
+            .Take(3).ToArray();
+        if (candidates.Length == 1)
+            return candidates[0].Reference;
+        if (candidates.Length != 2) return null;
+        foreach (var (normal, instant) in new[] {
+            ("mag.f", "instMag.f"), ("cVal.mag.f", "instCVal.mag.f") })
+        {
+            if (candidates.Any(x => x.Relative == normal) &&
+                candidates.Any(x => x.Relative == instant))
+                return candidates.First(x => x.Relative == normal).Reference;
+        }
+        return null;
     }
 
     private static string TrimObjectName(string path, string objectName)

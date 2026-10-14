@@ -390,6 +390,94 @@ public sealed class M2IedBrowserHierarchyAndReportWireTests
     }
 
     [Fact]
+    public void FcdaSubmemberAndIntermediateDAsUseNormalVerifiedLeaf_NotQTimeOrInstant()
+    {
+        const string owner = "LD/MMXU1.A";
+        const string memberRef = "LD/MMXU1.A.phsA";
+        LiveIedDataAttributeModel Attribute(string tail) => new()
+        {
+            ObjectReference = owner,
+            AttributePath = "A.phsA." + tail,
+            FunctionalConstraint = "MX",
+            MmsReference = "LD/MMXU1$MX$A$phsA$" + tail.Replace('.', '$')
+        };
+        var obj = new LiveIedDataObjectModel {
+            Name = "A", Reference = owner,
+            Attributes = [Attribute("instCVal.mag.f"), Attribute("cVal.mag.f"),
+                Attribute("q"), Attribute("t")]
+        };
+        var model = new LiveIedModelDiscoveryDocument {
+            LogicalDevices = [new LiveIedLogicalDeviceModel {
+                LogicalNodes = [new LiveIedLogicalNodeModel {
+                    DataObjects = [obj]
+                }]
+            }]
+        };
+        var member = new LiveIedDataSetMemberModel {
+            Reference = memberRef, FunctionalConstraint = "MX"
+        };
+        var exactLeaf = memberRef + ".cVal.mag.f";
+        var root = IedBrowserStructuredDetails.Member(member, model);
+        Assert.Equal(exactLeaf, root.ValueReference);
+        Assert.True(root.IsEngineeringValue);
+        var projection = new IedBrowserDetailProjection();
+        projection.Reset(IedBrowserStructuredDetails.DataSetMemberChildren(member, model, 1));
+        var phsA = Assert.Single(projection.Rows.Where(r => r.Name == "phsA [MX]"));
+        Assert.Equal(exactLeaf, phsA.ValueReference);
+        projection.Toggle(phsA);
+        var cval = Assert.Single(projection.Rows.Where(r => r.Name == "cVal [MX]"));
+        Assert.Equal(exactLeaf, cval.ValueReference);
+        projection.Toggle(cval);
+        var mag = Assert.Single(projection.Rows.Where(r => r.Name == "mag [MX]"));
+        Assert.Equal(exactLeaf, mag.ValueReference);
+        projection.Toggle(mag);
+        var f = Assert.Single(projection.Rows.Where(r => r.Name == "f [MX]"));
+        Assert.False(f.IsEngineeringValue);
+        var live = new IedBrowserLiveValues();
+        var session = live.BeginAssociation();
+        Assert.True(live.PublishForAssociation(session, exactLeaf, "MX",
+            "0", "", "", "Report"));
+        foreach (var row in new[] { root, phsA, cval, mag, f })
+            Assert.True(live.TryGet(row.ValueReference, row.FunctionalConstraint, out _));
+        var index = IedBrowserEngineeringValuePresentation.BuildUnitIndex(
+            [new SignalDefinition {
+                ObjectReference = memberRef, FunctionalConstraint = "MX", Unit = "A"
+            }]);
+        foreach (var row in new[] { root, phsA, cval, mag })
+            Assert.Equal("0 A", IedBrowserEngineeringValuePresentation.Format(
+                "0", IedBrowserEngineeringValuePresentation.ResolveUnit(
+                    index, row.EngineeringUnitReference, row.FunctionalConstraint)));
+        Assert.Equal("0", live.TryGet(f.ValueReference, "MX", out var primitive)
+            ? primitive.Value : "Not read");
+        Assert.Equal("0", IedBrowserEngineeringValuePresentation.Format("0", ""));
+
+        var ambiguous = IedBrowserStructuredDetails.AttributeRows(
+            [Attribute("cVal.mag.f"), Attribute("cVal.ang.f")], "A");
+        var rootGroup = Assert.Single(ambiguous);
+        Assert.Equal("LD/MMXU1.A.phsA", rootGroup.ValueReference);
+    }
+
+    [Fact]
+    public void UnitsMustBeProvenByExactReferenceAndFc_NoCrossObjectBorrowOrDuplication()
+    {
+        var units = IedBrowserEngineeringValuePresentation.BuildUnitIndex(
+            [new SignalDefinition {
+                ObjectReference = "LD/MMXU1.Hz", FunctionalConstraint = "MX", Unit = "Hz"
+            }, new SignalDefinition {
+                ObjectReference = "LD/MMXU1.TotW", FunctionalConstraint = "MX", Unit = "kW"
+            }]);
+        Assert.Equal("Hz", IedBrowserEngineeringValuePresentation.ResolveUnit(
+            units, "LD/MMXU1.Hz.mag.f", "MX"));
+        Assert.Equal("", IedBrowserEngineeringValuePresentation.ResolveUnit(
+            units, "LD/MMXU1.Hz.mag.f", "ST"));
+        Assert.Equal("", IedBrowserEngineeringValuePresentation.ResolveUnit(
+            units, "LD/MMXU1.TotVA.mag.f", "MX"));
+        Assert.Equal("0 Hz", IedBrowserEngineeringValuePresentation.Format("0", "Hz"));
+        Assert.Equal("0 Hz", IedBrowserEngineeringValuePresentation.Format("0 Hz", "Hz"));
+        Assert.Equal("good", IedBrowserEngineeringValuePresentation.Format("good", "Hz"));
+    }
+
+    [Fact]
     public void DataModel_LnPageShowsExpandableDosAndNestedAttributes_NotFlatNavigation()
     {
         var obj = ModelDo();

@@ -199,6 +199,12 @@ public sealed record IedBrowserDetailRow(
     }
     public event PropertyChangedEventHandler? PropertyChanged;
     public string ValueReference { get; init; } = "";
+    // The exact alternate reference is evaluated only when the primary has
+    // no observation in the current association. Never borrow a sibling.
+    public string FallbackValueReference { get; init; } = "";
+    // Units apply to engineering aggregates only, never to primitive f/q/t.
+    public bool IsEngineeringValue { get; init; }
+    public string EngineeringUnitReference { get; init; } = "";
     // A typed child of a received q/t field; never treat the entire parent
     // value text as this individual Boolean/time-quality bit.
     public string EvidenceField { get; init; } = "";
@@ -268,18 +274,22 @@ public static class IedBrowserPresentation
 {
     public static IReadOnlyList<IedBrowserTreeRow> Roots(
         LiveIedModelDiscoveryDocument? model, IReadOnlyList<RcbExportRow> rcbs,
-        IReadOnlyList<IedBrowserRemoteFile>? remoteFiles = null)
+        IReadOnlyList<IedBrowserRemoteFile>? remoteFiles = null,
+        string? iedName = null)
     {
         const int childDepth = 1;
+        // Keep domain/object keys untouched; only presentation labels are short.
+        var labelIed = !string.IsNullOrWhiteSpace(model?.IedName)
+            ? model.IedName : iedName;
         IedBrowserTreeRow Category(string name, string key,
             Func<IReadOnlyList<IedBrowserTreeRow>> children)
             => new("category/" + key, name, "Category", 0, loadChildren: children);
 
         var categories = new List<IedBrowserTreeRow>
         {
-            Category("GOOSE", "goose", () => BlockGroups(model?.GooseControlBlocks, "GoCB")),
-            Category("Reports", "reports", () => ReportGroups(rcbs)),
-            Category("Setting Groups", "settings", () => BlockGroups(model?.SettingGroupControls, "SGCB")),
+            Category("GOOSE", "goose", () => BlockGroups(model?.GooseControlBlocks, "GoCB", labelIed)),
+            Category("Reports", "reports", () => ReportGroups(rcbs, labelIed)),
+            Category("Setting Groups", "settings", () => BlockGroups(model?.SettingGroupControls, "SGCB", labelIed)),
             Category("Files", "files", () =>
                 (model?.FileDirectory.Entries.Select(f =>
                     new IedBrowserTreeRow("file/" + f.Path, f.Name, "File", childDepth, f))
@@ -294,10 +304,11 @@ public static class IedBrowserPresentation
                     _ => row.Key
                 }, StringComparer.OrdinalIgnoreCase)
                 .ToArray()),
-            Category("DataSets", "datasets", () => DataSetGroups(model?.DataSets)),
+            Category("DataSets", "datasets", () => DataSetGroups(model?.DataSets, labelIed)),
             Category("Data Model", "model", () =>
                 model?.LogicalDevices.Select(ld =>
-                    new IedBrowserTreeRow("model/ld/" + ld.MmsDomain, ld.MmsDomain, "LD", 1, ld,
+                    new IedBrowserTreeRow("model/ld/" + ld.MmsDomain,
+                        LdDisplayName(ld.MmsDomain, labelIed), "LD", 1, ld,
                         () => ld.LogicalNodes.Select(ln =>
                             new IedBrowserTreeRow("model/ln/" + ld.MmsDomain + "/" + ln.Name,
                                 ln.Name, "LN", 2, ln,
@@ -312,9 +323,23 @@ public static class IedBrowserPresentation
         return categories; // ARSAS IED Explorer already owns device selection; never duplicate it.
     }
 
-    private static IReadOnlyList<IedBrowserTreeRow> ReportGroups(IReadOnlyList<RcbExportRow> rcbs)
+    public static string LdDisplayName(string domain, string? iedName)
+    {
+        var name = (domain ?? "").Trim();
+        var owner = (iedName ?? "").Trim();
+        // The MMS domain is the protocol identity. Strip only an exact
+        // engineering IEDName prefix and never show an empty LD label.
+        if (owner.Length == 0 || name.Length <= owner.Length ||
+            !name.StartsWith(owner, StringComparison.Ordinal))
+            return name;
+        return name[owner.Length..];
+    }
+
+    private static IReadOnlyList<IedBrowserTreeRow> ReportGroups(
+        IReadOnlyList<RcbExportRow> rcbs, string? iedName)
         => rcbs.GroupBy(row => LogicalDevice(row.Reference), StringComparer.Ordinal)
-            .Select(ld => new IedBrowserTreeRow("reports/ld/" + ld.Key, ld.Key, "LD", 1,
+            .Select(ld => new IedBrowserTreeRow("reports/ld/" + ld.Key,
+                LdDisplayName(ld.Key, iedName), "LD", 1,
                 loadChildren: () => ld.GroupBy(row => LogicalNode(row.Reference), StringComparer.Ordinal)
                     .Select(ln => new IedBrowserTreeRow("reports/ln/" + ld.Key + "/" + ln.Key,
                         ln.Key, "LN", 2,
@@ -322,9 +347,11 @@ public static class IedBrowserPresentation
                             new IedBrowserTreeRow("reports/rcb/" + row.SelectionIdentity,
                                 row.Name, "RCB", 3, row)).ToArray())).ToArray())).ToArray();
 
-    private static IReadOnlyList<IedBrowserTreeRow> DataSetGroups(IReadOnlyList<LiveIedDataSetModel>? sets)
+    private static IReadOnlyList<IedBrowserTreeRow> DataSetGroups(
+        IReadOnlyList<LiveIedDataSetModel>? sets, string? iedName)
         => sets?.GroupBy(set => set.Domain, StringComparer.Ordinal)
-            .Select(ld => new IedBrowserTreeRow("datasets/ld/" + ld.Key, ld.Key, "LD", 1,
+            .Select(ld => new IedBrowserTreeRow("datasets/ld/" + ld.Key,
+                LdDisplayName(ld.Key, iedName), "LD", 1,
                 loadChildren: () => ld.GroupBy(set => set.LogicalNode, StringComparer.Ordinal)
                     .Select(ln => new IedBrowserTreeRow("datasets/ln/" + ld.Key + "/" + ln.Key,
                         ln.Key, "LN", 2,
@@ -334,9 +361,11 @@ public static class IedBrowserPresentation
             ?? Array.Empty<IedBrowserTreeRow>();
 
     private static IReadOnlyList<IedBrowserTreeRow> BlockGroups(
-        IReadOnlyList<LiveIedControlBlockModel>? blocks, string kind)
+        IReadOnlyList<LiveIedControlBlockModel>? blocks, string kind,
+        string? iedName)
         => blocks?.GroupBy(block => block.Domain, StringComparer.Ordinal)
-            .Select(ld => new IedBrowserTreeRow(kind + "/ld/" + ld.Key, ld.Key, "LD", 1,
+            .Select(ld => new IedBrowserTreeRow(kind + "/ld/" + ld.Key,
+                LdDisplayName(ld.Key, iedName), "LD", 1,
                 loadChildren: () => ld.GroupBy(block => block.LogicalNode, StringComparer.Ordinal)
                     .Select(ln => new IedBrowserTreeRow(kind + "/ln/" + ld.Key + "/" + ln.Key,
                         ln.Key, "LN", 2,

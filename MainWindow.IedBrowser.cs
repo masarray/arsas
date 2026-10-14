@@ -355,15 +355,24 @@ public partial class MainWindow
         var version = device.LiveValues.Version;
         if (_iedBrowserLastLiveVersion == version) return;
         _iedBrowserLastLiveVersion = version;
+        // Unit index is built once per actual received-value revision, not
+        // per row or on every render. Unit is authoritative signal metadata.
+        var engineeringUnits = IedBrowserEngineeringValuePresentation.BuildUnitIndex(
+            device.Signals);
         foreach (var row in _iedBrowserDetails.Rows)
         {
             if (string.IsNullOrWhiteSpace(row.ValueReference)) continue;
-            if (!device.LiveValues.TryGet(row.ValueReference,
-                    row.FunctionalConstraint, out var live,
-                    preferReport: device.IsMonitoring,
-                    schema: _iedBrowserValueSchemaIndex,
-                    requiredEvidence: row.EvidenceField.Length > 0
-                        ? row.EvidenceKind : ""))
+            var found = device.LiveValues.TryGet(row.ValueReference,
+                row.FunctionalConstraint, out var live,
+                preferReport: device.IsMonitoring,
+                schema: _iedBrowserValueSchemaIndex,
+                requiredEvidence: row.EvidenceField.Length > 0
+                    ? row.EvidenceKind : "");
+            if (!found && !string.IsNullOrWhiteSpace(row.FallbackValueReference))
+                found = device.LiveValues.TryGet(row.FallbackValueReference,
+                    row.FunctionalConstraint, out live,
+                    preferReport: device.IsMonitoring, schema: _iedBrowserValueSchemaIndex);
+            if (!found)
             {
                 row.Value = "Not read";
                 row.ObservationSource = "";
@@ -389,6 +398,13 @@ public partial class MainWindow
                 display = live.Value;
             else
                 display = "Not exposed";
+            if (row.IsEngineeringValue && row.EvidenceField.Length == 0)
+                display = IedBrowserEngineeringValuePresentation.Format(
+                    display, IedBrowserEngineeringValuePresentation.ResolveUnit(
+                        engineeringUnits,
+                        row.EngineeringUnitReference.Length == 0
+                            ? row.ValueReference : row.EngineeringUnitReference,
+                        row.FunctionalConstraint));
             row.Value = live.IsStale ? "Offline · " + display : display;
         }
     }
@@ -563,7 +579,7 @@ public partial class MainWindow
             _iedBrowserCachedSourceStamp = stamp;
 
             var roots = IedBrowserPresentation.Roots(model, _iedBrowserCachedRcbRows,
-                _iedBrowserRemoteFiles);
+                _iedBrowserRemoteFiles, EffectiveSclIedName(device));
             _iedBrowserTree.Reset(roots, expandedKeys);
             // Reports is the familiar entry point; selecting the category shows its
             // full RCB list on the right. Preserve explicit expansion on same-IED refresh.

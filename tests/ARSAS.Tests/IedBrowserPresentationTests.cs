@@ -97,6 +97,43 @@ public sealed class IedBrowserPresentationTests
     }
 
     [Fact]
+    public void ExactIedPrefixIsStrippedOnlyFromLdLabels_NeverKeysOrReferences()
+    {
+        const string ied = "AA1E1F06R4";
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            IedName = ied,
+            LogicalDevices = [new LiveIedLogicalDeviceModel {
+                MmsDomain = ied + "ADD"
+            }, new LiveIedLogicalDeviceModel {
+                MmsDomain = ied + "Application"
+            }],
+            DataSets = [new LiveIedDataSetModel {
+                Domain = ied + "Application", LogicalNode = "LLN0",
+                Name = "Analog", Reference = ied + "Application/LLN0.Analog"
+            }]
+        };
+        var rcb = new RcbExportRow {
+            Reference = ied + "Application/LLN0.RP.Unbuffer01",
+            Name = "Unbuffer01"
+        };
+        var roots = IedBrowserPresentation.Roots(model, [rcb]);
+        var modelRoot = Assert.Single(roots.Where(x => x.Key == "category/model"));
+        Assert.Equal(["ADD", "Application"],
+            modelRoot.GetChildren().Select(x => x.Title).ToArray());
+        Assert.Equal("model/ld/" + ied + "Application",
+            modelRoot.GetChildren()[1].Key);
+        var ds = Assert.Single(roots.Where(x => x.Key == "category/datasets"));
+        Assert.Equal("Application", Assert.Single(ds.GetChildren()).Title);
+        var reports = Assert.Single(roots.Where(x => x.Key == "category/reports"));
+        Assert.Equal("Application", Assert.Single(reports.GetChildren()).Title);
+        Assert.Equal("AA1E1F06R4Application",
+            IedBrowserPresentation.LdDisplayName("AA1E1F06R4Application", "OTHER"));
+        Assert.Equal("Application", IedBrowserPresentation.LdDisplayName(
+            "AA1E1F06R4Application", ied));
+    }
+
+    [Fact]
     public void CategoriesFollowEngineeringNavigationOrder_WithoutMmsCalls()
     {
         var roots = IedBrowserPresentation.Roots(new LiveIedModelDiscoveryDocument(),
