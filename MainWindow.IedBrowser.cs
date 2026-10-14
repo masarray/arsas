@@ -370,6 +370,8 @@ public partial class MainWindow
             if (row.EvidenceKind == "Quality")
                 display = live.QualityBits?.FormatField(row.EvidenceField) ??
                     Iec61850QualityPresentation.FormatObserved(live.Value, row.EvidenceField);
+            else if (row.EvidenceKind == "Timestamp" && row.EvidenceField.Length > 0)
+                display = live.TimeBits?.FormatField(row.EvidenceField) ?? "Not exposed";
             else if (row.EvidenceField.Length == 0)
                 display = live.Value;
             else
