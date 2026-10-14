@@ -17,6 +17,8 @@ public sealed class IedBrowserSchemaIndex
     private readonly HashSet<string> _dataObjects = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _qualityLeaves =
         new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _timestampLeaves =
+        new(StringComparer.Ordinal);
 
     private static readonly HashSet<string> ProcessLeaves =
         new(["stVal", "posVal", "valWTr", "general", "mag.f", "instMag.f", "cVal.mag.f"],
@@ -66,6 +68,8 @@ public sealed class IedBrowserSchemaIndex
                 var relative = reference[(owner.Length + 1)..];
                 if (relative == "q")
                     _qualityLeaves[Key(owner, fc)] = reference;
+                if (relative == "t")
+                    _timestampLeaves[Key(owner, fc)] = reference;
                 if (!ProcessLeaves.Contains(relative)) continue;
                 if (!primaries.TryGetValue(fc, out var paths))
                 {
@@ -150,6 +154,23 @@ public sealed class IedBrowserSchemaIndex
         {
             if (!_dataObjects.Contains(owner)) continue;
             return _qualityLeaves.TryGetValue(Key(owner, fc), out quality!);
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Time evidence is mapped only to a model-declared t under the same
+    /// exact DO and FC as its raw reported FCD; never a nearby sibling.
+    /// </summary>
+    public bool TryGetTimestampCompanion(string? reportReference, string? fc, out string timestamp)
+    {
+        timestamp = "";
+        if (string.IsNullOrWhiteSpace(reportReference) || string.IsNullOrWhiteSpace(fc))
+            return false;
+        foreach (var owner in Ancestors(IedBrowserLiveValues.CanonicalReference(reportReference)))
+        {
+            if (!_dataObjects.Contains(owner)) continue;
+            return _timestampLeaves.TryGetValue(Key(owner, fc), out timestamp!);
         }
         return false;
     }
