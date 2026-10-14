@@ -1446,7 +1446,12 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                             // not the nearest name-like prefix or another FC.
                             if (schema != null &&
                                 schema.TryGetQualityCompanion(update.Reference, reportFc,
-                                    out var qualityReference))
+                                    out var qualityReference) &&
+                                // A direct q member contains its own raw bits. Never
+                                // overwrite that proof with normalized quality text.
+                                !string.Equals(qualityReference,
+                                    IedBrowserLiveValues.CanonicalReference(update.Reference),
+                                    StringComparison.Ordinal))
                                 session.Device.LiveValues.PublishForAssociation(
                                     session.BrowserObservationAssociation, qualityReference,
                                     reportFc, update.Quality, "", update.Timestamp, "Report quality");
