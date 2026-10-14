@@ -1,3 +1,6 @@
+using AR.Iec61850.Mms;
+using ArIED61850Tester.Protocol.Mms;
+
 namespace ArIED61850Tester.Models;
 
 public sealed class NativeReportMonitorStartResult
@@ -38,6 +41,10 @@ public sealed class NativeReportMonitorSliceResult
     public string Message { get; init; } = string.Empty;
     public IReadOnlyList<NativeReportFrameMetadata> ReportFrames { get; init; } = Array.Empty<NativeReportFrameMetadata>();
     public IReadOnlyList<NativeReportValueUpdate> Updates { get; init; } = Array.Empty<NativeReportValueUpdate>();
+    // Ingress-only decoded wire evidence for the Browser; never changes
+    // process acquisition, RCB configuration, GI, or report point projection.
+    public IReadOnlyList<NativeBrowserReportRawEvidence> BrowserRawEvidence { get; init; } =
+        Array.Empty<NativeBrowserReportRawEvidence>();
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 }
 
@@ -97,3 +104,8 @@ public sealed class NativeReportValueUpdate
     public string ReportTimestamp { get; init; } = string.Empty;
     public DateTimeOffset UpdatedAt { get; init; }
 }
+
+public sealed record NativeBrowserReportRawEvidence(
+    string CarrierReference, string FunctionalConstraint,
+    MmsQualityEvidence? QualityBits = null,
+    Iec61850UtcTimeEvidence? TimeBits = null);
