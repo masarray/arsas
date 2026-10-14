@@ -14,27 +14,9 @@ public static class IedBrowserReportValueAuthority
         string? reportedReference, out string functionalConstraint)
     {
         functionalConstraint = "";
-        if (model is null || string.IsNullOrWhiteSpace(dataSetReference) ||
-            string.IsNullOrWhiteSpace(reportedReference))
-            return false;
-        var set = model.DataSets.FirstOrDefault(ds =>
-            IedBrowserLiveValues.CanonicalReference(ds.Reference).Equals(
-                IedBrowserLiveValues.CanonicalReference(dataSetReference),
-                StringComparison.OrdinalIgnoreCase));
-        if (set is null) return false;
-        var report = IedBrowserLiveValues.CanonicalReference(reportedReference);
-        var matched = set.Members
-            .Where(member => {
-                var prefix = IedBrowserLiveValues.CanonicalReference(member.Reference);
-                return report.Equals(prefix, StringComparison.OrdinalIgnoreCase) ||
-                       report.StartsWith(prefix + ".", StringComparison.OrdinalIgnoreCase);
-            })
-            .Select(member => member.FunctionalConstraint)
-            .Where(fc => !string.IsNullOrWhiteSpace(fc))
-            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        if (matched.Length != 1) return false;
-        functionalConstraint = matched[0];
-        return true;
+        return model is not null &&
+            new IedBrowserSchemaIndex(model).TryResolveReportFc(
+                dataSetReference, reportedReference, out functionalConstraint);
     }
 
     public static bool SafeScalar(string? value)
