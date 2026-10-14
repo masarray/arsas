@@ -62,7 +62,7 @@ public sealed class SclTaskFirstQuickStartRegressionTests
         var actions = File.ReadAllText(FindRepoFile("MainWindow.SclQuickActions.cs"));
         var chooser = File.ReadAllText(FindRepoFile("SclSignalSelectionModeWindow.xaml.cs"));
 
-        Assert.Contains("IED Actions — Static DataSet, Select Signals, RCB Engineering, COMTRADE, Browse Offline", behavior, StringComparison.Ordinal);
+        Assert.Contains("IED Actions — Static DataSet, Browse IED, Select Signals, RCB Engineering, COMTRADE", behavior, StringComparison.Ordinal);
         Assert.Contains("args.Handled = true;", behavior, StringComparison.Ordinal);
         Assert.Contains("OpenIedWorkspaceActionsFromCardAsync(button)", behavior, StringComparison.Ordinal);
         Assert.Contains("new SclSignalSelectionModeWindow(1, device)", actions, StringComparison.Ordinal);
