@@ -74,8 +74,8 @@ public sealed class IedBrowserPresentationTests
         Assert.Equal("LLN0.A [ST]", members[0].Name);
         Assert.Equal("LLN0.A [ST]", members[1].Name);
         Assert.All(members, row => Assert.Equal("Not read", row.Value));
-        Assert.Contains(details, row => row.Kind == "Message"
-            && row.Name.Contains("No report-reception snapshot", StringComparison.Ordinal));
+        Assert.Contains(details, row => row.Kind == "Property" &&
+            row.Name == "Last Report status" && row.Value == "No matching received Report");
     }
 
     [Fact]

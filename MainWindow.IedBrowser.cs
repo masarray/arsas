@@ -457,8 +457,65 @@ public partial class MainWindow
             row.Value = live.IsStale ? "Offline · " + display : display;
         }
         UpdateIedBrowserGooseDetails();
+        UpdateIedBrowserRcbReportDetails();
     }
 
+
+
+    private void UpdateIedBrowserRcbReportDetails()
+    {
+        if (MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
+            _iedBrowserRenderedPage?.Payload is not RcbExportRow rcb ||
+            SelectedDevice is not { } device)
+            return;
+
+        var fields = _iedBrowserDetails.Rows.Where(row => row.Kind == "Property")
+            .ToDictionary(row => row.Name, StringComparer.Ordinal);
+        void Put(string name, string value, string authority)
+        {
+            if (!fields.TryGetValue(name, out var row)) return;
+            row.Value = value;
+            row.ObservationSource = authority;
+            row.ObservationTooltip = name + " · " + authority;
+        }
+
+        // Association-scoped immutable metadata, never a synthetic report,
+        // reservation state, RptEna, GI, or a newly opened MMS association.
+        var received = device.IsConnected && device.IsMonitoring &&
+                !device.LiveValues.IsOffline
+            ? IedBrowserRcbReportEvidence.Select(device.ReportContinuityEvidence,
+                rcb.Reference, rcb.DataSetReference, rcb.Inspection.ReportId)
+            : null;
+        if (received is null)
+        {
+            Put("Last Report status", device.IsConnected && device.IsMonitoring
+                ? "No uniquely matched received Report" : "No active report monitoring",
+                "Current association only");
+            Put("Last Report received at", "—", "No current matching frame");
+            Put("Received frame count", "—", "No current matching stream");
+            Put("Last observed SqNum", "—", "No current matching stream");
+            Put("Received RptID", "—", "No current matching stream");
+            Put("Received DataSet", "—", "No current matching stream");
+            return;
+        }
+
+        Put("Last Report status", "Received · exact RCB verified",
+            "Association-scoped Report continuity evidence");
+        Put("Last Report received at", received.LastFrameReceivedAtUtc!.Value.ToLocalTime()
+            .ToString("yyyy-MM-dd HH:mm:ss.fff zzz",
+                System.Globalization.CultureInfo.InvariantCulture),
+            "Decoded Report receive time");
+        Put("Received frame count", received.Frames.ToString(
+            System.Globalization.CultureInfo.InvariantCulture),
+            "Current Report stream only");
+        Put("Last observed SqNum", received.LastSqNum is { } sq
+            ? sq.ToString(System.Globalization.CultureInfo.InvariantCulture) : "Not supplied",
+            "Last observed sequence number; not necessarily in latest frame");
+        Put("Received RptID", received.ReportId, "Decoded received Report identifier");
+        Put("Received DataSet", received.DataSet, "Decoded received Report DataSet");
+        // The continuity summary contains aggregated GI/reason evidence; it
+        // cannot prove reason for inclusion in the last individual frame.
+    }
 
     private void PrepareIedBrowserGoose(Iec61850MonitorDevice device,
         LiveIedControlBlockModel block, LiveIedModelDiscoveryDocument? model)
@@ -478,8 +535,7 @@ public partial class MainWindow
                 !string.Equals(block.ControlId, scl.GoId, StringComparison.Ordinal)) ||
              (modelAppId.HasValue && scl.Address.AppId.HasValue &&
                 modelAppId.Value != scl.Address.AppId.Value) ||
-             (modelConfRev.HasValue && scl.ConfigurationRevision.HasValue &&
-                modelConfRev.Value != scl.ConfigurationRevision.Value)))
+             (modelConfRev.HasValue && modelConfRev.Value != scl.ConfigurationRevision)))
             scl = null; // preserve conflicting authorities rather than blind SCL overlay
 
         var dataSet = !string.IsNullOrWhiteSpace(block.DataSetReference)
@@ -813,6 +869,8 @@ public partial class MainWindow
         if (changed || !ReferenceEquals(currentPage, _iedBrowserRenderedPage) ||
             _iedBrowserRenderedConnected != device.IsConnected)
             RenderIedBrowserSelection(currentPage, model, device.IsConnected);
+        else
+            UpdateIedBrowserRcbReportDetails(); // metadata may arrive without a scalar update
     }
 
     private void IedBrowserTreeToggle_Click(object sender, RoutedEventArgs e)

@@ -551,7 +551,13 @@ public static class IedBrowserPresentation
                     Flags = IedBrowserReportFlags.OptionalFields(optRaw)
                 });
                 Section("Information received in last Report");
-                rows.Add(new("Message", "No report-reception snapshot is available in this inspector."));
+                Field("Last Report status", "No matching received Report");
+                Field("Last Report received at", "—");
+                Field("Received frame count", "—");
+                Field("Last observed SqNum", "—");
+                Field("Received RptID", "—");
+                Field("Received DataSet", "—");
+                Field("Inclusion reason", "Not exposed in continuity summary");
                 Section("Data");
                 rows.Add(new("DataHeader", "Name", "Value"));
                 var linkedDataSet = FindDataSet(model, rcb.DataSetReference);
