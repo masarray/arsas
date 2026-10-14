@@ -1045,7 +1045,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                     attempts.Add($"{candidate.Label}/smart: {smart.ReadResult.Message}");
                     if (smart.ReadResult.IsSuccess)
                     {
-                        var projected = AttachBrowserTimeEvidence(
+                        var projected = AttachBrowserWireEvidence(
                             ProjectReadValue(smart.ReadResult.Value, dataType, candidate.Reference, objectReference),
                             smart.ReadResult.Value, objectReference);
                         if (projected != null)
@@ -1072,7 +1072,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 attempts.Add($"{candidate.Label}/direct {normalized}: {(result.IsSuccess ? "OK" : result.Message)}");
                 if (result.IsSuccess)
                 {
-                    var projected = AttachBrowserTimeEvidence(
+                    var projected = AttachBrowserWireEvidence(
                         ProjectReadValue(result.Value, dataType, candidate.Reference, objectReference),
                         result.Value, objectReference);
                     if (projected != null)
@@ -1102,16 +1102,24 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
     /// raw bytes may populate Browser t quality. Structured parent timestamps
     /// and report TimeOfEntry do not satisfy this leaf-level proof.
     /// </summary>
-    private static Iec61850ReadValue? AttachBrowserTimeEvidence(
+    private static Iec61850ReadValue? AttachBrowserWireEvidence(
         Iec61850ReadValue? projected, ArMms.MmsDataValue? raw, string reference)
     {
-        if (projected is null || raw?.Kind != ArMms.MmsDataKind.UtcTime ||
-            !(reference.EndsWith(".t", StringComparison.Ordinal) ||
-              reference.EndsWith("$t", StringComparison.Ordinal)))
-            return projected;
-        var evidence = ArMms.Iec61850UtcTimeEvidence.Decode(raw);
-        if (evidence.IsDecoded && evidence.HasWireProvenance)
-            projected.UtcTimeEvidence = evidence;
+        if (projected is null || raw is null) return projected;
+        if ((reference.EndsWith(".q", StringComparison.Ordinal) ||
+             reference.EndsWith("$q", StringComparison.Ordinal)) &&
+            raw.Kind == ArMms.MmsDataKind.BitString &&
+            ArIED61850Tester.Protocol.Mms.MmsQualityDecoder.TryDecode(
+                raw.RawValue.ToArray(), out var verifiedQuality))
+            projected.QualityEvidence = verifiedQuality;
+        if ((reference.EndsWith(".t", StringComparison.Ordinal) ||
+             reference.EndsWith("$t", StringComparison.Ordinal)) &&
+            raw.Kind == ArMms.MmsDataKind.UtcTime)
+        {
+            var evidence = ArMms.Iec61850UtcTimeEvidence.Decode(raw);
+            if (evidence.IsDecoded && evidence.HasWireProvenance)
+                projected.UtcTimeEvidence = evidence;
+        }
         return projected;
     }
 
