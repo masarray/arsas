@@ -478,6 +478,103 @@ public sealed class M2IedBrowserHierarchyAndReportWireTests
     }
 
     [Fact]
+    public void BrowserAlternateReferences_PreserveReportAuthorityAcrossReadAndReportChannels()
+    {
+        const string member = "LD/MMXU1.A.phsA";
+        const string leaf = member + ".cVal.mag.f";
+        var row = new IedBrowserDetailRow("Data", "A.phsA [MX]")
+        {
+            ValueReference = leaf, FallbackValueReference = member,
+            FunctionalConstraint = "MX", IsEngineeringValue = true
+        };
+        var ledger = new IedBrowserLiveValues();
+        var association = ledger.BeginAssociation();
+        Assert.True(ledger.PublishForAssociation(association, member, "MX",
+            "5", "", "", "Report"));
+        Assert.True(ledger.PublishForAssociation(association, leaf, "MX",
+            "7", "", "", "MMS Read"));
+
+        Assert.True(IedBrowserDetailEvidenceResolver.TryResolve(
+            ledger, row, null, monitoring: true, out var monitor, out var monitorRef));
+        Assert.Equal("5", monitor.Value);
+        Assert.Equal("Report", monitor.Source);
+        Assert.Equal(member, monitorRef);
+
+        Assert.True(IedBrowserDetailEvidenceResolver.TryResolve(
+            ledger, row, null, monitoring: false, out var latest, out var latestRef));
+        Assert.Equal("7", latest.Value);
+        Assert.Equal("MMS Read", latest.Source);
+        Assert.Equal(leaf, latestRef);
+
+        Assert.True(ledger.PublishForAssociation(association, leaf, "MX",
+            "6", "", "", "Report"));
+        Assert.True(IedBrowserDetailEvidenceResolver.TryResolve(
+            ledger, row, null, monitoring: true, out monitor, out monitorRef));
+        Assert.Equal("6", monitor.Value);
+        Assert.Equal("Report", monitor.Source);
+        Assert.Equal(leaf, monitorRef);
+
+        Assert.True(ledger.PublishForAssociation(association, member, "MX",
+            "9", "", "", "MMS Read"));
+        Assert.True(IedBrowserDetailEvidenceResolver.TryResolve(
+            ledger, row, null, monitoring: true, out monitor, out monitorRef));
+        Assert.Equal("6", monitor.Value);
+        Assert.Equal(leaf, monitorRef);
+
+        // Explicit standalone reads can still take the freshest value.
+        Assert.True(IedBrowserDetailEvidenceResolver.TryResolve(
+            ledger, row, null, monitoring: false, out latest, out latestRef));
+        Assert.Equal("9", latest.Value);
+        Assert.Equal(member, latestRef);
+
+        ledger.MarkOffline();
+        Assert.True(IedBrowserDetailEvidenceResolver.TryResolve(
+            ledger, row, null, monitoring: true, out monitor, out _));
+        Assert.True(monitor.IsStale);
+        var nextAssociation = ledger.BeginAssociation();
+        Assert.NotEqual(association, nextAssociation);
+        Assert.False(IedBrowserDetailEvidenceResolver.TryResolve(
+            ledger, row, null, monitoring: true, out _, out _));
+        Assert.False(ledger.PublishForAssociation(association, member, "MX",
+            "99", "", "", "Report"));
+    }
+
+    [Fact]
+    public void BrowserAlternateReferences_NeverBorrowSiblingFcOrFabricateEvidence()
+    {
+        var ledger = new IedBrowserLiveValues();
+        var association = ledger.BeginAssociation();
+        Assert.True(ledger.PublishForAssociation(association, "LD/MMXU1.A.phsB",
+            "MX", "13", "", "", "Report"));
+        var row = new IedBrowserDetailRow("Data", "A.phsA")
+        {
+            ValueReference = "LD/MMXU1.A.phsA.cVal.mag.f",
+            FallbackValueReference = "LD/MMXU1.A.phsA",
+            FunctionalConstraint = "MX"
+        };
+        Assert.False(IedBrowserDetailEvidenceResolver.TryResolve(
+            ledger, row, null, monitoring: true, out _, out _));
+        Assert.True(ledger.PublishForAssociation(association, row.FallbackValueReference,
+            "ST", "17", "", "", "Report"));
+        Assert.False(IedBrowserDetailEvidenceResolver.TryResolve(
+            ledger, row, null, monitoring: true, out _, out _));
+
+        // Quality children cannot read a process alias even when the parent
+        // happens to have a value; bit fields require their own typed source.
+        var qualityRow = new IedBrowserDetailRow("Data", "Quality Details")
+        {
+            ValueReference = row.ValueReference,
+            FallbackValueReference = row.FallbackValueReference,
+            FunctionalConstraint = "MX", EvidenceKind = "Quality",
+            EvidenceField = "OldData"
+        };
+        Assert.True(ledger.PublishForAssociation(association, row.FallbackValueReference,
+            "MX", "22", "", "", "MMS Read"));
+        Assert.False(IedBrowserDetailEvidenceResolver.TryResolve(
+            ledger, qualityRow, null, monitoring: true, out _, out _));
+    }
+
+    [Fact]
     public void DataModel_LnPageShowsExpandableDosAndNestedAttributes_NotFlatNavigation()
     {
         var obj = ModelDo();

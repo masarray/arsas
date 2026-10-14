@@ -362,16 +362,9 @@ public partial class MainWindow
         foreach (var row in _iedBrowserDetails.Rows)
         {
             if (string.IsNullOrWhiteSpace(row.ValueReference)) continue;
-            var found = device.LiveValues.TryGet(row.ValueReference,
-                row.FunctionalConstraint, out var live,
-                preferReport: device.IsMonitoring,
-                schema: _iedBrowserValueSchemaIndex,
-                requiredEvidence: row.EvidenceField.Length > 0
-                    ? row.EvidenceKind : "");
-            if (!found && !string.IsNullOrWhiteSpace(row.FallbackValueReference))
-                found = device.LiveValues.TryGet(row.FallbackValueReference,
-                    row.FunctionalConstraint, out live,
-                    preferReport: device.IsMonitoring, schema: _iedBrowserValueSchemaIndex);
+            var found = IedBrowserDetailEvidenceResolver.TryResolve(
+                device.LiveValues, row, _iedBrowserValueSchemaIndex,
+                device.IsMonitoring, out var live, out var observedReference);
             if (!found)
             {
                 row.Value = "Not read";
@@ -383,7 +376,7 @@ public partial class MainWindow
                 ? "Stale " + live.Source
                 : live.Source;
             row.ObservationTooltip =
-                $"{row.ValueReference} [{row.FunctionalConstraint}] · {row.ObservationSource} " +
+                $"{observedReference} [{row.FunctionalConstraint}] · {row.ObservationSource} " +
                 $"· observed {live.ObservedUtc:yyyy-MM-dd HH:mm:ss} UTC · association {live.Association}";
             // Typed Quality is decoded once at ingress, never guessed from
             // valid-looking text. Offline snapshots remain clearly stale.
