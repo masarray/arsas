@@ -105,8 +105,9 @@ public partial class MainWindow
             _iedBrowserReadOperation is not null || _iedBrowserFilesLoading)
             return;
 
+        var reason = "Read the IED FileDirectory first.";
         if (_iedBrowserFileCatalog is not { } catalog ||
-            !catalog.TryGetRecord(file.RemotePath, out var record, out var reason))
+            !catalog.TryGetRecord(file.RemotePath, out var record, out reason))
         {
             IedBrowserDetailStatus.Text = _iedBrowserFileCatalog is null
                 ? "Read the IED FileDirectory first. SCL file references are not download proof."
