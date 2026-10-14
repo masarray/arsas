@@ -227,5 +227,6 @@ public sealed record IedBrowserReadTarget(string Reference, string FunctionalCon
 public sealed record IedBrowserReadResult(
     IedBrowserReadTarget Target, string Value, string Quality,
     string DeviceTimestamp, string Error,
-    Iec61850UtcTimeEvidence? UtcTimeEvidence = null);
+    Iec61850UtcTimeEvidence? UtcTimeEvidence = null,
+    MmsQualityEvidence? QualityEvidence = null);
 public sealed record IedBrowserReadProgress(int Completed, int Total);
