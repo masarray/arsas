@@ -41,9 +41,11 @@ public static class IedBrowserStructuredDetails
             .FirstOrDefault(obj => string.Equals(
                 IedBrowserLiveValues.CanonicalReference(obj.Reference), identity,
                 StringComparison.Ordinal));
+        var leaf = string.Empty;
+        var leafFc = string.Empty;
         var foundLeaf = exactObject is not null &&
             IedBrowserSchemaIndex.TryGetUniqueProcessLeaf(
-                exactObject, out var leaf, out var leafFc) &&
+                exactObject, out leaf, out leafFc) &&
             string.Equals(leafFc, member.FunctionalConstraint,
                 StringComparison.OrdinalIgnoreCase);
         return new IedBrowserDetailRow("Data", $"{name} [{member.FunctionalConstraint}]", "Not read",
