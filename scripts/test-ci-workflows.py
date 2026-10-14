@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import fnmatch
 import json
 import subprocess
 import tempfile
@@ -162,6 +163,53 @@ jobs:
         self.assertTrue(
             any("duplicate job id 'validate'" in item for item in report["structureErrors"])
         )
+
+    def test_sv_evidence_trigger_only_runs_for_sv_domain(self):
+        """SV canonical proof must run for SV edits, not every application test."""
+        repo = Path(__file__).resolve().parents[1]
+        source = (repo / ".github/workflows/validate-sv-evidence.yml").read_text(
+            encoding="utf-8"
+        )
+        # This workflow uses a simple quoted on.pull_request.paths YAML sequence.
+        # Extract exactly that sequence, not push or workflow_dispatch paths.
+        header = "  pull_request:\n    paths:\n"
+        self.assertEqual(source.count(header), 1)
+        block = source.split(header, 1)[1].split("  workflow_dispatch:", 1)[0]
+        paths = [
+            json.loads(line.strip()[2:])
+            for line in block.splitlines()
+            if line.strip().startswith('- "')
+        ]
+        self.assertEqual(len(paths), len(set(paths)))
+        self.assertNotIn("tests/ARSAS.Tests/**", paths)
+
+        def matches(changed_path: str) -> bool:
+            return any(fnmatch.fnmatchcase(changed_path, pattern) for pattern in paths)
+
+        for changed_path in (
+            "tests/ARSAS.Tests/SmvFastWorkflowTests.cs",
+            "tests/ARSAS.Tests/SmvSnapshotEvidenceExporterTests.cs",
+            "tests/ARSAS.Tests/SampledValueFutureRegressionTests.cs",
+            "Services/SmvSnapshotCaptureService.cs",
+            "Services/SmvSnapshotSafetyAssessment.cs",
+            "MainWindow.IedSmvQuickStart.cs",
+            "SmvViewerWindow.xaml.cs",
+            "engines/ARIEC61850.lock.json",
+            ".github/actions/resolve-ariec-engine/action.yml",
+            ".github/workflows/build.yml",
+            "scripts/verify-ci-canonical-reuse.py",
+        ):
+            self.assertTrue(matches(changed_path), changed_path)
+
+        for changed_path in (
+            "tests/ARSAS.Tests/M2IedBrowserHierarchyAndReportWireTests.cs",
+            "tests/ARSAS.Tests/IoFatStructuredMmsAliasRegressionTests.cs",
+            "tests/ARSAS.Tests/RcbExportEvidenceAcquisitionRegressionTests.cs",
+            "Models/IedBrowserPresentation.cs",
+            "Services/RcbAvailabilityProbeService.cs",
+            "docs/ARSAS_IED_BROWSER_M2_EXECUTION_ARD.md",
+        ):
+            self.assertFalse(matches(changed_path), changed_path)
 
     def test_p3h_windows_pr_workflows_cancel_only_superseded_pr_runs(self):
         repo = Path(__file__).resolve().parents[1]
