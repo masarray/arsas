@@ -12,6 +12,7 @@ public partial class MainWindow
     private enum SclSignalSelectionMode
     {
         StaticDataSet,
+        BrowseIed,
         Manual
     }
 
@@ -49,9 +50,13 @@ public partial class MainWindow
             return null;
         }
 
-        var mode = dialog.UseStaticDataSet
-            ? SclSignalSelectionMode.StaticDataSet
-            : SclSignalSelectionMode.Manual;
+        SclSignalSelectionMode? mode = dialog.Selection switch
+        {
+            IedWorkspaceTaskChoice.StaticDataSet => SclSignalSelectionMode.StaticDataSet,
+            IedWorkspaceTaskChoice.BrowseIed => SclSignalSelectionMode.BrowseIed,
+            IedWorkspaceTaskChoice.ManualSignals => SclSignalSelectionMode.Manual,
+            _ => null
+        };
         _pendingSharedStaticSelectionAssignments = mode == SclSignalSelectionMode.StaticDataSet
             ? Math.Max(1, iedCount)
             : 0;

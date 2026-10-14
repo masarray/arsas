@@ -272,8 +272,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             SetStatus(status);
             AddLog("INFO", "SCL", status);
 
+            // A valid discovered/SCL IED schema is enough to browse even when
+            // no process signals were materialized into the SCADA catalog.
             var selectableDevices = importedDevices
-                .Where(device => device.Signals.Count > 0)
+                .Where(device => device.Signals.Count > 0 ||
+                    (device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel)
+                        is { LogicalDevices.Count: > 0 })
                 .Distinct()
                 .ToArray();
             SclSignalSelectionMode? sharedSelectionMode = null;
@@ -306,7 +310,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                         }
                     }
                 }
-                else
+                else if (selectionMode == SclSignalSelectionMode.BrowseIed)
+                {
+                    // Inspect the first imported IED's verified engineering model.
+                    // A multi-IED import retains all cards for subsequent selection;
+                    // no signal selection/FAT mutation or report session is created.
+                    if (firstImported is not null)
+                        OpenIedBrowserModel(firstImported);
+                    AddLog("INFO", "SCL", $"Browse IED selected for {firstImported?.Name ?? "first IED"}; no monitoring started.");
+                }
+                else if (selectionMode == SclSignalSelectionMode.Manual)
                 {
                     AddLog("INFO", "SCL", "Manual Signal Selection is shared by Engineering and FAT; each imported IED keeps its own checkbox state.");
                     foreach (var importedDevice in selectableDevices)
@@ -322,7 +335,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             // Importing through Engineering must update an already-loaded FAT project as
             // the same workspace mutation. The selection decision has already been applied,
             // so the hidden FAT view receives the new IEDs without a second prompt or reset.
-            if (_loadedIoFatWindow is { IsLoaded: true } loadedFat && sharedSelectionMode.HasValue)
+            if (_loadedIoFatWindow is { IsLoaded: true } loadedFat &&
+                sharedSelectionMode is SclSignalSelectionMode.StaticDataSet or SclSignalSelectionMode.Manual)
             {
                 var newFatSourcePaths = importedSources
                     .Where(imported => !loadedFat.Project.Sources.Any(source =>
@@ -947,7 +961,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             device.RefreshComputed();
 
             var discoveredDataSetCount = device.LiveDiscoveryModel?.DataSets.Count ?? 0;
-            if (openWizard && (device.SignalCount > 0 || discoveredDataSetCount > 0))
+            var discoveredLdCount = device.LiveDiscoveryModel?.LogicalDevices.Count ?? 0;
+            if (openWizard && (device.SignalCount > 0 ||
+                               discoveredDataSetCount > 0 || discoveredLdCount > 0))
             {
                 if ((selectDevice || ReferenceEquals(SelectedDevice, device)) && !_signalSelectionWizardOpen)
                 {
