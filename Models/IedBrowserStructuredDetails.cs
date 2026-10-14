@@ -17,6 +17,15 @@ public static class IedBrowserStructuredDetails
         // registry; there is no second value cache or additional MMS read.
         var hasLeaf = IedBrowserSchemaIndex.TryGetUniqueProcessLeaf(
             obj, out var processLeaf, out var processFc);
+        // A compound DO such as MMXU.PhV has no unique scalar leaf, but
+        // can have a single schema-verified FC for independently observed
+        // phase vectors. Never infer this FC from the object's label.
+        var candidateFcs = obj.Attributes
+            .Select(a => (a.FunctionalConstraint ?? "").Trim().ToUpperInvariant())
+            .Where(fc => fc.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .Take(2).ToArray();
+        var compoundFc = candidateFcs.Length == 1 ? candidateFcs[0] : "";
         return new IedBrowserDetailRow("Data", obj.Name, "Not read", depth,
             $"IEC DO declaration · {obj.Reference} · CDC {obj.InferredCdc}")
         {
@@ -25,16 +34,17 @@ public static class IedBrowserStructuredDetails
             FallbackValueReference = hasLeaf ? obj.Reference : "",
             IsEngineeringValue = hasLeaf,
             EngineeringUnitReference = hasLeaf ? processLeaf : "",
-            FunctionalConstraint = hasLeaf ? processFc : uniqueProcessFc ?? "",
+            FunctionalConstraint = hasLeaf ? processFc :
+                (uniqueProcessFc is { Length: > 0 } ? uniqueProcessFc : compoundFc),
             VectorComponents = hasLeaf ? Array.Empty<IedBrowserVectorComponent>() :
                 ObservedVectors(
                     obj.Attributes.Where(a =>
-                        string.Equals(a.FunctionalConstraint, uniqueProcessFc,
+                        string.Equals(a.FunctionalConstraint, compoundFc,
                             StringComparison.OrdinalIgnoreCase))
                     .Select(a => (
                         Reference: IedBrowserLiveValues.CanonicalReference(a.MmsReference),
                         Relative: TrimObjectName(a.AttributePath, obj.Name))),
-                    uniqueProcessFc ?? ""),
+                    compoundFc),
             LoadChildren = () => AttributeRows(obj.Attributes, obj.Name, depth + 1)
         };
     }
@@ -211,29 +221,42 @@ public static class IedBrowserStructuredDetails
         IEnumerable<(string Reference, string Relative)> attributes, string fc)
     {
         if (string.IsNullOrWhiteSpace(fc)) return [];
-        var parts = new Dictionary<string, (string Mag, string Ang)>(StringComparer.Ordinal);
+        var parts = new Dictionary<string, (string Label, string Mag, string Ang)>(
+            StringComparer.Ordinal);
         foreach (var (reference, relative) in attributes)
         {
             var tokens = relative.Split('.', StringSplitOptions.RemoveEmptyEntries);
             if (tokens.Length < 2 || tokens[^1] != "f") continue;
             var axis = tokens[^2];
             if (axis is not ("mag" or "ang")) continue;
-            var prefix = tokens.Length >= 3 && tokens[^3] == "cVal"
-                ? tokens[..^3] : tokens[..^2];
+            var isCVal = tokens.Length >= 3 && tokens[^3] == "cVal";
+            var prefix = isCVal ? tokens[..^3] : tokens[..^2];
             // Do not treat instant/derived/vendor vectors as the steady cVal.
             if (prefix.Any(p => p is "instCVal" or "instMag")) continue;
             // Normal IEC vector syntax: mag.f / ang.f or cVal.mag.f /
             // cVal.ang.f, with at most one phase name before cVal.
             if (prefix.Length > 1) continue;
             var label = prefix.Length == 1 ? prefix[0] : "";
-            if (!parts.TryGetValue(label, out var pair)) pair = ("", "");
-            pair = axis == "mag" ? (reference, pair.Ang) : (pair.Mag, reference);
-            parts[label] = pair;
+            // Direct mag/ang and cVal.mag/cVal.ang belong to different
+            // structure owners. Never cross-pair them even when both are
+            // descendants of the same presentation row.
+            var key = label + "|" + (isCVal ? "cVal" : "direct");
+            if (!parts.TryGetValue(key, out var pair)) pair = (label, "", "");
+            if (axis == "mag")
+                pair = (label, pair.Mag.Length == 0 ? reference : "", pair.Ang);
+            else
+                pair = (label, pair.Mag, pair.Ang.Length == 0 ? reference : "");
+            parts[key] = pair;
         }
-        return parts.OrderBy(p => p.Key, StringComparer.Ordinal)
-            .Where(p => p.Value.Mag.Length > 0 && p.Value.Ang.Length > 0)
+        var complete = parts.Values.Where(p => p.Mag.Length > 0 && p.Ang.Length > 0)
+            .GroupBy(p => p.Label, StringComparer.Ordinal)
+            .Where(group => group.Count() == 1)
+            .Select(group => group.First())
+            .OrderBy(p => p.Label, StringComparer.Ordinal)
+            .ToArray();
+        return complete
             .Select(p => new IedBrowserVectorComponent(
-                p.Key, p.Value.Mag, p.Value.Ang, fc.Trim().ToUpperInvariant()))
+                p.Label, p.Mag, p.Ang, fc.Trim().ToUpperInvariant()))
             .ToArray();
     }
 
