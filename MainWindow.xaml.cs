@@ -26,7 +26,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly CancellationTokenSource _applicationCancellation = new();
     private readonly Dictionary<string, HashSet<string>> _pendingProjectSelections = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<SignalDefinition, Iec61850MonitorDevice> _signalOwners = new();
-    private readonly ConcurrentDictionary<string, PendingPointUpdate> _pendingPointSnapshots = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, CanonicalPointSnapshotBatch> _pendingPointSnapshots = new(StringComparer.OrdinalIgnoreCase);
     // Monitoring-lifetime O(1) immutable reference/FC lookup for SignalDefinition.
     // Rebuilt after the selected signal/point model is materialized.
     private readonly Dictionary<string, IedBrowserReadBindingIndex> _canonicalSignalProjections =
@@ -2374,8 +2374,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         _pendingPointSnapshots.AddOrUpdate(
             snapshot.Point.PointKey,
-            _ => new PendingPointUpdate(snapshot, snapshot.IsValueEdge),
-            (_, current) => current.Merge(snapshot));
+            _ => new CanonicalPointSnapshotBatch(snapshot, snapshot.IsValueEdge),
+            (_, current) => CanonicalPointSnapshotAuthority.Merge(current, snapshot));
     }
 
     private void Runtime_EventRaised(Iec61850EventEntry entry)
@@ -2442,7 +2442,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 (snapshot.ObservationAssociation == 0 ||
                  snapshot.ObservationAssociation != observedOwner.LiveValues.Association))
                 continue;
-            if (snapshot.Sequence < point.Sequence)
+            // Guard both pre-dispatch coalescing and already-rendered state.
+            // Same-association status/q/t updates may share semantic Sequence,
+            // but publication revisions distinguish their real receive order.
+            if (point.LastSnapshotAssociation == snapshot.ObservationAssociation &&
+                (snapshot.Sequence < point.Sequence ||
+                 (snapshot.SnapshotRevision > 0 &&
+                  snapshot.SnapshotRevision <= point.LastSnapshotRevision)))
                 continue;
             var presentation = CanonicalPointSnapshotAuthority.Project(
                 observedOwner, point, snapshot);
@@ -2462,6 +2468,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             point.Reason = snapshot.Reason;
             point.Status = snapshot.Status;
             point.Sequence = snapshot.Sequence;
+            point.LastSnapshotAssociation = snapshot.ObservationAssociation;
+            point.LastSnapshotRevision = snapshot.SnapshotRevision;
             // This is the same coalesced UI snapshot that updates Explorer,
             // Live Monitor and SOE. Browser never has its own report decoder.
             // Canonical ingress remains first authority. The point snapshot
@@ -3283,20 +3291,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private static string NormalizeReference(string? reference)
         => (reference ?? string.Empty).Trim().Replace('$', '.').Replace("..", ".").ToLowerInvariant();
-
-    private sealed record PendingPointUpdate(Iec61850PointSnapshot Snapshot, bool HasValueEdge)
-    {
-        public PendingPointUpdate Merge(Iec61850PointSnapshot next)
-        {
-            // Session identity outranks process sequence. Reconnect can reset
-            // a point's sequence, so never let an older session's high sequence
-            // overwrite a new session's first value in the UI batch.
-            var newest = CanonicalPointSnapshotAuthority.NewerSnapshot(Snapshot, next);
-            var sameAssociation = newest.ObservationAssociation == Snapshot.ObservationAssociation;
-            return new PendingPointUpdate(newest,
-                (sameAssociation && HasValueEdge) || newest.IsValueEdge);
-        }
-    }
 
     private static string Csv(string value)
         => "\"" + (value ?? string.Empty).Replace("\"", "\"\"") + "\"";

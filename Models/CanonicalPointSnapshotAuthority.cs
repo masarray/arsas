@@ -11,6 +11,9 @@ public sealed record CanonicalPointPresentation(
     string Value, string Quality, string DeviceTimestamp,
     string SourceMode, bool FromCanonicalReport);
 
+public sealed record CanonicalPointSnapshotBatch(
+    Iec61850PointSnapshot Snapshot, bool HasValueEdge);
+
 public static class CanonicalPointSnapshotAuthority
 {
     public static Iec61850PointSnapshot NewerSnapshot(
@@ -18,11 +21,39 @@ public static class CanonicalPointSnapshotAuthority
     {
         ArgumentNullException.ThrowIfNull(previous);
         ArgumentNullException.ThrowIfNull(incoming);
-        if (previous.ObservationAssociation != incoming.ObservationAssociation &&
-            previous.ObservationAssociation > 0 && incoming.ObservationAssociation > 0)
+        // Association identity always wins over sequence (even if a legacy
+        // zero-stamp frame races a proven real association). This prevents a
+        // reconnect's first low-sequence snapshot being hidden by an old one.
+        if (previous.ObservationAssociation != incoming.ObservationAssociation)
             return incoming.ObservationAssociation > previous.ObservationAssociation
                 ? incoming : previous;
+        // q/t, report-source and RCB coverage changes do not advance semantic
+        // Sequence; the ingress publication revision DOES advance for each
+        // emitted snapshot. Never roll metadata back on equal process sequence.
+        if (previous.SnapshotRevision != incoming.SnapshotRevision &&
+            (previous.SnapshotRevision > 0 || incoming.SnapshotRevision > 0))
+            return incoming.SnapshotRevision > previous.SnapshotRevision
+                ? incoming : previous;
+        // Only older synthetic/legacy frames without stamps use process order.
         return incoming.Sequence >= previous.Sequence ? incoming : previous;
+    }
+
+    /// <summary>
+    /// Coalesce all received metadata for one point without considering an
+    /// out-of-order, rejected update a fresh SOE/UI highlight. The runtime
+    /// event path remains the sole authority for actual SOE records.
+    /// </summary>
+    public static CanonicalPointSnapshotBatch Merge(
+        CanonicalPointSnapshotBatch prior, Iec61850PointSnapshot incoming)
+    {
+        ArgumentNullException.ThrowIfNull(prior);
+        ArgumentNullException.ThrowIfNull(incoming);
+        var selected = NewerSnapshot(prior.Snapshot, incoming);
+        var sameAssociation = selected.ObservationAssociation ==
+                              prior.Snapshot.ObservationAssociation;
+        return new CanonicalPointSnapshotBatch(selected,
+            (sameAssociation && prior.HasValueEdge) ||
+            (ReferenceEquals(selected, incoming) && incoming.IsValueEdge));
     }
 
     /// <summary>

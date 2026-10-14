@@ -21,6 +21,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public DateTime LastUpdateUtc { get; set; } = DateTime.MinValue;
         public DateTime NextPollUtc { get; set; } = DateTime.MinValue;
         public DateTime NextCompanionPollUtc { get; set; } = DateTime.MinValue;
+        // Monotonic per-point publication order, independent of semantic
+        // process edges/SOE Sequence (unchanged for q/t/RCB/status-only updates).
+        public long SnapshotRevision { get; set; }
         public long Sequence { get; set; }
         public string SourceMode { get; set; } = "Waiting";
         public string AcquisitionLabel { get; set; } = "MMS polling";
@@ -1961,6 +1964,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 IsValueEdge = changed,
                 IsReportTraffic = trustReportEdge,
                 ObservationAssociation = session.BrowserObservationAssociation,
+                SnapshotRevision = ++state.SnapshotRevision,
                 // This is association-local evidence from an actual routed report.
                 // Preserve it through later metadata/status UI coalescing.
                 RoutedReportControlReferences = state.RoutedReportControlReferences
@@ -2020,6 +2024,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             Status = status,
             IsValueEdge = false,
             ObservationAssociation = session.BrowserObservationAssociation,
+            SnapshotRevision = ++state.SnapshotRevision,
             RoutedReportControlReferences = state.RoutedReportControlReferences
                 .OrderBy(reference => reference, StringComparer.OrdinalIgnoreCase).ToArray(),
             Sequence = state.Sequence
