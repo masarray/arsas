@@ -83,7 +83,8 @@ public partial class MainWindow
 
     private async Task BrowseIedBrowserFilesAsync(Iec61850MonitorDevice device)
     {
-        if (_iedBrowserFilesLoading || _iedBrowserReadOperation != null)
+        if (_iedBrowserFilesLoading || _iedBrowserReadOperation != null ||
+            _iedBrowserFileTransferOperation != null)
             return;
         _iedBrowserFilesLoading = true;
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
@@ -99,21 +100,18 @@ public partial class MainWindow
                 await using var transfer = new ArIED61850Tester.Services.FaultRecordTransferClient();
                 await transfer.ConnectAsync(source.IpAddress, source.Port, cts.Token);
                 var catalog = await transfer.DiscoverAsync(remoteDirectory: null, cts.Token);
-                return catalog.Records.SelectMany(record => record.Files)
-                    .Select(file => new IedBrowserRemoteFile(file.Name, file.RemotePath,
-                        file.SizeBytes, file.LastModifiedUtc))
-                    .DistinctBy(file => file.RemotePath, StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(file => file.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+                return new IedBrowserFileCatalog(catalog);
             }, cts.Token).ConfigureAwait(true);
             if (cts.IsCancellationRequested ||
                 !ReferenceEquals(source, SelectedDevice) ||
                 !ReferenceEquals(source, _iedBrowserFileOwner) || !source.IsConnected)
                 return;
-            _iedBrowserRemoteFiles = files;
+            _iedBrowserFileCatalog = files;
+            _iedBrowserRemoteFiles = files.Files;
             _iedBrowserFilesLoaded = true;
             _iedBrowserForceRefresh = true;
             RefreshIedBrowser();
-            IedBrowserDetailStatus.Text = $"FileDirectory · {files.Length:N0} remote record file(s)";
+            IedBrowserDetailStatus.Text = $"FileDirectory · {files.Files.Count:N0} remote record file(s)";
         }
         catch (OperationCanceledException)
         {
@@ -138,7 +136,8 @@ public partial class MainWindow
     private void IedBrowserBrowseFiles_Click(object sender, RoutedEventArgs e)
     {
         if (SelectedDevice is not { IsConnected: true } device ||
-            _iedBrowserFilesLoading || _iedBrowserReadOperation != null)
+            _iedBrowserFilesLoading || _iedBrowserReadOperation != null ||
+            _iedBrowserFileTransferOperation != null)
         {
             IedBrowserDetailStatus.Text = "Connect this IED to browse remote files.";
             return;
@@ -391,8 +390,10 @@ public partial class MainWindow
         if (_iedBrowserObservedDevice != null)
             _iedBrowserObservedDevice.PropertyChanged -= IedBrowserDevice_PropertyChanged;
         _iedBrowserFileReadOperation?.Cancel();
+        _iedBrowserFileTransferOperation?.Cancel();
         _iedBrowserFileReadOperation = null;
         _iedBrowserFilesLoading = false;
+        _iedBrowserFileCatalog = null;
         _iedBrowserObservedDevice = device;
         _iedBrowserSnapshot = null;
         _iedBrowserFileOwner = device;
@@ -424,6 +425,8 @@ public partial class MainWindow
         if (_iedBrowserObservedDevice?.IsConnected != true)
         {
             _iedBrowserFileReadOperation?.Cancel();
+            _iedBrowserFileTransferOperation?.Cancel();
+            _iedBrowserFileCatalog = null;
             if (_iedBrowserFilesLoaded)
             {
                 _iedBrowserFilesLoaded = false;
@@ -459,6 +462,7 @@ public partial class MainWindow
             IedBrowserTreeGrid.ItemsSource = _iedBrowserTree.Rows;
             _iedBrowserDetails.Reset([]);
             IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
+            UpdateIedBrowserFilesView(null, null);
             IedBrowserSubtitle.Text = "Select an IED in Explorer. Browsing does not open MMS sessions.";
             IedBrowserObjectPath.Text = "No IED selected";
             IedBrowserDetailStatus.Text = "Select an existing engineering model";
@@ -685,6 +689,7 @@ public partial class MainWindow
         _iedBrowserRenderedPage = row;
         _iedBrowserRenderedConnected = connected;
         IedBrowserBackButton.IsEnabled = _iedBrowserNavigation.CanGoBack;
+        UpdateIedBrowserFilesView(row, model);
         if (row == null)
         {
             IedBrowserObjectPath.Text = "Select an object in the left tree";
