@@ -279,7 +279,12 @@ public sealed class IedBrowserPresentationTests
     [Fact]
     public void BrowserSelectionDefersAndDetachesBeforeDetailCollectionReset()
     {
-        var source = File.ReadAllText(Find("MainWindow.IedBrowser.cs"));
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root is not null &&
+               !File.Exists(Path.Combine(root.FullName, "MainWindow.IedBrowser.cs")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var source = File.ReadAllText(Path.Combine(root!.FullName, "MainWindow.IedBrowser.cs"));
         Assert.Contains("Dispatcher.BeginInvoke(DispatcherPriority.Background", source);
         Assert.Contains("ticket != _iedBrowserNavigationRenderTicket", source);
         var method = source.IndexOf("private void ReplaceIedBrowserDetails(", StringComparison.Ordinal);
