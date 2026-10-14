@@ -2113,7 +2113,7 @@
                                         </DockPanel>
                                     </Border>
                                 <DataGrid x:Name="IedBrowserFilesGrid" Grid.Row="1"
-                                          Visibility="Collapsed" AutoGenerateColumns="False"
+                                          AutoGenerateColumns="False"
                                           IsReadOnly="True" CanUserAddRows="False"
                                           CanUserDeleteRows="False"
                                           SelectionMode="Single" SelectionUnit="FullRow"
