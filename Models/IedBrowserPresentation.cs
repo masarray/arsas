@@ -212,6 +212,10 @@ public sealed record IedBrowserDetailRow(
     public string EvidenceKind { get; init; } = "";
     public string FunctionalConstraint { get; init; } = "";
     public bool IsDataObject { get; init; }
+    // IEC DataSet position, not a live value; only a validated frame can populate it.
+    public int GooseSlot { get; init; } = -1;
+    public string GooseReference { get; init; } = "";
+    public string GooseFc { get; init; } = "";
     private IReadOnlyList<IedBrowserDetailRow>? _children;
     public IedBrowserTreeRow? NavigateTo { get; init; }
     public Func<IReadOnlyList<IedBrowserDetailRow>>? LoadChildren { get; init; }
@@ -628,15 +632,34 @@ public static class IedBrowserPresentation
                     Field("VLAN priority", "Not read");
                     Field("Needs commissioning", "Not read");
                     Section("Information received in last GOOSE");
-                    rows.Add(new("Message", "No passive GOOSE reception evidence is linked to this model."));
+                    Field("Capture status", "Subscriber not capturing", "Passive GOOSE");
+                    Field("Frame received at", "—", "Passive GOOSE");
+                    Field("Source MAC", "—", "Passive GOOSE");
+                    Field("Frame test", "—", "Passive GOOSE");
+                    Field("Frame ndsCom", "—", "Passive GOOSE");
+                    Field("State number", "—", "Passive GOOSE");
+                    Field("Sequence number", "—", "Passive GOOSE");
+                    Field("Time allowed to live", "—", "Passive GOOSE");
+                    Field("Frame DataSet entries", "—", "Passive GOOSE");
                     Section("Data");
                     rows.Add(new("DataHeader", "Name", "Value"));
                     var linkedGooseSet = FindDataSet(model, block.DataSetReference);
                     if (linkedGooseSet is null)
                         rows.Add(new("Message", "No verified DataSet member directory for this GoCB."));
                     else
-                        foreach (var member in linkedGooseSet.Members)
-                            rows.Add(IedBrowserStructuredDetails.Member(member, model));
+                    {
+                        var ordered = linkedGooseSet.Members.OrderBy(m => m.Index).ToArray();
+                        for (var slot = 0; slot < ordered.Length; slot++)
+                        {
+                            var member = ordered[slot];
+                            rows.Add(IedBrowserStructuredDetails.Member(member, model) with
+                            {
+                                GooseSlot = slot,
+                                GooseReference = member.Reference,
+                                GooseFc = member.FunctionalConstraint
+                            });
+                        }
+                    }
                 }
                 break;
             case LiveIedLogicalDeviceModel ld:

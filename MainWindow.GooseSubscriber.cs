@@ -240,6 +240,11 @@ public partial class MainWindow
         Raise(nameof(GooseClearVisibility));
         Raise(nameof(GooseCounterText));
         Raise(nameof(GooseSelectedStreamText));
+        if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
+        {
+            _iedBrowserLastLiveVersion = -1;
+            RefreshIedBrowserVisibleValues();
+        }
     }
 
     private async Task StopGooseSubscriberAsync()
@@ -254,6 +259,11 @@ public partial class MainWindow
             IsGooseCapturing = false;
             GooseStatusText = "GOOSE subscriber stopped.";
             SetStatus("GOOSE Subscriber stopped.");
+            if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
+            {
+                _iedBrowserLastLiveVersion = -1;
+                RefreshIedBrowserVisibleValues();
+            }
         }
         catch (Exception ex)
         {
@@ -474,6 +484,7 @@ public partial class MainWindow
         Raise(nameof(GooseDataSetInspectorVisibility));
         Raise(nameof(GooseClearVisibility));
         Raise(nameof(GooseSelectedStreamText));
+        UpdateIedBrowserGooseDetails(); // coalesced update, no second subscriber
     }
 
     private GooseBindingCatalog BuildGooseBindingCatalog()

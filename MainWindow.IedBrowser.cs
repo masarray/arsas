@@ -41,6 +41,8 @@ public partial class MainWindow
     private bool _iedBrowserFilesLoading;
     private CancellationTokenSource? _iedBrowserFileReadOperation;
     private CancellationTokenSource? _iedBrowserReadOperation;
+    private IedBrowserGooseExpectedIdentity? _iedBrowserGooseExpected;
+    private LiveIedDataSetModel? _iedBrowserGooseDirectory;
 
     /// <summary>
     /// Task-first navigation for both Open SCL and IED Discovery. This touches
@@ -453,6 +455,146 @@ public partial class MainWindow
                         row.FunctionalConstraint));
             row.Value = live.IsStale ? "Offline · " + display : display;
         }
+        UpdateIedBrowserGooseDetails();
+    }
+
+
+    private void PrepareIedBrowserGoose(Iec61850MonitorDevice device,
+        LiveIedControlBlockModel block, LiveIedModelDiscoveryDocument? model)
+    {
+        // Only SCL metadata belonging to this selected device may enrich the GoCB.
+        var source = device.SclWorkspace?.GooseStreams
+            .Where(item => IedBrowserGooseInspection.Canonical(item.ControlBlockReference) ==
+                IedBrowserGooseInspection.Canonical(block.Reference)).Take(2).ToArray();
+        var scl = source is { Length: 1 } ? source[0] : null;
+        if (scl is not null && !string.IsNullOrWhiteSpace(block.DataSetReference) &&
+            IedBrowserGooseInspection.Canonical(block.DataSetReference) !=
+            IedBrowserGooseInspection.Canonical(scl.DataSetReference))
+            scl = null; // conflicting model authorities fail closed
+
+        var dataSet = !string.IsNullOrWhiteSpace(block.DataSetReference)
+            ? block.DataSetReference : scl?.DataSetReference ?? "";
+        _iedBrowserGooseDirectory = model?.DataSets.FirstOrDefault(entry =>
+            IedBrowserGooseInspection.Canonical(entry.Reference) ==
+                IedBrowserGooseInspection.Canonical(dataSet));
+        _iedBrowserGooseExpected = new IedBrowserGooseExpectedIdentity(
+            device.Name, block.Reference, dataSet,
+            !string.IsNullOrWhiteSpace(block.ControlId) ? block.ControlId : scl?.GoId ?? "",
+            TryParseAppId(block.AppId) ?? scl?.Address.AppId,
+            TryParseUInt(block.ConfRev) ?? scl?.ConfigurationRevision,
+            scl?.Address.DestinationMac?.ToString() ?? "",
+            scl?.GoId ?? "", scl?.Address.AppId);
+    }
+
+    private void UpdateIedBrowserGooseDetails()
+    {
+        if (MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
+            _iedBrowserRenderedPage?.Kind != "GoCB" ||
+            _iedBrowserGooseExpected is not { } identity)
+            return;
+
+        // One indexed projection per bounded UI coalescing tick. No tree rebuild.
+        var fields = _iedBrowserDetails.Rows
+            .Where(row => row.Kind == "Property")
+            .ToDictionary(row => row.Name, StringComparer.Ordinal);
+        void Put(string name, string value, string authority)
+        {
+            if (!fields.TryGetValue(name, out var row)) return;
+            row.Value = value;
+            row.ObservationSource = authority;
+            row.ObservationTooltip = name + " · " + authority;
+        }
+
+        if (!string.IsNullOrWhiteSpace(identity.SclGoId))
+            Put("GOOSE ID", identity.SclGoId, "Source SCL GSEControl");
+        if (!string.IsNullOrWhiteSpace(identity.DataSetReference))
+            Put("DataSet reference", identity.DataSetReference, "Model / SCL DataSet");
+        if (identity.SclAppId is { } configuredAppId)
+            Put("Application ID", configuredAppId.ToString(
+                System.Globalization.CultureInfo.InvariantCulture), "Source SCL GSE address");
+        Put("Destination MAC", string.IsNullOrWhiteSpace(identity.SclDestinationMac)
+            ? "Not read" : identity.SclDestinationMac,
+            string.IsNullOrWhiteSpace(identity.SclDestinationMac)
+                ? "No verified GSE address" : "Source SCL GSE address");
+
+        // Never present old snapshots as currently received when capture is stopped.
+        foreach (var name in new[] { "Frame received at", "Source MAC", "Frame test",
+            "Frame ndsCom", "State number", "Sequence number",
+            "Time allowed to live", "Frame DataSet entries" })
+            Put(name, "—", "No currently verified passive reception");
+        Put("VLAN ID", "Not read", "No currently verified passive reception");
+        Put("VLAN priority", "Not read", "No currently verified passive reception");
+
+        // Filter raw bounded cache by exact GoCB before building display leaves.
+        // Two different publisher streams claiming the same identity are rejected.
+        var found = IsGooseCapturing
+            ? _latestGooseFrames.Values.Where(frame =>
+                IedBrowserGooseInspection.Canonical(frame.Frame.Pdu.GoCbRef) ==
+                IedBrowserGooseInspection.Canonical(identity.GoCbRef)).Take(2)
+                .Select(frame => (Raw: frame,
+                    Display: BuildGooseStreamSnapshot(frame, _gooseBindingCatalog))).ToArray()
+            : Array.Empty<(GooseSubscriberFrameSnapshot Raw, GooseStreamSnapshot Display)>();
+        var frameView = IedBrowserGooseInspection.Select(identity, found.Select(x => x.Display));
+        var received = frameView is null ? null : found
+            .FirstOrDefault(x => ReferenceEquals(frameView, x.Display)).Raw;
+        if (frameView is not null && received is not null)
+        {
+            Put("Capture status", "Received · exact GoCB verified", "Passive GOOSE");
+            Put("Frame received at", received.CaptureTimestamp.ToLocalTime()
+                .ToString("yyyy-MM-dd HH:mm:ss.fff zzz",
+                    System.Globalization.CultureInfo.InvariantCulture), "Passive capture time");
+            Put("Source MAC", frameView.SourceMac, "Received Ethernet frame");
+            Put("Destination MAC", frameView.DestinationMac, "Received Ethernet frame");
+            Put("VLAN ID", frameView.VlanId, "Received Ethernet frame");
+            Put("VLAN priority", frameView.VlanPriority, "Received Ethernet frame");
+            Put("Frame test", frameView.Test ? "true" : "false", "Received GOOSE PDU");
+            Put("Frame ndsCom", frameView.NeedsCommissioning ? "true" : "false",
+                "Received PDU; not MMS GoEna or control state");
+            Put("State number", frameView.StateNumberText, "Received stNum");
+            Put("Sequence number", frameView.SequenceNumberText, "Received sqNum");
+            Put("Time allowed to live", frameView.TimeAllowedToLiveText,
+                "Received timeAllowedToLive");
+            Put("Frame DataSet entries", frameView.WireDataSetEntryCount.ToString(
+                System.Globalization.CultureInfo.InvariantCulture), "Received allData");
+            var ordered = _iedBrowserGooseDirectory is null
+                ? null : IedBrowserGooseInspection.VerifiedMembers(frameView,
+                    _iedBrowserGooseDirectory);
+            foreach (var row in _iedBrowserDetails.Rows)
+            {
+                if (row.GooseSlot < 0) continue;
+                if (ordered is not null && row.GooseSlot < ordered.Count &&
+                    IedBrowserGooseInspection.Canonical(row.GooseReference) ==
+                        IedBrowserGooseInspection.Canonical(ordered[row.GooseSlot].SignalReference) &&
+                    string.Equals(row.GooseFc, ordered[row.GooseSlot].FunctionalConstraint,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    row.Value = ordered[row.GooseSlot].Value;
+                    row.ObservationSource = "GOOSE frame";
+                    row.ObservationTooltip = row.GooseReference + " [" + row.GooseFc +
+                        "] · passive received " + received.CaptureTimestamp.ToString("O",
+                            System.Globalization.CultureInfo.InvariantCulture);
+                }
+                else if (row.ObservationSource == "GOOSE frame")
+                {
+                    row.Value = "Not read";
+                    row.ObservationSource = "";
+                    row.ObservationTooltip = "";
+                }
+            }
+        }
+        else
+        {
+            Put("Capture status", IsGooseCapturing
+                ? "No uniquely verified matching frame" : "Subscriber not capturing",
+                "Passive capture; not an MMS GoCB read");
+            foreach (var row in _iedBrowserDetails.Rows)
+            {
+                if (row.GooseSlot < 0 || row.ObservationSource != "GOOSE frame") continue;
+                row.Value = "Not read";
+                row.ObservationSource = "";
+                row.ObservationTooltip = "";
+            }
+        }
     }
 
     private void CancelIedBrowserRead()
@@ -800,6 +942,11 @@ public partial class MainWindow
     {
         _iedBrowserRenderedPage = row;
         _iedBrowserRenderedConnected = connected;
+        _iedBrowserGooseExpected = null;
+        _iedBrowserGooseDirectory = null;
+        if (row is { Kind: "GoCB", Payload: LiveIedControlBlockModel gooseBlock } &&
+            SelectedDevice is { } owner)
+            PrepareIedBrowserGoose(owner, gooseBlock, model);
         IedBrowserBackButton.IsEnabled = _iedBrowserNavigation.CanGoBack;
         UpdateIedBrowserFilesView(row, model);
         if (row == null)
