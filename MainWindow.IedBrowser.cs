@@ -205,6 +205,7 @@ public partial class MainWindow
         var sourceDevice = device;
         var successes = 0;
         var failures = 0;
+        long readAssociation = -1; // bound after any explicit connect
         device.ResetDiscoveryProgress("Preparing read-only MMS values…",
             readAll ? "Reading all IED values" : "Reading Browser values");
         device.IsBrowserReading = true; // Preserve the ongoing report monitor lifecycle.
@@ -222,9 +223,12 @@ public partial class MainWindow
                     throw new InvalidOperationException("MMS connection was not established.");
             }
 
+            readAssociation = sourceDevice.LiveValues.Association;
             var readValues = new Progress<IedBrowserReadResult>(result =>
             {
-                if (!ReferenceEquals(SelectedDevice, sourceDevice) || cts.IsCancellationRequested)
+                if (!ReferenceEquals(SelectedDevice, sourceDevice) ||
+                    !ReferenceEquals(_iedBrowserReadOperation, cts) ||
+                    cts.IsCancellationRequested)
                     return;
                 if (result.Error.Length != 0)
                 {
@@ -232,11 +236,11 @@ public partial class MainWindow
                     return;
                 }
                 successes++;
-                sourceDevice.LiveValues.Publish(result.Target.Reference,
-                    result.Target.FunctionalConstraint, result.Value, result.Quality,
-                    result.DeviceTimestamp, "MMS Read");
-                // Never overwrite a live report point with an unrelated
-                // independent MMS snapshot while the reporter owns acquisition.
+                var accepted = sourceDevice.LiveValues.PublishForAssociation(
+                    readAssociation, result.Target.Reference, result.Target.FunctionalConstraint,
+                    result.Value, result.Quality, result.DeviceTimestamp, "MMS Read");
+                if (!accepted) return; // stale connection or superseded read flight
+                // Never overwrite a report-owned point during live acquisition.
                 if (!sourceDevice.IsMonitoring)
                     bindingIndex.Apply(result);
                 RefreshIedBrowserVisibleValues();
@@ -306,20 +310,23 @@ public partial class MainWindow
         {
             if (string.IsNullOrWhiteSpace(row.ValueReference)) continue;
             if (!device.LiveValues.TryGet(row.ValueReference,
-                    row.FunctionalConstraint, out var live))
+                    row.FunctionalConstraint, out var live,
+                    preferReport: device.IsMonitoring))
             {
                 row.Value = "Not read";
                 continue;
             }
-            // The parent q and its inline children share one IEC Quality
-            // presentation path. Unknown flags stay unavailable, never false.
+            // Typed Quality is decoded once at ingress, never guessed from
+            // valid-looking text. Offline snapshots remain clearly stale.
+            string display;
             if (row.EvidenceKind == "Quality")
-                row.Value = Iec61850QualityPresentation.FormatObserved(
-                    live.Value, row.EvidenceField);
+                display = live.QualityBits?.FormatField(row.EvidenceField) ??
+                    Iec61850QualityPresentation.FormatObserved(live.Value, row.EvidenceField);
             else if (row.EvidenceField.Length == 0)
-                row.Value = live.Value;
+                display = live.Value;
             else
-                row.Value = "Not exposed";
+                display = "Not exposed";
+            row.Value = live.IsStale ? "Offline · " + display : display;
         }
     }
 
