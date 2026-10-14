@@ -143,6 +143,21 @@ public sealed class M2IedBrowserTimeAndReferenceTests
             out var process));
         Assert.Equal("Report", process.Source);
 
+        // A newer summary-only Report makes the older explicit Read stale;
+        // its individual flags must no longer be represented as current.
+        Assert.True(ledger.PublishForAssociation(session, qualityReference,
+            "ST", "good", "", "", "Report quality"));
+        Assert.True(ledger.TryGet(qualityReference, "ST", out var newerQuality,
+            requiredEvidence: "Quality"));
+        Assert.Equal("Report quality", newerQuality.Source);
+        Assert.Null(newerQuality.QualityBits);
+        Assert.True(ledger.PublishForAssociation(session, timeReference,
+            "ST", "2026-10-14 10:01:00", "", "", "Report timestamp"));
+        Assert.True(ledger.TryGet(timeReference, "ST", out var newerTime,
+            requiredEvidence: "Timestamp"));
+        Assert.Equal("Report timestamp", newerTime.Source);
+        Assert.Null(newerTime.TimeBits);
+
         // The association fence still prevents old typed data from being shown.
         ledger.BeginAssociation();
         Assert.False(ledger.TryGet(qualityReference, "ST", out _,

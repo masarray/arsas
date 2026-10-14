@@ -223,19 +223,19 @@ public sealed class IedBrowserLiveValues
         // subfields may use a verified direct MMS Read when the selected
         // Report provides a textual summary but no underlying bit evidence.
         // Never manufacture a bit from "good" or a rendered timestamp.
-        if (requiredEvidence == "Quality" && selected.QualityBits is null)
+        if (ReferenceEquals(selected, channels.Report) &&
+            channels.Read is { } explicitRead &&
+            explicitRead.Revision > selected.Revision &&
+            (requiredEvidence == "Quality" &&
+                 selected.QualityBits is null && explicitRead.QualityBits is not null ||
+             requiredEvidence == "Timestamp" &&
+                 selected.TimeBits is null &&
+                 explicitRead.TimeBits is { IsDecoded: true, HasWireProvenance: true }))
         {
-            var alternative = ReferenceEquals(selected, channels.Report)
-                ? channels.Read : channels.Report;
-            if (alternative?.QualityBits is not null)
-                selected = alternative;
-        }
-        else if (requiredEvidence == "Timestamp" && selected.TimeBits is null)
-        {
-            var alternative = ReferenceEquals(selected, channels.Report)
-                ? channels.Read : channels.Report;
-            if (alternative?.TimeBits is { IsDecoded: true, HasWireProvenance: true })
-                selected = alternative;
+            // A newer explicit read supplies the missing bit-level proof.
+            // An older read can never decorate a newer Report with stale q/t,
+            // and an old Report cannot override a newer untyped Read.
+            selected = explicitRead;
         }
         evidence = _offline ? selected with { IsStale = true } : selected;
         return true;

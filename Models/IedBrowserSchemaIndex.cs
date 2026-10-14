@@ -99,7 +99,7 @@ public sealed class IedBrowserSchemaIndex
         var owner = IedBrowserLiveValues.CanonicalReference(obj.Reference);
         if (owner.Length == 0) return false;
         var candidates = obj.Attributes
-            .Where(attr => attr.FunctionalConstraint is "ST" or "MX")
+            .Where(attr => NormalizeFc(attr.FunctionalConstraint) is "ST" or "MX")
             .Select(attr => (
                 Reference: IedBrowserLiveValues.CanonicalReference(attr.MmsReference),
                 Fc: NormalizeFc(attr.FunctionalConstraint)))
