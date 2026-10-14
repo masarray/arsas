@@ -107,7 +107,7 @@ public sealed class IedBrowserLiveValues
     private bool TryPublish(string reference, string fc, string? value, string? quality,
         string? timestamp, string source, long? expectedAssociation,
         Iec61850UtcTimeEvidence? utcTimeEvidence,
-        MmsQualityEvidence? qualityEvidence)
+        MmsQualityEvidence? qualityEvidence, bool onlyIfNoReport = false)
     {
         if (string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(fc) ||
             string.IsNullOrWhiteSpace(value) ||
@@ -124,6 +124,11 @@ public sealed class IedBrowserLiveValues
 
             _values.TryGetValue(key, out var channels);
             channels ??= new IedBrowserObservationChannels();
+            // The WPF coalesced point snapshot is a compatibility mirror.
+            // It must never replace a real ingress Report observation,
+            // especially typed q/t evidence from the original MMS bytes.
+            if (onlyIfNoReport && channels.Report is not null)
+                return false;
             var observed = new IedBrowserObservedValue(value.Trim(), quality ?? "",
                 timestamp ?? "", source, DateTime.UtcNow, _version + 1, _association,
                 QualityBits: IsQualityReference(key)
@@ -162,15 +167,24 @@ public sealed class IedBrowserLiveValues
             !point.SourceMode.Contains("Report", StringComparison.OrdinalIgnoreCase) &&
             point.RoutedReportControlReferences.Count == 0)
             return;
-        Publish(point.IecReference, point.FunctionalConstraint, point.Value,
+        // Primary Report ingress is published on the runtime receive lane.
+        // This UI snapshot only fills gaps (legacy sessions or points), never
+        // downgrades a typed Report q/t to the normalized "good"/date text.
+        MirrorReportIfMissing(point.IecReference, point.FunctionalConstraint, point.Value,
             point.Quality, point.DeviceTimestamp, "Report");
         if (point.Quality is not ("Unknown" or "-"))
-            Publish(point.QualityReference, point.FunctionalConstraint, point.Quality,
-                "", point.DeviceTimestamp, "Report quality");
+            MirrorReportIfMissing(point.QualityReference, point.FunctionalConstraint,
+                point.Quality, "", point.DeviceTimestamp, "Report quality");
         if (point.DeviceTimestamp is not ("Unknown" or "-"))
-            Publish(point.TimestampReference, point.FunctionalConstraint, point.DeviceTimestamp,
-                "", point.DeviceTimestamp, "Report timestamp");
+            MirrorReportIfMissing(point.TimestampReference, point.FunctionalConstraint,
+                point.DeviceTimestamp, "", point.DeviceTimestamp, "Report timestamp");
     }
+
+    private void MirrorReportIfMissing(string reference, string fc,
+        string? value, string? quality, string? timestamp, string source)
+        => TryPublish(reference, fc, value, quality, timestamp, source,
+            expectedAssociation: null, utcTimeEvidence: null, qualityEvidence: null,
+            onlyIfNoReport: true);
 
     /// <summary>
     /// Return the authoritative reported snapshot during monitoring. When the

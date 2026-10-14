@@ -120,6 +120,45 @@ public sealed class M2IedBrowserHierarchyAndReportWireTests
         Assert.False(live.TryGet("LD/GGIO6.CBPond.q", "ST", out _));
     }
 
+    [Fact]
+    public void CoalescedUiReportMirror_CannotEraseTypedRawWireQualityOrTimestamp()
+    {
+        var raw = Assert.Single(IedBrowserReportWireEvidence.Extract(
+            Frame("LD/GGIO6.CBPond", MmsDataValue.Structure(
+                [MmsDataValue.Boolean(false),
+                 MmsDataValue.BitString(3, [0, 0]), WireUtc(0x3F)]))));
+        var live = new IedBrowserLiveValues();
+        var session = live.BeginAssociation();
+        Assert.True(live.PublishForAssociation(session, "LD/GGIO6.CBPond.q",
+            "ST", raw.QualityBits!.Summary, "", "", "Report quality · raw MMS",
+            qualityEvidence: raw.QualityBits));
+        Assert.True(live.PublishForAssociation(session, "LD/GGIO6.CBPond.t",
+            "ST", raw.TimeBits!.EngineeringUtc, "", "", "Report timestamp · raw MMS",
+            utcTimeEvidence: raw.TimeBits));
+        var mirroredPoint = new Iec61850MonitorPoint
+        {
+            IecReference = "LD/GGIO6.CBPond.stVal",
+            QualityReference = "LD/GGIO6.CBPond.q",
+            TimestampReference = "LD/GGIO6.CBPond.t",
+            FunctionalConstraint = "ST",
+            Value = "False", Quality = "good",
+            DeviceTimestamp = "2026-10-14 10:00:00",
+            SourceMode = "StaticBRCB",
+            IsOffline = false
+        };
+        live.PublishReport(mirroredPoint, observedReportIngress: true);
+        Assert.True(live.TryGet("LD/GGIO6.CBPond.q", "ST", out var q));
+        Assert.Equal("Report quality · raw MMS", q.Source);
+        Assert.Equal("false", q.QualityBits?.FormatField("OperatorBlocked"));
+        Assert.True(live.TryGet("LD/GGIO6.CBPond.t", "ST", out var t));
+        Assert.Equal("Report timestamp · raw MMS", t.Source);
+        Assert.Equal("true", IedBrowserUtcTimeQualityPresentation.FormatField(
+            t.TimeBits, "ClockNotSynchronized"));
+        Assert.True(live.TryGet("LD/GGIO6.CBPond.stVal", "ST", out var stVal));
+        Assert.Equal("False", stVal.Value);
+        Assert.Equal("Report", stVal.Source);
+    }
+
     private static LiveIedDataObjectModel ModelDo()
     {
         LiveIedDataAttributeModel Attr(string path, string fc = "ST") => new()
