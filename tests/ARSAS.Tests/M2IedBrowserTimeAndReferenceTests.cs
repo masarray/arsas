@@ -219,7 +219,7 @@ public sealed class M2IedBrowserTimeAndReferenceTests
     [Fact]
     public void ExplicitReadBinding_CaseSensitiveIecIdentity_AndNormalizedFc()
     {
-        var device = new Iec61850MonitorDevice();
+        var device = new Iec61850MonitorDevice { IsConnected = true };
         var upper = new Iec61850MonitorPoint
         {
             IecReference = "LD/CSWI1.Pos.stVal", FunctionalConstraint = "ST", Value = "before-upper"
@@ -231,14 +231,23 @@ public sealed class M2IedBrowserTimeAndReferenceTests
         device.Points.Add(upper);
         device.Points.Add(lower);
         var index = new IedBrowserReadBindingIndex(device);
-        index.Apply(new IedBrowserReadResult(
+        var association = device.LiveValues.Association;
+        var first = new IedBrowserReadResult(
             new IedBrowserReadTarget("LD/CSWI1$st$Pos$stVal", "st", "BOOLEAN"),
-            "true", "", "", ""));
+            "true", "", "", "");
+        Assert.True(device.LiveValues.PublishForAssociation(association,
+            first.Target.Reference, first.Target.FunctionalConstraint,
+            first.Value, first.Quality, first.DeviceTimestamp, "MMS Read"));
+        Assert.Equal(1, index.Apply(first, device.LiveValues, association));
         Assert.Equal("true", upper.Value);
         Assert.Equal("before-lower", lower.Value);
-        index.Apply(new IedBrowserReadResult(
+        var second = new IedBrowserReadResult(
             new IedBrowserReadTarget("LD/CSWI1.pos.stVal", "ST", "BOOLEAN"),
-            "false", "", "", ""));
+            "false", "", "", "");
+        Assert.True(device.LiveValues.PublishForAssociation(association,
+            second.Target.Reference, second.Target.FunctionalConstraint,
+            second.Value, second.Quality, second.DeviceTimestamp, "MMS Read"));
+        Assert.Equal(1, index.Apply(second, device.LiveValues, association));
         Assert.Equal("true", upper.Value);
         Assert.Equal("false", lower.Value);
     }
