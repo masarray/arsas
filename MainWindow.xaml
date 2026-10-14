@@ -2092,24 +2092,76 @@
                                 </ListView>
                                 <!-- Files are a separate dense 3-column virtualized native grid;
                                      normal Browser detail rows remain untouched. -->
-                                <DataGrid x:Name="IedBrowserFilesGrid"
+                                <Grid x:Name="IedBrowserFilesPanel" Grid.Row="1" Visibility="Collapsed">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <Border Grid.Row="0" Background="#EDF4FC" BorderBrush="#D6E2F0"
+                                            BorderThickness="1,1,1,0" Padding="10,6">
+                                        <DockPanel LastChildFill="True">
+                                            <Button x:Name="IedBrowserFilesDownloadSelectedButton"
+                                                    DockPanel.Dock="Right" Content="Download selected"
+                                                    Click="IedBrowserDownloadSelected_Click"
+                                                    Style="{StaticResource SoftButton}" IsEnabled="False"
+                                                    Padding="10,4" Margin="8,0,0,0" FontSize="11"
+                                                    ToolTip="Download the selected complete COMTRADE record and open its local folder"/>
+                                            <TextBlock x:Name="IedBrowserFileSelectionText"
+                                                       Text="Select a file · Double-click to open · Right-click for Download"
+                                                       VerticalAlignment="Center" FontSize="11.4"
+                                                       Foreground="#475F7A" TextTrimming="CharacterEllipsis"/>
+                                        </DockPanel>
+                                    </Border>
+                                <DataGrid x:Name="IedBrowserFilesGrid" Grid.Row="1"
                                           Visibility="Collapsed" AutoGenerateColumns="False"
                                           IsReadOnly="True" CanUserAddRows="False"
                                           CanUserDeleteRows="False"
-                                          SelectionMode="Single" HeadersVisibility="Column"
+                                          SelectionMode="Single" SelectionUnit="FullRow"
+                                          SelectionChanged="IedBrowserFiles_SelectionChanged"
+                                          HeadersVisibility="Column" AlternationCount="2"
                                           EnableRowVirtualization="True"
                                           VirtualizingPanel.IsVirtualizing="True"
                                           VirtualizingPanel.VirtualizationMode="Recycling"
                                           BorderBrush="#CBD7E4" BorderThickness="1"
-                                          Background="White" RowHeight="31"
-                                          GridLinesVisibility="None"
+                                          Background="White" RowHeight="34" FontSize="12"
+                                          AlternatingRowBackground="#F4F8FD"
+                                          GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EDF1F6"
                                           LoadingRow="IedBrowserFile_LoadingRow">
                                     <DataGrid.RowStyle>
                                         <Style TargetType="{x:Type DataGridRow}">
                                             <EventSetter Event="MouseDoubleClick" Handler="IedBrowserFile_DoubleClick"/>
+                                            <EventSetter Event="PreviewMouseRightButtonDown" Handler="IedBrowserFile_RightClick"/>
                                             <Setter Property="ToolTip" Value="{Binding RemotePath}"/>
+                                            <Setter Property="Cursor" Value="Hand"/>
+                                            <Setter Property="BorderThickness" Value="3,0,0,0"/>
+                                            <Setter Property="BorderBrush" Value="Transparent"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="#EAF3FF"/>
+                                                </Trigger>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter Property="Background" Value="#CFE5FF"/>
+                                                    <Setter Property="BorderBrush" Value="#2563EB"/>
+                                                    <Setter Property="Foreground" Value="#17365B"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                </Trigger>
+                                            </Style.Triggers>
                                         </Style>
                                     </DataGrid.RowStyle>
+                                    <DataGrid.CellStyle>
+                                        <Style TargetType="{x:Type DataGridCell}">
+                                            <Setter Property="BorderThickness" Value="0"/>
+                                            <Setter Property="Padding" Value="8,3"/>
+                                            <Setter Property="Foreground" Value="#243C57"/>
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type DataGridRow}}}" Value="True">
+                                                    <Setter Property="Background" Value="#CFE5FF"/>
+                                                    <Setter Property="Foreground" Value="#17365B"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGrid.CellStyle>
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Filename" Binding="{Binding Name}"
                                                             Width="*" MinWidth="185"/>
@@ -2119,6 +2171,7 @@
                                                             Width="110" MinWidth="95"/>
                                     </DataGrid.Columns>
                                 </DataGrid>
+                                </Grid>
                                 <!-- Overlay is scoped to Files only, never to monitoring or
                                      the Explorer. Cancellation reaches the dedicated transfer. -->
                                 <Border x:Name="IedBrowserFileTransferOverlay" Visibility="Collapsed"
