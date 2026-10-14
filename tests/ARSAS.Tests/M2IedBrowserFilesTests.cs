@@ -151,13 +151,14 @@ public sealed class M2IedBrowserFilesTests
         Assert.Equal(["Filename", "Time", "Size"], cols);
         Assert.Equal("True", (string?)grid.Attribute("EnableRowVirtualization"));
         Assert.Contains("IedBrowserFile_DoubleClick", grid.ToString(), StringComparison.Ordinal);
-        Assert.Contains("IedBrowserFileDownload_Click", grid.ToString(), StringComparison.Ordinal);
+        Assert.Contains("IedBrowserFile_LoadingRow", grid.ToString(), StringComparison.Ordinal);
         var overlay = Assert.Single(xaml.Descendants(p + "Border"),
             e => e.Attribute(x + "Name")?.Value == "IedBrowserFileTransferOverlay");
         Assert.Contains("IedBrowserCancelFileTransfer_Click", overlay.ToString(), StringComparison.Ordinal);
 
         var source = File.ReadAllText(Find("MainWindow.IedBrowser.Files.cs"));
         Assert.Contains("new FaultRecordTransferClient()", source, StringComparison.Ordinal);
+        Assert.Contains("download.Click += IedBrowserFileDownload_Click", source, StringComparison.Ordinal);
         Assert.Contains("IedBrowserLocalRecordEvidence.ValidateFresh", source, StringComparison.Ordinal);
         Assert.Contains("ArdIrecViewerLauncher.TryResolveComtradeCfg", source, StringComparison.Ordinal);
         Assert.Contains("ArdIrecNativeBridge.TryOpen", source, StringComparison.Ordinal);
