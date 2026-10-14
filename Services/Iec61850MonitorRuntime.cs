@@ -1048,7 +1048,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                             unavailableState.SourceMode = "Static DataSet: RCB unavailable";
                             unavailableState.AcquisitionLabel = unavailableState.SourceMode;
                             unavailableState.Reason = result.Message;
-                            EmitStatusSnapshot(point, unavailableState, "Static report unavailable / no MMS fallback", "Pending");
+                            EmitStatusSnapshot(session, point, unavailableState, "Static report unavailable / no MMS fallback", "Pending");
                         }
                     }
                     foreach (var warning in result.Warnings.Take(3))
@@ -1163,7 +1163,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                         failedState.SourceMode = "Static DataSet: report setup failed";
                         failedState.AcquisitionLabel = failedState.SourceMode;
                         failedState.Reason = $"{ex.GetType().Name}: {ex.Message}";
-                        EmitStatusSnapshot(point, failedState, "Static report setup failed / no MMS fallback", "Pending");
+                        EmitStatusSnapshot(session, point, failedState, "Static report setup failed / no MMS fallback", "Pending");
                     }
                 }
             }
@@ -1778,6 +1778,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 {
                     state.ConsecutiveErrors++;
                     EmitStatusSnapshot(
+                        session,
                         point,
                         state,
                         "MMS read returned no value",
@@ -1876,7 +1877,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 state.ConsecutiveErrors++;
-                EmitStatusSnapshot(point, state, $"Read error: {ex.Message}", "Bad / communication error");
+                EmitStatusSnapshot(session, point, state, $"Read error: {ex.Message}", "Bad / communication error");
                 if (state.ConsecutiveErrors >= 2)
                     session.ConsecutiveSessionErrors++;
             }
@@ -1959,6 +1960,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 Status = status,
                 IsValueEdge = changed,
                 IsReportTraffic = trustReportEdge,
+                ObservationAssociation = session.BrowserObservationAssociation,
                 // This is association-local evidence from an actual routed report.
                 // Preserve it through later metadata/status UI coalescing.
                 RoutedReportControlReferences = state.RoutedReportControlReferences
@@ -1999,6 +2001,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     }
 
     private void EmitStatusSnapshot(
+        DeviceSession session,
         Iec61850MonitorPoint point,
         RuntimePointState state,
         string status,
@@ -2016,6 +2019,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             Reason = state.Reason,
             Status = status,
             IsValueEdge = false,
+            ObservationAssociation = session.BrowserObservationAssociation,
             RoutedReportControlReferences = state.RoutedReportControlReferences
                 .OrderBy(reference => reference, StringComparer.OrdinalIgnoreCase).ToArray(),
             Sequence = state.Sequence

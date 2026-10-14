@@ -2398,15 +2398,33 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         FlushGooseSubscriberUi();
 
         var pointChanged = false;
-        foreach (var pointKey in _pendingPointSnapshots.Keys.ToArray())
+        // One device-owner index for the entire coalesced batch: avoid scanning
+        // every IED for every reported point in a high-rate static DataSet.
+        var queuedKeys = _pendingPointSnapshots.Keys.ToArray();
+        var deviceOwners = queuedKeys.Length == 0
+            ? null
+            : Devices.GroupBy(device => device.DeviceId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.First(),
+                    StringComparer.OrdinalIgnoreCase);
+        foreach (var pointKey in queuedKeys)
         {
             if (!_pendingPointSnapshots.TryRemove(pointKey, out var pending)) continue;
             var snapshot = pending.Snapshot;
             var point = snapshot.Point;
+            if (deviceOwners == null ||
+                !deviceOwners.TryGetValue(point.DeviceId, out var observedOwner))
+                continue;
+            // Reject queued frames from an earlier MMS connection even if
+            // the new session resets its point Sequence counter to zero.
+            if (snapshot.ObservationAssociation != 0 &&
+                snapshot.ObservationAssociation != observedOwner.LiveValues.Association)
+                continue;
             if (snapshot.Sequence < point.Sequence)
                 continue;
+            var currentProcess = CanonicalPointSnapshotAuthority.ProcessDisplay(
+                observedOwner, point, snapshot);
             var qualityChanged = !string.Equals(point.Quality, snapshot.Quality, StringComparison.Ordinal);
-            var uiDetectedEdge = point.ApplyProcessValue(snapshot.Value);
+            var uiDetectedEdge = point.ApplyProcessValue(currentProcess);
             if (pending.HasValueEdge || snapshot.IsValueEdge || uiDetectedEdge)
                 MarkPointRecentlyChanged(point);
             point.Quality = snapshot.Quality;
@@ -2422,9 +2440,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             point.Sequence = snapshot.Sequence;
             // This is the same coalesced UI snapshot that updates Explorer,
             // Live Monitor and SOE. Browser never has its own report decoder.
-            var observedOwner = Devices.FirstOrDefault(d =>
-                string.Equals(d.DeviceId, point.DeviceId, StringComparison.OrdinalIgnoreCase));
-            observedOwner?.LiveValues.PublishReport(point, snapshot.IsReportTraffic);
+            // Canonical ingress remains first authority. The point snapshot
+            // is a compatibility mirror only when Report evidence is absent.
+            observedOwner.LiveValues.PublishReport(point, snapshot.IsReportTraffic);
             if (uiDetectedEdge || pending.HasValueEdge || snapshot.IsValueEdge || qualityChanged)
             {
                 UpdateCommandFeedbackFromLivePoint(point);
@@ -2432,13 +2450,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             }
             if (snapshot.IsReportTraffic)
             {
-                var device = Devices.FirstOrDefault(item => item.DeviceId.Equals(point.DeviceId, StringComparison.OrdinalIgnoreCase));
-                if (device != null)
-                {
-                    device.HasReportStream = true;
-                    device.ReportPulseActive = true;
-                    _reportPulseUntil[device.DeviceId] = DateTime.UtcNow.AddMilliseconds(650);
-                }
+                observedOwner.HasReportStream = true;
+                observedOwner.ReportPulseActive = true;
+                _reportPulseUntil[observedOwner.DeviceId] = DateTime.UtcNow.AddMilliseconds(650);
             }
             pointChanged = true;
         }
@@ -3240,11 +3254,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         public PendingPointUpdate Merge(Iec61850PointSnapshot next)
         {
-            // A command-confirmed snapshot can overtake an older report/poll snapshot in
-            // the 100 ms UI batching queue. Never let a lower process sequence roll the
-            // command row and live grid back to the previous breaker state.
-            var newest = next.Sequence < Snapshot.Sequence ? Snapshot : next;
-            return new PendingPointUpdate(newest, HasValueEdge || next.IsValueEdge);
+            // Session identity outranks process sequence. Reconnect can reset
+            // a point's sequence, so never let an older session's high sequence
+            // overwrite a new session's first value in the UI batch.
+            var newest = CanonicalPointSnapshotAuthority.NewerSnapshot(Snapshot, next);
+            var sameAssociation = newest.ObservationAssociation == Snapshot.ObservationAssociation;
+            return new PendingPointUpdate(newest,
+                (sameAssociation && HasValueEdge) || newest.IsValueEdge);
         }
     }
 

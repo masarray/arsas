@@ -939,6 +939,9 @@ public sealed class Iec61850PointSnapshot
     /// </summary>
     public bool IsValueEdge { get; init; }
     public bool IsReportTraffic { get; init; }
+    // Association identity is stamped at runtime ingress, NOT reconstructed
+    // by the UI when a queued snapshot is eventually processed.
+    public long ObservationAssociation { get; init; }
     // Association-local aggregate sourced only from real decoded report ingress.
     // Immutable copy when published: safe across the runtime / WPF dispatcher.
     public IReadOnlyList<string> RoutedReportControlReferences { get; init; } = Array.Empty<string>();
