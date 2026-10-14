@@ -1580,6 +1580,43 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 }
             }
 
+            // Model-checked, raw MMS q/t evidence arrives independently of
+            // flattened process-value updates. Publish AFTER normalized updates
+            // so "good"/display-date text never erases proven bit fields.
+            // This path performs no Read, MMS polling, RCB write or GI.
+            if (slice.BrowserRawEvidence.Count > 0)
+            {
+                var evidenceModel = session.Device.SclWorkspace?.DesignModel ??
+                                    session.Device.LiveDiscoveryModel;
+                if (!ReferenceEquals(session.BrowserSchema?.SourceModel, evidenceModel))
+                    session.BrowserSchema = evidenceModel is null
+                        ? null : new IedBrowserSchemaIndex(evidenceModel);
+                var evidenceSchema = session.BrowserSchema;
+                if (evidenceSchema is not null)
+                    foreach (var evidence in slice.BrowserRawEvidence)
+                    {
+                        if (!evidenceSchema.TryResolveReportFc(plan.DataSetReference,
+                                evidence.CarrierReference, out var evidenceFc) ||
+                            !string.Equals(evidenceFc, evidence.FunctionalConstraint,
+                                StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        if (evidence.QualityBits is { } quality &&
+                            evidenceSchema.TryGetQualityCompanion(
+                                evidence.CarrierReference, evidenceFc, out var qRef))
+                            session.Device.LiveValues.PublishForAssociation(
+                                session.BrowserObservationAssociation,
+                                qRef, evidenceFc, quality.Summary, "", "",
+                                "Report quality · raw MMS", qualityEvidence: quality);
+                        if (evidence.TimeBits is { IsDecoded: true, HasWireProvenance: true } time &&
+                            evidenceSchema.TryGetTimestampCompanion(
+                                evidence.CarrierReference, evidenceFc, out var tRef))
+                            session.Device.LiveValues.PublishForAssociation(
+                                session.BrowserObservationAssociation,
+                                tRef, evidenceFc, time.EngineeringUtc, "", "",
+                                "Report timestamp · raw MMS", utcTimeEvidence: time);
+                    }
+            }
+
             var verifiedReportPointKeys = slice.Updates
                 .Select(update => FindPointForReportReference(session, update.Reference))
                 .Where(point => point is not null)
