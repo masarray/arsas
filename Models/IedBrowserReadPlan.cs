@@ -15,6 +15,7 @@ public static class IedBrowserReadPlan
         LiveIedModelDiscoveryDocument? model, IedBrowserTreeRow? page, bool readAll)
     {
         if (model is null) return Array.Empty<IedBrowserReadTarget>();
+        var schema = new IedBrowserSchemaIndex(model);
         var all = model.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
             .SelectMany(ln => ln.DataObjects)
             .SelectMany(obj => obj.Attributes)
@@ -27,16 +28,18 @@ public static class IedBrowserReadPlan
             selected = page?.Payload switch
             {
                 LiveIedDataAttributeModel attribute => all.Where(a =>
-                    string.Equals(a.MmsReference, attribute.MmsReference, StringComparison.Ordinal)),
+                    string.Equals(a.MmsReference, attribute.MmsReference, StringComparison.Ordinal) &&
+                    string.Equals(a.FunctionalConstraint, attribute.FunctionalConstraint,
+                        StringComparison.OrdinalIgnoreCase)),
                 LiveIedDataObjectModel obj => obj.Attributes,
                 LiveIedLogicalNodeModel ln => ln.DataObjects.SelectMany(o => o.Attributes),
                 LiveIedLogicalDeviceModel ld => ld.LogicalNodes.SelectMany(ln => ln.DataObjects)
                     .SelectMany(o => o.Attributes),
-                LiveIedDataSetModel set => ForDataSet(all, set),
+                LiveIedDataSetModel set => ForDataSet(all, schema, set),
                 LiveIedControlBlockModel block when !string.IsNullOrWhiteSpace(block.DataSetReference) =>
-                    ForDataSet(all, FindSet(model, block.DataSetReference)),
+                    ForDataSet(all, schema, FindSet(model, block.DataSetReference)),
                 RcbExportRow rcb when !string.IsNullOrWhiteSpace(rcb.DataSetReference) =>
-                    ForDataSet(all, FindSet(model, rcb.DataSetReference)),
+                    ForDataSet(all, schema, FindSet(model, rcb.DataSetReference)),
                 _ => Array.Empty<LiveIedDataAttributeModel>()
             };
         }
@@ -47,7 +50,7 @@ public static class IedBrowserReadPlan
                 a.MmsReference, a.FunctionalConstraint,
                 string.IsNullOrWhiteSpace(a.SclBType) ? a.MmsType : a.SclBType))
             .DistinctBy(x => IedBrowserLiveValues.CanonicalReference(x.Reference) + "|" +
-                x.FunctionalConstraint, StringComparer.OrdinalIgnoreCase)
+                x.FunctionalConstraint.Trim().ToUpperInvariant(), StringComparer.Ordinal)
             .ToArray();
     }
 
@@ -56,18 +59,9 @@ public static class IedBrowserReadPlan
             string.Equals(ds.Reference, reference, StringComparison.Ordinal));
 
     private static IEnumerable<LiveIedDataAttributeModel> ForDataSet(
-        IEnumerable<LiveIedDataAttributeModel> attributes, LiveIedDataSetModel? set)
-    {
-        if (set is null) return Array.Empty<LiveIedDataAttributeModel>();
-        var members = set.Members.Select(m =>
-            (Reference: IedBrowserLiveValues.CanonicalReference(m.Reference),
-             Fc: m.FunctionalConstraint)).ToArray();
-        return attributes.Where(a =>
-        {
-            var reference = IedBrowserLiveValues.CanonicalReference(a.MmsReference);
-            return members.Any(m => a.FunctionalConstraint.Equals(m.Fc, StringComparison.OrdinalIgnoreCase) &&
-                (reference.Equals(m.Reference, StringComparison.OrdinalIgnoreCase) ||
-                 reference.StartsWith(m.Reference + ".", StringComparison.OrdinalIgnoreCase)));
-        });
-    }
+        IEnumerable<LiveIedDataAttributeModel> attributes,
+        IedBrowserSchemaIndex schema, LiveIedDataSetModel? set)
+        => set is null ? [] : attributes.Where(attr =>
+            schema.ContainsDataSetMember(set.Reference, attr.MmsReference,
+                attr.FunctionalConstraint));
 }
