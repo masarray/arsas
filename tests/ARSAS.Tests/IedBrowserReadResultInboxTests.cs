@@ -74,8 +74,10 @@ public sealed class IedBrowserReadResultInboxTests
         var source = File.ReadAllText(Path.Combine(root!.FullName, "MainWindow.IedBrowser.cs"));
         Assert.Contains("new IedBrowserReadResultInbox(", source);
         Assert.DoesNotContain("new Progress<IedBrowserReadResult>", source);
-        var finalDrain = source.IndexOf("DrainReadResults();\n            if (!cts.IsCancellationRequested", StringComparison.Ordinal);
-        var summary = source.IndexOf("Read complete ·", StringComparison.Ordinal);
+        // Checkout on Windows uses CRLF; source-based contracts are newline-neutral.
+        var normalized = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var finalDrain = normalized.IndexOf("DrainReadResults();\n            if (!cts.IsCancellationRequested", StringComparison.Ordinal);
+        var summary = normalized.IndexOf("Read complete ·", StringComparison.Ordinal);
         Assert.True(finalDrain >= 0 && summary > finalDrain);
         Assert.Contains("sourceDevice.LiveValues.Association != readAssociation", source);
     }
