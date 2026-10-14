@@ -205,12 +205,13 @@ public sealed record IedBrowserDetailRow(
     // Schema-qualified presentation type; never infer a q/t bit from a DO name.
     public string EvidenceKind { get; init; } = "";
     public string FunctionalConstraint { get; init; } = "";
+    public bool IsDataObject { get; init; }
     private IReadOnlyList<IedBrowserDetailRow>? _children;
     public IedBrowserTreeRow? NavigateTo { get; init; }
     public Func<IReadOnlyList<IedBrowserDetailRow>>? LoadChildren { get; init; }
     public IReadOnlyList<IedBrowserFlagOption> Flags { get; init; } = Array.Empty<IedBrowserFlagOption>();
     public string SecondaryText { get; init; } = "";
-    public string Glyph => NavigateTo?.Glyph ?? (Kind == "Data" ? "DA" : "");
+    public string Glyph => NavigateTo?.Glyph ?? (IsDataObject ? "DO" : Kind == "Data" ? "DA" : "");
     public System.Windows.Media.Brush GlyphBrush => NavigateTo?.GlyphBrush ??
         System.Windows.Media.Brushes.SteelBlue;
     public string RcbUsageGlyph => NavigateTo?.RcbUsageGlyph ?? "";
