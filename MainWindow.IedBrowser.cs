@@ -380,7 +380,8 @@ public partial class MainWindow
                 display = live.QualityBits?.FormatField(row.EvidenceField) ??
                     Iec61850QualityPresentation.FormatObserved(live.Value, row.EvidenceField);
             else if (row.EvidenceKind == "Timestamp" && row.EvidenceField.Length > 0)
-                display = live.TimeBits?.FormatField(row.EvidenceField) ?? "Not exposed";
+                display = IedBrowserUtcTimeQualityPresentation.FormatField(
+                    live.TimeBits, row.EvidenceField);
             else if (row.EvidenceField.Length == 0)
                 display = live.Value;
             else
