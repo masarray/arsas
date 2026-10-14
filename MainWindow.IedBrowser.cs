@@ -362,8 +362,16 @@ public partial class MainWindow
                     schema: _iedBrowserValueSchemaIndex))
             {
                 row.Value = "Not read";
+                row.ObservationSource = "";
+                row.ObservationTooltip = "";
                 continue;
             }
+            row.ObservationSource = live.IsStale
+                ? "Stale " + live.Source
+                : live.Source;
+            row.ObservationTooltip =
+                $"{row.ValueReference} [{row.FunctionalConstraint}] · {row.ObservationSource} " +
+                $"· observed {live.ObservedUtc:yyyy-MM-dd HH:mm:ss} UTC · association {live.Association}";
             // Typed Quality is decoded once at ingress, never guessed from
             // valid-looking text. Offline snapshots remain clearly stale.
             string display;
