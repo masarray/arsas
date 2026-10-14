@@ -3,12 +3,20 @@ name: Validate SV evidence bundles
 on:
   pull_request:
     paths:
+      # Domain-owned sources; unrelated Browser/RCB/IO tests remain covered
+      # by the canonical Build ARSAS gate without a redundant SV waiter.
+      - "MainWindow.IedSmvQuickStart.cs"
       - "SmvViewerWindow.xaml"
-      - "Services/SmvViewerWindow.P1Evidence.cs"
-      - "Services/SmvSnapshotEvidenceExporter.cs"
-      - "Services/SmvSnapshotCaptureService.cs"
-      - "tests/ARSAS.Tests/**"
+      - "SmvViewerWindow*.cs"
+      - "Services/Smv*.cs"
+      - "tests/ARSAS.Tests/Smv*.cs"
+      - "tests/ARSAS.Tests/Sv*.cs"
+      - "tests/ARSAS.Tests/SampledValue*.cs"
+      - "tests/ARSAS.Tests/ProcessBus*.cs"
+      # Changes to shared evidence authority still force SV revalidation.
       - "engines/ARIEC61850.lock.json"
+      - ".github/actions/resolve-ariec-engine/**"
+      - ".github/workflows/build.yml"
       - ".github/workflows/validate-sv-evidence.yml"
       - "scripts/verify-ci-canonical-reuse.py"
       - "scripts/test-ci-canonical-reuse.py"
