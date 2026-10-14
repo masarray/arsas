@@ -2102,19 +2102,12 @@
                                           VirtualizingPanel.VirtualizationMode="Recycling"
                                           BorderBrush="#CBD7E4" BorderThickness="1"
                                           Background="White" RowHeight="31"
-                                          GridLinesVisibility="None">
+                                          GridLinesVisibility="None"
+                                          LoadingRow="IedBrowserFile_LoadingRow">
                                     <DataGrid.RowStyle>
                                         <Style TargetType="{x:Type DataGridRow}">
                                             <EventSetter Event="MouseDoubleClick" Handler="IedBrowserFile_DoubleClick"/>
                                             <Setter Property="ToolTip" Value="{Binding RemotePath}"/>
-                                            <Setter Property="ContextMenu">
-                                                <Setter.Value>
-                                                    <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
-                                                        <MenuItem Header="Download" Tag="{Binding}"
-                                                                  Click="IedBrowserFileDownload_Click"/>
-                                                    </ContextMenu>
-                                                </Setter.Value>
-                                            </Setter>
                                         </Style>
                                     </DataGrid.RowStyle>
                                     <DataGrid.Columns>
