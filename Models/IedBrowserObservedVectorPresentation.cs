@@ -15,7 +15,7 @@ public sealed record IedBrowserVectorDisplay(
 /// Presentation-only composition of independently observed IEC Vector leaves.
 /// Does not interpolate unavailable phases, calculate phasors, infer SI units,
 /// or merge q/t or SOE state. Work is bounded to the visible row (at most
-/// three phases) with constant-time ledger lookups.
+/// eight model-verified subgroups) with constant-time ledger lookups.
 /// </summary>
 public static class IedBrowserObservedVectorPresentation
 {
@@ -29,7 +29,7 @@ public static class IedBrowserObservedVectorPresentation
         ArgumentNullException.ThrowIfNull(components);
         ArgumentNullException.ThrowIfNull(units);
         display = null!;
-        if (components.Count == 0 || components.Count > 3)
+        if (components.Count == 0 || components.Count > 8)
             return false;
 
         var displayed = new List<string>(components.Count);

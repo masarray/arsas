@@ -253,7 +253,14 @@ public static class IedBrowserStructuredDetails
             .GroupBy(p => p.Label, StringComparer.Ordinal)
             .Where(group => group.Count() == 1)
             .Select(group => group.First())
-            .OrderBy(p => p.Label, StringComparer.Ordinal)
+            // Phase display order follows IEC measurement convention; other
+            // exact schema children remain deterministically ordered.
+            .OrderBy(p => p.Label switch
+            {
+                "phsA" => 0, "phsB" => 1, "phsC" => 2,
+                "neut" => 3, "net" => 4, "res" => 5, _ => 6
+            })
+            .ThenBy(p => p.Label, StringComparer.Ordinal)
             .ToArray();
         return complete
             .Select(p => new IedBrowserVectorComponent(
