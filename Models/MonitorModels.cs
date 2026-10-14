@@ -332,8 +332,10 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         {
             if (Set(ref _isConnected, value))
             {
-                // Explicit MMS and report observations never cross associations.
-                if (!value) LiveValues.Clear();
+                // Retain prior values as stale/offline evidence; a new MMS
+                // association always starts an isolated revision/identity.
+                if (value) LiveValues.BeginAssociation();
+                else LiveValues.MarkOffline();
                 RefreshComputed();
             }
         }

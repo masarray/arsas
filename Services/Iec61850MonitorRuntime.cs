@@ -56,6 +56,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public Dictionary<string, string> BrowserReportFcCache { get; } =
             new(StringComparer.OrdinalIgnoreCase);
         public HashSet<string>? BrowserDataObjects { get; set; }
+        // Captured on association acceptance; old receive pumps cannot publish
+        // into a newer connection even if the IED identity is the same.
+        public long BrowserObservationAssociation { get; set; }
         public List<ReportControlPlan> ActiveReportPlanOrder { get; } = new();
         public Dictionary<string, string> PointPlanIds { get; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, Iec61850MonitorPoint> ReportReferenceIndex { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -246,6 +249,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             }
 
             device.IsConnected = true;
+            session.BrowserObservationAssociation = device.LiveValues.Association;
             device.LastDiagnosticSnapshot = session.Client.CaptureDiagnosticSnapshot("ACSE/MMS associated");
             device.Status = "MMS associated";
             device.Detail = "Association ready. Scanning the live MMS schema, DataSets, and Report Control Blocks.";
@@ -506,6 +510,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 4));
 
             device.IsConnected = true;
+            session.BrowserObservationAssociation = device.LiveValues.Association;
             device.LastDiagnosticSnapshot = session.Client.CaptureDiagnosticSnapshot(
                 connectionPath == Iec61850ConnectionPath.SclAssisted
                     ? "Verified SCL-assisted connection complete"
@@ -700,6 +705,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
         device.IsMonitoring = true;
         device.IsConnected = true;
+        session.BrowserObservationAssociation = device.LiveValues.Association;
         device.Status = "Monitoring";
         if (staticDataSetReportOnly)
         {
@@ -1431,7 +1437,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                         if (update.HasValue &&
                             IedBrowserReportValueAuthority.SafeScalar(update.Value) &&
                             !LooksLikeReferenceEcho(update.Value, update.Reference, update.Reference))
-                            session.Device.LiveValues.Publish(
+                            session.Device.LiveValues.PublishForAssociation(
+                                session.BrowserObservationAssociation,
                                 update.Reference, reportFc, update.Value,
                                 update.HasQuality ? update.Quality : "",
                                 update.HasTimestamp ? update.Timestamp : "", "Report");
@@ -1454,7 +1461,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                                 owner = owner[..dot];
                             }
                             if (owner.Length > 0)
-                                session.Device.LiveValues.Publish(owner + ".q",
+                                session.Device.LiveValues.PublishForAssociation(
+                                    session.BrowserObservationAssociation, owner + ".q",
                                     reportFc, update.Quality, "", update.Timestamp, "Report quality");
                         }
                     }
@@ -2183,6 +2191,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.LastSuccessfulIoUtc = associatedUtc;
         session.NextHealthProbeUtc = session.RecoveryWarmupUntilUtc;
         session.Device.IsConnected = true;
+        session.BrowserObservationAssociation = session.Device.LiveValues.Association;
         session.Device.Status = "Monitoring";
         session.Device.AcquisitionMode = session.StaticDataSetReportOnly
             ? "MMS recovered • Static DataSet report re-arm pending"
