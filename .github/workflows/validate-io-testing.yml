@@ -3,18 +3,24 @@ name: Validate IO List Testing
 on:
   pull_request:
     paths:
-      - "MainWindow.IoTesting.cs"
+      # Exact IO/FAT owners; Browser/RCB/SV changes use canonical Build ARSAS.
+      - "MainWindow.IoTesting*.cs"
+      - "MainWindow.NativeFat*.cs"
+      - "MainWindow.P0Fat*.cs"
       - "IoListTestingWindow.xaml"
-      - "IoListTestingWindow.xaml.cs"
+      - "IoListTestingWindow*.cs"
       - "Models/IoTesting/**"
+      - "Models/NativeFat*.cs"
       - "Services/IoTesting/**"
-      - "tests/ARSAS.Tests/IoTest*"
-      - "tests/ARSAS.Tests/IoList*"
-      - "tests/ARSAS.Tests/IoFat*"
-      - "tests/ARSAS.Tests/FatDataSet*"
-      - "tests/ARSAS.Tests/FatScl*"
+      - "tests/ARSAS.Tests/Io*.cs"
+      - "tests/ARSAS.Tests/Fat*.cs"
+      - "tests/ARSAS.Tests/NativeFat*.cs"
+      # Canonical test-evidence and immutable engine authority changes.
       - "engines/ARIEC61850.lock.json"
+      - ".github/actions/resolve-ariec-engine/**"
+      - ".github/workflows/build.yml"
       - ".github/workflows/validate-io-testing.yml"
+      - "scripts/write-ci-canonical-proof.py"
       - "scripts/verify-ci-canonical-reuse.py"
       - "scripts/test-ci-canonical-reuse.py"
   workflow_dispatch:
