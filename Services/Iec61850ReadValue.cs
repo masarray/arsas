@@ -1,5 +1,6 @@
 using System.Globalization;
 using AR.Iec61850.Mms;
+using ArIED61850Tester.Protocol.Mms;
 
 namespace ArIED61850Tester.Services;
 
@@ -16,6 +17,7 @@ public sealed class Iec61850ReadValue
     // Authoritative engine-owned UTC-Time evidence. Available only when
     // a direct MMS .t read preserved the original eight wire bytes.
     public Iec61850UtcTimeEvidence? UtcTimeEvidence { get; internal set; }
+    public MmsQualityEvidence? QualityEvidence { get; internal set; }
 
     public bool HasQuality => !string.IsNullOrWhiteSpace(Quality) && Quality != "-";
     public bool HasDeviceTimestamp => !string.IsNullOrWhiteSpace(DeviceTimestamp) && DeviceTimestamp != "-";
