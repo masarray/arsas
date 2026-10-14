@@ -1446,7 +1446,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                             // not the nearest name-like prefix or another FC.
                             if (schema != null &&
                                 schema.TryGetDerivedQualityCompanion(
-                                    update.Reference, reportFc, out var qualityReference)
+                                    update.Reference, reportFc, out var qualityReference))
                                 session.Device.LiveValues.PublishForAssociation(
                                     session.BrowserObservationAssociation, qualityReference,
                                     reportFc, update.Quality, "", update.Timestamp, "Report quality");
