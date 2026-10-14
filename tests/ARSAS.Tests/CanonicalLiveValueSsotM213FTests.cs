@@ -134,6 +134,8 @@ public sealed class CanonicalLiveValueSsotM213FTests
         var source = FindSource("MainWindow.IedBrowser.cs");
         Assert.Contains("bindingIndex = new IedBrowserReadBindingIndex(sourceDevice);", source);
         Assert.Contains("bindingIndex is not { IsCurrent: true }", source);
+        Assert.Contains("Browser model changed during connection", source);
+        Assert.Contains("Browser catalog changed during Read", source);
     }
 
     private static string FindSource(string path)

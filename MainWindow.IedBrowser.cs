@@ -299,6 +299,12 @@ public partial class MainWindow
                     throw new InvalidOperationException("MMS connection was not established.");
             }
 
+            // A cached connect may rebuild schema/model. Never execute Read
+            // targets from a superseded model against the new association.
+            if (!ReferenceEquals(model,
+                    sourceDevice.LiveDiscoveryModel ?? sourceDevice.SclWorkspace?.DesignModel))
+                throw new InvalidOperationException(
+                    "Browser model changed during connection; select the current model and retry Read.");
             readAssociation = sourceDevice.LiveValues.Association;
             bindingIndex = new IedBrowserReadBindingIndex(sourceDevice);
             var readProgress = new Progress<IedBrowserReadProgress>(p =>
@@ -318,6 +324,9 @@ public partial class MainWindow
             // All producers have returned: consume the final queued results
             // synchronously before calculating counts and closing this flight.
             DrainReadResults();
+            if (bindingIndex is not { IsCurrent: true })
+                throw new InvalidOperationException(
+                    "Browser catalog changed during Read; obsolete result rows were not admitted.");
             if (!cts.IsCancellationRequested && ReferenceEquals(SelectedDevice, sourceDevice))
             {
                 device.ApplyBrowserReadProgress(targets.Count, targets.Count);

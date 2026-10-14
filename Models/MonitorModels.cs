@@ -61,7 +61,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     // and schema replacement invalidate captured reference/FC projection indexes.
     // One monotonic revision avoids scans or per-row event subscriptions on ingress.
     private long _browserProjectionEpoch;
-    public long BrowserProjectionEpoch =>
+    internal long BrowserProjectionEpoch =>
         System.Threading.Interlocked.Read(ref _browserProjectionEpoch);
 
     public Iec61850MonitorDevice()
