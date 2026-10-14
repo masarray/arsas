@@ -136,7 +136,7 @@ public sealed class CanonicalLiveValueSsotM213Tests
         var runtime = Read("Services/Iec61850MonitorRuntime.cs");
         var ui = Read("MainWindow.xaml.cs");
         Assert.Contains("ObservationAssociation = session.BrowserObservationAssociation", runtime);
-        Assert.Contains("CanonicalPointSnapshotAuthority.ProcessDisplay(", ui);
+        Assert.Contains("CanonicalPointSnapshotAuthority.Project(", ui);
         Assert.Contains("snapshot.ObservationAssociation != observedOwner.LiveValues.Association", ui);
         Assert.Contains("CanonicalPointSnapshotAuthority.NewerSnapshot(", ui);
     }
