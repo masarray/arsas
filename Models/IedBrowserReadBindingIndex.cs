@@ -90,6 +90,8 @@ public sealed class IedBrowserReadBindingIndex
                 signal.Quality = CanonicalPointSnapshotAuthority.QualityOrUnknown(observed.Quality);
                 signal.DeviceTimestamp = CanonicalPointSnapshotAuthority.TimestampOrUnavailable(
                     observed.DeviceTimestamp);
+                signal.MarkCanonicalObservation(
+                    CanonicalSignalObservationState.LiveRead, association);
                 updated++;
             }
         if (_points.TryGetValue(key, out var points))
@@ -132,6 +134,8 @@ public sealed class IedBrowserReadBindingIndex
             signal.Quality = CanonicalPointSnapshotAuthority.QualityOrUnknown(observed.Quality);
             signal.DeviceTimestamp = CanonicalPointSnapshotAuthority.TimestampOrUnavailable(
                 observed.DeviceTimestamp);
+            signal.MarkCanonicalObservation(
+                CanonicalSignalObservationState.LiveReport, association);
         }
         return signals.Length;
     }

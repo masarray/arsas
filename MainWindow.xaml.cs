@@ -2430,7 +2430,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 continue;
             // Reject queued frames from an earlier MMS connection even if
             // the new session resets its point Sequence counter to zero.
-            if (snapshot.ObservationAssociation != 0 &&
+            // Never re-activate Paused/Offline rows from late runtime callbacks.
+            // A real live monitoring association must be stamped at ingress;
+            // legacy unstamped snapshots cannot cross a reconnect boundary.
+            if (!observedOwner.IsConnected || !observedOwner.IsMonitoring ||
+                snapshot.ObservationAssociation == 0 ||
                 snapshot.ObservationAssociation != observedOwner.LiveValues.Association)
                 continue;
             if (snapshot.Sequence < point.Sequence)

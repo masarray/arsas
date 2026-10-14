@@ -336,6 +336,9 @@ public sealed class Iec61850MonitorDevice : ObservableObject
                 // association always starts an isolated revision/identity.
                 if (value) LiveValues.BeginAssociation();
                 else LiveValues.MarkOffline();
+                MarkSignalObservationLifecycle(value
+                    ? CanonicalSignalObservationState.Awaiting
+                    : CanonicalSignalObservationState.Offline);
                 RefreshComputed();
             }
         }
@@ -374,8 +377,29 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         get => _isMonitoring;
         set
         {
-            if (Set(ref _isMonitoring, value))
-                RefreshComputed();
+            if (!Set(ref _isMonitoring, value)) return;
+            if (IsConnected)
+                MarkSignalObservationLifecycle(value
+                    ? CanonicalSignalObservationState.Awaiting
+                    : CanonicalSignalObservationState.Paused,
+                    preserveCurrentLive: value);
+            RefreshComputed();
+        }
+    }
+
+    // One O(signal count) pass only on lifecycle transitions. No per-Report
+    // scan; the canonical projection index handles Report ingress in O(1).
+    private void MarkSignalObservationLifecycle(
+        CanonicalSignalObservationState state, bool preserveCurrentLive = false)
+    {
+        var association = LiveValues.Association;
+        foreach (var signal in Signals)
+        {
+            if (signal.IsControlSignal) continue;
+            if (preserveCurrentLive && signal.IsLiveObservation &&
+                signal.ObservationAssociation == association)
+                continue;
+            signal.MarkCanonicalObservation(state, association);
         }
     }
 

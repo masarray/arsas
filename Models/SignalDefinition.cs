@@ -4,6 +4,12 @@ namespace ArIED61850Tester.Models;
 
 public sealed record ControlCommandClaim(long Sequence, string RequestedValue, string ActionLabel);
 
+// Presentation-only lifecycle, never IEC quality or a persisted process value.
+public enum CanonicalSignalObservationState
+{
+    Unobserved, Awaiting, LiveReport, LiveRead, Paused, Offline
+}
+
 public class SignalDefinition : ObservableObject
 {
     private bool _isSelected;
@@ -12,6 +18,9 @@ public class SignalDefinition : ObservableObject
     private string _quality = "Unknown";
     private string _deviceTimestamp = "-";
     private string _probeStatus = "Not probed";
+    private CanonicalSignalObservationState _observationState =
+        CanonicalSignalObservationState.Unobserved;
+    private long _observationAssociation;
     private string _reportCoverage = "Polling fallback";
     private string _displayReference = string.Empty;
     private DateTime _timestamp = DateTime.MinValue;
@@ -815,6 +824,39 @@ public class SignalDefinition : ObservableObject
 
     public string SignalPropertiesSummary => BuildSignalPropertiesSummary();
 
+    // Never serialize runtime freshness alongside engineering model values.
+    // Last-known Value/q/t remain untouched on disconnect and can be inspected,
+    // but this independent state prevents a cached value being labeled live.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public CanonicalSignalObservationState ObservationState => _observationState;
+    [System.Text.Json.Serialization.JsonIgnore]
+    public long ObservationAssociation => _observationAssociation;
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsLiveObservation => _observationState is
+        CanonicalSignalObservationState.LiveReport or CanonicalSignalObservationState.LiveRead;
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string ObservationLabel => _observationState switch
+    {
+        CanonicalSignalObservationState.LiveReport => "Live · Report",
+        CanonicalSignalObservationState.LiveRead => "Live · MMS Read",
+        CanonicalSignalObservationState.Awaiting => "Awaiting current association",
+        CanonicalSignalObservationState.Paused => "Paused · last known",
+        CanonicalSignalObservationState.Offline => "Offline · last known",
+        _ => "Not observed"
+    };
+
+    public void MarkCanonicalObservation(
+        CanonicalSignalObservationState state, long association)
+    {
+        if (_observationState == state && _observationAssociation == association)
+            return;
+        _observationAssociation = association;
+        Set(ref _observationState, state, nameof(ObservationState));
+        Raise(nameof(ObservationLabel));
+        Raise(nameof(IsLiveObservation));
+        Raise(nameof(SignalPropertiesSummary));
+    }
+
     public string Value { get => _value; set => Set(ref _value, value); }
     public string Quality { get => _quality; set => Set(ref _quality, value); }
     public string DeviceTimestamp { get => _deviceTimestamp; set => Set(ref _deviceTimestamp, string.IsNullOrWhiteSpace(value) ? "-" : value); }
@@ -851,6 +893,7 @@ public class SignalDefinition : ObservableObject
                $"DataSet: {ds}\n" +
                $"Report Control Block: {rcb}\n" +
                $"Runtime Source: {ReportPlan}\n" +
+               $"Observed Value State: {ObservationLabel}\n" +
                $"Reason: {reason}";
     }
 
