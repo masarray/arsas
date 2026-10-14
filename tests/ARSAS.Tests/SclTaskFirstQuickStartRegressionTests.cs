@@ -14,7 +14,8 @@ public sealed class SclTaskFirstQuickStartRegressionTests
         Assert.Contains("Select Signals", xaml, StringComparison.Ordinal);
         Assert.Contains("RCB Engineering", xaml, StringComparison.Ordinal);
         Assert.Contains("Download COMTRADE", xaml, StringComparison.Ordinal);
-        Assert.Contains("Browse Offline", xaml, StringComparison.Ordinal);
+        Assert.Contains("Browse IED", xaml, StringComparison.Ordinal);
+        Assert.Contains("Click=\"BrowseIed_Click\"", xaml, StringComparison.Ordinal);
         Assert.Contains("MonitorStaticDataSet_Click", code, StringComparison.Ordinal);
         Assert.Contains("MonitorManual_Click", code, StringComparison.Ordinal);
         Assert.Contains("OpenSelectedSclRcbEngineering", code, StringComparison.Ordinal);
