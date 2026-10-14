@@ -101,6 +101,12 @@ public sealed class M2QuickStartBrowseTests
         Assert.DoesNotContain("ActivateRcb(", route, StringComparison.Ordinal);
         Assert.Contains("IedBrowserReadValues_Click", File.ReadAllText(Find("MainWindow.xaml")),
             StringComparison.Ordinal);
+        Assert.Contains("connected ? \"Read\" : \"Connect & Read\"", source,
+            StringComparison.Ordinal);
+        Assert.Contains("hasModel && canReachIED && _iedBrowserReadOperation == null", source,
+            StringComparison.Ordinal);
+        Assert.Contains("await _runtime.ConnectUsingCachedModelAsync(device, cts.Token)", source,
+            StringComparison.Ordinal);
     }
 
     private static string Find(string filename)
