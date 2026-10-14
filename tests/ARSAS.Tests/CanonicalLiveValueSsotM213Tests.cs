@@ -93,6 +93,33 @@ public sealed class CanonicalLiveValueSsotM213Tests
     }
 
     [Fact]
+    public void HistoricRcbMembershipIsNotProofOfCurrentReportIngress()
+    {
+        var device = new Iec61850MonitorDevice { IsConnected = true };
+        var point = new Iec61850MonitorPoint
+        {
+            DeviceId = device.DeviceId,
+            IecReference = "LD/CSWI1.Pos.stVal",
+            FunctionalConstraint = "ST",
+            Value = "Close [10]", SourceMode = "MMS Polling",
+            RoutedReportControlReferences = ["LD/LLN0.BR.Buffer01"]
+        };
+        device.LiveValues.PublishReport(point);
+        Assert.False(device.LiveValues.TryGet(point.IecReference, "ST", out _));
+
+        device.LiveValues.PublishReport(point, observedReportIngress: true);
+        Assert.True(device.LiveValues.TryGet(point.IecReference, "ST", out var reported));
+        Assert.Equal("Report", reported.Source);
+        Assert.Equal("Close [10]", reported.Value);
+
+        // A later non-Report snapshot must never overwrite prior authority.
+        point.Value = "Open [01]";
+        device.LiveValues.PublishReport(point);
+        Assert.True(device.LiveValues.TryGet(point.IecReference, "ST", out reported));
+        Assert.Equal("Close [10]", reported.Value);
+    }
+
+    [Fact]
     public void RuntimeAndUiContractStampsAssociationAndUsesCanonicalProjection()
     {
         static string Read(string filename)

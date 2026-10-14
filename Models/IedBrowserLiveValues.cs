@@ -162,10 +162,13 @@ public sealed class IedBrowserLiveValues
 
     public void PublishReport(Iec61850MonitorPoint point, bool observedReportIngress = false)
     {
+        // A previously routed RCB is historical coverage, NOT proof that
+        // this point snapshot is Report ingress. Never promote an MMS Read,
+        // polling result, or status-only refresh into canonical Report channel
+        // merely because this signal once appeared in an RCB.
         if (point.IsOffline || point.Value == "-" ||
             !observedReportIngress &&
-            !point.SourceMode.Contains("Report", StringComparison.OrdinalIgnoreCase) &&
-            point.RoutedReportControlReferences.Count == 0)
+            !point.SourceMode.Contains("Report", StringComparison.OrdinalIgnoreCase))
             return;
         // Primary Report ingress is published on the runtime receive lane.
         // This UI snapshot only fills gaps (legacy sessions or points), never
