@@ -40,7 +40,7 @@ public static class IedBrowserIsolatedReadService
                     if (IedBrowserReportValueAuthority.SafeScalar(display))
                     {
                         values.Report(new IedBrowserReadResult(target, display, read?.Quality ?? "",
-                            read?.DeviceTimestamp ?? "", ""));
+                            read?.DeviceTimestamp ?? "", "", read?.UtcTimeEvidence));
                         successful++;
                     }
                     else
