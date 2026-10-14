@@ -11,14 +11,21 @@ public static class IedBrowserStructuredDetails
     /// <summary>One DO row; child DAs/BDAs materialize only when expanded.</summary>
     public static IedBrowserDetailRow DataObject(
         LiveIedDataObjectModel obj, string? uniqueProcessFc, int depth = 0)
-        => new("Data", obj.Name, "Not read", depth,
+    {
+        // Directly bind the DO's displayed value to its single model-proven
+        // process leaf. The leaf's key is already present in the observation
+        // registry; there is no second value cache or additional MMS read.
+        var hasLeaf = IedBrowserSchemaIndex.TryGetUniqueProcessLeaf(
+            obj, out var processLeaf, out var processFc);
+        return new IedBrowserDetailRow("Data", obj.Name, "Not read", depth,
             $"IEC DO declaration · {obj.Reference} · CDC {obj.InferredCdc}")
         {
             IsDataObject = true,
-            ValueReference = obj.Reference,
-            FunctionalConstraint = uniqueProcessFc ?? "",
+            ValueReference = hasLeaf ? processLeaf : obj.Reference,
+            FunctionalConstraint = hasLeaf ? processFc : uniqueProcessFc ?? "",
             LoadChildren = () => AttributeRows(obj.Attributes, obj.Name, depth + 1)
         };
+    }
 
     public static IedBrowserDetailRow Member(LiveIedDataSetMemberModel member,
         LiveIedModelDiscoveryDocument? model, int depth = 0)

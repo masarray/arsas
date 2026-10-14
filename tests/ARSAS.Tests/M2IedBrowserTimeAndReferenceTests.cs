@@ -91,6 +91,67 @@ public sealed class M2IedBrowserTimeAndReferenceTests
     }
 
     [Fact]
+    public void TypedReadProvidesMissingReportQualityDetails_WithoutReplacingProcessAuthority()
+    {
+        var ledger = new IedBrowserLiveValues();
+        var session = ledger.BeginAssociation();
+        var qualityReference = "LD/GGIO6.CBPond.q";
+        var timeReference = "LD/GGIO6.CBPond.t";
+        Assert.True(ledger.PublishForAssociation(session, qualityReference,
+            "ST", "good", "", "", "Report quality"));
+        Assert.True(ledger.PublishForAssociation(session, timeReference,
+            "ST", "2026-10-14 10:00:00", "", "", "Report timestamp"));
+        Assert.True(ledger.PublishForAssociation(session, "LD/GGIO6.CBPond.stVal",
+            "ST", "False", "", "", "Report"));
+
+        var qWire = Assert.Single(ArIED61850Tester.Services.IedBrowserReportWireEvidence.Extract(
+            new MmsReportFrame
+            {
+                Values =
+                [
+                    new MmsReportValue
+                    {
+                        Member = new MmsDataSetDirectoryMember
+                        {
+                            UserReference = qualityReference,
+                            FunctionalConstraint = "ST"
+                        },
+                        Value = MmsDataValue.BitString(3, [0, 0])
+                    }
+                ]
+            })).QualityBits!;
+        var tWire = WireTime(0x25);
+        Assert.True(ledger.PublishForAssociation(session, qualityReference,
+            "ST", qWire.Summary, "", "", "MMS Read", qualityEvidence: qWire));
+        Assert.True(ledger.PublishForAssociation(session, timeReference,
+            "ST", tWire.EngineeringUtc, "", "", "MMS Read", utcTimeEvidence: tWire));
+
+        // A normal row remains Report-owned during monitoring.
+        Assert.True(ledger.TryGet(qualityReference, "ST", out var qParent));
+        Assert.Equal("Report quality", qParent.Source);
+        Assert.Null(qParent.QualityBits);
+        Assert.True(ledger.TryGet(qualityReference, "ST", out var qChild,
+            requiredEvidence: "Quality"));
+        Assert.Equal("MMS Read", qChild.Source);
+        Assert.Equal("false", qChild.QualityBits?.FormatField("Overflow"));
+        Assert.True(ledger.TryGet(timeReference, "ST", out var tChild,
+            requiredEvidence: "Timestamp"));
+        Assert.Equal("MMS Read", tChild.Source);
+        Assert.Equal("true", IedBrowserUtcTimeQualityPresentation.FormatField(
+            tChild.TimeBits, "ClockNotSynchronized"));
+        Assert.True(ledger.TryGet("LD/GGIO6.CBPond.stVal", "ST",
+            out var process));
+        Assert.Equal("Report", process.Source);
+
+        // The association fence still prevents old typed data from being shown.
+        ledger.BeginAssociation();
+        Assert.False(ledger.TryGet(qualityReference, "ST", out _,
+            requiredEvidence: "Quality"));
+        Assert.False(ledger.TryGet(timeReference, "ST", out _,
+            requiredEvidence: "Timestamp"));
+    }
+
+    [Fact]
     public void DataSetMemberExpansion_IsolatesExactLeaf_FcAndMmsCanonicalization()
     {
         static LiveIedDataAttributeModel Attr(string path, string fc = "ST") => new()

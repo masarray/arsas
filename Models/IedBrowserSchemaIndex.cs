@@ -86,6 +86,34 @@ public sealed class IedBrowserSchemaIndex
         }
     }
 
+    /// <summary>
+    /// The only safe DO display alias is one unique process DA across all FCs.
+    /// It must already be declared inside the exact DO; never use a first-match
+    /// stVal suffix or borrow another object's leaf.
+    /// </summary>
+    public static bool TryGetUniqueProcessLeaf(
+        LiveIedDataObjectModel obj, out string leaf, out string fc)
+    {
+        leaf = "";
+        fc = "";
+        var owner = IedBrowserLiveValues.CanonicalReference(obj.Reference);
+        if (owner.Length == 0) return false;
+        var candidates = obj.Attributes
+            .Where(attr => attr.FunctionalConstraint is "ST" or "MX")
+            .Select(attr => (
+                Reference: IedBrowserLiveValues.CanonicalReference(attr.MmsReference),
+                Fc: NormalizeFc(attr.FunctionalConstraint)))
+            .Where(attr => attr.Reference.StartsWith(owner + ".", StringComparison.Ordinal)
+                && ProcessLeaves.Contains(attr.Reference[(owner.Length + 1)..]))
+            .Distinct()
+            .Take(2)
+            .ToArray();
+        if (candidates.Length != 1) return false;
+        leaf = candidates[0].Reference;
+        fc = candidates[0].Fc;
+        return true;
+    }
+
     private static string NormalizeFc(string? fc)
         => (fc ?? "").Trim().ToUpperInvariant();
 

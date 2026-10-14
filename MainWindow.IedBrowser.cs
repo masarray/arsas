@@ -360,7 +360,9 @@ public partial class MainWindow
             if (!device.LiveValues.TryGet(row.ValueReference,
                     row.FunctionalConstraint, out var live,
                     preferReport: device.IsMonitoring,
-                    schema: _iedBrowserValueSchemaIndex))
+                    schema: _iedBrowserValueSchemaIndex,
+                    requiredEvidence: row.EvidenceField.Length > 0
+                        ? row.EvidenceKind : ""))
             {
                 row.Value = "Not read";
                 row.ObservationSource = "";

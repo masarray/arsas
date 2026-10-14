@@ -179,7 +179,7 @@ public sealed class IedBrowserLiveValues
     /// </summary>
     public bool TryGet(string reference, string fc,
         out IedBrowserObservedValue evidence, bool preferReport = true,
-        IedBrowserSchemaIndex? schema = null)
+        IedBrowserSchemaIndex? schema = null, string requiredEvidence = "")
     {
         if (string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(fc))
         {
@@ -188,21 +188,22 @@ public sealed class IedBrowserLiveValues
         }
         lock (_gate)
         {
-            if (TryGetExact(Key(reference, fc), preferReport, out evidence))
+            if (TryGetExact(Key(reference, fc), preferReport, requiredEvidence, out evidence))
                 return true;
             // Only the exact engineering schema can authorize an alias from
             // DO to its unique scalar DA. Do not guess from IEC suffixes and do
             // not reverse-map DO scalars into unsupported child q/t/DA values.
             if (schema != null &&
                 schema.TryGetPrimaryLeaf(reference, fc, out var exactLeaf) &&
-                TryGetExact(Key(exactLeaf, fc), preferReport, out evidence))
+                TryGetExact(Key(exactLeaf, fc), preferReport, requiredEvidence, out evidence))
                 return true;
             evidence = null!;
             return false;
         }
     }
 
-    private bool TryGetExact(string key, bool preferReport, out IedBrowserObservedValue evidence)
+    private bool TryGetExact(string key, bool preferReport, string requiredEvidence,
+        out IedBrowserObservedValue evidence)
     {
         if (!_values.TryGetValue(key, out var channels))
         {
@@ -217,6 +218,24 @@ public sealed class IedBrowserLiveValues
         {
             evidence = null!;
             return false;
+        }
+        // Process values retain normal Report authority. Only expanded q/t
+        // subfields may use a verified direct MMS Read when the selected
+        // Report provides a textual summary but no underlying bit evidence.
+        // Never manufacture a bit from "good" or a rendered timestamp.
+        if (requiredEvidence == "Quality" && selected.QualityBits is null)
+        {
+            var alternative = ReferenceEquals(selected, channels.Report)
+                ? channels.Read : channels.Report;
+            if (alternative?.QualityBits is not null)
+                selected = alternative;
+        }
+        else if (requiredEvidence == "Timestamp" && selected.TimeBits is null)
+        {
+            var alternative = ReferenceEquals(selected, channels.Report)
+                ? channels.Read : channels.Report;
+            if (alternative?.TimeBits is { IsDecoded: true, HasWireProvenance: true })
+                selected = alternative;
         }
         evidence = _offline ? selected with { IsStale = true } : selected;
         return true;

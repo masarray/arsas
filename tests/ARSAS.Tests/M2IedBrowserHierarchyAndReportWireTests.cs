@@ -172,6 +172,42 @@ public sealed class M2IedBrowserHierarchyAndReportWireTests
     }
 
     [Fact]
+    public void DataModel_DoValueUsesOnlyUniqueExactObservedProcessLeaf()
+    {
+        var obj = ModelDo();
+        var projected = IedBrowserStructuredDetails.DataObject(obj, "ST");
+        Assert.Equal("LD/CSWI1.Pos.stVal", projected.ValueReference);
+        Assert.Equal("ST", projected.FunctionalConstraint);
+
+        var values = new IedBrowserLiveValues();
+        var session = values.BeginAssociation();
+        Assert.True(values.PublishForAssociation(session, "LD/CSWI1$ST$Pos$stVal",
+            "ST", "Open [01]", "", "", "Report"));
+        Assert.True(values.TryGet(projected.ValueReference,
+            projected.FunctionalConstraint, out var observed));
+        Assert.Equal("Open [01]", observed.Value);
+
+        var sibling = new LiveIedDataObjectModel
+        {
+            Name = obj.Name, Reference = obj.Reference,
+            Attributes = obj.Attributes.Concat([
+                new LiveIedDataAttributeModel
+                {
+                    ObjectReference = obj.Reference, AttributePath = "Pos.posVal",
+                    MmsReference = "LD/CSWI1$ST$Pos$posVal",
+                    FunctionalConstraint = "ST"
+                }
+            ]).ToArray()
+        };
+        var ambiguous = IedBrowserStructuredDetails.DataObject(sibling, "ST");
+        Assert.Equal(obj.Reference, ambiguous.ValueReference);
+        Assert.False(IedBrowserSchemaIndex.TryGetUniqueProcessLeaf(
+            sibling, out _, out _));
+        Assert.False(values.TryGet(ambiguous.ValueReference,
+            ambiguous.FunctionalConstraint, out _));
+    }
+
+    [Fact]
     public void DataModel_LnPageShowsExpandableDosAndNestedAttributes_NotFlatNavigation()
     {
         var obj = ModelDo();
