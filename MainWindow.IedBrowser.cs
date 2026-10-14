@@ -239,6 +239,43 @@ public partial class MainWindow
         var successes = 0;
         var failures = 0;
         long readAssociation = -1; // bound after any explicit connect
+        // Progress<T> posts asynchronously to WPF: an awaited read sweep
+        // can finish before the final posted callbacks execute. Ingestion
+        // must be synchronous on the producer side, with coalesced UI drain
+        // and a final drain BEFORE disposing the operation token.
+        var readValues = new IedBrowserReadResultInbox(() =>
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.Background,
+                new Action(DrainReadResults));
+        });
+        void DrainReadResults()
+        {
+            var changed = false;
+            readValues.Drain(result =>
+            {
+                if (!ReferenceEquals(_iedBrowserReadOperation, cts) ||
+                    sourceDevice.LiveValues.Association != readAssociation)
+                    return; // new association or replaced read flight
+                if (result.Error.Length != 0 || string.IsNullOrWhiteSpace(result.Value))
+                {
+                    failures++;
+                    return;
+                }
+                var accepted = sourceDevice.LiveValues.PublishForAssociation(
+                    readAssociation, result.Target.Reference,
+                    result.Target.FunctionalConstraint, result.Value,
+                    result.Quality, result.DeviceTimestamp, "MMS Read",
+                    result.UtcTimeEvidence, result.QualityEvidence);
+                if (!accepted) return;
+                successes++;
+                // Never overwrite a report-owned point during live acquisition.
+                if (!sourceDevice.IsMonitoring)
+                    bindingIndex.Apply(result);
+                changed = true;
+            });
+            if (changed && ReferenceEquals(SelectedDevice, sourceDevice))
+                RefreshIedBrowserVisibleValues();
+        }
         device.ResetDiscoveryProgress("Preparing read-only MMS values…",
             readAll ? "Reading all IED values" : "Reading Browser values");
         device.IsBrowserReading = true; // Preserve the ongoing report monitor lifecycle.
@@ -257,43 +294,6 @@ public partial class MainWindow
             }
 
             readAssociation = sourceDevice.LiveValues.Association;
-            // Progress<T> posts asynchronously to WPF: an awaited read sweep
-            // can finish before the final posted callbacks execute. Ingestion
-            // must be synchronous on the producer side, with coalesced UI drain
-            // and a final drain BEFORE disposing the operation token.
-            var readValues = new IedBrowserReadResultInbox(() =>
-            {
-                Dispatcher.BeginInvoke(DispatcherPriority.Background,
-                    new Action(DrainReadResults));
-            });
-            void DrainReadResults()
-            {
-                var changed = false;
-                readValues.Drain(result =>
-                {
-                    if (!ReferenceEquals(_iedBrowserReadOperation, cts) ||
-                        sourceDevice.LiveValues.Association != readAssociation)
-                        return; // new association or replaced read flight
-                    if (result.Error.Length != 0 || string.IsNullOrWhiteSpace(result.Value))
-                    {
-                        failures++;
-                        return;
-                    }
-                    var accepted = sourceDevice.LiveValues.PublishForAssociation(
-                        readAssociation, result.Target.Reference,
-                        result.Target.FunctionalConstraint, result.Value,
-                        result.Quality, result.DeviceTimestamp, "MMS Read",
-                        result.UtcTimeEvidence, result.QualityEvidence);
-                    if (!accepted) return;
-                    successes++;
-                    // Never overwrite a report-owned point during live acquisition.
-                    if (!sourceDevice.IsMonitoring)
-                        bindingIndex.Apply(result);
-                    changed = true;
-                });
-                if (changed && ReferenceEquals(SelectedDevice, sourceDevice))
-                    RefreshIedBrowserVisibleValues();
-            }
             var readProgress = new Progress<IedBrowserReadProgress>(p =>
             {
                 if (ReferenceEquals(_iedBrowserReadOperation, cts) &&
