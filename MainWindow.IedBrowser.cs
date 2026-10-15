@@ -99,29 +99,33 @@ public partial class MainWindow
         IedBrowserDetailStatus.Text = "Reading IEC 61850 FileDirectory…";
         try
         {
-            // Reuse the exact service in Fault Records / COMTRADE.
-            // The service owns its own association and bounded traversal.
+            // Read root FIRST so a slow recursive fault-record scan cannot
+            // hide valid MMS files. The existing ARIEC session stays the only
+            // wire authority; COMTRADE discovery is an optional enrichment.
             var files = await Task.Run(async () =>
             {
                 await using var transfer = new ArIED61850Tester.Services.FaultRecordTransferClient();
                 await transfer.ConnectAsync(source.IpAddress, source.Port, cts.Token);
-                var catalog = await transfer.DiscoverAsync(remoteDirectory: null, cts.Token);
-                // FaultRecordCatalog filters ordinary files by extension.
-                // Ask the same ARIEC session for real root FileDirectory
-                // entries instead of claiming that zero records means no files.
-                IReadOnlyList<AR.Iec61850.Mms.MmsFileDirectoryEntry> root = [];
-                string? rootWarning = null;
-                try
-                {
-                    root = await transfer.ReadRootFileDirectoryAsync(cts.Token);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    rootWarning = ex.Message;
-                }
-                return (Files: new IedBrowserFileCatalog(catalog, root),
-                    RootWarning: rootWarning,
-                    CatalogDiagnostics: catalog.Diagnostics);
+                return await IedBrowserFileDiscoveryPlanner.DiscoverAsync(
+                    ct => transfer.ReadRootFileDirectoryAsync(ct),
+                    ct => transfer.DiscoverAsync(null, ct),
+                    cts.Token,
+                    publishRoot: early => Dispatcher.InvokeAsync(() =>
+                    {
+                        if (cts.IsCancellationRequested ||
+                            !ReferenceEquals(_iedBrowserFileReadOperation, cts) ||
+                            !ReferenceEquals(source, SelectedDevice) ||
+                            !ReferenceEquals(source, _iedBrowserFileOwner) ||
+                            !source.IsConnected)
+                            return;
+                        _iedBrowserFileCatalog = early;
+                        _iedBrowserRemoteFiles = early.Files;
+                        _iedBrowserFilesLoaded = true;
+                        _iedBrowserForceRefresh = true;
+                        RefreshIedBrowser();
+                        IedBrowserDetailStatus.Text =
+                            $"FileDirectory · {early.Files.Count:N0} root entries · checking verified records…";
+                    }).Task).ConfigureAwait(false);
             }, cts.Token).ConfigureAwait(true);
             if (cts.IsCancellationRequested ||
                 !ReferenceEquals(source, SelectedDevice) ||
@@ -132,10 +136,16 @@ public partial class MainWindow
             _iedBrowserFilesLoaded = true;
             _iedBrowserForceRefresh = true;
             RefreshIedBrowser();
+            var notes = new[] { files.RootWarning, files.CatalogWarning }
+                .Where(note => !string.IsNullOrWhiteSpace(note))
+                .Concat(files.CatalogDiagnostics).Take(4).ToArray();
             IedBrowserDetailStatus.Text = files.Files.Files.Count > 0
-                ? $"FileDirectory · {files.Files.Files.Count:N0} browsable entries (root files/folders + verified fault records)"
+                ? $"FileDirectory · {files.Files.Files.Count:N0} entries" +
+                  (notes.Length > 0 ? " · partial inventory (details in tooltip)" : " · verified root/records")
                 : "FileDirectory returned no browsable entries. " +
-                  (files.RootWarning ?? string.Join(" | ", files.CatalogDiagnostics.Take(3)));
+                  (notes.Length == 0 ? "IED directory is empty." : notes[0]);
+            IedBrowserDetailStatus.ToolTip = notes.Length == 0
+                ? null : string.Join(Environment.NewLine, notes);
         }
         catch (OperationCanceledException)
         {
