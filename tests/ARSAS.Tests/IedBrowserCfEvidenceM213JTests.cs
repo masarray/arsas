@@ -171,6 +171,27 @@ public sealed class IedBrowserCfEvidenceM213JTests
             Owner + ".phsB.units", "CF", out _, out _));
     }
 
+
+    [Fact]
+    public void SelectedLogicalNodeExplicitReadIncludesCfAndMxLeafs()
+    {
+        var model = Model();
+        var ln = model.LogicalDevices[0].LogicalNodes[0];
+        var page = new IedBrowserTreeRow("model/ln/LD/MMXU1",
+            "MMXU1", "LN", 2, ln);
+        var targets = IedBrowserReadPlan.Build(model, page, readAll: false);
+        Assert.Contains(targets, t =>
+            IedBrowserLiveValues.CanonicalReference(t.Reference) ==
+                Owner + ".phsA.units.SIUnit" && t.FunctionalConstraint == "CF");
+        Assert.Contains(targets, t =>
+            IedBrowserLiveValues.CanonicalReference(t.Reference) ==
+                Owner + ".phsA.units.multiplier" && t.FunctionalConstraint == "CF");
+        Assert.Contains(targets, t =>
+            IedBrowserLiveValues.CanonicalReference(t.Reference) ==
+                Owner + ".phsA.cVal.mag.f" && t.FunctionalConstraint == "MX");
+        Assert.Equal(6, targets.Count);
+    }
+
     [Fact]
     public void BrowserRefreshBindsCfEvidenceWithoutImplicitMmsRequests()
     {

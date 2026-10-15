@@ -1095,7 +1095,7 @@ public partial class MainWindow
         IedBrowserObjectPath.ToolTip = reference;
         IedBrowserDetailStatus.Text = row.Payload is RcbExportRow r
             ? r.Inspection.Summary(connected)
-            : connected ? "Connected · cached model metadata (not a live read)"
+            : connected ? "Connected · Report values shown; use Read for CF/DC configuration values"
                         : "Offline · cached SCL/discovery model";
         ReplaceIedBrowserDetails(IedBrowserPresentation.Details(row, model, connected));
         _iedBrowserLastLiveVersion = -1;
