@@ -69,7 +69,7 @@ public sealed class M214SclOnlyGooseReadAndDataSetParentTests
         var live = Model([]);
         var block = new LiveIedControlBlockModel
         {
-            Name = "gcb", Kind = "GOOSE", Domain = "LD",
+            Name = "gcb", Kind = "GOOSE", DiscoveryStatus = "SCLOnly", Domain = "LD",
             LogicalNode = "LLN0", Reference = "LD/LLN0.GO.gcb",
             DataSetReference = "LD/LLN0.DS"
         };
