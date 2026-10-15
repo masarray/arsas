@@ -2205,8 +2205,8 @@
                                           VirtualizingPanel.IsVirtualizing="True"
                                           VirtualizingPanel.VirtualizationMode="Recycling"
                                           BorderBrush="#CBD7E4" BorderThickness="1"
-                                          Background="White" RowHeight="34" FontSize="12"
-                                          AlternatingRowBackground="#F4F8FD"
+                                          Background="White" RowHeight="27" FontSize="11.6"
+                                          AlternatingRowBackground="#F0F4F9"
                                           GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EDF1F6"
                                           LoadingRow="IedBrowserFile_LoadingRow">
                                     <DataGrid.RowStyle>
@@ -2215,6 +2215,7 @@
                                             <EventSetter Event="PreviewMouseRightButtonDown" Handler="IedBrowserFile_RightClick"/>
                                             <Setter Property="ToolTip" Value="{Binding RemotePath}"/>
                                             <Setter Property="Cursor" Value="Hand"/>
+                                            <Setter Property="VerticalContentAlignment" Value="Center"/>
                                             <Setter Property="BorderThickness" Value="3,0,0,0"/>
                                             <Setter Property="BorderBrush" Value="Transparent"/>
                                             <Style.Triggers>
@@ -2233,7 +2234,8 @@
                                     <DataGrid.CellStyle>
                                         <Style TargetType="{x:Type DataGridCell}">
                                             <Setter Property="BorderThickness" Value="0"/>
-                                            <Setter Property="Padding" Value="8,3"/>
+                                            <Setter Property="Padding" Value="7,0"/>
+                                            <Setter Property="VerticalContentAlignment" Value="Center"/>
                                             <Setter Property="Foreground" Value="#243C57"/>
                                             <Setter Property="Background" Value="Transparent"/>
                                             <Style.Triggers>
@@ -2245,12 +2247,38 @@
                                         </Style>
                                     </DataGrid.CellStyle>
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Filename" Binding="{Binding Name}"
-                                                            Width="*" MinWidth="185"/>
+                                        <DataGridTemplateColumn Header="Filename" Width="*" MinWidth="185">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <!-- Vector geometry supplied for the File List:
+                                                             no font icon and no raster dependency. -->
+                                                        <Viewbox Width="17" Height="17" Margin="0,0,7,0">
+                                                            <Path Fill="#315F8D"
+                                                                  Data="M824-120 636-308q-41 32-90.5 50T440-240q-90 0-162.5-44T163-400h98q34 37 79.5 58.5T440-320q100 0 170-70t70-170q0-100-70-170t-170-70q-94 0-162.5 63.5T201-580h-80q8-127 99.5-213.5T440-880q134 0 227 93t93 227q0 56-18 105.5T692-364l188 188-56 56ZM397-400l-63-208-52 148H80v-60h160l66-190h60l61 204 43-134h60l60 120h30v60h-67l-47-94-50 154h-59Z"/>
+                                                        </Viewbox>
+                                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
                                         <DataGridTextColumn Header="Time" Binding="{Binding ModifiedText}"
-                                                            Width="175" MinWidth="140"/>
+                                                            Width="175" MinWidth="140">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="{x:Type TextBlock}">
+                                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                        </DataGridTextColumn>
                                         <DataGridTextColumn Header="Size" Binding="{Binding SizeText}"
-                                                            Width="110" MinWidth="95"/>
+                                                            Width="110" MinWidth="95">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="{x:Type TextBlock}">
+                                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                        </DataGridTextColumn>
                                     </DataGrid.Columns>
                                 </DataGrid>
                                 </Grid>
