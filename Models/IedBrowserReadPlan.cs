@@ -3,11 +3,29 @@ using AR.Iec61850.Discovery;
 namespace ArIED61850Tester.Models;
 
 /// <summary>
-/// Explicit, non-cyclic read plans. Only model-proven FC leaf attributes are allowed;
-/// controls are never operated, created, reserved, enabled or written.
+/// Typed selection routes avoid treating an FC DataSet read as control-block status.
 /// </summary>
+public enum IedBrowserReadSelectionKind
+{
+    FcAttributes,
+    ReadOnlyRcb,
+    SettingGroupAttributes,
+    GooseInspectionRequiresSubscriber
+}
+
 public static class IedBrowserReadPlan
 {
+    public static IedBrowserReadSelectionKind SelectionKind(IedBrowserTreeRow? page)
+        => page?.Payload switch
+        {
+            RcbExportRow => IedBrowserReadSelectionKind.ReadOnlyRcb,
+            LiveIedControlBlockModel when page.Kind == "SGCB" =>
+                IedBrowserReadSelectionKind.SettingGroupAttributes,
+            LiveIedControlBlockModel when page.Kind == "GoCB" =>
+                IedBrowserReadSelectionKind.GooseInspectionRequiresSubscriber,
+            _ => IedBrowserReadSelectionKind.FcAttributes
+        };
+
     private static readonly HashSet<string> ReadableFc = new(
         ["ST", "MX", "CF", "DC", "SP", "SG", "SE", "EX"], StringComparer.OrdinalIgnoreCase);
 
@@ -36,10 +54,21 @@ public static class IedBrowserReadPlan
                 LiveIedLogicalDeviceModel ld => ld.LogicalNodes.SelectMany(ln => ln.DataObjects)
                     .SelectMany(o => o.Attributes),
                 LiveIedDataSetModel set => ForDataSet(all, schema, set),
+                // Read-only SG/SE FC data, owned by the exact logical device.
+                // No edit-group selection, confirmation, writes or implicit activation.
+                LiveIedControlBlockModel block when page.Kind == "SGCB" =>
+                    model.LogicalDevices
+                        .Where(ld => string.Equals(ld.MmsDomain, block.Domain, StringComparison.Ordinal))
+                        .SelectMany(ld => ld.LogicalNodes)
+                        .SelectMany(ln => ln.DataObjects)
+                        .SelectMany(obj => obj.Attributes)
+                        .Where(attr => attr.FunctionalConstraint is "SG" or "SE"),
+                // A DataSet read cannot inspect GoEna or prove GOOSE reception.
+                LiveIedControlBlockModel when page.Kind == "GoCB" =>
+                    Array.Empty<LiveIedDataAttributeModel>(),
                 LiveIedControlBlockModel block when !string.IsNullOrWhiteSpace(block.DataSetReference) =>
                     ForDataSet(all, schema, FindSet(model, block.DataSetReference)),
-                RcbExportRow rcb when !string.IsNullOrWhiteSpace(rcb.DataSetReference) =>
-                    ForDataSet(all, schema, FindSet(model, rcb.DataSetReference)),
+                RcbExportRow => Array.Empty<LiveIedDataAttributeModel>(),
                 _ => Array.Empty<LiveIedDataAttributeModel>()
             };
         }

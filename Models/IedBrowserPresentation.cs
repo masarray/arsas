@@ -199,18 +199,33 @@ public sealed record IedBrowserDetailRow(
     }
     public event PropertyChangedEventHandler? PropertyChanged;
     public string ValueReference { get; init; } = "";
+    // The exact alternate reference is evaluated only when the primary has
+    // no observation in the current association. Never borrow a sibling.
+    public string FallbackValueReference { get; init; } = "";
+    // Units apply to engineering aggregates only, never to primitive f/q/t.
+    public bool IsEngineeringValue { get; init; }
+    public string EngineeringUnitReference { get; init; } = "";
+    // Immutable, model-verified composite descriptors. No values or WPF objects cached.
+    public IedBrowserPolarPlan? PolarPlan { get; init; }
+    public IReadOnlyList<IedBrowserPolarPlan> PhasePlans { get; init; } =
+        Array.Empty<IedBrowserPolarPlan>();
     // A typed child of a received q/t field; never treat the entire parent
     // value text as this individual Boolean/time-quality bit.
     public string EvidenceField { get; init; } = "";
     // Schema-qualified presentation type; never infer a q/t bit from a DO name.
     public string EvidenceKind { get; init; } = "";
     public string FunctionalConstraint { get; init; } = "";
+    public bool IsDataObject { get; init; }
+    // IEC DataSet position, not a live value; only a validated frame can populate it.
+    public int GooseSlot { get; init; } = -1;
+    public string GooseReference { get; init; } = "";
+    public string GooseFc { get; init; } = "";
     private IReadOnlyList<IedBrowserDetailRow>? _children;
     public IedBrowserTreeRow? NavigateTo { get; init; }
     public Func<IReadOnlyList<IedBrowserDetailRow>>? LoadChildren { get; init; }
     public IReadOnlyList<IedBrowserFlagOption> Flags { get; init; } = Array.Empty<IedBrowserFlagOption>();
     public string SecondaryText { get; init; } = "";
-    public string Glyph => NavigateTo?.Glyph ?? (Kind == "Data" ? "DA" : "");
+    public string Glyph => NavigateTo?.Glyph ?? (IsDataObject ? "DO" : Kind == "Data" ? "DA" : "");
     public System.Windows.Media.Brush GlyphBrush => NavigateTo?.GlyphBrush ??
         System.Windows.Media.Brushes.SteelBlue;
     public string RcbUsageGlyph => NavigateTo?.RcbUsageGlyph ?? "";
@@ -267,18 +282,22 @@ public static class IedBrowserPresentation
 {
     public static IReadOnlyList<IedBrowserTreeRow> Roots(
         LiveIedModelDiscoveryDocument? model, IReadOnlyList<RcbExportRow> rcbs,
-        IReadOnlyList<IedBrowserRemoteFile>? remoteFiles = null)
+        IReadOnlyList<IedBrowserRemoteFile>? remoteFiles = null,
+        string? iedName = null)
     {
         const int childDepth = 1;
+        // Keep domain/object keys untouched; only presentation labels are short.
+        var labelIed = !string.IsNullOrWhiteSpace(model?.IedName)
+            ? model.IedName : iedName;
         IedBrowserTreeRow Category(string name, string key,
             Func<IReadOnlyList<IedBrowserTreeRow>> children)
             => new("category/" + key, name, "Category", 0, loadChildren: children);
 
         var categories = new List<IedBrowserTreeRow>
         {
-            Category("GOOSE", "goose", () => BlockGroups(model?.GooseControlBlocks, "GoCB")),
-            Category("Reports", "reports", () => ReportGroups(rcbs)),
-            Category("Setting Groups", "settings", () => BlockGroups(model?.SettingGroupControls, "SGCB")),
+            Category("GOOSE", "goose", () => BlockGroups(model?.GooseControlBlocks, "GoCB", labelIed)),
+            Category("Reports", "reports", () => ReportGroups(rcbs, labelIed)),
+            Category("Setting Groups", "settings", () => BlockGroups(model?.SettingGroupControls, "SGCB", labelIed)),
             Category("Files", "files", () =>
                 (model?.FileDirectory.Entries.Select(f =>
                     new IedBrowserTreeRow("file/" + f.Path, f.Name, "File", childDepth, f))
@@ -293,10 +312,11 @@ public static class IedBrowserPresentation
                     _ => row.Key
                 }, StringComparer.OrdinalIgnoreCase)
                 .ToArray()),
-            Category("DataSets", "datasets", () => DataSetGroups(model?.DataSets)),
+            Category("DataSets", "datasets", () => DataSetGroups(model?.DataSets, labelIed)),
             Category("Data Model", "model", () =>
                 model?.LogicalDevices.Select(ld =>
-                    new IedBrowserTreeRow("model/ld/" + ld.MmsDomain, ld.MmsDomain, "LD", 1, ld,
+                    new IedBrowserTreeRow("model/ld/" + ld.MmsDomain,
+                        LdDisplayName(ld.MmsDomain, labelIed), "LD", 1, ld,
                         () => ld.LogicalNodes.Select(ln =>
                             new IedBrowserTreeRow("model/ln/" + ld.MmsDomain + "/" + ln.Name,
                                 ln.Name, "LN", 2, ln,
@@ -311,9 +331,23 @@ public static class IedBrowserPresentation
         return categories; // ARSAS IED Explorer already owns device selection; never duplicate it.
     }
 
-    private static IReadOnlyList<IedBrowserTreeRow> ReportGroups(IReadOnlyList<RcbExportRow> rcbs)
+    public static string LdDisplayName(string domain, string? iedName)
+    {
+        var name = (domain ?? "").Trim();
+        var owner = (iedName ?? "").Trim();
+        // The MMS domain is the protocol identity. Strip only an exact
+        // engineering IEDName prefix and never show an empty LD label.
+        if (owner.Length == 0 || name.Length <= owner.Length ||
+            !name.StartsWith(owner, StringComparison.Ordinal))
+            return name;
+        return name[owner.Length..];
+    }
+
+    private static IReadOnlyList<IedBrowserTreeRow> ReportGroups(
+        IReadOnlyList<RcbExportRow> rcbs, string? iedName)
         => rcbs.GroupBy(row => LogicalDevice(row.Reference), StringComparer.Ordinal)
-            .Select(ld => new IedBrowserTreeRow("reports/ld/" + ld.Key, ld.Key, "LD", 1,
+            .Select(ld => new IedBrowserTreeRow("reports/ld/" + ld.Key,
+                LdDisplayName(ld.Key, iedName), "LD", 1,
                 loadChildren: () => ld.GroupBy(row => LogicalNode(row.Reference), StringComparer.Ordinal)
                     .Select(ln => new IedBrowserTreeRow("reports/ln/" + ld.Key + "/" + ln.Key,
                         ln.Key, "LN", 2,
@@ -321,9 +355,11 @@ public static class IedBrowserPresentation
                             new IedBrowserTreeRow("reports/rcb/" + row.SelectionIdentity,
                                 row.Name, "RCB", 3, row)).ToArray())).ToArray())).ToArray();
 
-    private static IReadOnlyList<IedBrowserTreeRow> DataSetGroups(IReadOnlyList<LiveIedDataSetModel>? sets)
+    private static IReadOnlyList<IedBrowserTreeRow> DataSetGroups(
+        IReadOnlyList<LiveIedDataSetModel>? sets, string? iedName)
         => sets?.GroupBy(set => set.Domain, StringComparer.Ordinal)
-            .Select(ld => new IedBrowserTreeRow("datasets/ld/" + ld.Key, ld.Key, "LD", 1,
+            .Select(ld => new IedBrowserTreeRow("datasets/ld/" + ld.Key,
+                LdDisplayName(ld.Key, iedName), "LD", 1,
                 loadChildren: () => ld.GroupBy(set => set.LogicalNode, StringComparer.Ordinal)
                     .Select(ln => new IedBrowserTreeRow("datasets/ln/" + ld.Key + "/" + ln.Key,
                         ln.Key, "LN", 2,
@@ -333,9 +369,11 @@ public static class IedBrowserPresentation
             ?? Array.Empty<IedBrowserTreeRow>();
 
     private static IReadOnlyList<IedBrowserTreeRow> BlockGroups(
-        IReadOnlyList<LiveIedControlBlockModel>? blocks, string kind)
+        IReadOnlyList<LiveIedControlBlockModel>? blocks, string kind,
+        string? iedName)
         => blocks?.GroupBy(block => block.Domain, StringComparer.Ordinal)
-            .Select(ld => new IedBrowserTreeRow(kind + "/ld/" + ld.Key, ld.Key, "LD", 1,
+            .Select(ld => new IedBrowserTreeRow(kind + "/ld/" + ld.Key,
+                LdDisplayName(ld.Key, iedName), "LD", 1,
                 loadChildren: () => ld.GroupBy(block => block.LogicalNode, StringComparer.Ordinal)
                     .Select(ln => new IedBrowserTreeRow(kind + "/ln/" + ld.Key + "/" + ln.Key,
                         ln.Key, "LN", 2,
@@ -382,10 +420,11 @@ public static class IedBrowserPresentation
              node.Key.StartsWith("datasets/", StringComparison.Ordinal));
         var serviceRoot = node.Key is "category/reports" or "category/goose" or
             "category/settings" or "category/datasets";
+        // LN and DO must use the SAME real hierarchical data projection as
+        // DataSets, not this generic navigation-card list. Those pages contain
+        // actual expandable DO/DA/BDA with live Report/Read evidence.
         var dataModelContainer = node.Key == "category/model" ||
-            node.Key.StartsWith("model/ld/", StringComparison.Ordinal) ||
-            node.Key.StartsWith("model/ln/", StringComparison.Ordinal) ||
-            node.Key.StartsWith("model/do/", StringComparison.Ordinal);
+            node.Key.StartsWith("model/ld/", StringComparison.Ordinal);
         var fileRoot = node.Key == "category/files";
         if (!serviceRoot && !serviceCategory && !dataModelContainer && !fileRoot)
             return false;
@@ -516,7 +555,13 @@ public static class IedBrowserPresentation
                     Flags = IedBrowserReportFlags.OptionalFields(optRaw)
                 });
                 Section("Information received in last Report");
-                rows.Add(new("Message", "No report-reception snapshot is available in this inspector."));
+                Field("Last Report status", "No matching received Report");
+                Field("Last Report received at", "—");
+                Field("Received frame count", "—");
+                Field("Last observed SqNum", "—");
+                Field("Received RptID", "—");
+                Field("Received DataSet", "—");
+                Field("Inclusion reason", "Not exposed in continuity summary");
                 Section("Data");
                 rows.Add(new("DataHeader", "Name", "Value"));
                 var linkedDataSet = FindDataSet(model, rcb.DataSetReference);
@@ -550,21 +595,33 @@ public static class IedBrowserPresentation
                     rows.Add(new("DataHeader", "Name", "Value"));
                     if (model is not null)
                     {
+                        // Group by real model DO; never concatenate ObjectReference and
+                        // AttributePath, which can produce duplicate setVal spelling.
                         var settings = model.LogicalDevices
                             .Where(ld => string.Equals(ld.MmsDomain, block.Domain, StringComparison.Ordinal))
                             .SelectMany(ld => ld.LogicalNodes)
-                            .SelectMany(ln => ln.DataObjects)
-                            .SelectMany(obj => obj.Attributes)
-                            .Where(attr => attr.FunctionalConstraint is "SG" or "SE")
+                            .SelectMany(ln => ln.DataObjects.Select(obj => (Ln: ln, Object: obj)))
+                            .Select(x => (x.Ln, x.Object, Attributes: x.Object.Attributes
+                                .Where(a => a.FunctionalConstraint is "SG" or "SE").ToArray()))
+                            .Where(x => x.Attributes.Length > 0)
                             .ToArray();
-                        foreach (var attr in settings)
+                        foreach (var setting in settings)
+                        {
+                            var attributes = setting.Attributes;
+                            var sole = attributes.Length == 1 ? attributes[0] : null;
                             rows.Add(new IedBrowserDetailRow("Data",
-                                $"{attr.ObjectReference}.{attr.AttributePath} [{attr.FunctionalConstraint}]",
-                                "Not read", Source: "SG/SE declaration, no live setting-group read")
+                                $"{setting.Ln.Name}.{setting.Object.Name}", "Not read", 0,
+                                "SG/SE declaration; effective setting group not verified")
                             {
-                                ValueReference = attr.MmsReference,
-                                FunctionalConstraint = attr.FunctionalConstraint
+                                // Never project a multi-leaf parent from an arbitrary child.
+                                ValueReference = sole?.MmsReference ?? "",
+                                FunctionalConstraint = sole?.FunctionalConstraint ?? "",
+                                EngineeringUnitReference = sole?.MmsReference ?? "",
+                                IsEngineeringValue = sole is not null,
+                                LoadChildren = () => IedBrowserStructuredDetails.AttributeRows(
+                                    attributes, setting.Object.Name, 1)
                             });
+                        }
                         if (settings.Length == 0)
                             rows.Add(new("Message", "No SG/SE parameters available in this model."));
                     }
@@ -585,15 +642,34 @@ public static class IedBrowserPresentation
                     Field("VLAN priority", "Not read");
                     Field("Needs commissioning", "Not read");
                     Section("Information received in last GOOSE");
-                    rows.Add(new("Message", "No passive GOOSE reception evidence is linked to this model."));
+                    Field("Capture status", "Subscriber not capturing", "Passive GOOSE");
+                    Field("Frame received at", "—", "Passive GOOSE");
+                    Field("Source MAC", "—", "Passive GOOSE");
+                    Field("Frame test", "—", "Passive GOOSE");
+                    Field("Frame ndsCom", "—", "Passive GOOSE");
+                    Field("State number", "—", "Passive GOOSE");
+                    Field("Sequence number", "—", "Passive GOOSE");
+                    Field("Time allowed to live", "—", "Passive GOOSE");
+                    Field("Frame DataSet entries", "—", "Passive GOOSE");
                     Section("Data");
                     rows.Add(new("DataHeader", "Name", "Value"));
                     var linkedGooseSet = FindDataSet(model, block.DataSetReference);
                     if (linkedGooseSet is null)
                         rows.Add(new("Message", "No verified DataSet member directory for this GoCB."));
                     else
-                        foreach (var member in linkedGooseSet.Members)
-                            rows.Add(IedBrowserStructuredDetails.Member(member, model));
+                    {
+                        var ordered = linkedGooseSet.Members.OrderBy(m => m.Index).ToArray();
+                        for (var slot = 0; slot < ordered.Length; slot++)
+                        {
+                            var member = ordered[slot];
+                            rows.Add(IedBrowserStructuredDetails.Member(member, model) with
+                            {
+                                GooseSlot = slot,
+                                GooseReference = member.Reference,
+                                GooseFc = member.FunctionalConstraint
+                            });
+                        }
+                    }
                 }
                 break;
             case LiveIedLogicalDeviceModel ld:
@@ -607,22 +683,24 @@ public static class IedBrowserPresentation
                     Member(ln.Name, ln.LnClass, source: "Model");
                 break;
             case LiveIedLogicalNodeModel ln:
-                Section("Logical Node");
-                Field("Name", ln.Name);
+                Section("Logical Node · " + ln.Name);
                 Field("Class", ln.LnClass);
                 Field("LN type", ln.ProposedLnTypeId);
                 Section("Data Objects");
-                rows.Add(new("DataHeader", "Name", "CDC"));
+                rows.Add(new("DataHeader", "Name", "Live value · provenance"));
+                // O(number of DO), with lazy expansion of each selected DO.
+                // No recursive UI object creation for a large IED namespace.
                 foreach (var obj in ln.DataObjects)
-                    Member(obj.Name, obj.InferredCdc);
+                    rows.Add(IedBrowserStructuredDetails.DataObject(
+                        obj, PrimaryValueFunctionalConstraint(obj)));
                 break;
             case LiveIedDataObjectModel obj:
-                Section("Data Object");
+                Section("Data Object · " + obj.Name);
                 Field("Reference", obj.Reference);
                 Field("CDC", obj.InferredCdc);
                 Field("Type confidence", obj.ConfidenceLevel);
-                Section("Data Attributes");
-                rows.Add(new("DataHeader", "Name", "Type"));
+                Section("Data");
+                rows.Add(new("DataHeader", "Name", "Live value · provenance"));
                 foreach (var attr in IedBrowserStructuredDetails.AttributeRows(obj.Attributes, obj.Name))
                     rows.Add(attr);
                 break;

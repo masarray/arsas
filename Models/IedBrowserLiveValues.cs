@@ -91,7 +91,7 @@ public sealed class IedBrowserLiveValues
     public void Publish(string reference, string fc, string? value, string? quality,
         string? timestamp, string source)
         => TryPublish(reference, fc, value, quality, timestamp, source, expectedAssociation: null,
-            utcTimeEvidence: null);
+            utcTimeEvidence: null, qualityEvidence: null);
 
     /// <summary>
     /// Ordered, association-bound publication. A callback from a cancelled or
@@ -99,13 +99,15 @@ public sealed class IedBrowserLiveValues
     /// </summary>
     public bool PublishForAssociation(long association, string reference, string fc,
         string? value, string? quality, string? timestamp, string source,
-        Iec61850UtcTimeEvidence? utcTimeEvidence = null)
+        Iec61850UtcTimeEvidence? utcTimeEvidence = null,
+        MmsQualityEvidence? qualityEvidence = null)
         => TryPublish(reference, fc, value, quality, timestamp, source, association,
-            utcTimeEvidence);
+            utcTimeEvidence, qualityEvidence);
 
     private bool TryPublish(string reference, string fc, string? value, string? quality,
         string? timestamp, string source, long? expectedAssociation,
-        Iec61850UtcTimeEvidence? utcTimeEvidence)
+        Iec61850UtcTimeEvidence? utcTimeEvidence,
+        MmsQualityEvidence? qualityEvidence, bool onlyIfNoReport = false)
     {
         if (string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(fc) ||
             string.IsNullOrWhiteSpace(value) ||
@@ -122,11 +124,17 @@ public sealed class IedBrowserLiveValues
 
             _values.TryGetValue(key, out var channels);
             channels ??= new IedBrowserObservationChannels();
+            // The WPF coalesced point snapshot is a compatibility mirror.
+            // It must never replace a real ingress Report observation,
+            // especially typed q/t evidence from the original MMS bytes.
+            if (onlyIfNoReport && channels.Report is not null)
+                return false;
             var observed = new IedBrowserObservedValue(value.Trim(), quality ?? "",
                 timestamp ?? "", source, DateTime.UtcNow, _version + 1, _association,
-                QualityBits: IsQualityReference(key) &&
-                    MmsQualityDecoder.TryDecodeRendered(value, out var decodedQuality)
-                        ? decodedQuality : null,
+                QualityBits: IsQualityReference(key)
+                    ? qualityEvidence ?? (MmsQualityDecoder.TryDecodeRendered(value,
+                        out var decodedQuality) ? decodedQuality : null)
+                    : null,
                 TimeBits: IsTimeReference(key) &&
                     utcTimeEvidence is { IsDecoded: true, HasWireProvenance: true }
                         ? utcTimeEvidence : null);
@@ -154,20 +162,32 @@ public sealed class IedBrowserLiveValues
 
     public void PublishReport(Iec61850MonitorPoint point, bool observedReportIngress = false)
     {
+        // A previously routed RCB is historical coverage, NOT proof that
+        // this point snapshot is Report ingress. Never promote an MMS Read,
+        // polling result, or status-only refresh into canonical Report channel
+        // merely because this signal once appeared in an RCB.
         if (point.IsOffline || point.Value == "-" ||
             !observedReportIngress &&
-            !point.SourceMode.Contains("Report", StringComparison.OrdinalIgnoreCase) &&
-            point.RoutedReportControlReferences.Count == 0)
+            !point.SourceMode.Contains("Report", StringComparison.OrdinalIgnoreCase))
             return;
-        Publish(point.IecReference, point.FunctionalConstraint, point.Value,
+        // Primary Report ingress is published on the runtime receive lane.
+        // This UI snapshot only fills gaps (legacy sessions or points), never
+        // downgrades a typed Report q/t to the normalized "good"/date text.
+        MirrorReportIfMissing(point.IecReference, point.FunctionalConstraint, point.Value,
             point.Quality, point.DeviceTimestamp, "Report");
         if (point.Quality is not ("Unknown" or "-"))
-            Publish(point.QualityReference, point.FunctionalConstraint, point.Quality,
-                "", point.DeviceTimestamp, "Report quality");
+            MirrorReportIfMissing(point.QualityReference, point.FunctionalConstraint,
+                point.Quality, "", point.DeviceTimestamp, "Report quality");
         if (point.DeviceTimestamp is not ("Unknown" or "-"))
-            Publish(point.TimestampReference, point.FunctionalConstraint, point.DeviceTimestamp,
-                "", point.DeviceTimestamp, "Report timestamp");
+            MirrorReportIfMissing(point.TimestampReference, point.FunctionalConstraint,
+                point.DeviceTimestamp, "", point.DeviceTimestamp, "Report timestamp");
     }
+
+    private void MirrorReportIfMissing(string reference, string fc,
+        string? value, string? quality, string? timestamp, string source)
+        => TryPublish(reference, fc, value, quality, timestamp, source,
+            expectedAssociation: null, utcTimeEvidence: null, qualityEvidence: null,
+            onlyIfNoReport: true);
 
     /// <summary>
     /// Return the authoritative reported snapshot during monitoring. When the
@@ -176,7 +196,7 @@ public sealed class IedBrowserLiveValues
     /// </summary>
     public bool TryGet(string reference, string fc,
         out IedBrowserObservedValue evidence, bool preferReport = true,
-        IedBrowserSchemaIndex? schema = null)
+        IedBrowserSchemaIndex? schema = null, string requiredEvidence = "")
     {
         if (string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(fc))
         {
@@ -185,21 +205,22 @@ public sealed class IedBrowserLiveValues
         }
         lock (_gate)
         {
-            if (TryGetExact(Key(reference, fc), preferReport, out evidence))
+            if (TryGetExact(Key(reference, fc), preferReport, requiredEvidence, out evidence))
                 return true;
             // Only the exact engineering schema can authorize an alias from
             // DO to its unique scalar DA. Do not guess from IEC suffixes and do
             // not reverse-map DO scalars into unsupported child q/t/DA values.
             if (schema != null &&
                 schema.TryGetPrimaryLeaf(reference, fc, out var exactLeaf) &&
-                TryGetExact(Key(exactLeaf, fc), preferReport, out evidence))
+                TryGetExact(Key(exactLeaf, fc), preferReport, requiredEvidence, out evidence))
                 return true;
             evidence = null!;
             return false;
         }
     }
 
-    private bool TryGetExact(string key, bool preferReport, out IedBrowserObservedValue evidence)
+    private bool TryGetExact(string key, bool preferReport, string requiredEvidence,
+        out IedBrowserObservedValue evidence)
     {
         if (!_values.TryGetValue(key, out var channels))
         {
@@ -215,6 +236,24 @@ public sealed class IedBrowserLiveValues
             evidence = null!;
             return false;
         }
+        // Process values retain normal Report authority. Only expanded q/t
+        // subfields may use a verified direct MMS Read when the selected
+        // Report provides a textual summary but no underlying bit evidence.
+        // Never manufacture a bit from "good" or a rendered timestamp.
+        if (ReferenceEquals(selected, channels.Report) &&
+            channels.Read is { } explicitRead &&
+            explicitRead.Revision > selected.Revision &&
+            (requiredEvidence == "Quality" &&
+                 selected.QualityBits is null && explicitRead.QualityBits is not null ||
+             requiredEvidence == "Timestamp" &&
+                 selected.TimeBits is null &&
+                 explicitRead.TimeBits is { IsDecoded: true, HasWireProvenance: true }))
+        {
+            // A newer explicit read supplies the missing bit-level proof.
+            // An older read can never decorate a newer Report with stale q/t,
+            // and an old Report cannot override a newer untyped Read.
+            selected = explicitRead;
+        }
         evidence = _offline ? selected with { IsStale = true } : selected;
         return true;
     }
@@ -224,5 +263,6 @@ public sealed record IedBrowserReadTarget(string Reference, string FunctionalCon
 public sealed record IedBrowserReadResult(
     IedBrowserReadTarget Target, string Value, string Quality,
     string DeviceTimestamp, string Error,
-    Iec61850UtcTimeEvidence? UtcTimeEvidence = null);
+    Iec61850UtcTimeEvidence? UtcTimeEvidence = null,
+    MmsQualityEvidence? QualityEvidence = null);
 public sealed record IedBrowserReadProgress(int Completed, int Total);

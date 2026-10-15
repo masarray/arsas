@@ -91,6 +91,82 @@ public sealed class M2IedBrowserTimeAndReferenceTests
     }
 
     [Fact]
+    public void TypedReadProvidesMissingReportQualityDetails_WithoutReplacingProcessAuthority()
+    {
+        var ledger = new IedBrowserLiveValues();
+        var session = ledger.BeginAssociation();
+        var qualityReference = "LD/GGIO6.CBPond.q";
+        var timeReference = "LD/GGIO6.CBPond.t";
+        Assert.True(ledger.PublishForAssociation(session, qualityReference,
+            "ST", "good", "", "", "Report quality"));
+        Assert.True(ledger.PublishForAssociation(session, timeReference,
+            "ST", "2026-10-14 10:00:00", "", "", "Report timestamp"));
+        Assert.True(ledger.PublishForAssociation(session, "LD/GGIO6.CBPond.stVal",
+            "ST", "False", "", "", "Report"));
+
+        var qWire = Assert.Single(ArIED61850Tester.Services.IedBrowserReportWireEvidence.Extract(
+            new MmsReportFrame
+            {
+                Values =
+                [
+                    new MmsReportValue
+                    {
+                        Member = new MmsDataSetDirectoryMember
+                        {
+                            UserReference = qualityReference,
+                            FunctionalConstraint = "ST"
+                        },
+                        Value = MmsDataValue.BitString(3, [0, 0])
+                    }
+                ]
+            })).QualityBits!;
+        var tWire = WireTime(0x25);
+        Assert.True(ledger.PublishForAssociation(session, qualityReference,
+            "ST", qWire.Summary, "", "", "MMS Read", qualityEvidence: qWire));
+        Assert.True(ledger.PublishForAssociation(session, timeReference,
+            "ST", tWire.EngineeringUtc, "", "", "MMS Read", utcTimeEvidence: tWire));
+
+        // A normal row remains Report-owned during monitoring.
+        Assert.True(ledger.TryGet(qualityReference, "ST", out var qParent));
+        Assert.Equal("Report quality", qParent.Source);
+        Assert.Null(qParent.QualityBits);
+        Assert.True(ledger.TryGet(qualityReference, "ST", out var qChild,
+            requiredEvidence: "Quality"));
+        Assert.Equal("MMS Read", qChild.Source);
+        Assert.Equal("false", qChild.QualityBits?.FormatField("Overflow"));
+        Assert.True(ledger.TryGet(timeReference, "ST", out var tChild,
+            requiredEvidence: "Timestamp"));
+        Assert.Equal("MMS Read", tChild.Source);
+        Assert.Equal("true", IedBrowserUtcTimeQualityPresentation.FormatField(
+            tChild.TimeBits, "ClockNotSynchronized"));
+        Assert.True(ledger.TryGet("LD/GGIO6.CBPond.stVal", "ST",
+            out var process));
+        Assert.Equal("Report", process.Source);
+
+        // A newer summary-only Report makes the older explicit Read stale;
+        // its individual flags must no longer be represented as current.
+        Assert.True(ledger.PublishForAssociation(session, qualityReference,
+            "ST", "good", "", "", "Report quality"));
+        Assert.True(ledger.TryGet(qualityReference, "ST", out var newerQuality,
+            requiredEvidence: "Quality"));
+        Assert.Equal("Report quality", newerQuality.Source);
+        Assert.Null(newerQuality.QualityBits);
+        Assert.True(ledger.PublishForAssociation(session, timeReference,
+            "ST", "2026-10-14 10:01:00", "", "", "Report timestamp"));
+        Assert.True(ledger.TryGet(timeReference, "ST", out var newerTime,
+            requiredEvidence: "Timestamp"));
+        Assert.Equal("Report timestamp", newerTime.Source);
+        Assert.Null(newerTime.TimeBits);
+
+        // The association fence still prevents old typed data from being shown.
+        ledger.BeginAssociation();
+        Assert.False(ledger.TryGet(qualityReference, "ST", out _,
+            requiredEvidence: "Quality"));
+        Assert.False(ledger.TryGet(timeReference, "ST", out _,
+            requiredEvidence: "Timestamp"));
+    }
+
+    [Fact]
     public void DataSetMemberExpansion_IsolatesExactLeaf_FcAndMmsCanonicalization()
     {
         static LiveIedDataAttributeModel Attr(string path, string fc = "ST") => new()
@@ -143,7 +219,7 @@ public sealed class M2IedBrowserTimeAndReferenceTests
     [Fact]
     public void ExplicitReadBinding_CaseSensitiveIecIdentity_AndNormalizedFc()
     {
-        var device = new Iec61850MonitorDevice();
+        var device = new Iec61850MonitorDevice { IsConnected = true };
         var upper = new Iec61850MonitorPoint
         {
             IecReference = "LD/CSWI1.Pos.stVal", FunctionalConstraint = "ST", Value = "before-upper"
@@ -155,14 +231,23 @@ public sealed class M2IedBrowserTimeAndReferenceTests
         device.Points.Add(upper);
         device.Points.Add(lower);
         var index = new IedBrowserReadBindingIndex(device);
-        index.Apply(new IedBrowserReadResult(
+        var association = device.LiveValues.Association;
+        var first = new IedBrowserReadResult(
             new IedBrowserReadTarget("LD/CSWI1$st$Pos$stVal", "st", "BOOLEAN"),
-            "true", "", "", ""));
+            "true", "", "", "");
+        Assert.True(device.LiveValues.PublishForAssociation(association,
+            first.Target.Reference, first.Target.FunctionalConstraint,
+            first.Value, first.Quality, first.DeviceTimestamp, "MMS Read"));
+        Assert.Equal(1, index.Apply(first, device.LiveValues, association));
         Assert.Equal("true", upper.Value);
         Assert.Equal("before-lower", lower.Value);
-        index.Apply(new IedBrowserReadResult(
+        var second = new IedBrowserReadResult(
             new IedBrowserReadTarget("LD/CSWI1.pos.stVal", "ST", "BOOLEAN"),
-            "false", "", "", ""));
+            "false", "", "", "");
+        Assert.True(device.LiveValues.PublishForAssociation(association,
+            second.Target.Reference, second.Target.FunctionalConstraint,
+            second.Value, second.Quality, second.DeviceTimestamp, "MMS Read"));
+        Assert.Equal(1, index.Apply(second, device.LiveValues, association));
         Assert.Equal("true", upper.Value);
         Assert.Equal("false", lower.Value);
     }

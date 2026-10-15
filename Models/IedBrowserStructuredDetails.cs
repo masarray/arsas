@@ -8,16 +8,79 @@ namespace ArIED61850Tester.Models;
 /// </summary>
 public static class IedBrowserStructuredDetails
 {
+    /// <summary>One DO row; child DAs/BDAs materialize only when expanded.</summary>
+    public static IedBrowserDetailRow DataObject(
+        LiveIedDataObjectModel obj, string? uniqueProcessFc, int depth = 0)
+    {
+        // Directly bind the DO's displayed value to its single model-proven
+        // process leaf. The leaf's key is already present in the observation
+        // registry; there is no second value cache or additional MMS read.
+        var hasLeaf = IedBrowserSchemaIndex.TryGetUniqueProcessLeaf(
+            obj, out var processLeaf, out var processFc);
+        var phases = IedBrowserEngineeringComposite.BuildThreePhases(
+            obj.Attributes, obj.Reference);
+        var polar = phases.Count == 0
+            ? IedBrowserEngineeringComposite.BuildPolar(obj.Attributes, obj.Reference)
+            : null;
+        return new IedBrowserDetailRow("Data", obj.Name, "Not read", depth,
+            $"IEC DO declaration · {obj.Reference} · CDC {obj.InferredCdc}")
+        {
+            IsDataObject = true,
+            PolarPlan = polar,
+            PhasePlans = phases,
+            ValueReference = hasLeaf ? processLeaf : obj.Reference,
+            FallbackValueReference = hasLeaf ? obj.Reference : "",
+            IsEngineeringValue = hasLeaf,
+            EngineeringUnitReference = hasLeaf ? processLeaf : "",
+            FunctionalConstraint = hasLeaf ? processFc : uniqueProcessFc ?? "",
+            LoadChildren = () => AttributeRows(obj.Attributes, obj.Name, depth + 1)
+        };
+    }
+
     public static IedBrowserDetailRow Member(LiveIedDataSetMemberModel member,
         LiveIedModelDiscoveryDocument? model, int depth = 0)
     {
         var name = member.Reference;
         var slash = name.IndexOf('/');
         if (slash >= 0 && slash + 1 < name.Length) name = name[(slash + 1)..];
+        // Static FCD reports can expose only a scalar semantic descendant.
+        // Resolve a unique IEC process leaf once from the exact model owner.
+        var identity = IedBrowserLiveValues.CanonicalReference(member.Reference);
+        var exactObject = model?.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
+            .SelectMany(ln => ln.DataObjects)
+            .Where(obj => identity == IedBrowserLiveValues.CanonicalReference(obj.Reference) ||
+                identity.StartsWith(IedBrowserLiveValues.CanonicalReference(obj.Reference) + ".",
+                    StringComparison.Ordinal))
+            .OrderByDescending(obj => obj.Reference.Length).FirstOrDefault();
+        // A DataSet FCDA can identify a structured subobject (A.phsA)
+        // while the discovered DO owner is A. Resolve only descendants of
+        // that exact member and matching FC.
+        var leaf = exactObject is null ? null : ChooseEngineeringLeaf(
+            exactObject.Attributes
+                .Where(a => string.Equals(a.FunctionalConstraint, member.FunctionalConstraint,
+                    StringComparison.OrdinalIgnoreCase))
+                .Select(a => (Reference: IedBrowserLiveValues.CanonicalReference(a.MmsReference),
+                    Prefix: identity + "."))
+                .Where(a => a.Reference.StartsWith(a.Prefix, StringComparison.Ordinal))
+                .Select(a => (Reference: a.Reference, Relative: a.Reference[a.Prefix.Length..]))); 
+        var foundLeaf = !string.IsNullOrEmpty(leaf);
+        var members = exactObject?.Attributes.Where(a =>
+            string.Equals(a.FunctionalConstraint, member.FunctionalConstraint,
+                StringComparison.OrdinalIgnoreCase)).ToArray()
+            ?? Array.Empty<LiveIedDataAttributeModel>();
+        var memberPhases = IedBrowserEngineeringComposite.BuildThreePhases(
+            members, identity);
+        var memberPolar = memberPhases.Count == 0
+            ? IedBrowserEngineeringComposite.BuildPolar(members, identity) : null;
         return new IedBrowserDetailRow("Data", $"{name} [{member.FunctionalConstraint}]", "Not read",
             depth, "DataSet directory; observed live values or explicit MMS read")
         {
-            ValueReference = member.Reference,
+            PolarPlan = memberPolar,
+            PhasePlans = memberPhases,
+            ValueReference = foundLeaf ? leaf! : member.Reference,
+            FallbackValueReference = foundLeaf ? member.Reference : "",
+            EngineeringUnitReference = foundLeaf ? leaf! : "",
+            IsEngineeringValue = foundLeaf,
             FunctionalConstraint = member.FunctionalConstraint,
             LoadChildren = () => DataSetMemberChildren(member, model, depth + 1)
         };
@@ -75,14 +138,32 @@ public static class IedBrowserStructuredDetails
     {
         var result = new List<IedBrowserDetailRow>();
         foreach (var group in attrs.Where(x => x.parts.Length > pathIndex)
-                     .GroupBy(x => x.parts[pathIndex], StringComparer.Ordinal))
+                     .GroupBy(x => (Name: x.parts[pathIndex],
+                         Fc: (x.attr.FunctionalConstraint ?? string.Empty).Trim().ToUpperInvariant())))
         {
-            var name = group.Key;
+            // IEC attribute paths may exist under different FCs (e.g. ST/CO).
+            // Never merge them into one expandable UI branch: that would
+            // cross-bind children and make the parent FC unknowable.
+            var name = group.Key.Name;
             var groupArray = group.ToArray();
             var matching = groupArray.FirstOrDefault(x => x.parts.Length == pathIndex + 1);
             var hasDirect = matching.attr is not null;
             var attr = hasDirect ? matching.attr : groupArray[0].attr;
             var descendants = groupArray.Where(x => x.parts.Length > pathIndex + 1).ToArray();
+            var fullPrefix = IedBrowserLiveValues.CanonicalReference(attr.ObjectReference) +
+                "." + string.Join(".", groupArray[0].parts.Take(pathIndex + 1));
+            var polar = IedBrowserEngineeringComposite.BuildPolar(
+                groupArray.Select(x => x.attr), fullPrefix);
+            var phases = polar is null
+                ? IedBrowserEngineeringComposite.BuildThreePhases(
+                    groupArray.Select(x => x.attr), fullPrefix)
+                : Array.Empty<IedBrowserPolarPlan>();
+            // q/t and alternate instantaneous leaves are not blockers for a
+            // model-proven normal engineering value. No first child wins.
+            var scalarLeaf = name is "q" or "t" ? null :
+                ChooseEngineeringLeaf(descendants.Select(x => (
+                    Reference: IedBrowserLiveValues.CanonicalReference(x.attr.MmsReference),
+                    Relative: string.Join(".", x.parts.Skip(pathIndex + 1)))));
             Func<IReadOnlyList<IedBrowserDetailRow>>? children = null;
             if (descendants.Length > 0)
                 children = () => BuildAt(descendants, pathIndex + 1, depth + 1);
@@ -100,8 +181,13 @@ public static class IedBrowserStructuredDetails
                 // that exact depth. Keep the verified parent reference/FC.
                 ValueReference = hasDirect
                     ? attr.MmsReference
-                    : attr.ObjectReference + "." +
-                        string.Join(".", groupArray[0].parts.Take(pathIndex + 1)),
+                    : scalarLeaf ?? (attr.ObjectReference + "." +
+                        string.Join(".", groupArray[0].parts.Take(pathIndex + 1))),
+                FallbackValueReference = hasDirect ? scalarLeaf ?? "" : "",
+                EngineeringUnitReference = scalarLeaf ?? "",
+                IsEngineeringValue = scalarLeaf is not null && descendants.Length > 0,
+                PolarPlan = polar,
+                PhasePlans = phases,
                 EvidenceKind = hasDirect && name == "q" ? "Quality" :
                     hasDirect && name == "t" ? "Timestamp" : "",
                 FunctionalConstraint = groupArray.All(x =>
@@ -112,6 +198,32 @@ public static class IedBrowserStructuredDetails
             });
         }
         return result;
+    }
+
+    // Returns a scalar only when the entire candidate set proves a unique
+    // IEC engineering magnitude. q/t and non-value configuration fields are
+    // deliberately excluded. Magnitude + instantaneous magnitude is an
+    // explicitly recognized IEC pair; other multi-leaf groups fail closed.
+    private static string? ChooseEngineeringLeaf(
+        IEnumerable<(string Reference, string Relative)> rows)
+    {
+        var candidates = rows.Where(x => !string.IsNullOrWhiteSpace(x.Reference) &&
+                x.Relative is "f" or "stVal" or "posVal" or "general" or
+                    "valWTr" or "mag.f" or "instMag.f" or "cVal.mag.f" or
+                    "instCVal.mag.f" or "ang.f" or "cVal.ang.f")
+            .DistinctBy(x => x.Reference, StringComparer.Ordinal)
+            .Take(3).ToArray();
+        if (candidates.Length == 1)
+            return candidates[0].Reference;
+        if (candidates.Length != 2) return null;
+        foreach (var (normal, instant) in new[] {
+            ("mag.f", "instMag.f"), ("cVal.mag.f", "instCVal.mag.f") })
+        {
+            if (candidates.Any(x => x.Relative == normal) &&
+                candidates.Any(x => x.Relative == instant))
+                return candidates.First(x => x.Relative == normal).Reference;
+        }
+        return null;
     }
 
     private static string TrimObjectName(string path, string objectName)

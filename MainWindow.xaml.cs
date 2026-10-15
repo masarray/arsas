@@ -26,7 +26,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly CancellationTokenSource _applicationCancellation = new();
     private readonly Dictionary<string, HashSet<string>> _pendingProjectSelections = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<SignalDefinition, Iec61850MonitorDevice> _signalOwners = new();
-    private readonly ConcurrentDictionary<string, PendingPointUpdate> _pendingPointSnapshots = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, CanonicalPointSnapshotBatch> _pendingPointSnapshots = new(StringComparer.OrdinalIgnoreCase);
+    // Monitoring-lifetime O(1) immutable reference/FC lookup for SignalDefinition.
+    // Rebuilt after the selected signal/point model is materialized.
+    private readonly Dictionary<string, IedBrowserReadBindingIndex> _canonicalSignalProjections =
+        new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Iec61850MonitorPoint> _pointIndex = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentQueue<Iec61850EventEntry> _pendingEvents = new();
     private readonly ConcurrentQueue<DiagnosticEntry> _pendingDiagnostics = new();
@@ -2201,6 +2205,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             RebuildControlFeedbackIndex(device);
             foreach (var point in points)
                 _pointIndex[point.PointKey] = point;
+            var signalProjection = new IedBrowserReadBindingIndex(device);
+            _canonicalSignalProjections[device.DeviceId] = signalProjection;
+            // A first static Report may arrive before StartMonitoringAsync
+            // returns; seed those existing observations once, not by rereading MMS.
+            var projectionAssociation = device.LiveValues.Association;
+            foreach (var point in points)
+                signalProjection.ProjectReportedSignals(device.LiveValues,
+                    projectionAssociation, point.IecReference, point.FunctionalConstraint);
             device.RefreshComputed();
             RaiseWorkspaceCounts();
             if (navigateToExplorer)
@@ -2233,6 +2245,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         device.ReportPulseActive = false;
         _reportPulseUntil.Remove(device.DeviceId);
         RemoveDeviceHighlights(device.DeviceId);
+        _canonicalSignalProjections.Remove(device.DeviceId);
         MarkDevicePointsInactive(device, disconnected: false);
         EnsureOfflinePointProjection(device);
         device.RefreshComputed();
@@ -2301,6 +2314,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     // them as live data or raise new SOE events during the transition.
     private void MarkDevicePointsInactive(Iec61850MonitorDevice device, bool disconnected)
     {
+        _canonicalSignalProjections.Remove(device.DeviceId);
         var label = disconnected ? "Offline" : "Paused";
         foreach (var point in device.Points)
         {
@@ -2360,8 +2374,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         _pendingPointSnapshots.AddOrUpdate(
             snapshot.Point.PointKey,
-            _ => new PendingPointUpdate(snapshot, snapshot.IsValueEdge),
-            (_, current) => current.Merge(snapshot));
+            _ => new CanonicalPointSnapshotBatch(snapshot, snapshot.IsValueEdge),
+            (_, current) => CanonicalPointSnapshotAuthority.Merge(current, snapshot));
     }
 
     private void Runtime_EventRaised(Iec61850EventEntry entry)
@@ -2398,21 +2412,55 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         FlushGooseSubscriberUi();
 
         var pointChanged = false;
-        foreach (var pointKey in _pendingPointSnapshots.Keys.ToArray())
+        // One device-owner index for the entire coalesced batch: avoid scanning
+        // every IED for every reported point in a high-rate static DataSet.
+        var queuedKeys = _pendingPointSnapshots.Keys.ToArray();
+        var deviceOwners = queuedKeys.Length == 0
+            ? null
+            : Devices.GroupBy(device => device.DeviceId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.First(),
+                    StringComparer.OrdinalIgnoreCase);
+        foreach (var pointKey in queuedKeys)
         {
             if (!_pendingPointSnapshots.TryRemove(pointKey, out var pending)) continue;
             var snapshot = pending.Snapshot;
             var point = snapshot.Point;
-            if (snapshot.Sequence < point.Sequence)
+            if (deviceOwners == null ||
+                !deviceOwners.TryGetValue(point.DeviceId, out var observedOwner))
                 continue;
-            var qualityChanged = !string.Equals(point.Quality, snapshot.Quality, StringComparison.Ordinal);
-            var uiDetectedEdge = point.ApplyProcessValue(snapshot.Value);
+            // Reject queued frames from an earlier MMS connection even if
+            // the new session resets its point Sequence counter to zero.
+            // Never re-activate Paused/Offline rows from late runtime callbacks.
+            // A real live monitoring association must be stamped at ingress;
+            // legacy unstamped snapshots cannot cross a reconnect boundary.
+            if (!observedOwner.IsConnected || !observedOwner.IsMonitoring)
+                continue;
+            // Demo is an explicitly synthetic UI mode without an MMS
+            // association. Real IED snapshots must carry their exact session
+            // stamp; never treat an unstamped real callback as current.
+            if (!observedOwner.IsDemo &&
+                (snapshot.ObservationAssociation == 0 ||
+                 snapshot.ObservationAssociation != observedOwner.LiveValues.Association))
+                continue;
+            // Guard both pre-dispatch coalescing and already-rendered state.
+            // Same-association status/q/t updates may share semantic Sequence,
+            // but publication revisions distinguish their real receive order.
+            if (point.LastSnapshotAssociation == snapshot.ObservationAssociation &&
+                (snapshot.Sequence < point.Sequence ||
+                 (snapshot.SnapshotRevision > 0 &&
+                  snapshot.SnapshotRevision <= point.LastSnapshotRevision)))
+                continue;
+            var presentation = CanonicalPointSnapshotAuthority.Project(
+                observedOwner, point, snapshot);
+            var qualityChanged = !string.Equals(
+                point.Quality, presentation.Quality, StringComparison.Ordinal);
+            var uiDetectedEdge = point.ApplyProcessValue(presentation.Value);
             if (pending.HasValueEdge || snapshot.IsValueEdge || uiDetectedEdge)
                 MarkPointRecentlyChanged(point);
-            point.Quality = snapshot.Quality;
+            point.Quality = presentation.Quality;
             point.IsOffline = false;
-            point.DeviceTimestamp = snapshot.DeviceTimestamp;
-            point.SourceMode = snapshot.SourceMode;
+            point.DeviceTimestamp = presentation.DeviceTimestamp;
+            point.SourceMode = presentation.SourceMode;
             // The immutable runtime snapshot aggregates only RCBs that have
             // actually delivered this signal on the current association.
             // A non-value status snapshot cannot erase prior routed sources.
@@ -2420,11 +2468,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             point.Reason = snapshot.Reason;
             point.Status = snapshot.Status;
             point.Sequence = snapshot.Sequence;
+            point.LastSnapshotAssociation = snapshot.ObservationAssociation;
+            point.LastSnapshotRevision = snapshot.SnapshotRevision;
             // This is the same coalesced UI snapshot that updates Explorer,
             // Live Monitor and SOE. Browser never has its own report decoder.
-            var observedOwner = Devices.FirstOrDefault(d =>
-                string.Equals(d.DeviceId, point.DeviceId, StringComparison.OrdinalIgnoreCase));
-            observedOwner?.LiveValues.PublishReport(point, snapshot.IsReportTraffic);
+            // Canonical ingress remains first authority. The point snapshot
+            // is a compatibility mirror only when Report evidence is absent.
+            observedOwner.LiveValues.PublishReport(point, snapshot.IsReportTraffic);
+            // Never mirror the payload into signals directly. Only the actual
+            // canonical Report observation with matching association can feed
+            // selected SignalDefinition presentation rows.
+            if (snapshot.IsReportTraffic &&
+                _canonicalSignalProjections.TryGetValue(observedOwner.DeviceId,
+                    out var signalProjection))
+                signalProjection.ProjectReportedSignals(observedOwner.LiveValues,
+                    snapshot.ObservationAssociation, point.IecReference,
+                    point.FunctionalConstraint);
             if (uiDetectedEdge || pending.HasValueEdge || snapshot.IsValueEdge || qualityChanged)
             {
                 UpdateCommandFeedbackFromLivePoint(point);
@@ -2432,13 +2491,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             }
             if (snapshot.IsReportTraffic)
             {
-                var device = Devices.FirstOrDefault(item => item.DeviceId.Equals(point.DeviceId, StringComparison.OrdinalIgnoreCase));
-                if (device != null)
-                {
-                    device.HasReportStream = true;
-                    device.ReportPulseActive = true;
-                    _reportPulseUntil[device.DeviceId] = DateTime.UtcNow.AddMilliseconds(650);
-                }
+                observedOwner.HasReportStream = true;
+                observedOwner.ReportPulseActive = true;
+                _reportPulseUntil[observedOwner.DeviceId] = DateTime.UtcNow.AddMilliseconds(650);
             }
             pointChanged = true;
         }
@@ -3131,6 +3186,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void RemoveDevicePoints(string deviceId)
     {
+        _canonicalSignalProjections.Remove(deviceId);
         for (var index = GlobalPoints.Count - 1; index >= 0; index--)
         {
             if (GlobalPoints[index].DeviceId.Equals(deviceId, StringComparison.OrdinalIgnoreCase))
@@ -3235,18 +3291,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private static string NormalizeReference(string? reference)
         => (reference ?? string.Empty).Trim().Replace('$', '.').Replace("..", ".").ToLowerInvariant();
-
-    private sealed record PendingPointUpdate(Iec61850PointSnapshot Snapshot, bool HasValueEdge)
-    {
-        public PendingPointUpdate Merge(Iec61850PointSnapshot next)
-        {
-            // A command-confirmed snapshot can overtake an older report/poll snapshot in
-            // the 100 ms UI batching queue. Never let a lower process sequence roll the
-            // command row and live grid back to the previous breaker state.
-            var newest = next.Sequence < Snapshot.Sequence ? Snapshot : next;
-            return new PendingPointUpdate(newest, HasValueEdge || next.IsValueEdge);
-        }
-    }
 
     private static string Csv(string value)
         => "\"" + (value ?? string.Empty).Replace("\"", "\"\"") + "\"";

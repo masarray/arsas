@@ -336,6 +336,9 @@ public sealed class Iec61850MonitorDevice : ObservableObject
                 // association always starts an isolated revision/identity.
                 if (value) LiveValues.BeginAssociation();
                 else LiveValues.MarkOffline();
+                MarkSignalObservationLifecycle(value
+                    ? CanonicalSignalObservationState.Awaiting
+                    : CanonicalSignalObservationState.Offline);
                 RefreshComputed();
             }
         }
@@ -374,8 +377,29 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         get => _isMonitoring;
         set
         {
-            if (Set(ref _isMonitoring, value))
-                RefreshComputed();
+            if (!Set(ref _isMonitoring, value)) return;
+            if (IsConnected)
+                MarkSignalObservationLifecycle(value
+                    ? CanonicalSignalObservationState.Awaiting
+                    : CanonicalSignalObservationState.Paused,
+                    preserveCurrentLive: value);
+            RefreshComputed();
+        }
+    }
+
+    // One O(signal count) pass only on lifecycle transitions. No per-Report
+    // scan; the canonical projection index handles Report ingress in O(1).
+    private void MarkSignalObservationLifecycle(
+        CanonicalSignalObservationState state, bool preserveCurrentLive = false)
+    {
+        var association = LiveValues.Association;
+        foreach (var signal in Signals)
+        {
+            if (signal.IsControlSignal) continue;
+            if (preserveCurrentLive && signal.IsLiveObservation &&
+                signal.ObservationAssociation == association)
+                continue;
+            signal.MarkCanonicalObservation(state, association);
         }
     }
 
@@ -819,6 +843,11 @@ public sealed class Iec61850MonitorPoint : ObservableObject
     // Runtime ordering metadata is not rendered. Avoid an unnecessary WPF property-change
     // notification for every poll/report sample; the value still guards stale snapshots.
     public long Sequence { get => _sequence; set => _sequence = value; }
+    // UI-only monotonic apply guard; no PropertyChanged, persistence, or SOE.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public long LastSnapshotRevision { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public long LastSnapshotAssociation { get; set; }
     // Presentation state only: cached/last-seen values cannot be mistaken
     // for fresh IED data when the MMS association has been stopped.
     public bool IsOffline
@@ -939,6 +968,12 @@ public sealed class Iec61850PointSnapshot
     /// </summary>
     public bool IsValueEdge { get; init; }
     public bool IsReportTraffic { get; init; }
+    // Association identity is stamped at runtime ingress, NOT reconstructed
+    // by the UI when a queued snapshot is eventually processed.
+    public long ObservationAssociation { get; init; }
+    // Per-point monotonic publication order, including metadata-only frames.
+    // Separate from Sequence, which is reserved for semantic process edges/SOE.
+    public long SnapshotRevision { get; init; }
     // Association-local aggregate sourced only from real decoded report ingress.
     // Immutable copy when published: safe across the runtime / WPF dispatcher.
     public IReadOnlyList<string> RoutedReportControlReferences { get; init; } = Array.Empty<string>();

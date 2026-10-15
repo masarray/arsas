@@ -21,6 +21,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public DateTime LastUpdateUtc { get; set; } = DateTime.MinValue;
         public DateTime NextPollUtc { get; set; } = DateTime.MinValue;
         public DateTime NextCompanionPollUtc { get; set; } = DateTime.MinValue;
+        // Monotonic per-point publication order, independent of semantic
+        // process edges/SOE Sequence (unchanged for q/t/RCB/status-only updates).
+        public long SnapshotRevision { get; set; }
         public long Sequence { get; set; }
         public string SourceMode { get; set; } = "Waiting";
         public string AcquisitionLabel { get; set; } = "MMS polling";
@@ -145,7 +148,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 {
                     values.Report(new IedBrowserReadResult(target, display,
                         rich?.Quality ?? "", rich?.DeviceTimestamp ?? "", "",
-                        rich?.UtcTimeEvidence));
+                        rich?.UtcTimeEvidence, rich?.QualityEvidence));
                     succeeded++;
                 }
                 else
@@ -1048,7 +1051,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                             unavailableState.SourceMode = "Static DataSet: RCB unavailable";
                             unavailableState.AcquisitionLabel = unavailableState.SourceMode;
                             unavailableState.Reason = result.Message;
-                            EmitStatusSnapshot(point, unavailableState, "Static report unavailable / no MMS fallback", "Pending");
+                            EmitStatusSnapshot(session, point, unavailableState, "Static report unavailable / no MMS fallback", "Pending");
                         }
                     }
                     foreach (var warning in result.Warnings.Take(3))
@@ -1163,7 +1166,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                         failedState.SourceMode = "Static DataSet: report setup failed";
                         failedState.AcquisitionLabel = failedState.SourceMode;
                         failedState.Reason = $"{ex.GetType().Name}: {ex.Message}";
-                        EmitStatusSnapshot(point, failedState, "Static report setup failed / no MMS fallback", "Pending");
+                        EmitStatusSnapshot(session, point, failedState, "Static report setup failed / no MMS fallback", "Pending");
                     }
                 }
             }
@@ -1580,6 +1583,51 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 }
             }
 
+            // Model-checked, raw MMS q/t evidence arrives independently of
+            // flattened process-value updates. Publish AFTER normalized updates
+            // so "good"/display-date text never erases proven bit fields.
+            // This path performs no Read, MMS polling, RCB write or GI.
+            if (slice.BrowserRawEvidence.Count > 0)
+            {
+                var evidenceModel = session.Device.SclWorkspace?.DesignModel ??
+                                    session.Device.LiveDiscoveryModel;
+                if (!ReferenceEquals(session.BrowserSchema?.SourceModel, evidenceModel))
+                    session.BrowserSchema = evidenceModel is null
+                        ? null : new IedBrowserSchemaIndex(evidenceModel);
+                var evidenceSchema = session.BrowserSchema;
+                if (evidenceSchema is not null)
+                    foreach (var evidence in slice.BrowserRawEvidence)
+                    {
+                        if (!evidenceSchema.TryResolveReportFc(plan.DataSetReference,
+                                evidence.CarrierReference, out var evidenceFc) ||
+                            !string.Equals(evidenceFc, evidence.FunctionalConstraint,
+                                StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        var isExactDo = evidenceSchema.IsDeclaredDataObject(
+                            evidence.CarrierReference);
+                        var isDirectQuality = evidence.CarrierReference.EndsWith(
+                            ".q", StringComparison.Ordinal);
+                        var isDirectTime = evidence.CarrierReference.EndsWith(
+                            ".t", StringComparison.Ordinal);
+                        if (!isExactDo && !isDirectQuality && !isDirectTime)
+                            continue; // never attribute nested DA evidence to owner DO
+                        if (evidence.QualityBits is { } quality &&
+                            evidenceSchema.TryGetQualityCompanion(
+                                evidence.CarrierReference, evidenceFc, out var qRef))
+                            session.Device.LiveValues.PublishForAssociation(
+                                session.BrowserObservationAssociation,
+                                qRef, evidenceFc, quality.Summary, "", "",
+                                "Report quality · raw MMS", qualityEvidence: quality);
+                        if (evidence.TimeBits is { IsDecoded: true, HasWireProvenance: true } time &&
+                            evidenceSchema.TryGetTimestampCompanion(
+                                evidence.CarrierReference, evidenceFc, out var tRef))
+                            session.Device.LiveValues.PublishForAssociation(
+                                session.BrowserObservationAssociation,
+                                tRef, evidenceFc, time.EngineeringUtc, "", "",
+                                "Report timestamp · raw MMS", utcTimeEvidence: time);
+                    }
+            }
+
             var verifiedReportPointKeys = slice.Updates
                 .Select(update => FindPointForReportReference(session, update.Reference))
                 .Where(point => point is not null)
@@ -1733,6 +1781,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 {
                     state.ConsecutiveErrors++;
                     EmitStatusSnapshot(
+                        session,
                         point,
                         state,
                         "MMS read returned no value",
@@ -1831,7 +1880,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 state.ConsecutiveErrors++;
-                EmitStatusSnapshot(point, state, $"Read error: {ex.Message}", "Bad / communication error");
+                EmitStatusSnapshot(session, point, state, $"Read error: {ex.Message}", "Bad / communication error");
                 if (state.ConsecutiveErrors >= 2)
                     session.ConsecutiveSessionErrors++;
             }
@@ -1914,6 +1963,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 Status = status,
                 IsValueEdge = changed,
                 IsReportTraffic = trustReportEdge,
+                ObservationAssociation = session.BrowserObservationAssociation,
+                SnapshotRevision = ++state.SnapshotRevision,
                 // This is association-local evidence from an actual routed report.
                 // Preserve it through later metadata/status UI coalescing.
                 RoutedReportControlReferences = state.RoutedReportControlReferences
@@ -1954,6 +2005,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     }
 
     private void EmitStatusSnapshot(
+        DeviceSession session,
         Iec61850MonitorPoint point,
         RuntimePointState state,
         string status,
@@ -1971,6 +2023,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             Reason = state.Reason,
             Status = status,
             IsValueEdge = false,
+            ObservationAssociation = session.BrowserObservationAssociation,
+            SnapshotRevision = ++state.SnapshotRevision,
             RoutedReportControlReferences = state.RoutedReportControlReferences
                 .OrderBy(reference => reference, StringComparer.OrdinalIgnoreCase).ToArray(),
             Sequence = state.Sequence

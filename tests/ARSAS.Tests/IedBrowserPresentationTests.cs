@@ -74,8 +74,8 @@ public sealed class IedBrowserPresentationTests
         Assert.Equal("LLN0.A [ST]", members[0].Name);
         Assert.Equal("LLN0.A [ST]", members[1].Name);
         Assert.All(members, row => Assert.Equal("Not read", row.Value));
-        Assert.Contains(details, row => row.Kind == "Message"
-            && row.Name.Contains("No report-reception snapshot", StringComparison.Ordinal));
+        Assert.Contains(details, row => row.Kind == "Property" &&
+            row.Name == "Last Report status" && row.Value == "No matching received Report");
     }
 
     [Fact]
@@ -94,6 +94,43 @@ public sealed class IedBrowserPresentationTests
         Assert.Contains(details, x => x.Kind == "Section" && x.Name == "Control Block attributes");
         Assert.Contains(details, x => x.Kind == "Property" && x.Name == "Number of Setting Groups" && x.Value == "Not read");
         Assert.Contains(details, x => x.Kind == "Message" && x.Name.Contains("No model is available"));
+    }
+
+    [Fact]
+    public void ExactIedPrefixIsStrippedOnlyFromLdLabels_NeverKeysOrReferences()
+    {
+        const string ied = "AA1E1F06R4";
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            IedName = ied,
+            LogicalDevices = [new LiveIedLogicalDeviceModel {
+                MmsDomain = ied + "ADD"
+            }, new LiveIedLogicalDeviceModel {
+                MmsDomain = ied + "Application"
+            }],
+            DataSets = [new LiveIedDataSetModel {
+                Domain = ied + "Application", LogicalNode = "LLN0",
+                Name = "Analog", Reference = ied + "Application/LLN0.Analog"
+            }]
+        };
+        var rcb = new RcbExportRow {
+            Reference = ied + "Application/LLN0.RP.Unbuffer01",
+            Name = "Unbuffer01"
+        };
+        var roots = IedBrowserPresentation.Roots(model, [rcb]);
+        var modelRoot = Assert.Single(roots.Where(x => x.Key == "category/model"));
+        Assert.Equal(["ADD", "Application"],
+            modelRoot.GetChildren().Select(x => x.Title).ToArray());
+        Assert.Equal("model/ld/" + ied + "Application",
+            modelRoot.GetChildren()[1].Key);
+        var ds = Assert.Single(roots.Where(x => x.Key == "category/datasets"));
+        Assert.Equal("Application", Assert.Single(ds.GetChildren()).Title);
+        var reports = Assert.Single(roots.Where(x => x.Key == "category/reports"));
+        Assert.Equal("Application", Assert.Single(reports.GetChildren()).Title);
+        Assert.Equal("AA1E1F06R4Application",
+            IedBrowserPresentation.LdDisplayName("AA1E1F06R4Application", "OTHER"));
+        Assert.Equal("Application", IedBrowserPresentation.LdDisplayName(
+            "AA1E1F06R4Application", ied));
     }
 
     [Fact]
@@ -250,10 +287,14 @@ public sealed class IedBrowserPresentationTests
         var lns = IedBrowserPresentation.Details(ld.NavigateTo!, model, false)
             .Where(r => r.NavigateTo?.Kind == "LN").ToArray();
         Assert.Equal(["LLN0", "ATCC1"], lns.Select(r => r.Name).ToArray());
-        var dos = IedBrowserPresentation.Details(lns[0].NavigateTo!, model, false)
-            .Where(r => r.NavigateTo?.Kind == "DO").ToArray();
-        Assert.Single(dos);
-        Assert.Equal("Beh", dos[0].Name);
+        // M2.6B: LN's right pane projects real DO→DA/BDA data rows, not
+        // navigation cards. The left tree still stops at LN.
+        var details = IedBrowserPresentation.Details(lns[0].NavigateTo!, model, false);
+        var doRow = Assert.Single(details.Where(r => r.IsDataObject));
+        Assert.Equal("Beh", doRow.Name);
+        Assert.Equal("DO", doRow.Glyph);
+        Assert.Equal("ZIVLD/LLN0.Beh", doRow.ValueReference);
+        Assert.DoesNotContain(details, r => r.NavigateTo?.Kind == "DO");
     }
     [Fact]
     public void ReportFlags_UseEngineReservedBitMapping_AndUnknownDoesNotMeanDisabled()
@@ -270,6 +311,25 @@ public sealed class IedBrowserPresentationTests
         Assert.All(IedBrowserReportFlags.TriggerOptions("mystery-value"), x => Assert.Null(x.IsEnabled));
         Assert.True(IedBrowserReportFlags.TriggerOptions("dchg, gi")
             .Single(x => x.Label == "Data change").IsEnabled);
+    }
+
+    [Fact]
+    public void BrowserSelectionDefersAndDetachesBeforeDetailCollectionReset()
+    {
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root is not null &&
+               !File.Exists(Path.Combine(root.FullName, "MainWindow.IedBrowser.cs")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var source = File.ReadAllText(Path.Combine(root!.FullName, "MainWindow.IedBrowser.cs"));
+        Assert.Contains("Dispatcher.BeginInvoke(DispatcherPriority.Background", source);
+        Assert.Contains("ticket != _iedBrowserNavigationRenderTicket", source);
+        var method = source.IndexOf("private void ReplaceIedBrowserDetails(", StringComparison.Ordinal);
+        Assert.True(method >= 0);
+        var detach = source.IndexOf("IedBrowserDetailList.ItemsSource = null;", method, StringComparison.Ordinal);
+        var reset = source.IndexOf("_iedBrowserDetails.Reset(rows);", method, StringComparison.Ordinal);
+        var attach = source.IndexOf("IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;", method, StringComparison.Ordinal);
+        Assert.True(detach > method && reset > detach && attach > reset);
     }
 
     [Fact]
@@ -340,7 +400,12 @@ public sealed class IedBrowserPresentationTests
         var sgRows = IedBrowserPresentation.Details(
             new IedBrowserTreeRow("sg", "SGCB", "SGCB", 3, sg), model, true);
         Assert.Contains(sgRows, r => r.Kind == "Section" && r.Name == "Settings");
-        Assert.Contains(sgRows, r => r.Kind == "Data" && r.Name.Contains("BndWid.setMag") && r.Value == "Not read");
+        var settingRoot = Assert.Single(sgRows.Where(r => r.Kind == "Data" &&
+            r.Name == "ATCC1.BndWid"));
+        Assert.Equal("Not read", settingRoot.Value);
+        var settingLeaf = Assert.Single(settingRoot.GetChildren());
+        Assert.Equal("setMag [SG]", settingLeaf.Name);
+        Assert.Equal("LD/ATCC1$SG$BndWid$setMag", settingLeaf.ValueReference);
         var goose = new LiveIedControlBlockModel { Kind = "GOOSE", Domain = "LD",
             Reference = "LD/LLN0.GO.cb1", DataSetReference = "LD/LLN0.Signals" };
         var gRows = IedBrowserPresentation.Details(
@@ -392,16 +457,21 @@ public sealed class IedBrowserPresentationTests
         tree.Expand(ln); // Cannot add DO/DA to the left pane, even via API.
         Assert.DoesNotContain(tree.Rows, r => r.Kind is "DO" or "DA");
 
-        var doRow = Assert.Single(IedBrowserPresentation.Details(ln, model, false)
-            .Where(r => r.NavigateTo?.Kind == "DO"));
-        var doPage = doRow.NavigateTo!;
-        Assert.Same(ln, doPage.Parent);
-        var daRow = Assert.Single(IedBrowserPresentation.Details(doPage, model, false)
-            .Where(r => r.NavigateTo?.Kind == "DA"));
-        Assert.Equal("Pos.stVal", daRow.Name);
-        Assert.Same(doPage, daRow.NavigateTo!.Parent);
-        Assert.Contains(IedBrowserPresentation.Details(daRow.NavigateTo!, model, false),
-            r => r.Kind == "Property" && r.Name == "FC" && r.Value == "ST");
+        // The LN detail pane now expands DO and DA natively, without
+        // manufacturing a duplicate navigation hierarchy in the left tree.
+        var rows = IedBrowserPresentation.Details(ln, model, false);
+        var doRow = Assert.Single(rows.Where(r => r.IsDataObject));
+        Assert.Equal("Pos", doRow.Name);
+        Assert.Equal("DO", doRow.Glyph);
+        Assert.True(doRow.HasChildren);
+        Assert.Null(doRow.NavigateTo);
+        var hierarchy = new IedBrowserDetailProjection();
+        hierarchy.Reset(rows);
+        hierarchy.Toggle(doRow);
+        var daRow = Assert.Single(hierarchy.Rows.Where(r => r.Name == "stVal [ST]"));
+        Assert.Equal("LD/CSWI1$ST$Pos$stVal", daRow.ValueReference);
+        Assert.Equal("ST", daRow.FunctionalConstraint);
+        Assert.Equal("DA", daRow.Glyph);
         Assert.DoesNotContain(tree.Rows, r => r.Kind is "DO" or "DA");
     }
 
@@ -667,6 +737,75 @@ public sealed class IedBrowserPresentationTests
         var details = IedBrowserPresentation.Details(row.NavigateTo!, null, true);
         Assert.Contains(details, x => x.Kind == "Property" && x.Name == "Path" &&
                                       x.Value == "fault/FRA00029.cfg");
+    }
+
+    [Fact]
+    public void RcbGooseAndSgcb_HaveDistinctReadSelectionRoutes()
+    {
+        var rcb = new IedBrowserTreeRow("r", "r", "RCB", 3,
+            new RcbExportRow { Reference = "LD/LLN0.RP.r", DataSetReference = "LD/LLN0.DS" });
+        var goose = new IedBrowserTreeRow("g", "g", "GoCB", 3,
+            new LiveIedControlBlockModel { Reference = "LD/LLN0.GO.g",
+                DataSetReference = "LD/LLN0.DS" });
+        var sgcb = new IedBrowserTreeRow("s", "s", "SGCB", 3,
+            new LiveIedControlBlockModel { Reference = "LD/LLN0.SGCB", Domain = "LD" });
+        Assert.Equal(IedBrowserReadSelectionKind.ReadOnlyRcb, IedBrowserReadPlan.SelectionKind(rcb));
+        Assert.Equal(IedBrowserReadSelectionKind.GooseInspectionRequiresSubscriber,
+            IedBrowserReadPlan.SelectionKind(goose));
+        Assert.Equal(IedBrowserReadSelectionKind.SettingGroupAttributes,
+            IedBrowserReadPlan.SelectionKind(sgcb));
+        Assert.Equal(IedBrowserReadSelectionKind.FcAttributes,
+            IedBrowserReadPlan.SelectionKind(null));
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            DataSets = [new LiveIedDataSetModel { Reference = "LD/LLN0.DS" }]
+        };
+        Assert.Empty(IedBrowserReadPlan.Build(model, rcb, readAll: false));
+        Assert.Empty(IedBrowserReadPlan.Build(model, goose, readAll: false));
+    }
+
+    [Fact]
+    public void SettingGroup_ReadPlanAndHierarchy_PreserveExactLdAndFunctionalConstraint()
+    {
+        static LiveIedDataAttributeModel Attr(string ld, string fc) => new()
+        {
+            ObjectReference = ld + "/ATCC1.BndWid", AttributePath = "BndWid.setMag.f",
+            MmsReference = ld + "/ATCC1$" + fc + "$BndWid$setMag$f",
+            FunctionalConstraint = fc
+        };
+        var sg = Attr("LD", "SG");
+        var se = Attr("LD", "SE");
+        var foreign = Attr("LD2", "SG");
+        var mx = Attr("LD", "MX");
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices =
+            [
+                new LiveIedLogicalDeviceModel { MmsDomain = "LD",
+                    LogicalNodes = [new LiveIedLogicalNodeModel { Name = "ATCC1",
+                        DataObjects = [new LiveIedDataObjectModel { Name = "BndWid",
+                            Reference = "LD/ATCC1.BndWid", Attributes = [sg, se, mx] }] }] },
+                new LiveIedLogicalDeviceModel { MmsDomain = "LD2",
+                    LogicalNodes = [new LiveIedLogicalNodeModel { Name = "ATCC1",
+                        DataObjects = [new LiveIedDataObjectModel { Name = "BndWid",
+                            Reference = "LD2/ATCC1.BndWid", Attributes = [foreign] }] }] }
+            ]
+        };
+        var node = new IedBrowserTreeRow("s", "SGCB", "SGCB", 3,
+            new LiveIedControlBlockModel { Reference = "LD/LLN0.SGCB", Domain = "LD" });
+        var targets = IedBrowserReadPlan.Build(model, node, readAll: false);
+        Assert.Equal(2, targets.Count);
+        Assert.Contains(targets, v => v.Reference == sg.MmsReference && v.FunctionalConstraint == "SG");
+        Assert.Contains(targets, v => v.Reference == se.MmsReference && v.FunctionalConstraint == "SE");
+        Assert.DoesNotContain(targets, v => v.Reference == foreign.MmsReference || v.Reference == mx.MmsReference);
+        var rows = IedBrowserPresentation.Details(node, model, connected: true);
+        var root = Assert.Single(rows.Where(v => v.Kind == "Data"));
+        Assert.Equal("ATCC1.BndWid", root.Name);
+        Assert.Equal("", root.ValueReference);
+        var sgGroup = Assert.Single(root.GetChildren().Where(v => v.Name == "setMag [SG]"));
+        var leaf = Assert.Single(sgGroup.GetChildren());
+        Assert.Equal("f [SG]", leaf.Name);
+        Assert.Equal(sg.MmsReference, leaf.ValueReference);
     }
 
 }
