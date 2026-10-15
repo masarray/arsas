@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import fnmatch
 import json
 import subprocess
 import tempfile
@@ -335,7 +336,6 @@ jobs:
 
     def test_io_domain_trigger_covers_all_real_owners_without_unrelated_ci(self):
         """Fail closed on missed IO/FAT owners and slash-spanning wildcard mistakes."""
-        import fnmatch
 
         repo = Path(__file__).resolve().parents[1]
         source = (repo / ".github/workflows/validate-io-testing.yml").read_text(
