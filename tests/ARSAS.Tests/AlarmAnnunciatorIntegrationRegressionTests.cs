@@ -32,13 +32,13 @@ public sealed class AlarmAnnunciatorIntegrationRegressionTests
             (string?)button.Attribute("Tag") == "4");
         Assert.Contains(navGrid.Descendants(p + "Button"), button =>
             (string?)button.Attribute(x + "Name") == "NavDiagnosticsButton" &&
-            (string?)button.Attribute("Tag") == "5");
+            (string?)button.Attribute("Tag") == "7");
         Assert.Contains(navGrid.Descendants(p + "Button"), button =>
             (string?)button.Attribute(x + "Name") == "NavNativeFatButton" &&
             (string?)button.Attribute("Tag") == "6" &&
-            ((string?)button.Attribute("Content") == "FAT" ||
+            ((string?)button.Attribute("Content") == "Signal Testing" ||
              button.Descendants(p + "TextBlock").Any(label =>
-                 (string?)label.Attribute("Text") == "FAT")));
+                 (string?)label.Attribute("Text") == "Signal Testing")));
 
         var headerSource = header.ToString(SaveOptions.DisableFormatting);
         Assert.DoesNotContain("ConnectionInsightText", headerSource, StringComparison.Ordinal);
@@ -54,8 +54,8 @@ public sealed class AlarmAnnunciatorIntegrationRegressionTests
     {
         var source = File.ReadAllText(FindRepoFile("SasOperationalUiPolicy.cs"));
 
-        Assert.Contains("\"NavExplorerButton\", \"NavLiveButton\", \"NavEventsButton\", \"NavAlarmButton\", \"NavGooseButton\", \"NavDiagnosticsButton\", \"NavNativeFatButton\", \"NavIedBrowserButton\"", source, StringComparison.Ordinal);
-        Assert.Contains("UpdateNavigation(buttons, tabs.SelectedIndex", source, StringComparison.Ordinal);
+        Assert.Contains("\"NavIedBrowserButton\", \"NavExplorerButton\", \"NavEventsButton\", \"NavAlarmButton\", \"NavGooseButton\", \"NavSmvButton\", \"NavNativeFatButton\", \"NavDiagnosticsButton\"", source, StringComparison.Ordinal);
+        Assert.Contains("UpdateNavigation(buttons, EngineeringNavigationRoute.ButtonForTab(tabs.SelectedIndex)", source, StringComparison.Ordinal);
         Assert.Contains("buttons[index].Background = selected ? AccentGradient()", source, StringComparison.Ordinal);
     }
 
@@ -137,13 +137,13 @@ public sealed class AlarmAnnunciatorIntegrationRegressionTests
         var nativeFat = File.ReadAllText(FindRepoFile("MainWindow.NativeFatWorkspace.cs"));
 
         Assert.Contains("contentWidth / 8d", navigation, StringComparison.Ordinal);
-        Assert.Contains("Math.Clamp(tabs.SelectedIndex, 0, 7)", navigation, StringComparison.Ordinal);
+        Assert.Contains("EngineeringNavigationRoute.ButtonForTab(tabs.SelectedIndex)", navigation, StringComparison.Ordinal);
         Assert.Contains("NavAlarmButton", navigation, StringComparison.Ordinal);
         Assert.Contains("NavNativeFatButton", navigation, StringComparison.Ordinal);
         Assert.Contains("MainTabs.SelectedIndex == 4", main, StringComparison.Ordinal);
         Assert.Contains("MainTabs.SelectedIndex == 5", main, StringComparison.Ordinal);
         Assert.Contains("private const int NativeFatWorkspaceIndex = 6", nativeFat, StringComparison.Ordinal);
-        Assert.Contains("Math.Clamp(index, 0, IedBrowserWorkspaceIndex)", main, StringComparison.Ordinal);
+        Assert.Contains("EngineeringNavigationRoute.TabForButton(index)", main, StringComparison.Ordinal);
     }
 
     [Fact]
