@@ -68,7 +68,7 @@ public sealed class IedBrowserObservedVectorM213HTests
     }
 
     [Fact]
-    public void OnlyObservedPhaseAndProvenUnitAppear_NoFabricatedZeroOrDegrees()
+    public void OnlyObservedPhaseAndProvenUnitAppear_NoFabricatedMagnitudeOrUnknownUnits()
     {
         var root = IedBrowserStructuredDetails.DataObject(VectorModel(), "");
         var values = new IedBrowserLiveValues();
@@ -86,7 +86,7 @@ public sealed class IedBrowserObservedVectorM213HTests
         Assert.True(IedBrowserObservedVectorPresentation.TryFormat(
             values, root.VectorComponents, Units(Unit(Owner + ".phsC", "kV")),
             true, out var unqualifiedAngle));
-        Assert.Equal("phsC: 0 kV ∠ 17", unqualifiedAngle.Value);
+        Assert.Equal("phsC: 0 kV ∠ 17°", unqualifiedAngle.Value);
         Assert.Equal("Report", display.Source);
         Assert.Contains(Owner + ".phsC.cVal.mag.f", display.Provenance);
         Assert.DoesNotContain("phsA:", display.Value);
@@ -94,9 +94,9 @@ public sealed class IedBrowserObservedVectorM213HTests
 
         Assert.True(IedBrowserObservedVectorPresentation.TryFormat(
             values, root.VectorComponents, Units(), true, out var raw));
-        Assert.Equal("phsC: 0 ∠ 17", raw.Value);
+        Assert.Equal("phsC: 0 ∠ 17°", raw.Value);
         Assert.DoesNotContain("kV", raw.Value);
-        Assert.DoesNotContain("°", raw.Value);
+        Assert.Contains("°", raw.Value);
     }
 
     [Fact]
