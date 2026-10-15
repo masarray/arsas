@@ -17,11 +17,11 @@ public sealed class MaterialIconConsistencyTests
     private static readonly XNamespace X = "http://schemas.microsoft.com/winfx/2006/xaml";
 
     [Theory]
-    [InlineData("NavExplorerButton", "0", "MaterialExplorerIcon")]
-    [InlineData("NavLiveButton", "1", "MaterialLiveIcon")]
+    [InlineData("NavExplorerButton", "0", "OperatorIecWirelessIcon")]
+    [InlineData("NavLiveButton", "1", "OperatorLiveMonitorIcon")]
     [InlineData("NavEventsButton", "2", "OperatorEventLogIcon")]
     [InlineData("NavAlarmButton", "3", "OperatorAlarmIcon")]
-    [InlineData("NavGooseButton", "4", "MaterialGooseIcon")]
+    [InlineData("NavGooseButton", "4", "OperatorIecWirelessIcon")]
     [InlineData("NavDiagnosticsButton", "5", "MaterialDiagnosticsIcon")]
     [InlineData("NavNativeFatButton", "6", "OperatorFatIcon")]
     [InlineData("NavIedBrowserButton", "7", "OperatorIedBrowserIcon")]

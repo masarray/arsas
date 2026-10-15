@@ -72,7 +72,7 @@ public sealed class IedBrowserEngineeringCompositeTests
                 plan.MagnitudeReference, "MX", "0", "", "", "MMS Read");
         Assert.True(IedBrowserEngineeringComposite.TryCompose(
             row, ledger, new Dictionary<string, string?>(), false, out var result));
-        Assert.Contains("angle not verified", result.Text);
+        Assert.DoesNotContain("angle not verified", result.Text);
         Assert.DoesNotContain("°", result.Text);
         Assert.DoesNotContain("kV", result.Text);
     }
@@ -87,7 +87,7 @@ public sealed class IedBrowserEngineeringCompositeTests
             row.PhasePlans[0].MagnitudeReference, "MX", "42", "", "", "Report");
         Assert.True(IedBrowserEngineeringComposite.TryCompose(
             row, ledger, new Dictionary<string, string?>(), true, out var summary));
-        Assert.StartsWith("Partial · phsA: 42 (angle not verified); phsB: not observed;", summary.Text);
+        Assert.StartsWith("Partial · phsA: 42; phsB: not observed;", summary.Text);
         Assert.Contains("phsC: not observed", summary.Text);
         Assert.DoesNotContain("∠ 0", summary.Text);
         Assert.True(ledger.TryGet(row.PhasePlans[0].MagnitudeReference, "MX",
@@ -118,8 +118,9 @@ public sealed class IedBrowserEngineeringCompositeTests
             phase.AngleReference, "MX", "33", "", "timestamp2", "Report");
         Assert.True(IedBrowserEngineeringComposite.TryCompose(
             row, ledger, new Dictionary<string, string?>(), true, out var output));
-        Assert.Equal("12 (angle not verified)", output.Text);
-        Assert.DoesNotContain("33", output.Text);
+        Assert.Equal("12; angle 33°", output.Text);
+        Assert.DoesNotContain("∠", output.Text);
+        Assert.Contains("independent", output.Provenance);
     }
 
     [Fact]

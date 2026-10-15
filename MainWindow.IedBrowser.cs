@@ -1161,7 +1161,8 @@ public partial class MainWindow
             ? r.Inspection.Summary(connected)
             : connected ? "Connected · Report values shown; use Read for CF/DC configuration values"
                         : "Offline · cached SCL/discovery model";
-        ReplaceIedBrowserDetails(IedBrowserPresentation.Details(row, model, connected));
+        ReplaceIedBrowserDetails(IedBrowserPresentation.Details(row, model,
+            connected, SelectedDevice?.SclWorkspace?.DesignModel));
         _iedBrowserLastLiveVersion = -1;
         RefreshIedBrowserVisibleValues();
         // Folder entry opens at its first child, regardless of the scroll
