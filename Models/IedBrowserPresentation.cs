@@ -603,35 +603,45 @@ public static class IedBrowserPresentation
                     rows.Add(new("DataHeader", "Name", "Value"));
                     if (model is not null)
                     {
-                        // Group by real model DO; never concatenate ObjectReference and
-                        // AttributePath, which can produce duplicate setVal spelling.
+                        // Active SG values use the existing lazy IEC DA projector.
+                        // Never collapse all SG/SE attributes into an unbound DO.
                         var settings = model.LogicalDevices
-                            .Where(ld => string.Equals(ld.MmsDomain, block.Domain, StringComparison.Ordinal))
+                            .Where(ld => string.Equals(ld.MmsDomain, block.Domain,
+                                StringComparison.Ordinal))
                             .SelectMany(ld => ld.LogicalNodes)
                             .SelectMany(ln => ln.DataObjects.Select(obj => (Ln: ln, Object: obj)))
-                            .Select(x => (x.Ln, x.Object, Attributes: x.Object.Attributes
-                                .Where(a => a.FunctionalConstraint is "SG" or "SE").ToArray()))
-                            .Where(x => x.Attributes.Length > 0)
                             .ToArray();
+                        var shown = 0;
+                        var seen = new HashSet<string>(StringComparer.Ordinal);
                         foreach (var setting in settings)
                         {
-                            var attributes = setting.Attributes;
-                            var sole = attributes.Length == 1 ? attributes[0] : null;
-                            rows.Add(new IedBrowserDetailRow("Data",
-                                $"{setting.Ln.Name}.{setting.Object.Name}", "Not read", 0,
-                                "SG/SE declaration; effective setting group not verified")
+                            var sg = setting.Object.Attributes.Where(a =>
+                                string.Equals(a.FunctionalConstraint, "SG",
+                                    StringComparison.OrdinalIgnoreCase)).ToArray();
+                            if (sg.Length == 0) continue;
+                            foreach (var field in IedBrowserStructuredDetails.AttributeRows(
+                                         sg, setting.Object.Name))
                             {
-                                // Never project a multi-leaf parent from an arbitrary child.
-                                ValueReference = sole?.MmsReference ?? "",
-                                FunctionalConstraint = sole?.FunctionalConstraint ?? "",
-                                EngineeringUnitReference = sole?.MmsReference ?? "",
-                                IsEngineeringValue = sole is not null,
-                                LoadChildren = () => IedBrowserStructuredDetails.AttributeRows(
-                                    attributes, setting.Object.Name, 1)
-                            });
+                                // Prefer a unique scalar descendant when direct
+                                // parent and child declarations coexist.
+                                var refToRead = field.FallbackValueReference.Length > 0
+                                    ? field.FallbackValueReference : field.ValueReference;
+                                var identity = setting.Object.Reference + "|" + field.Name;
+                                if (!seen.Add(identity)) continue;
+                                rows.Add(field with
+                                {
+                                    Name = $"{setting.Ln.Name}.{setting.Object.Name}.{field.Name}",
+                                    ValueReference = refToRead,
+                                    FallbackValueReference = refToRead == field.ValueReference
+                                        ? "" : field.ValueReference,
+                                    Source = field.Source + " · active SG declaration"
+                                });
+                                shown++;
+                            }
                         }
-                        if (settings.Length == 0)
-                            rows.Add(new("Message", "No SG/SE parameters available in this model."));
+                        if (shown == 0)
+                            rows.Add(new("Message",
+                                "No active-group [SG] parameters in this model; [SE] edit values cannot substitute."));
                     }
                     else
                         rows.Add(new("Message", "No model is available for SG/SE setting attributes."));

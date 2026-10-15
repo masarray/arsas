@@ -401,11 +401,10 @@ public sealed class IedBrowserPresentationTests
             new IedBrowserTreeRow("sg", "SGCB", "SGCB", 3, sg), model, true);
         Assert.Contains(sgRows, r => r.Kind == "Section" && r.Name == "Settings");
         var settingRoot = Assert.Single(sgRows.Where(r => r.Kind == "Data" &&
-            r.Name == "ATCC1.BndWid"));
+            r.Name == "ATCC1.BndWid.setMag [SG]"));
         Assert.Equal("Not read", settingRoot.Value);
-        var settingLeaf = Assert.Single(settingRoot.GetChildren());
-        Assert.Equal("setMag [SG]", settingLeaf.Name);
-        Assert.Equal("LD/ATCC1$SG$BndWid$setMag", settingLeaf.ValueReference);
+        Assert.Equal("LD/ATCC1$SG$BndWid$setMag", settingRoot.ValueReference);
+        Assert.Equal("SG", settingRoot.FunctionalConstraint);
         var goose = new LiveIedControlBlockModel { Kind = "GOOSE", Domain = "LD",
             Reference = "LD/LLN0.GO.cb1", DataSetReference = "LD/LLN0.Signals" };
         var gRows = IedBrowserPresentation.Details(
