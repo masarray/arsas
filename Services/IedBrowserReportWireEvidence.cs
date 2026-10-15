@@ -21,11 +21,8 @@ public static class IedBrowserReportWireEvidence
         {
             var reference = IedBrowserLiveValues.CanonicalReference(reported.MemberReference);
             var fc = reported.Member?.FunctionalConstraint ?? "";
-            // When OptFlds contains DataRef, its on-wire identity must agree
-            // with the resolved DataSet member before any raw quality/time
-            // evidence is bound to a Browser DO. Absence of optional DataRef
-            // preserves the existing engine-verified member/index route.
-            // Never resolve a disagreement by short name or suffix.
+            // DataRef is optional. If present it must agree with the verified
+            // DataSet member AND explicit FC, or the raw q/t is quarantined.
             if (!DataReferenceAgreesWithMember(reported.DataReference, reference, fc))
                 continue;
             var payload = reported.Value;
@@ -65,50 +62,21 @@ public static class IedBrowserReportWireEvidence
     }
 
 
-    /// <summary>
-    /// Match both the IEC attribute path and, when the wire DataRef has an MMS
-    /// $FC$ component, its FC. CanonicalReference alone intentionally removes
-    /// the FC for ledger keys and therefore cannot prove this wire identity.
-    /// </summary>
     private static bool DataReferenceAgreesWithMember(
         string? dataReference, string memberReference, string memberFc)
     {
         if (string.IsNullOrWhiteSpace(dataReference))
-            return true; // DataRef is optional; the decoded member remains authoritative.
+            return true;
         var wire = dataReference.Trim();
         if (!string.Equals(IedBrowserLiveValues.CanonicalReference(wire),
                 memberReference, StringComparison.Ordinal))
             return false;
-        var fcStart = wire.IndexOf('
-        => raw.Kind == MmsDataKind.BitString &&
-            MmsQualityDecoder.TryDecode(raw.RawValue.ToArray(), out var decoded)
-            ? decoded : null;
-
-    private static Iec61850UtcTimeEvidence? DecodeTime(MmsDataValue raw)
-    {
-        if (raw.Kind != MmsDataKind.UtcTime) return null;
-        var decoded = Iec61850UtcTimeEvidence.Decode(raw);
-        return decoded is { IsDecoded: true, HasWireProvenance: true }
-            ? decoded : null;
-    }
-}
-);
+        // The canonical ledger deliberately drops the MMS $FC$ segment.
+        // Recheck this separately to reject cross-FC alias collisions.
+        var fcStart = wire.IndexOf('$');
         if (fcStart < 0)
-            return true; // Standard dotted IEC reference carries no FC segment.
-        var fcEnd = wire.IndexOf('
-        => raw.Kind == MmsDataKind.BitString &&
-            MmsQualityDecoder.TryDecode(raw.RawValue.ToArray(), out var decoded)
-            ? decoded : null;
-
-    private static Iec61850UtcTimeEvidence? DecodeTime(MmsDataValue raw)
-    {
-        if (raw.Kind != MmsDataKind.UtcTime) return null;
-        var decoded = Iec61850UtcTimeEvidence.Decode(raw);
-        return decoded is { IsDecoded: true, HasWireProvenance: true }
-            ? decoded : null;
-    }
-}
-, fcStart + 1);
+            return true;
+        var fcEnd = wire.IndexOf('$', fcStart + 1);
         return fcEnd > fcStart + 1 &&
             string.Equals(wire[(fcStart + 1)..fcEnd], memberFc,
                 StringComparison.OrdinalIgnoreCase);
