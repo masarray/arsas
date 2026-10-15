@@ -109,8 +109,22 @@
                             <DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.18" Color="#2563EB"/>
                         </Border.Effect>
                     </Border>
-                    <Button x:Name="NavExplorerButton" Grid.Column="0" Content="IEC 61850 Explorer" Tag="0" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
-                    <Button x:Name="NavLiveButton" Grid.Column="1" Content="Live Monitor" Tag="1" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
+                    <Button x:Name="NavExplorerButton" Grid.Column="0" Tag="0" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="IEC 61850 Explorer">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                <Path Data="{StaticResource MaterialExplorerIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                            </Viewbox>
+                            <TextBlock Text="IEC 61850 Explorer" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="NavLiveButton" Grid.Column="1" Tag="1" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="Live Monitor">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                <Path Data="{StaticResource MaterialLiveIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                            </Viewbox>
+                            <TextBlock Text="Live Monitor" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <Button x:Name="NavEventsButton" Grid.Column="2" Tag="2" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="Event Log">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                             <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
@@ -127,9 +141,19 @@
                             <TextBlock Text="Alarm" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="NavGooseButton" Grid.Column="4" Content="GOOSE Subscriber" Tag="4" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
+                    <Button x:Name="NavGooseButton" Grid.Column="4" Tag="4" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="GOOSE Subscriber">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                <Path Data="{StaticResource MaterialGooseIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                            </Viewbox>
+                            <TextBlock Text="GOOSE Subscriber" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <Button x:Name="NavDiagnosticsButton" Grid.Column="5" Tag="5" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                <Path Data="{StaticResource MaterialDiagnosticsIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                            </Viewbox>
                             <TextBlock Text="Diagnostics" VerticalAlignment="Center"/>
                             <Border Visibility="{Binding DiagnosticsAlertVisibility}"
                                     Width="17" Height="17" CornerRadius="8.5" Margin="7,0,0,0"
@@ -189,12 +213,12 @@
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                                     <Button Style="{StaticResource IedIconButton}" Click="OpenProject_Click" ToolTip="Open ARSAS project" Margin="0,0,6,0">
                                         <Viewbox Width="16" Height="16">
-                                            <Path Data="{StaticResource LucideFolderOpen}" Style="{StaticResource LucideIcon}"/>
+                                            <Path Data="{StaticResource MaterialFolderOpenIcon}" Style="{StaticResource MaterialIconGlyph}"/>
                                         </Viewbox>
                                     </Button>
                                     <Button Style="{StaticResource IedIconButton}" Click="SaveProject_Click" ToolTip="Save ARSAS project">
                                         <Viewbox Width="16" Height="16">
-                                            <Path Data="{StaticResource LucideSave}" Style="{StaticResource LucideIcon}"/>
+                                            <Path Data="{StaticResource MaterialSaveIcon}" Style="{StaticResource MaterialIconGlyph}"/>
                                         </Viewbox>
                                     </Button>
                                 </StackPanel>
@@ -222,7 +246,7 @@
                                             ToolTip="Fast-connect every saved or SCL-imported IED and start live monitoring for saved selections">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <Viewbox Width="13" Height="13" Margin="0,0,5,0">
-                                                <Path Data="{StaticResource LucidePlay}" Style="{StaticResource LucideIcon}" Stroke="#16A34A"/>
+                                                <Path Data="{StaticResource MaterialPlayIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="#16A34A"/>
                                             </Viewbox>
                                             <TextBlock Text="Connect All" FontWeight="SemiBold"/>
                                         </StackPanel>
@@ -233,7 +257,7 @@
                                             ToolTip="Import one or more IED endpoints from SCD, CID, ICD, IID, SSD, or XML SCL files">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <Viewbox Width="13" Height="13" Margin="0,0,5,0">
-                                                <Path Data="{StaticResource LucideFileInput}" Style="{StaticResource LucideIcon}"/>
+                                                <Path Data="{StaticResource MaterialUploadFileIcon}" Style="{StaticResource MaterialIconGlyph}"/>
                                             </Viewbox>
                                             <TextBlock Text="Open SCL" FontWeight="SemiBold"/>
                                         </StackPanel>
@@ -359,23 +383,23 @@
                                           <UniformGrid Rows="1" Columns="5" HorizontalAlignment="Stretch">
                                               <Button Style="{StaticResource IedIconButton}" Width="27" Height="27" Margin="0" Tag="{Binding}" Click="IedPlayAction_Click"
                                                       IsEnabled="{Binding CanPlayAction}" ToolTip="{Binding PlayToolTip}">
-                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource LucidePlay}" Style="{StaticResource LucideIcon}" Stroke="#16A34A"/></Viewbox>
+                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource MaterialPlayIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="#16A34A"/></Viewbox>
                                               </Button>
                                               <Button Style="{StaticResource IedIconButton}" Width="27" Height="27" Margin="0" Tag="{Binding}" Click="IedStopAction_Click"
                                                       IsEnabled="{Binding CanStopAction}" ToolTip="{Binding StopToolTip}">
-                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource LucideSquare}" Style="{StaticResource LucideIcon}" Stroke="{StaticResource Warning}"/></Viewbox>
+                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource MaterialStopIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="{StaticResource Warning}"/></Viewbox>
                                               </Button>
                                               <Button Style="{StaticResource IedIconButton}" Width="27" Height="27" Margin="0" Tag="{Binding}" Click="IedConfigureSignals_Click"
                                                       IsEnabled="{Binding CanEditSignals}" ToolTip="{Binding ConfigureToolTip}">
-                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource LucidePencilLine}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource MaterialEditIcon}" Style="{StaticResource MaterialIconGlyph}"/></Viewbox>
                                               </Button>
                                               <Button Style="{StaticResource IedIconButton}" Width="27" Height="27" Margin="0" Tag="{Binding}" Click="IedEditRcb_Click"
                                                       IsEnabled="{Binding IsActionEnabled}" ToolTip="RCB Export Filter — keep one RCB for legacy SAS CID import">
-                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource LucideSlidersHorizontal}" Style="{StaticResource LucideIcon}" Stroke="#315DBF"/></Viewbox>
+                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource MaterialTuneIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="#315DBF"/></Viewbox>
                                               </Button>
                                               <Button Style="{StaticResource IedIconButton}" Width="27" Height="27" Margin="0" Tag="{Binding}" Click="IedSaveScl_Click"
                                                       IsEnabled="{Binding CanSaveScl}" ToolTip="{Binding SaveSclToolTip}">
-                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource LucideSave}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource MaterialSaveIcon}" Style="{StaticResource MaterialIconGlyph}"/></Viewbox>
                                               </Button>
                                           </UniformGrid>
                                       </Grid>
@@ -385,7 +409,7 @@
                                                     IsEnabled="{Binding IsActionEnabled}" ToolTip="{Binding RemoveToolTip}"
                                                     Width="25" Height="25" Margin="0,-4,-4,0"
                                                     HorizontalAlignment="Right" VerticalAlignment="Top" Panel.ZIndex="12">
-                                                <Viewbox Width="14" Height="14"><Path Data="{StaticResource LucideX}" Style="{StaticResource LucideIcon}" Stroke="{StaticResource Danger}"/></Viewbox>
+                                                <Viewbox Width="14" Height="14"><Path Data="{StaticResource MaterialCloseIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="{StaticResource Danger}"/></Viewbox>
                                             </Button>
 
                                             <Border x:Name="BusyOverlay" Visibility="Collapsed" Background="#F7FAFEF7" CornerRadius="12"
@@ -481,7 +505,7 @@
                                         <WrapPanel>
                                             <Button Style="{StaticResource SoftButton}" Click="OpenProject_Click" Margin="0,0,10,0">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <Viewbox Width="15" Height="15" Margin="0,0,7,0"><Path Data="{StaticResource LucideFolderOpen}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                                    <Viewbox Width="15" Height="15" Margin="0,0,7,0"><Path Data="{StaticResource MaterialFolderOpenIcon}" Style="{StaticResource MaterialIconGlyph}"/></Viewbox>
                                                     <TextBlock Text="Open Project"/>
                                                 </StackPanel>
                                             </Button>
@@ -527,7 +551,7 @@
                                                     <ColumnDefinition Width="30"/>
                                                 </Grid.ColumnDefinitions>
                                                 <Viewbox Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                    <Path Data="{StaticResource LucideSearch}" Style="{StaticResource LucideIcon}" Stroke="#738398"/>
+                                                    <Path Data="{StaticResource MaterialSearchIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="#738398"/>
                                                 </Viewbox>
                                                 <TextBox x:Name="ExplorerLiveSearchBox" Grid.Column="1"
                                                          BorderThickness="0" Background="Transparent" Foreground="#263445"
@@ -561,7 +585,7 @@
                                                                     <ControlTemplate TargetType="Button">
                                                                         <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="7">
                                                                             <Viewbox Width="13" Height="13" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                                                <Path Data="{StaticResource LucideX}" Style="{StaticResource LucideIcon}" Stroke="#607086"/>
+                                                                                <Path Data="{StaticResource MaterialCloseIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="#607086"/>
                                                                             </Viewbox>
                                                                         </Border>
                                                                         <ControlTemplate.Triggers>
@@ -657,7 +681,7 @@
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <Border Width="28" Height="28" CornerRadius="9" Background="#E7F0FF" BorderBrush="#C9DBF7" BorderThickness="1" Margin="0,0,9,0">
                                             <Viewbox Width="15" Height="15" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                <Path Data="{StaticResource LucideSlidersHorizontal}" Style="{StaticResource LucideIcon}"/>
+                                                <Path Data="{StaticResource MaterialTuneIcon}" Style="{StaticResource MaterialIconGlyph}"/>
                                             </Viewbox>
                                         </Border>
                                         <TextBlock Text="IED Command Panel" FontSize="13.6" FontWeight="SemiBold" Foreground="{StaticResource Ink}" VerticalAlignment="Center"/>
@@ -932,7 +956,7 @@
                                             <ColumnDefinition Width="34"/>
                                         </Grid.ColumnDefinitions>
                                         <Viewbox Width="15" Height="15" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                            <Path Data="{StaticResource LucideSearch}" Style="{StaticResource LucideIcon}" Stroke="#607086"/>
+                                            <Path Data="{StaticResource MaterialSearchIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="#607086"/>
                                         </Viewbox>
                                         <Grid Grid.Column="1">
                                             <TextBox x:Name="GlobalLiveSearchBox"
@@ -969,7 +993,7 @@
                                                     </Style.Triggers>
                                                 </Style>
                                             </Button.Style>
-                                            <Viewbox Width="13" Height="13"><Path Data="{StaticResource LucideX}" Style="{StaticResource LucideIcon}" Stroke="#607086"/></Viewbox>
+                                            <Viewbox Width="13" Height="13"><Path Data="{StaticResource MaterialCloseIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="#607086"/></Viewbox>
                                         </Button>
                                     </Grid>
                                 </Border>
@@ -978,7 +1002,7 @@
                                         Padding="10,6" MinHeight="36" ToolTip="Show or hide per-column filters">
                                     <StackPanel Orientation="Horizontal">
                                         <Viewbox Width="14" Height="14" Margin="0,0,6,0">
-                                            <Path Data="{StaticResource LucideSlidersHorizontal}" Style="{StaticResource LucideIcon}"/>
+                                            <Path Data="{StaticResource MaterialTuneIcon}" Style="{StaticResource MaterialIconGlyph}"/>
                                         </Viewbox>
                                         <TextBlock x:Name="GlobalLiveFiltersLabel" Text="Filters" FontWeight="SemiBold"/>
                                     </StackPanel>
@@ -1449,21 +1473,21 @@
                                 <Button Grid.Column="1" Style="{StaticResource CommandOpenButton}" Click="StartGooseSubscriber_Click"
                                         Visibility="{Binding GooseStartVisibility}" IsEnabled="{Binding CanStartGooseSubscriber}" Padding="13,6" MinHeight="34">
                                     <StackPanel Orientation="Horizontal">
-                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource LucidePlay}" Style="{StaticResource LucideIcon}" Stroke="White"/></Viewbox>
+                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource MaterialPlayIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="White"/></Viewbox>
                                         <TextBlock Text="Start" Foreground="White"/>
                                     </StackPanel>
                                 </Button>
                                 <Button Grid.Column="3" Style="{StaticResource SoftButton}" Click="StopGooseSubscriber_Click"
                                         Visibility="{Binding GooseStopVisibility}" IsEnabled="{Binding CanStopGooseSubscriber}" Padding="11,6" MinHeight="34">
                                     <StackPanel Orientation="Horizontal">
-                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource LucideSquare}" Style="{StaticResource LucideIcon}" Stroke="{StaticResource Warning}"/></Viewbox>
+                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource MaterialStopIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="{StaticResource Warning}"/></Viewbox>
                                         <TextBlock Text="Stop"/>
                                     </StackPanel>
                                 </Button>
                                 <Button Grid.Column="5" Style="{StaticResource SoftButton}" Click="ClearGooseSubscriber_Click"
                                         Visibility="{Binding GooseClearVisibility}" Padding="11,6" MinHeight="34" ToolTip="Clear captured streams">
                                     <StackPanel Orientation="Horizontal">
-                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource LucideX}" Style="{StaticResource LucideIcon}" Stroke="{StaticResource Danger}"/></Viewbox>
+                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource MaterialCloseIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="{StaticResource Danger}"/></Viewbox>
                                         <TextBlock Text="Clear"/>
                                     </StackPanel>
                                 </Button>
@@ -1489,7 +1513,7 @@
                                 </ComboBox>
                                 <Button Grid.Column="2" Style="{StaticResource IedIconButton}" Click="RefreshGooseAdapters_Click"
                                         IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="Refresh adapters">
-                                    <Viewbox Width="15" Height="15"><Path Data="{StaticResource LucideRefreshCw}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                    <Viewbox Width="15" Height="15"><Path Data="{StaticResource MaterialRefreshIcon}" Style="{StaticResource MaterialIconGlyph}"/></Viewbox>
                                 </Button>
 
                                 <Border Grid.Column="4" CornerRadius="9" Padding="8,3" BorderThickness="1">
@@ -1539,7 +1563,7 @@
                                              IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="GOOSE BPF capture filter"/>
                                     <Button Grid.Column="3" Style="{StaticResource IedIconButton}" Click="RefreshGooseModels_Click"
                                             IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="Refresh SCL/live model bindings">
-                                        <Viewbox Width="15" Height="15"><Path Data="{StaticResource LucideSlidersHorizontal}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                        <Viewbox Width="15" Height="15"><Path Data="{StaticResource MaterialTuneIcon}" Style="{StaticResource MaterialIconGlyph}"/></Viewbox>
                                     </Button>
                                     <TextBlock Grid.Column="5" Text="{Binding GooseBindingText}" Style="{StaticResource Caption}"
                                                VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding GooseBindingText}"/>
