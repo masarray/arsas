@@ -417,6 +417,19 @@ public partial class MainWindow
             device.Signals);
         foreach (var row in _iedBrowserDetails.Rows)
         {
+            // Derived display is rebuilt from the canonical ledger. No new
+            // protocol reads, derived registry values, or per-frame model walk.
+            if (IedBrowserEngineeringComposite.TryCompose(
+                    row, device.LiveValues, engineeringUnits,
+                    device.IsMonitoring, out var composite))
+            {
+                row.Value = composite.IsStale
+                    ? "Offline · " + composite.Text : composite.Text;
+                row.ObservationSource = composite.IsStale
+                    ? "Stale derived " + composite.Source : "Derived " + composite.Source;
+                row.ObservationTooltip = composite.Provenance;
+                continue;
+            }
             if (string.IsNullOrWhiteSpace(row.ValueReference)) continue;
             var found = IedBrowserDetailEvidenceResolver.TryResolve(
                 device.LiveValues, row, _iedBrowserValueSchemaIndex,
