@@ -747,7 +747,9 @@ public partial class MainWindow
             TryParseAppId(block.AppId) ?? scl?.Address.AppId,
             TryParseUInt(block.ConfRev) ?? scl?.ConfigurationRevision,
             scl?.Address.DestinationMac?.ToString() ?? "",
-            scl?.GoId ?? "", scl?.Address.AppId);
+            scl?.GoId ?? "", scl?.Address.AppId,
+            scl?.Address.VlanId, scl?.Address.VlanPriority,
+            scl?.MinTimeMilliseconds, scl?.MaxTimeMilliseconds);
     }
 
     private void UpdateIedBrowserGooseDetails()
@@ -780,14 +782,21 @@ public partial class MainWindow
             ? "Not read" : identity.SclDestinationMac,
             string.IsNullOrWhiteSpace(identity.SclDestinationMac)
                 ? "No verified GSE address" : "Source SCL GSE address");
+        foreach (var (name, value) in IedBrowserGooseInspection.SclNetworkProperties(identity))
+            Put(name, value,
+                name is "Minimum time (ms)" or "Maximum time (ms)"
+                    ? "Source SCL GSEControl" : "Source SCL GSE address");
 
         // Never present old snapshots as currently received when capture is stopped.
         foreach (var name in new[] { "Frame received at", "Source MAC", "Frame test",
             "Frame ndsCom", "State number", "Sequence number",
             "Time allowed to live", "Frame DataSet entries" })
             Put(name, "—", "No currently verified passive reception");
-        Put("VLAN ID", "Not read", "No currently verified passive reception");
-        Put("VLAN priority", "Not read", "No currently verified passive reception");
+        if (identity.SclVlanId is null)
+            Put("VLAN ID", "Not read", "No verified SCL VLAN configuration or passive frame");
+        if (identity.SclVlanPriority is null)
+            Put("VLAN priority", "Not read",
+                "No verified SCL VLAN configuration or passive frame");
 
         // Filter raw bounded cache by exact GoCB before building display leaves.
         // Two different publisher streams claiming the same identity are rejected.
