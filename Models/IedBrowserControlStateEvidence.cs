@@ -84,6 +84,24 @@ public static class IedBrowserControlStateEvidence
         }
         return true;
     }
+    /// <summary>
+    /// SGCB LActTm is a real relay value, but an all-zero wire UTC-Time
+    /// denotes an unset time rather than an actual group-change in 1970.
+    /// A formatted date alone is never proof: require exact raw MMS bytes.
+    /// </summary>
+    public static string FormatObservedField(
+        string pageKind, string field, IedBrowserObservedValue observed)
+        => pageKind == "SGCB" && field == "LActTm" &&
+           observed.TimeBits is
+           {
+               IsDecoded: true,
+               HasWireProvenance: true,
+               SecondsSinceEpoch: 0,
+               FractionOfSecond24: 0
+           }
+           ? "Not initialized"
+           : observed.Value;
+
     private static string Canonical(string reference)
         => (reference ?? "").Trim().Replace('$', '.');
 }
