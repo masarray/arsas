@@ -22,6 +22,7 @@ public partial class MainWindow
     private readonly IedBrowserDetailProjection _iedBrowserDetails = new();
     private readonly IedBrowserNavigationTrail _iedBrowserNavigation = new();
     private bool _iedBrowserSyncingSelection;
+    private string? _iedBrowserSelectedDoReference;
     private int _iedBrowserNavigationRenderTicket;
     private long _iedBrowserLastLiveVersion = -1;
     private LiveIedCanonicalModel? _iedBrowserLastCfCanonicalModel;
@@ -240,7 +241,13 @@ public partial class MainWindow
             }
         }
         var model = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
-        var targets = IedBrowserReadPlan.Build(model, _iedBrowserNavigation.Current, readAll);
+        var currentPage = _iedBrowserNavigation.Current;
+        var selectedDo = !readAll &&
+            ReferenceEquals(_iedBrowserRenderedPage, currentPage) &&
+            currentPage?.Payload is LiveIedLogicalNodeModel
+                ? _iedBrowserSelectedDoReference : null;
+        var targets = IedBrowserReadPlan.Build(
+            model, currentPage, readAll, selectedDo);
         if (targets.Count == 0)
         {
             IedBrowserSubtitle.Text = "No model-verified readable FC attributes in this selection.";
@@ -305,7 +312,8 @@ public partial class MainWindow
                 RefreshIedBrowserVisibleValues();
         }
         device.ResetDiscoveryProgress("Preparing read-only MMS values…",
-            readAll ? "Reading all IED values" : "Reading Browser values");
+            readAll ? "Reading all IED values" : selectedDo is not null
+                ? "Reading selected DO " + selectedDo : "Reading Browser values");
         device.IsBrowserReading = true; // Preserve the ongoing report monitor lifecycle.
         IedBrowserReadPageButton.IsEnabled = false;
         IedBrowserReadAllButton.IsEnabled = false;
@@ -995,6 +1003,75 @@ public partial class MainWindow
             UpdateIedBrowserRcbReportDetails(); // metadata may arrive without a scalar update
     }
 
+    private static bool IedBrowserClickOriginIsButton(
+        object originalSource, DependencyObject container)
+    {
+        var node = originalSource as DependencyObject;
+        while (node is not null && !ReferenceEquals(node, container))
+        {
+            if (node is System.Windows.Controls.Primitives.ButtonBase)
+                return true;
+            node = node is FrameworkContentElement content
+                ? content.Parent
+                : System.Windows.Media.VisualTreeHelper.GetParent(node);
+        }
+        return false;
+    }
+
+    private void IedBrowserTreeRow_MouseUp(
+        object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (e.ClickCount != 1 ||
+            sender is not DataGridRow { DataContext: IedBrowserTreeRow row } ||
+            !row.HasChildren || IedBrowserClickOriginIsButton(e.OriginalSource,
+                (DependencyObject)sender))
+            return;
+        // A virtual collection reset must not replace the clicked selection
+        // with a transient null and erase the navigation trail.
+        _iedBrowserSyncingSelection = true;
+        try
+        {
+            _iedBrowserTree.Toggle(row);
+            IedBrowserTreeGrid.SelectedItem = row;
+        }
+        finally { _iedBrowserSyncingSelection = false; }
+        _iedBrowserNavigation.SelectFromTree(row);
+        var owner = SelectedDevice;
+        var ticket = ++_iedBrowserNavigationRenderTicket;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            if (ticket != _iedBrowserNavigationRenderTicket ||
+                MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
+                !ReferenceEquals(SelectedDevice, owner) ||
+                !ReferenceEquals(_iedBrowserNavigation.Current, row))
+                return;
+            var model = owner?.LiveDiscoveryModel ?? owner?.SclWorkspace?.DesignModel;
+            RenderIedBrowserSelection(row, model, owner?.IsConnected == true);
+        }));
+        e.Handled = true;
+    }
+
+    private void IedBrowserDetailRow_MouseUp(
+        object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (e.ClickCount != 1 ||
+            sender is not ListViewItem { DataContext: IedBrowserDetailRow detail } ||
+            IedBrowserClickOriginIsButton(e.OriginalSource,
+                (DependencyObject)sender))
+            return;
+        if (!string.IsNullOrEmpty(detail.ReadObjectReference) &&
+            _iedBrowserNavigation.Current?.Payload is LiveIedLogicalNodeModel)
+        {
+            _iedBrowserSelectedDoReference = detail.ReadObjectReference;
+            IedBrowserReadPageButton.ToolTip =
+                "Read all model-proven safe FC attributes in selected DO " +
+                detail.ReadObjectReference + "; no writes or automatic polling.";
+        }
+        if (!detail.HasChildren) return;
+        ToggleIedBrowserDetails(detail);
+        e.Handled = true;
+    }
+
     private void IedBrowserTreeToggle_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: IedBrowserTreeRow row })
@@ -1056,12 +1133,8 @@ public partial class MainWindow
             return;
         }
 
-        if (!detail.HasChildren)
-            return;
-        // Quality/time and ordered dataset member rows drill down lazily in place,
-        // preserving the selected IEC object and the surrounding report context.
-        ToggleIedBrowserDetails(detail);
-        e.Handled = true;
+        // Full-row single click handles expansion. Double-click retains only
+        // genuine object navigation; never undo the first toggle here.
     }
 
     private void IedBrowserBack_Click(object sender, RoutedEventArgs e)
@@ -1130,6 +1203,8 @@ public partial class MainWindow
     private void RenderIedBrowserSelection(
         IedBrowserTreeRow? row, LiveIedModelDiscoveryDocument? model, bool connected)
     {
+        if (!ReferenceEquals(_iedBrowserRenderedPage, row))
+            _iedBrowserSelectedDoReference = null;
         _iedBrowserRenderedPage = row;
         _iedBrowserRenderedConnected = connected;
         _iedBrowserGooseExpected = null;

@@ -226,6 +226,9 @@ public sealed record IedBrowserDetailRow(
     public string EvidenceKind { get; init; } = "";
     public string FunctionalConstraint { get; init; } = "";
     public bool IsDataObject { get; init; }
+    // Exact whole IEC DO for an operator's explicit Read choice. Unlike
+    // ValueReference, never points to an arbitrary preferred scalar leaf.
+    public string ReadObjectReference { get; init; } = "";
     // IEC DataSet position, not a live value; only a validated frame can populate it.
     public int GooseSlot { get; init; } = -1;
     public string GooseReference { get; init; } = "";

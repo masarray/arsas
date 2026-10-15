@@ -32,7 +32,8 @@ public static class IedBrowserReadPlan
         ["ST", "MX", "CF", "DC", "SP", "SG", "SE", "EX"], StringComparer.OrdinalIgnoreCase);
 
     public static IReadOnlyList<IedBrowserReadTarget> Build(
-        LiveIedModelDiscoveryDocument? model, IedBrowserTreeRow? page, bool readAll)
+        LiveIedModelDiscoveryDocument? model, IedBrowserTreeRow? page,
+        bool readAll, string? selectedDoReference = null)
     {
         if (model is null) return Array.Empty<IedBrowserReadTarget>();
         var schema = new IedBrowserSchemaIndex(model);
@@ -52,7 +53,14 @@ public static class IedBrowserReadPlan
                     string.Equals(a.FunctionalConstraint, attribute.FunctionalConstraint,
                         StringComparison.OrdinalIgnoreCase)),
                 LiveIedDataObjectModel obj => obj.Attributes,
-                LiveIedLogicalNodeModel ln => ln.DataObjects.SelectMany(o => o.Attributes),
+                // An explicit DO focus in an LN page scopes Read to every
+                // model-verified safe FC leaf of that exact DO. No first-child
+                // selection, prefix matching, or matching names in other LNs.
+                LiveIedLogicalNodeModel ln => ln.DataObjects
+                    .Where(o => selectedDoReference is null ||
+                        string.Equals(o.Reference, selectedDoReference,
+                            StringComparison.Ordinal))
+                    .SelectMany(o => o.Attributes),
                 LiveIedLogicalDeviceModel ld => ld.LogicalNodes.SelectMany(ln => ln.DataObjects)
                     .SelectMany(o => o.Attributes),
                 LiveIedDataSetModel set => ForDataSet(all, schema, set),
