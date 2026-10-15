@@ -76,6 +76,32 @@ public sealed class M214OperatorNavigationRoutingTests
         Assert.DoesNotContain("new MmsClientSession", source);
     }
 
+    [Fact]
+    public void SelectingSmvTab_DoesNotAutoOpenWindowOrStartNpcapCapture()
+    {
+        var main = File.ReadAllText(Find("MainWindow.xaml.cs"));
+        const string tabRoute =
+            "MainTabs.SelectedIndex == EngineeringNavigationRoute.SmvWorkspaceIndex";
+        var index = main.IndexOf(tabRoute, StringComparison.Ordinal);
+        Assert.True(index >= 0);
+        var branch = main[index..Math.Min(main.Length, index + 380)];
+        Assert.Contains("PrepareSelectedSmvWorkspace();", branch);
+        Assert.DoesNotContain("ActivateSelectedSmvWorkspace();", branch);
+
+        var viewer = File.ReadAllText(Find("MainWindow.IedSmvQuickStart.cs"));
+        var prepareStart = viewer.IndexOf("private void PrepareSelectedSmvWorkspace()",
+            StringComparison.Ordinal);
+        var explicitStart = viewer.IndexOf("private void ActivateSelectedSmvWorkspace()",
+            prepareStart, StringComparison.Ordinal);
+        Assert.True(prepareStart > 0 && explicitStart > prepareStart);
+        var passive = viewer[prepareStart..explicitStart];
+        Assert.DoesNotContain("OpenSmvWorkspaceForDevice", passive);
+        Assert.DoesNotContain("ListAdapters", passive);
+        Assert.DoesNotContain("new SmvViewerWindow", passive);
+        Assert.Contains("=> ActivateSelectedSmvWorkspace();", viewer);
+        Assert.Contains("window.EnableFastWorkflow(adapter, routeDetail);", viewer);
+    }
+
     private static string Find(string path)
     {
         for (DirectoryInfo? d = new(AppContext.BaseDirectory); d != null; d = d.Parent)
