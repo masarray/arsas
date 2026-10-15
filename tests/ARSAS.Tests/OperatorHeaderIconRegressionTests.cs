@@ -65,8 +65,7 @@ public sealed class OperatorHeaderIconRegressionTests
         var source = File.ReadAllText(Find("MainWindow.NavigationLayoutFix.cs"));
         Assert.Contains("button.Content is StackPanel iconContent", source, StringComparison.Ordinal);
         Assert.Contains("caption.Text = labels[index];", source, StringComparison.Ordinal);
-        Assert.Contains("else\\n                    button.Content = labels[index];",
-            source.Replace("\\r", ""), StringComparison.Ordinal);
+        Assert.Matches(@"else\s+button\.Content = labels\[index\];", source);
         Assert.Contains("CompactLabels", source, StringComparison.Ordinal);
         Assert.Contains("FullLabels", source, StringComparison.Ordinal);
     }

@@ -24,7 +24,9 @@ public sealed class AlarmAnnunciatorIntegrationRegressionTests
         Assert.Contains(navGrid.Descendants(p + "Button"), button =>
             (string?)button.Attribute(x + "Name") == "NavAlarmButton" &&
             (string?)button.Attribute("Tag") == "3" &&
-            (string?)button.Attribute("Content") == "Alarm");
+            ((string?)button.Attribute("Content") == "Alarm" ||
+             button.Descendants(p + "TextBlock").Any(label =>
+                 (string?)label.Attribute("Text") == "Alarm")));
         Assert.Contains(navGrid.Descendants(p + "Button"), button =>
             (string?)button.Attribute(x + "Name") == "NavGooseButton" &&
             (string?)button.Attribute("Tag") == "4");
@@ -34,7 +36,9 @@ public sealed class AlarmAnnunciatorIntegrationRegressionTests
         Assert.Contains(navGrid.Descendants(p + "Button"), button =>
             (string?)button.Attribute(x + "Name") == "NavNativeFatButton" &&
             (string?)button.Attribute("Tag") == "6" &&
-            (string?)button.Attribute("Content") == "FAT");
+            ((string?)button.Attribute("Content") == "FAT" ||
+             button.Descendants(p + "TextBlock").Any(label =>
+                 (string?)label.Attribute("Text") == "FAT")));
 
         var headerSource = header.ToString(SaveOptions.DisableFormatting);
         Assert.DoesNotContain("ConnectionInsightText", headerSource, StringComparison.Ordinal);
