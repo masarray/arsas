@@ -28,23 +28,18 @@ public sealed class IedCardActionsGearRegressionTests
     }
 
     [Fact]
-    public void Gear_UsesCanonicalLucideSettingsShapeAndOpticalWeight()
+    public void Gear_UsesSharedMaterialSettingsShapeAndSameOpticalWeight()
     {
         var source = File.ReadAllText(FindRepoFile("IedCardActionsGearPolicy.cs"));
 
-        // Canonical Lucide Settings SVG supplied for the IED card action.
-        Assert.Contains("M9.671,4.136", source, StringComparison.Ordinal);
-        Assert.Contains("A2.34,2.34 0 0 1 14.33,4.136", source, StringComparison.Ordinal);
-        Assert.Contains("M15,12 A3,3 0 1 1 9,12 A3,3 0 1 1 15,12", source, StringComparison.Ordinal);
-
-        // Circular settings glyph needs a slightly larger optical box than the
-        // neighboring 14 px directional glyphs while retaining Lucide stroke 2.
+        Assert.Contains("FindResource(\"MaterialSettingsIcon\")", source, StringComparison.Ordinal);
         Assert.Contains("GearOpticalSize = 16d", source, StringComparison.Ordinal);
-        Assert.Contains("StrokeThickness = 2d", source, StringComparison.Ordinal);
+        Assert.Contains("Fill = iconFill", source, StringComparison.Ordinal);
+        Assert.Contains("StrokeThickness = 0d", source, StringComparison.Ordinal);
         Assert.Contains("Width = GearOpticalSize", source, StringComparison.Ordinal);
         Assert.Contains("Height = GearOpticalSize", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("StrokeThickness = 1.8", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("Width = 13", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("M9.671,4.136", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("StrokeThickness = 2d", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -54,7 +49,7 @@ public sealed class IedCardActionsGearRegressionTests
         var source = File.ReadAllText(FindRepoFile("IedCardActionsGearPolicy.cs"));
 
         Assert.Contains("Click=\"IedConfigureSignals_Click\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("LucidePencilLine", xaml, StringComparison.Ordinal);
+        Assert.Contains("MaterialEditIcon", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("IedConfigureSignals_Click", source, StringComparison.Ordinal);
     }
 
