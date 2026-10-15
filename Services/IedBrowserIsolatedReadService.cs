@@ -15,6 +15,10 @@ public static class IedBrowserIsolatedReadService
         CancellationToken cancellationToken)
         => Task.Run(async () =>
         {
+            // Capture before crossing the UI/thread boundary. The current
+            // monitoring association owns this exact live discovery model;
+            // SCL-only metadata is never promoted to verified MMS schema.
+            var lease = IedBrowserIsolatedReadSchemaLease.Capture(device);
             await using var client = new NativeIec61850Client();
             await client.ConnectAsync(device.IpAddress, device.Port, cancellationToken)
                 .ConfigureAwait(false);
@@ -22,10 +26,25 @@ public static class IedBrowserIsolatedReadService
                 throw new InvalidOperationException("IED rejected independent read-only MMS association. " +
                     "Stop monitoring if the IED allows only one client.");
 
+            if (lease is not null)
+            {
+                if (!lease.IsCurrent(device))
+                    throw new InvalidOperationException(
+                        "Live IED model or monitoring association changed before isolated MMS Read.");
+                // The secondary client has no discovery model unless we provide
+                // this exact association-verified reference/FC type inventory.
+                // Without it ARIEC cannot bind structured parent MMS values to
+                // the requested SG/DA leaf, even when the wire read succeeds.
+                client.BindIsolatedBrowserReadSchema(lease.Model);
+            }
+
             var successful = 0;
             for (var i = 0; i < targets.Count; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                if (lease is not null && !lease.IsCurrent(device))
+                    throw new InvalidOperationException(
+                        "Live IED discovery/model or monitoring association changed during isolated MMS Read.");
                 var target = targets[i];
                 try
                 {
