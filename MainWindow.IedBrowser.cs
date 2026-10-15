@@ -423,10 +423,12 @@ public partial class MainWindow
         var version = device.LiveValues.Version;
         if (_iedBrowserLastLiveVersion == version) return;
         _iedBrowserLastLiveVersion = version;
-        // Unit index is built once per actual received-value revision, not
-        // per row or on every render. Unit is authoritative signal metadata.
-        var engineeringUnits = IedBrowserEngineeringValuePresentation.BuildUnitIndex(
-            device.Signals);
+        // No MMS call occurs during navigation or refresh. Exact CF/DC
+        // instance evidence is a labelled discovery snapshot, not a Report.
+        var cfEvidence = new IedBrowserCfEvidencePresentation(device.LiveValues,
+            device.LiveDiscoveryModel, device.LiveCanonicalModel);
+        var model = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
+        var engineeringUnits = cfEvidence.BuildVerifiedUnits(device.Signals, model);
         foreach (var row in _iedBrowserDetails.Rows)
         {
             if (string.IsNullOrWhiteSpace(row.ValueReference)) continue;
@@ -444,9 +446,24 @@ public partial class MainWindow
                 device.IsMonitoring, out var live, out var observedReference);
             if (!found)
             {
-                row.Value = "Not read";
-                row.ObservationSource = "";
-                row.ObservationTooltip = "";
+                // Only exact model-bound, previously captured canonical
+                // instance evidence may populate an unread CF/DC value.
+                // It remains visibly a historical discovery snapshot.
+                if (row.FunctionalConstraint is "CF" or "DC" &&
+                    cfEvidence.TryGet(row.ValueReference, row.FunctionalConstraint,
+                        out var snapshot, out var provenance, out _))
+                {
+                    row.Value = IedBrowserCfEvidencePresentation.RenderCfValue(
+                        row.ValueReference, row.FunctionalConstraint, snapshot);
+                    row.ObservationSource = "Discovery snapshot";
+                    row.ObservationTooltip = provenance;
+                }
+                else
+                {
+                    row.Value = "Not read";
+                    row.ObservationSource = "";
+                    row.ObservationTooltip = "";
+                }
                 continue;
             }
             row.ObservationSource = live.IsStale
@@ -465,7 +482,8 @@ public partial class MainWindow
                 display = IedBrowserUtcTimeQualityPresentation.FormatField(
                     live.TimeBits, row.EvidenceField);
             else if (row.EvidenceField.Length == 0)
-                display = live.Value;
+                display = IedBrowserCfEvidencePresentation.RenderCfValue(
+                    row.ValueReference, row.FunctionalConstraint, live.Value);
             else
                 display = "Not exposed";
             if (row.IsEngineeringValue && row.EvidenceField.Length == 0)
