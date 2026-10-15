@@ -203,7 +203,8 @@ public sealed class IedBrowserObservedVectorM213HTests
             dir = dir.Parent;
         Assert.NotNull(dir);
         var source = File.ReadAllText(Path.Combine(dir!.FullName, "MainWindow.IedBrowser.cs"));
-        Assert.Contains("IedBrowserObservedVectorPresentation.TryFormat(", source);
-        Assert.Contains("device.LiveValues, row.VectorComponents, engineeringUnits", source);
+        Assert.Contains("IedBrowserEngineeringComposite.TryCompose(", source);
+        Assert.Contains("row, device.LiveValues, engineeringUnits", source);
+        Assert.DoesNotContain("if (IedBrowserObservedVectorPresentation.TryFormat(", source);
     }
 }

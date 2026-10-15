@@ -95,10 +95,17 @@ public static class IedBrowserEngineeringComposite
         ArgumentNullException.ThrowIfNull(row);
         ArgumentNullException.ThrowIfNull(ledger);
         observed = null!;
+        // One entry point for every schema-qualified vector, including
+        // neutral/net/residual extensions not covered by three-phase plans.
+        // The independent adapter shares CanPair: never bypass timestamp
+        // or source checks through a secondary renderer in MainWindow.
+        if (row.VectorComponents.Count > 3)
+            return TryIndependent(row, ledger, unitIndex, monitoring, out observed);
         IReadOnlyList<IedBrowserPolarPlan> plans = row.PhasePlans.Count > 0
             ? row.PhasePlans : row.PolarPlan is { } polar
                 ? new[] { polar } : Array.Empty<IedBrowserPolarPlan>();
-        if (plans.Count == 0) return false;
+        if (plans.Count == 0)
+            return TryIndependent(row, ledger, unitIndex, monitoring, out observed);
 
         var components = new List<string>(plans.Count);
         var authorities = new HashSet<string>(StringComparer.Ordinal);
@@ -168,6 +175,21 @@ public static class IedBrowserEngineeringComposite
             " · association " + generation + " · sources " + sources +
             " · independently observed components; not a synchronous phasor sample",
             stale);
+        return true;
+    }
+
+    private static bool TryIndependent(IedBrowserDetailRow row,
+        IedBrowserLiveValues ledger, IReadOnlyDictionary<string, string?> unitIndex,
+        bool monitoring, out IedBrowserCompositeObservation result)
+    {
+        result = null!;
+        if (!IedBrowserObservedVectorPresentation.TryFormat(
+                ledger, row.VectorComponents, unitIndex, monitoring,
+                out var independent))
+            return false;
+        result = new IedBrowserCompositeObservation(
+            independent.Value, "Independent " + independent.Source,
+            independent.Provenance, independent.IsStale);
         return true;
     }
 

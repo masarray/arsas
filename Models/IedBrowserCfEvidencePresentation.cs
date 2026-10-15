@@ -122,14 +122,27 @@ public sealed class IedBrowserCfEvidencePresentation
     /// </summary>
     public bool TryFormatUnitsParent(string reference, string fc,
         out string unit, out string provenance)
+        => TryFormatUnitsParent(reference, fc, out unit, out provenance, out _);
+
+    /// <summary>
+    /// A complete configuration pair is not necessarily current. Keep
+    /// historical and stale evidence visibly distinct from an MMS Read.
+    /// </summary>
+    public bool TryFormatUnitsParent(string reference, string fc,
+        out string unit, out string provenance, out string authority)
     {
         unit = "";
         provenance = "";
+        authority = "";
         var owner = IedBrowserLiveValues.CanonicalReference(reference);
         if (!string.Equals(fc, "CF", StringComparison.OrdinalIgnoreCase) ||
-            !owner.EndsWith(".units", StringComparison.Ordinal))
+            !owner.EndsWith(".units", StringComparison.Ordinal) ||
+            !TryVerifyUnitPair(owner, out unit, out provenance, out var fresh))
             return false;
-        return TryVerifyUnitPair(owner, out unit, out provenance, out _);
+        authority = provenance.Contains("Discovery snapshot", StringComparison.Ordinal)
+            ? "Historical discovery CF"
+            : fresh ? "Verified IEC CF configuration" : "Stale IEC CF configuration";
+        return true;
     }
 
     private bool TryVerifyUnitPair(string owner, out string unit,
