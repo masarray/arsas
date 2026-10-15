@@ -1113,7 +1113,10 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 raw.RawValue.ToArray(), out var verifiedQuality))
             projected.QualityEvidence = verifiedQuality;
         if ((reference.EndsWith(".t", StringComparison.Ordinal) ||
-             reference.EndsWith("$t", StringComparison.Ordinal)) &&
+             reference.EndsWith("$t", StringComparison.Ordinal) ||
+             // SGCB LActTm is the model-verified last-active-group UTC-Time.
+             reference.EndsWith(".LActTm", StringComparison.Ordinal) ||
+             reference.EndsWith("$LActTm", StringComparison.Ordinal)) &&
             raw.Kind == ArMms.MmsDataKind.UtcTime)
         {
             var evidence = ArMms.Iec61850UtcTimeEvidence.Decode(raw);
