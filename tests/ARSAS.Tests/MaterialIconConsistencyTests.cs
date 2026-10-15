@@ -18,7 +18,7 @@ public sealed class MaterialIconConsistencyTests
 
     [Theory]
     [InlineData("NavExplorerButton", "1", "OperatorIecTopologyIcon")]
-    [InlineData("NavSmvButton", "5", "OperatorLiveMonitorIcon")]
+    [InlineData("NavSmvButton", "5", "MaterialLiveIcon")]
     [InlineData("NavEventsButton", "2", "OperatorEventLogIcon")]
     [InlineData("NavAlarmButton", "3", "OperatorAlarmIcon")]
     [InlineData("NavGooseButton", "4", "OperatorIecWirelessIcon")]
