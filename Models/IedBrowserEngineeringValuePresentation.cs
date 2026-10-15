@@ -62,12 +62,17 @@ public static class IedBrowserEngineeringValuePresentation
         var canonical = IedBrowserLiveValues.CanonicalReference(reference);
         var normalizedFc = (fc ?? "").Trim().ToUpperInvariant();
         if (!canonical.EndsWith(".ang.f", StringComparison.Ordinal) ||
-            normalizedFc.Length == 0) return "";
+            normalizedFc != "MX") return "";
         if (index.TryGetValue(canonical + "|" + normalizedFc, out var exact))
             return exact ?? "";
         var angleOwner = canonical[..^2];
-        return index.TryGetValue(angleOwner + "|" + normalizedFc, out var declared)
-            ? declared ?? "" : "";
+        if (index.TryGetValue(angleOwner + "|" + normalizedFc, out var declared))
+            return declared ?? "";
+        // IEC 61850-7-3 Vector.ang: Unit.SIUnit='deg', no multiplier.
+        // Exact cVal/instCVal paths only, never inferred for scalar MV.
+        return canonical.EndsWith(".cVal.ang.f", StringComparison.Ordinal) ||
+               canonical.EndsWith(".instCVal.ang.f", StringComparison.Ordinal)
+            ? "°" : "";
     }
 
     public static string Format(string raw, string unit)

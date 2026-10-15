@@ -84,8 +84,22 @@ public sealed class M214SclSettingsDirectoryFallbackTests
     [Fact]
     public void ForeignSclDomainMustNeverLeakParameters()
     {
-        var foreign = Fixture(Attr("SG", "setVal"));
-        foreign.LogicalDevices[0].MmsDomain = "DIFFERENT";
+        var foreign = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel
+            {
+                MmsDomain = "DIFFERENT",
+                LogicalNodes = [new LiveIedLogicalNodeModel
+                {
+                    Name = "ATCC1",
+                    DataObjects = [new LiveIedDataObjectModel
+                    {
+                        Name = "BndWid", Reference = Owner,
+                        Attributes = [Attr("SG", "setVal")]
+                    }]
+                }]
+            }]
+        };
         var rows = IedBrowserPresentation.Details(Page,
             Fixture(Attr("ST", "stVal")), true, foreign);
         Assert.Empty(rows.Where(r => r.Kind == "Data"));
