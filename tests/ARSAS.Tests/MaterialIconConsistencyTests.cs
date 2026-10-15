@@ -17,12 +17,12 @@ public sealed class MaterialIconConsistencyTests
     private static readonly XNamespace X = "http://schemas.microsoft.com/winfx/2006/xaml";
 
     [Theory]
-    [InlineData("NavExplorerButton", "0", "OperatorIecWirelessIcon")]
+    [InlineData("NavExplorerButton", "0", "OperatorIecTopologyIcon")]
     [InlineData("NavLiveButton", "1", "OperatorLiveMonitorIcon")]
     [InlineData("NavEventsButton", "2", "OperatorEventLogIcon")]
     [InlineData("NavAlarmButton", "3", "OperatorAlarmIcon")]
     [InlineData("NavGooseButton", "4", "OperatorIecWirelessIcon")]
-    [InlineData("NavDiagnosticsButton", "5", "MaterialDiagnosticsIcon")]
+    [InlineData("NavDiagnosticsButton", "5", "OperatorDiagnosticsIcon")]
     [InlineData("NavNativeFatButton", "6", "OperatorFatIcon")]
     [InlineData("NavIedBrowserButton", "7", "OperatorIedBrowserIcon")]
     public void EveryNavigationDestinationOwnsOneGlyphAndSameClickHandler(
@@ -42,6 +42,34 @@ public sealed class MaterialIconConsistencyTests
             (string?)path.Attribute("Fill"));
         Assert.Single(button.Descendants(P + "Viewbox"));
         Assert.NotEmpty(button.Descendants(P + "TextBlock"));
+    }
+
+    [Fact]
+    public void SelectedOperatorPathsBindToExactlyOneNavigationAndCommandGlyph()
+    {
+        var app = XDocument.Load(Find("App.xaml"));
+        var xaml = XDocument.Load(Find("MainWindow.xaml"));
+        foreach (var (key, prefix) in new[]
+        {
+            ("OperatorIecTopologyIcon", "M600-160v-80"),
+            ("OperatorDiagnosticsIcon", "M80-600v-120"),
+            ("OperatorCommandDockPowerIcon", "M451.5-491.5")
+        })
+        {
+            var entry = Assert.Single(app.Descendants(P + "Geometry"), g =>
+                (string?)g.Attribute(X + "Key") == key);
+            Assert.StartsWith(prefix, entry.Value);
+            Assert.False(Geometry.Parse(entry.Value).Bounds.IsEmpty);
+        }
+        var command = Assert.Single(xaml.Descendants(P + "Expander"),
+            x => (string?)x.Attribute(X + "Name") == "CommandPanelExpander");
+        Assert.Equal("{StaticResource OperatorCommandDockPowerIcon}",
+            (string?)Assert.Single(command.Element(P + "Expander.Header")!
+                .Descendants(P + "Path")).Attribute("Data"));
+        var goose = Assert.Single(xaml.Descendants(P + "Button"), b =>
+            (string?)b.Attribute(X + "Name") == "NavGooseButton");
+        Assert.Contains(goose.Descendants(P + "Path"), g =>
+            (string?)g.Attribute("Data") == "{StaticResource OperatorIecWirelessIcon}");
     }
 
     [Fact]

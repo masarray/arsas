@@ -112,7 +112,7 @@
                     <Button x:Name="NavExplorerButton" Grid.Column="0" Tag="0" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="IEC 61850 Explorer">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                             <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
-                                <Path Data="{StaticResource OperatorIecWirelessIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                                <Path Data="{StaticResource OperatorIecTopologyIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
                             </Viewbox>
                             <TextBlock Text="IEC 61850 Explorer" VerticalAlignment="Center"/>
                         </StackPanel>
@@ -152,7 +152,7 @@
                     <Button x:Name="NavDiagnosticsButton" Grid.Column="5" Tag="5" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                             <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
-                                <Path Data="{StaticResource MaterialDiagnosticsIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                                <Path Data="{StaticResource OperatorDiagnosticsIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
                             </Viewbox>
                             <TextBlock Text="Diagnostics" VerticalAlignment="Center"/>
                             <Border Visibility="{Binding DiagnosticsAlertVisibility}"
@@ -681,7 +681,7 @@
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <Border Width="28" Height="28" CornerRadius="9" Background="#E7F0FF" BorderBrush="#C9DBF7" BorderThickness="1" Margin="0,0,9,0">
                                             <Viewbox Width="15" Height="15" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                <Path Data="{StaticResource MaterialTuneIcon}" Style="{StaticResource MaterialIconGlyph}"/>
+                                                <Path Data="{StaticResource OperatorCommandDockPowerIcon}" Style="{StaticResource MaterialIconGlyph}"/>
                                             </Viewbox>
                                         </Border>
                                         <TextBlock Text="IED Command Panel" FontSize="13.6" FontWeight="SemiBold" Foreground="{StaticResource Ink}" VerticalAlignment="Center"/>
