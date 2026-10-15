@@ -66,6 +66,43 @@ public sealed class FaultRecordTransferClient : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Return original MMS root FileDirectory entries, including ordinary files
+    /// and directories not recognized as COMTRADE fault records. Reuse the
+    /// current dedicated association and ARIEC's existing directory decoder.
+    /// This does not authorize downloads of unclassified files.
+    /// </summary>
+    public async Task<IReadOnlyList<MmsFileDirectoryEntry>> ReadRootFileDirectoryAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            EnsureReady();
+            var pages = await _session.GetFileDirectoryPagedAsync(
+                directoryName: null, maximumPages: 32,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+            var entries = new List<MmsFileDirectoryEntry>();
+            foreach (var page in pages)
+            {
+                if (!page.IsSuccess)
+                    throw new InvalidOperationException(
+                        "MMS root FileDirectory: " + page.Message);
+                foreach (var entry in page.Entries)
+                {
+                    if (entries.Count >= 20_000)
+                        return entries;
+                    entries.Add(entry);
+                }
+            }
+            return entries;
+        }
+        finally
+        {
+            _operationGate.Release();
+        }
+    }
+
     public async Task<Iec61850FaultRecordDownloadResult> DownloadAsync(
         Iec61850FaultRecordSet record,
         string destinationRoot,
