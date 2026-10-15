@@ -325,7 +325,8 @@ public static class IedBrowserPresentation
                         () => ld.LogicalNodes.Select(ln =>
                             new IedBrowserTreeRow("model/ln/" + ld.MmsDomain + "/" + ln.Name,
                                 ln.Name, "LN", 2, ln,
-                                () => ln.DataObjects.Select(obj =>
+                                () => IedBrowserEngineeringObjects.GroupExact(ln.DataObjects)
+                                    .Select(obj =>
                                     new IedBrowserTreeRow("model/do/" + obj.Reference, obj.Name, "DO", 3, obj,
                                         () => obj.Attributes.Select((attr, ordinal) =>
                                             new IedBrowserTreeRow("model/da/" + attr.MmsReference + "/" + ordinal,
@@ -711,7 +712,7 @@ public static class IedBrowserPresentation
                 rows.Add(new("DataHeader", "Name", "Live value · provenance"));
                 // O(number of DO), with lazy expansion of each selected DO.
                 // No recursive UI object creation for a large IED namespace.
-                foreach (var obj in ln.DataObjects)
+                foreach (var obj in IedBrowserEngineeringObjects.GroupExact(ln.DataObjects))
                     rows.Add(IedBrowserStructuredDetails.DataObject(
                         obj, PrimaryValueFunctionalConstraint(obj)));
                 break;
@@ -722,7 +723,8 @@ public static class IedBrowserPresentation
                 Field("Type confidence", obj.ConfidenceLevel);
                 Section("Data");
                 rows.Add(new("DataHeader", "Name", "Live value · provenance"));
-                foreach (var attr in IedBrowserStructuredDetails.AttributeRows(obj.Attributes, obj.Name))
+                foreach (var attr in IedBrowserStructuredDetails.AttributeRows(
+                             obj.Attributes, obj.Name, mergeFcRoots: true))
                     rows.Add(attr);
                 break;
             case LiveIedDataAttributeModel attr:

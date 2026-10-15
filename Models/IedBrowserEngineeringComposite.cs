@@ -99,7 +99,13 @@ public static class IedBrowserEngineeringComposite
         // neutral/net/residual extensions not covered by three-phase plans.
         // The independent adapter shares CanPair: never bypass timestamp
         // or source checks through a secondary renderer in MainWindow.
-        if (row.VectorComponents.Count > 3)
+        // A top-level DO shows the canonical three-phase engineering preview
+        // without dumping every neutral/net/res component into one grid cell.
+        // Those extra exact components remain accessible on expansion.
+        // Independent inspection rows still use the full-vector adapter.
+        var compactDo = row.IsDataObject && row.PhasePlans.Count == 3 &&
+            row.VectorComponents.Count > 3;
+        if (row.VectorComponents.Count > 3 && !compactDo)
             return TryIndependent(row, ledger, unitIndex, monitoring, out observed);
         IReadOnlyList<IedBrowserPolarPlan> plans = row.PhasePlans.Count > 0
             ? row.PhasePlans : row.PolarPlan is { } polar
@@ -162,7 +168,7 @@ public static class IedBrowserEngineeringComposite
                 references.Add(plan.AngleReference + "[" + plan.FunctionalConstraint + "]");
                 anglePaired = true;
             }
-            if (!anglePaired)
+            if (!anglePaired && !compactDo)
                 text += " (angle not verified)";
             components.Add(plan.Phase.Length == 0 ? text : plan.Phase + ": " + text);
         }
@@ -173,7 +179,9 @@ public static class IedBrowserEngineeringComposite
         observed = new IedBrowserCompositeObservation(prefix, sources,
             "Derived from exact " + string.Join(", ", references) +
             " · association " + generation + " · sources " + sources +
-            " · independently observed components; not a synchronous phasor sample",
+            (compactDo
+                ? " · three-phase summary only; other model-proven components on expansion"
+                : " · independently observed components; not a synchronous phasor sample"),
             stale);
         return true;
     }

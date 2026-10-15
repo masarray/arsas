@@ -57,7 +57,8 @@ public static class IedBrowserStructuredDetails
                         Relative: TrimObjectName(a.AttributePath, obj.Name))),
                     compoundFc),
             LoadChildren = () => AttributeRows(
-                obj.Attributes, obj.Name, depth + 1, allowVector)
+                obj.Attributes, obj.Name, depth + 1, allowVector,
+                mergeFcRoots: true)
         };
     }
 
@@ -165,14 +166,83 @@ public static class IedBrowserStructuredDetails
 
     public static IReadOnlyList<IedBrowserDetailRow> AttributeRows(
         IReadOnlyList<LiveIedDataAttributeModel> attributes, string objectName,
-        int depth = 0, bool allowVector = true)
+        int depth = 0, bool allowVector = true,
+        bool mergeFcRoots = false)
     {
         var descriptors = attributes
             .Select(attr => (attr, parts: TrimObjectName(attr.AttributePath, objectName)
                 .Split('.', StringSplitOptions.RemoveEmptyEntries)))
             .Where(x => x.parts.Length > 0)
             .ToArray();
-        return BuildAt(descriptors, 0, depth, allowVector);
+        return mergeFcRoots
+            ? BuildCrossFcRoots(descriptors, depth, allowVector)
+            : BuildAt(descriptors, 0, depth, allowVector);
+    }
+
+
+    /// <summary>
+    /// One structured phase/SDO row in a DO page even when attributes are
+    /// distributed across MX/CF/DC. FC namespaces remain isolated in its lazy
+    /// children, never collapsed into a synthetic observed value.
+    /// </summary>
+    private static IReadOnlyList<IedBrowserDetailRow> BuildCrossFcRoots(
+        (LiveIedDataAttributeModel attr, string[] parts)[] attrs,
+        int depth, bool allowVector)
+    {
+        var output = new List<IedBrowserDetailRow>();
+        foreach (var group in attrs.GroupBy(x => x.parts[0], StringComparer.Ordinal))
+        {
+            var declarations = group.ToArray();
+            var fcs = declarations.Select(x => x.attr.FunctionalConstraint)
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            if (fcs.Length == 1)
+            {
+                output.AddRange(BuildAt(declarations, 0, depth, allowVector));
+                continue;
+            }
+            // Multiple FC declarations of the *same* structured name: one
+            // display node, not phsA [MX], phsA [CF], phsA [DC] as siblings.
+            // Value selection is limited to one proven process FC.
+            var process = declarations.Where(x =>
+                x.attr.FunctionalConstraint is "MX" or "ST").ToArray();
+            var processFcs = process.Select(x => x.attr.FunctionalConstraint)
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            var fc = processFcs.Length == 1 ? processFcs[0] : "";
+            var qualified = IedBrowserLiveValues.CanonicalReference(
+                declarations[0].attr.ObjectReference) + "." + group.Key;
+            var processOnly = process.Where(x =>
+                string.Equals(x.attr.FunctionalConstraint, fc,
+                    StringComparison.OrdinalIgnoreCase)).ToArray();
+            var polar = allowVector && fc == "MX"
+                ? IedBrowserEngineeringComposite.BuildPolar(
+                    processOnly.Select(x => x.attr), qualified)
+                : null;
+            var phases = allowVector && fc == "MX" && polar is null
+                ? IedBrowserEngineeringComposite.BuildThreePhases(
+                    processOnly.Select(x => x.attr), qualified)
+                : Array.Empty<IedBrowserPolarPlan>();
+            var scalar = fc.Length == 0 ? null : ChooseEngineeringLeaf(
+                processOnly.Where(x => x.parts.Length > 1).Select(x => (
+                    Reference: IedBrowserLiveValues.CanonicalReference(x.attr.MmsReference),
+                    Relative: string.Join(".", x.parts.Skip(1)))));
+            var chosen = polar?.MagnitudeReference ?? scalar ?? qualified;
+            var descendants = declarations.Where(x => x.parts.Length > 1).ToArray();
+            output.Add(new IedBrowserDetailRow("Data", group.Key, "Not read", depth,
+                "IEC structured object · exact FC namespaces: " +
+                string.Join(", ", fcs))
+            {
+                IsDataObject = true,
+                ValueReference = chosen,
+                FunctionalConstraint = fc,
+                EngineeringUnitReference = scalar ?? polar?.MagnitudeReference ?? "",
+                IsEngineeringValue = scalar is not null || polar is not null,
+                PolarPlan = polar,
+                PhasePlans = phases,
+                LoadChildren = descendants.Length == 0 ? null
+                    : () => BuildAt(descendants, 1, depth + 1, allowVector)
+            });
+        }
+        return output;
     }
 
     private static IReadOnlyList<IedBrowserDetailRow> BuildAt(
