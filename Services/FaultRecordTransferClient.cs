@@ -80,7 +80,7 @@ public sealed class FaultRecordTransferClient : IAsyncDisposable
         {
             EnsureReady();
             var pages = await _session.GetFileDirectoryPagedAsync(
-                directoryName: null, maximumPages: 32,
+                directoryName: null, maxPages: 32,
                 cancellationToken: cancellationToken).ConfigureAwait(false);
             var entries = new List<MmsFileDirectoryEntry>();
             foreach (var page in pages)
