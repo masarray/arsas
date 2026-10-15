@@ -21,7 +21,13 @@ public sealed record IedBrowserCompositeObservation(
 /// </summary>
 public static class IedBrowserEngineeringComposite
 {
-    private static readonly string[] PhaseNames = ["phsA", "phsB", "phsC"];
+    // IEC WYE/A/PhV and DEL/PPV are different model-verified phase groups.
+    // One object exposing both group shapes is ambiguous, never first-match-wins.
+    private static readonly string[][] PhaseFamilies =
+    [
+        ["phsA", "phsB", "phsC"],
+        ["phsAB", "phsBC", "phsCA"]
+    ];
 
     public static IedBrowserPolarPlan? BuildPolar(
         IEnumerable<LiveIedDataAttributeModel> attributes, string owner)
@@ -50,14 +56,22 @@ public static class IedBrowserEngineeringComposite
         IEnumerable<LiveIedDataAttributeModel> attributes, string owner)
     {
         var all = attributes.ToArray();
-        var phases = new IedBrowserPolarPlan[PhaseNames.Length];
-        for (var i = 0; i < PhaseNames.Length; i++)
+        IedBrowserPolarPlan[]? matched = null;
+        foreach (var names in PhaseFamilies)
         {
-            var result = BuildPolar(all, owner + "." + PhaseNames[i]);
-            if (result is null) return Array.Empty<IedBrowserPolarPlan>();
-            phases[i] = result with { Phase = PhaseNames[i] };
+            var phases = new IedBrowserPolarPlan[names.Length];
+            var complete = true;
+            for (var i = 0; i < names.Length; i++)
+            {
+                var result = BuildPolar(all, owner + "." + names[i]);
+                if (result is null) { complete = false; break; }
+                phases[i] = result with { Phase = names[i] };
+            }
+            if (!complete) continue;
+            if (matched is not null) return Array.Empty<IedBrowserPolarPlan>();
+            matched = phases;
         }
-        return phases;
+        return matched ?? Array.Empty<IedBrowserPolarPlan>();
     }
 
     public static bool TryCompose(
@@ -68,8 +82,9 @@ public static class IedBrowserEngineeringComposite
         ArgumentNullException.ThrowIfNull(row);
         ArgumentNullException.ThrowIfNull(ledger);
         observed = null!;
-        var plans = row.PhasePlans.Count > 0 ? row.PhasePlans :
-            row.PolarPlan is { } polar ? [polar] : Array.Empty<IedBrowserPolarPlan>();
+        IReadOnlyList<IedBrowserPolarPlan> plans = row.PhasePlans.Count > 0
+            ? row.PhasePlans : row.PolarPlan is { } polar
+                ? new[] { polar } : Array.Empty<IedBrowserPolarPlan>();
         if (plans.Count == 0) return false;
 
         var components = new List<string>(plans.Count);
@@ -77,14 +92,22 @@ public static class IedBrowserEngineeringComposite
         var references = new List<string>(plans.Count * 2);
         long? generation = null;
         bool stale = false;
+        var missingMagnitudes = false;
         foreach (var plan in plans)
         {
             if (!ledger.TryGet(plan.MagnitudeReference, plan.FunctionalConstraint,
                     out var magnitude, preferReport: monitoring) ||
                 !double.TryParse(magnitude.Value, NumberStyles.Float,
                     CultureInfo.InvariantCulture, out var magnitudeNumber) ||
-                !double.IsFinite(magnitudeNumber) ||
-                generation.HasValue && generation.Value != magnitude.Association)
+                !double.IsFinite(magnitudeNumber))
+            {
+                // A partially received vector must not masquerade as a full
+                // phasor, but its already observed phases must not disappear.
+                missingMagnitudes = true;
+                components.Add(plan.Phase + ": not observed");
+                continue;
+            }
+            if (generation.HasValue && generation.Value != magnitude.Association)
                 return false;
 
             generation = magnitude.Association;
@@ -101,7 +124,8 @@ public static class IedBrowserEngineeringComposite
                     out var angle, preferReport: monitoring) &&
                 double.TryParse(angle.Value, NumberStyles.Float,
                     CultureInfo.InvariantCulture, out var angleNumber) &&
-                double.IsFinite(angleNumber) && !angle.IsStale == !magnitude.IsStale &&
+                double.IsFinite(angleNumber) &&
+                angle.IsStale == magnitude.IsStale &&
                 Compatible(magnitude, angle))
             {
                 var angleUnit = IedBrowserEngineeringValuePresentation.ResolveUnit(
@@ -122,7 +146,9 @@ public static class IedBrowserEngineeringComposite
                 text += " (angle not verified)";
             components.Add(plan.Phase.Length == 0 ? text : plan.Phase + ": " + text);
         }
+        if (!generation.HasValue) return false; // no evidence at all
         var prefix = plans.Count > 1 ? string.Join("; ", components) : components[0];
+        if (missingMagnitudes) prefix = "Partial · " + prefix;
         var sources = string.Join("+", authorities.OrderBy(x => x, StringComparer.Ordinal));
         observed = new IedBrowserCompositeObservation(prefix, sources,
             "Derived from exact " + string.Join(", ", references) +

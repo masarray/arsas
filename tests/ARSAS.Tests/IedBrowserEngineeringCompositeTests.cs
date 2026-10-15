@@ -78,15 +78,18 @@ public sealed class IedBrowserEngineeringCompositeTests
     }
 
     [Fact]
-    public void MissingPhaseRejectsWholeVector_LeavesRemainIndependentlyReadable()
+    public void MissingPhaseShowsExplicitPartialVector_LeavesRemainIndependentlyReadable()
     {
         var row = IedBrowserStructuredDetails.DataObject(Object(), "MX");
         var ledger = new IedBrowserLiveValues();
         var association = ledger.BeginAssociation();
         ledger.PublishForAssociation(association,
             row.PhasePlans[0].MagnitudeReference, "MX", "42", "", "", "Report");
-        Assert.False(IedBrowserEngineeringComposite.TryCompose(
-            row, ledger, new Dictionary<string, string?>(), true, out _));
+        Assert.True(IedBrowserEngineeringComposite.TryCompose(
+            row, ledger, new Dictionary<string, string?>(), true, out var summary));
+        Assert.StartsWith("Partial · phsA: 42 (angle not verified); phsB: not observed;", summary.Text);
+        Assert.Contains("phsC: not observed", summary.Text);
+        Assert.DoesNotContain("∠ 0", summary.Text);
         Assert.True(ledger.TryGet(row.PhasePlans[0].MagnitudeReference, "MX",
             out var actual));
         Assert.Equal("42", actual.Value);
@@ -142,4 +145,58 @@ public sealed class IedBrowserEngineeringCompositeTests
             IedBrowserStructuredDetails.DataObject(Object(), "MX").PhasePlans,
             row.PhasePlans);
     }
+    [Fact]
+    public void PpvLineToLineThreePhasePairsFollowDeclaredAbBcCaOrder()
+    {
+        const string owner = "LD/MMXU1.PPV";
+        var names = new[] { "phsAB", "phsBC", "phsCA" };
+        var attributes = names.SelectMany(phase => new[] { "cVal.mag.f", "cVal.ang.f" }
+            .Select(tail => new LiveIedDataAttributeModel
+            {
+                ObjectReference = owner, AttributePath = "PPV." + phase + "." + tail,
+                MmsReference = "LD/MMXU1$MX$PPV$" + phase + "$" +
+                    tail.Replace('.', '$'),
+                FunctionalConstraint = "MX"
+            })).ToArray();
+        var obj = new LiveIedDataObjectModel
+        {
+            Name = "PPV", Reference = owner, Attributes = attributes
+        };
+        var root = IedBrowserStructuredDetails.DataObject(obj, "MX");
+        Assert.Equal(names, root.PhasePlans.Select(p => p.Phase).ToArray());
+        var ledger = new IedBrowserLiveValues();
+        var association = ledger.BeginAssociation();
+        foreach (var (plan, index) in root.PhasePlans.Select((p, index) => (p, index)))
+        {
+            ledger.PublishForAssociation(association, plan.MagnitudeReference,
+                "MX", (index + 1).ToString(), "", "t0", "Report");
+            ledger.PublishForAssociation(association, plan.AngleReference,
+                "MX", "30", "", "t0", "Report");
+        }
+        var units = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var plan in root.PhasePlans)
+        {
+            units[plan.MagnitudeReference + "|MX"] = "kV";
+            units[plan.AngleReference + "|MX"] = "deg";
+        }
+        Assert.True(IedBrowserEngineeringComposite.TryCompose(
+            root, ledger, units, true, out var result));
+        Assert.Equal("phsAB: 1 kV ∠ 30°; phsBC: 2 kV ∠ 30°; phsCA: 3 kV ∠ 30°",
+            result.Text);
+    }
+
+    [Fact]
+    public void PpvAndWyeFamiliesCannotBeMixedIntoAFalseSingleThreePhaseVector()
+    {
+        const string owner = "LD/MMXU1.PPV";
+        LiveIedDataAttributeModel Leaf(string name) => new()
+        {
+            ObjectReference = owner,
+            MmsReference = "LD/MMXU1$MX$PPV$" + name + "$cVal$mag$f",
+            FunctionalConstraint = "MX"
+        };
+        var mixed = new[] { Leaf("phsA"), Leaf("phsB"), Leaf("phsCA") };
+        Assert.Empty(IedBrowserEngineeringComposite.BuildThreePhases(mixed, owner));
+    }
+
 }
