@@ -293,7 +293,8 @@ public static class IedBrowserPresentation
     public static IReadOnlyList<IedBrowserTreeRow> Roots(
         LiveIedModelDiscoveryDocument? model, IReadOnlyList<RcbExportRow> rcbs,
         IReadOnlyList<IedBrowserRemoteFile>? remoteFiles = null,
-        string? iedName = null)
+        string? iedName = null,
+        LiveIedModelDiscoveryDocument? sclModel = null)
     {
         const int childDepth = 1;
         // Keep domain/object keys untouched; only presentation labels are short.
@@ -305,7 +306,8 @@ public static class IedBrowserPresentation
 
         var categories = new List<IedBrowserTreeRow>
         {
-            Category("GOOSE", "goose", () => BlockGroups(model?.GooseControlBlocks, "GoCB", labelIed)),
+            Category("GOOSE", "goose", () => BlockGroups(
+                IedBrowserGooseDirectory.Resolve(model, sclModel), "GoCB", labelIed)),
             Category("Reports", "reports", () => ReportGroups(rcbs, labelIed)),
             Category("Setting Groups", "settings", () => BlockGroups(model?.SettingGroupControls, "SGCB", labelIed)),
             Category("Files", "files", () =>
@@ -581,7 +583,8 @@ public static class IedBrowserPresentation
                     rows.Add(new("Message", "DataSet member directory is not available in the current model."));
                 else
                     foreach (var member in linkedDataSet.Members)
-                        rows.Add(IedBrowserStructuredDetails.Member(member, model));
+                        rows.Add(IedBrowserStructuredDetails.Member(
+                            member, model, sclModel: sclModel));
                 break;
             case LiveIedDataSetModel set:
                 Section("DataSet attributes");
@@ -592,7 +595,8 @@ public static class IedBrowserPresentation
                 Section("Data");
                 rows.Add(new("DataHeader", "Name", "Value"));
                 foreach (var member in set.Members)
-                    rows.Add(IedBrowserStructuredDetails.Member(member, model));
+                    rows.Add(IedBrowserStructuredDetails.Member(
+                        member, model, sclModel: sclModel));
                 break;
             case LiveIedControlBlockModel block:
                 Section("Control Block attributes");
@@ -707,16 +711,19 @@ public static class IedBrowserPresentation
                     Field("Frame DataSet entries", "—", "Passive GOOSE");
                     Section("Data");
                     rows.Add(new("DataHeader", "Name", "Value"));
-                    var linkedGooseSet = FindDataSet(model, block.DataSetReference);
+                    var gooseDirectoryModel =
+                        IedBrowserGooseDirectory.ModelForDataSet(model, sclModel, block);
+                    var linkedGooseSet = FindDataSet(gooseDirectoryModel, block.DataSetReference);
                     if (linkedGooseSet is null)
-                        rows.Add(new("Message", "No verified DataSet member directory for this GoCB."));
+                        rows.Add(new("Message", "No exact DataSet member directory for this GoCB in selected IED models."));
                     else
                     {
                         var ordered = linkedGooseSet.Members.OrderBy(m => m.Index).ToArray();
                         for (var slot = 0; slot < ordered.Length; slot++)
                         {
                             var member = ordered[slot];
-                            rows.Add(IedBrowserStructuredDetails.Member(member, model) with
+                            rows.Add(IedBrowserStructuredDetails.Member(member,
+                                gooseDirectoryModel) with
                             {
                                 GooseSlot = slot,
                                 GooseReference = member.Reference,

@@ -126,6 +126,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public MainWindow()
     {
         InitializeComponent();
+        // The actual deployed assembly version, never an invented UI number.
+        var assembly = typeof(MainWindow).Assembly;
+        var compiled = assembly.GetCustomAttributes(
+                typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+            .FirstOrDefault()?.InformationalVersion;
+        var version = (compiled ?? assembly.GetName().Version?.ToString() ?? "")
+            .Split('+', 2)[0].TrimStart('v', 'V');
+        if (version.Length > 0)
+            Title = $"ARSAS v{version} - Smart IEC 61850 Communication Tester";
         DataContext = this;
         _controlShoutTimer.Tick += (_, _) =>
         {
