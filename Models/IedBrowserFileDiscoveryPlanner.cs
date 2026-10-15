@@ -42,9 +42,22 @@ public static class IedBrowserFileDiscoveryPlanner
             rootWarning = "Root MMS FileDirectory: " + ex.Message;
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         // Reuse ARIEC's exact extension/package authority even for root files.
-        // It is pure in-memory projection, so no redundant MMS traversal.
-        var rootCatalog = Iec61850FaultRecordCatalogBuilder.Build(root);
+        // One invalid remote path must not hide other actual MMS inventory.
+        // On failure, show paths only; none becomes download-authorized.
+        Iec61850FaultRecordCatalog rootCatalog;
+        try
+        {
+            rootCatalog = Iec61850FaultRecordCatalogBuilder.Build(root);
+        }
+        catch (ArgumentException ex)
+        {
+            rootCatalog = new Iec61850FaultRecordCatalog
+            {
+                Diagnostics = ["Untrusted FileDirectory record path rejected: " + ex.Message]
+            };
+        }
         var early = new IedBrowserFileCatalog(rootCatalog, root);
         if (root.Count > 0 && publishRoot is not null)
         {
