@@ -863,7 +863,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // Keep the same density used by the proven workstation shell while allowing
         // enough width for the Explorer label and the new canonical FAT sibling.
         var availableWidth = ActualWidth > 0d ? ActualWidth : 1480d;
-        var shellWidth = availableWidth >= 1700d ? 1150d : availableWidth >= 1380d ? 1010d : 842d;
+        var shellWidth = Math.Min(1190d, Math.Max(842d, availableWidth - 360d));
         WorkflowNavShell.Width = shellWidth;
         WorkflowNavShell.MinWidth = shellWidth;
 

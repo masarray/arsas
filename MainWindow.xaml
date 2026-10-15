@@ -82,7 +82,7 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <Border x:Name="WorkflowNavShell" Width="760" Height="56" HorizontalAlignment="Left"
+            <Border x:Name="WorkflowNavShell" Width="1080" Height="56" HorizontalAlignment="Left"
                     Background="#E7ECF5" CornerRadius="14" Padding="5" Effect="{StaticResource SoftShadow}"
                     ClipToBounds="False">
                 <Grid x:Name="WorkflowNavGrid" ClipToBounds="False">
@@ -112,7 +112,7 @@
                     <Button x:Name="NavExplorerButton" Grid.Column="0" Tag="0" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="IEC 61850 Explorer">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                             <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
-                                <Path Data="{StaticResource MaterialExplorerIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                                <Path Data="{StaticResource OperatorIecWirelessIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
                             </Viewbox>
                             <TextBlock Text="IEC 61850 Explorer" VerticalAlignment="Center"/>
                         </StackPanel>
@@ -120,7 +120,7 @@
                     <Button x:Name="NavLiveButton" Grid.Column="1" Tag="1" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="Live Monitor">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                             <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
-                                <Path Data="{StaticResource MaterialLiveIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                                <Path Data="{StaticResource OperatorLiveMonitorIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
                             </Viewbox>
                             <TextBlock Text="Live Monitor" VerticalAlignment="Center"/>
                         </StackPanel>
@@ -144,7 +144,7 @@
                     <Button x:Name="NavGooseButton" Grid.Column="4" Tag="4" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="GOOSE Subscriber">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                             <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
-                                <Path Data="{StaticResource MaterialGooseIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                                <Path Data="{StaticResource OperatorIecWirelessIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
                             </Viewbox>
                             <TextBlock Text="GOOSE Subscriber" VerticalAlignment="Center"/>
                         </StackPanel>

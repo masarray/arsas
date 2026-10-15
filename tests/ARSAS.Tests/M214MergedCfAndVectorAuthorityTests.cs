@@ -55,7 +55,9 @@ public sealed class M214MergedCfAndVectorAuthorityTests
         Assert.True(IedBrowserEngineeringComposite.TryCompose(
             expanded, ledger, new Dictionary<string, string?>(), true, out var all));
         Assert.StartsWith("Independent", all.Source);
-        Assert.Contains("angle 30 (independent, not paired)", all.Text);
+        Assert.Contains("angle 30", all.Text);
+        Assert.DoesNotContain("independent, not paired", all.Text);
+        Assert.Contains("not paired with magnitude", all.Provenance);
         Assert.Contains("neut: 3", all.Text);
 
         Assert.True(ledger.PublishForAssociation(session,

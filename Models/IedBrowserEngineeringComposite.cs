@@ -168,8 +168,22 @@ public static class IedBrowserEngineeringComposite
                 references.Add(plan.AngleReference + "[" + plan.FunctionalConstraint + "]");
                 anglePaired = true;
             }
-            if (!anglePaired && !compactDo)
-                text += " (angle not verified)";
+            if (!anglePaired && !compactDo && plan.AngleReference.Length > 0 &&
+                ledger.TryGet(plan.AngleReference, plan.FunctionalConstraint,
+                    out var independentAngle, preferReport: monitoring) &&
+                double.TryParse(independentAngle.Value, NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out var independentNumber) &&
+                double.IsFinite(independentNumber))
+            {
+                // Two real values can be displayed separately. Never add ∠
+                // unless the actual report/read evidence passed CanPair.
+                var independentUnit = IedBrowserEngineeringValuePresentation.ResolveVectorAngleUnit(
+                    unitIndex, plan.AngleReference, plan.FunctionalConstraint);
+                text += "; angle " + IedBrowserEngineeringValuePresentation.Format(
+                    independentAngle.Value, independentUnit);
+                references.Add(plan.AngleReference + "[independent " +
+                    plan.FunctionalConstraint + "]");
+            }
             components.Add(plan.Phase.Length == 0 ? text : plan.Phase + ": " + text);
         }
         if (!generation.HasValue) return false; // no evidence at all

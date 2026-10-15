@@ -37,6 +37,7 @@ public static class IedBrowserObservedVectorPresentation
         var displayed = new List<string>(components.Count);
         var provenance = new List<string>(components.Count * 2);
         bool anyStale = false, anyReport = false, anyRead = false;
+        var unpaired = new List<string>();
         foreach (var part in components)
         {
             var prefix = part.Label.Length == 0 ? "" : part.Label + ": ";
@@ -66,8 +67,14 @@ public static class IedBrowserObservedVectorPresentation
                 if (hasMag && IedBrowserEngineeringComposite.CanPair(magnitude, angle))
                     text += " ∠ " + rendered;
                 else
-                    text += (text.Length == 0 ? "" : "; ") + "angle " + rendered +
-                        (hasMag ? " (independent, not paired)" : " (magnitude not observed)");
+                {
+                    // The field is independently observed, not a phasor angle
+                    // pair. Keep the reason in provenance, not in Value cells.
+                    text += (text.Length == 0 ? "" : "; ") + "angle " + rendered;
+                    unpaired.Add(part.Label + ": " + (hasMag
+                        ? "angle not paired with magnitude"
+                        : "magnitude not observed"));
+                }
                 Register(part.AngleReference, angle);
             }
             displayed.Add(prefix + text);
@@ -82,7 +89,8 @@ public static class IedBrowserObservedVectorPresentation
         display = new IedBrowserVectorDisplay(
             string.Join("; ", displayed), source,
             string.Join(" | ", provenance) +
-            " · independently observed components (no inferred missing phases)",
+            " · independently observed components (no inferred missing phases)" +
+            (unpaired.Count == 0 ? "" : " · " + string.Join(" | ", unpaired)),
             anyStale);
         return true;
 
