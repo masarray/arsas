@@ -72,7 +72,7 @@ public partial class MainWindow
         toggle.Checked += GlobalSntpToggle_Changed;
         toggle.Unchecked += GlobalSntpToggle_Changed;
 
-        var clockIcon = new Path
+        var clockIcon = new System.Windows.Shapes.Path
         {
             Data = (Geometry)FindResource("OperatorNtpServerIcon"),
             Fill = ink,
