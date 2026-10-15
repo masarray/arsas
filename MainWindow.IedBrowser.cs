@@ -301,6 +301,8 @@ public partial class MainWindow
         var sourceDevice = device;
         var successes = 0;
         var failures = 0;
+        // Bounded diagnostic examples; these are never another value cache.
+        var failureExamples = new List<string>(3);
         long readAssociation = -1; // bound after any explicit connect
         // Progress<T> posts asynchronously to WPF: an awaited read sweep
         // can finish before the final posted callbacks execute. Ingestion
@@ -323,14 +325,26 @@ public partial class MainWindow
                     sourceDevice.LiveValues.Association != readAssociation ||
                     bindingIndex is not { IsCurrent: true })
                     return; // superseded association, catalog or read flight
-                if (result.Error.Length != 0 || string.IsNullOrWhiteSpace(result.Value))
+                var scalarValid = IedBrowserReadValuePolicy.TryAcceptDisplay(
+                    result.Value, out var safeValue, out var scalarReason);
+                if (result.Error.Length != 0 || !scalarValid)
                 {
                     failures++;
+                    if (failureExamples.Count < 3)
+                    {
+                        var message = result.Error.Length != 0
+                            ? result.Error : scalarReason;
+                        if (message.Length > 180)
+                            message = message[..180] + "…";
+                        failureExamples.Add(
+                            $"{IedBrowserLiveValues.CanonicalReference(result.Target.Reference)} " +
+                            $"[{result.Target.FunctionalConstraint}]: {message}");
+                    }
                     return;
                 }
                 var accepted = sourceDevice.LiveValues.PublishForAssociation(
                     readAssociation, result.Target.Reference,
-                    result.Target.FunctionalConstraint, result.Value,
+                    result.Target.FunctionalConstraint, safeValue,
                     result.Quality, result.DeviceTimestamp, "MMS Read",
                     result.UtcTimeEvidence, result.QualityEvidence);
                 if (!accepted) return;
@@ -392,7 +406,11 @@ public partial class MainWindow
             {
                 device.ApplyBrowserReadProgress(targets.Count, targets.Count);
                 device.CompleteDiscoveryProgressAnimation();
-                IedBrowserSubtitle.Text = $"Read complete · {successes:N0} values / {targets.Count:N0} attributes · {failures:N0} unavailable";
+                IedBrowserSubtitle.Text = $"Read complete · {successes:N0} verified scalar values / {targets.Count:N0} attributes · {failures:N0} unavailable";
+                IedBrowserSubtitle.ToolTip = failureExamples.Count == 0
+                    ? null
+                    : "First unavailable attributes (no scalar was published):\n" +
+                      string.Join("\n", failureExamples);
                 RefreshIedBrowserVisibleValues();
             }
         }

@@ -144,16 +144,18 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 cancellationToken.ThrowIfCancellationRequested();
                 var rich = raw as Iec61850ReadValue;
                 var display = raw?.ToString() ?? "";
-                if (!string.IsNullOrWhiteSpace(display) && display != "-")
+                if (IedBrowserReadValuePolicy.TryAcceptDisplay(
+                        display, out var accepted, out var reason))
                 {
-                    values.Report(new IedBrowserReadResult(target, display,
+                    values.Report(new IedBrowserReadResult(target, accepted,
                         rich?.Quality ?? "", rich?.DeviceTimestamp ?? "", "",
                         rich?.UtcTimeEvidence, rich?.QualityEvidence));
                     succeeded++;
                 }
                 else
                     values.Report(new IedBrowserReadResult(target, "", "", "",
-                        "IED did not return a readable value."));
+                        raw is null && session.Client.LastErrorMessage.Length > 0
+                            ? session.Client.LastErrorMessage : reason));
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {

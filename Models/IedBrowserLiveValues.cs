@@ -111,6 +111,8 @@ public sealed class IedBrowserLiveValues
     {
         if (string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(fc) ||
             string.IsNullOrWhiteSpace(value) ||
+            (string.Equals(source, "MMS Read", StringComparison.Ordinal) &&
+             !IedBrowserReadValuePolicy.TryAcceptDisplay(value, out _, out _)) ||
             value.Trim() is "-" or "Not read" or "Unknown")
             return false;
 
