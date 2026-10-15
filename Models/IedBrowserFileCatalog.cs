@@ -1,5 +1,6 @@
 using System.IO;
 using AR.Iec61850.FaultRecords;
+using AR.Iec61850.Mms;
 
 namespace ArIED61850Tester.Models;
 
@@ -16,7 +17,8 @@ public sealed class IedBrowserFileCatalog
 
     public IReadOnlyList<IedBrowserRemoteFile> Files { get; }
 
-    public IedBrowserFileCatalog(Iec61850FaultRecordCatalog catalog)
+    public IedBrowserFileCatalog(Iec61850FaultRecordCatalog catalog,
+        IEnumerable<MmsFileDirectoryEntry>? rootEntries = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         var displayed = new Dictionary<string, IedBrowserRemoteFile>(StringComparer.OrdinalIgnoreCase);
@@ -34,6 +36,20 @@ public sealed class IedBrowserFileCatalog
             displayed.Add(file.RemotePath, new IedBrowserRemoteFile(
                 file.Name, file.RemotePath, file.SizeBytes, file.LastModifiedUtc));
         }
+        // The fault-record catalog is intentionally filtered to COMTRADE and
+        // supported packages. Browse *all* actual MMS root entries as ordinary
+        // inventory, but do not grant download eligibility to these additions.
+        // The existing record association alone authorizes CFG/DAT transfers.
+        if (rootEntries is not null)
+            foreach (var entry in rootEntries)
+            {
+                if (string.IsNullOrWhiteSpace(entry.Path) ||
+                    displayed.ContainsKey(entry.Path))
+                    continue;
+                displayed.Add(entry.Path, new IedBrowserRemoteFile(
+                    string.IsNullOrWhiteSpace(entry.Name) ? entry.Path : entry.Name,
+                    entry.Path, entry.SizeBytes, null, entry.IsLikelyDirectory));
+            }
         Files = displayed.Values
             .OrderBy(row => row.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(row => row.RemotePath, StringComparer.Ordinal)

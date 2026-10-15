@@ -106,18 +106,36 @@ public partial class MainWindow
                 await using var transfer = new ArIED61850Tester.Services.FaultRecordTransferClient();
                 await transfer.ConnectAsync(source.IpAddress, source.Port, cts.Token);
                 var catalog = await transfer.DiscoverAsync(remoteDirectory: null, cts.Token);
-                return new IedBrowserFileCatalog(catalog);
+                // FaultRecordCatalog filters ordinary files by extension.
+                // Ask the same ARIEC session for real root FileDirectory
+                // entries instead of claiming that zero records means no files.
+                IReadOnlyList<AR.Iec61850.Mms.MmsFileDirectoryEntry> root = [];
+                string? rootWarning = null;
+                try
+                {
+                    root = await transfer.ReadRootFileDirectoryAsync(cts.Token);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    rootWarning = ex.Message;
+                }
+                return (Files: new IedBrowserFileCatalog(catalog, root),
+                    RootWarning: rootWarning,
+                    CatalogDiagnostics: catalog.Diagnostics);
             }, cts.Token).ConfigureAwait(true);
             if (cts.IsCancellationRequested ||
                 !ReferenceEquals(source, SelectedDevice) ||
                 !ReferenceEquals(source, _iedBrowserFileOwner) || !source.IsConnected)
                 return;
-            _iedBrowserFileCatalog = files;
-            _iedBrowserRemoteFiles = files.Files;
+            _iedBrowserFileCatalog = files.Files;
+            _iedBrowserRemoteFiles = files.Files.Files;
             _iedBrowserFilesLoaded = true;
             _iedBrowserForceRefresh = true;
             RefreshIedBrowser();
-            IedBrowserDetailStatus.Text = $"FileDirectory · {files.Files.Count:N0} remote record file(s)";
+            IedBrowserDetailStatus.Text = files.Files.Files.Count > 0
+                ? $"FileDirectory · {files.Files.Files.Count:N0} browsable entries (root files/folders + verified fault records)"
+                : "FileDirectory returned no browsable entries. " +
+                  (files.RootWarning ?? string.Join(" | ", files.CatalogDiagnostics.Take(3)));
         }
         catch (OperationCanceledException)
         {

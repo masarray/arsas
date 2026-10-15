@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using AR.Iec61850.FaultRecords;
+using AR.Iec61850.Mms;
 using ArIED61850Tester.Models;
 
 namespace ARSAS.Tests;
@@ -44,6 +45,43 @@ public sealed class M2IedBrowserFilesTests
         Assert.Same(record, found);
         Assert.False(index.TryGetRecord("/COMTRADE/FAULT001.datx", out _, out _));
         Assert.Equal("FAULT001.cfg", index.Files[0].Name);
+    }
+
+    [Fact]
+    public void ActualMmsDirectory_PreservesOrdinaryFilesAndFoldersWithoutFakeDownloads()
+    {
+        var index = new IedBrowserFileCatalog(new Iec61850FaultRecordCatalog(),
+        [
+            new MmsFileDirectoryEntry
+            {
+                Name = "config.xml", Path = "/config.xml", SizeBytes = 123
+            },
+            new MmsFileDirectoryEntry
+            {
+                Name = "records/", Path = "/records/", SizeBytes = 0
+            }
+        ]);
+        Assert.Equal(2, index.Files.Count);
+        Assert.Equal(123L, Assert.Single(index.Files,
+            f => f.RemotePath == "/config.xml").SizeBytes);
+        Assert.True(Assert.Single(index.Files,
+            f => f.RemotePath == "/records/").IsDirectory);
+        Assert.False(index.TryGetRecord("/config.xml", out _, out _));
+        Assert.False(index.TryGetRecord("/records/", out _, out _));
+    }
+
+    [Fact]
+    public void RootInventory_DoesNotDuplicateEngineVerifiedFaultRecords()
+    {
+        var record = Record();
+        var index = new IedBrowserFileCatalog(
+            new Iec61850FaultRecordCatalog { Records = [record] },
+            [new MmsFileDirectoryEntry {
+                Name = "FAULT001.cfg", Path = "/COMTRADE/FAULT001.cfg",
+                SizeBytes = 4
+            }]);
+        Assert.Equal(2, index.Files.Count);
+        Assert.True(index.TryGetRecord("/COMTRADE/FAULT001.cfg", out _, out _));
     }
 
     [Fact]

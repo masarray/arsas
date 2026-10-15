@@ -102,7 +102,7 @@ public partial class MainWindow
         if (IedBrowserFileSelectionText == null || IedBrowserFilesDownloadSelectedButton == null)
             return;
         var selected = IedBrowserFilesGrid.SelectedItem as IedBrowserRemoteFile;
-        var canDownload = selected is not null &&
+        var canDownload = selected is { IsDirectory: false } &&
             _iedBrowserFileCatalog?.TryGetRecord(selected.RemotePath, out _, out _) == true;
         IedBrowserFilesDownloadSelectedButton.IsEnabled = canDownload &&
             _iedBrowserFileTransferOperation is null;
