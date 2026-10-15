@@ -82,10 +82,17 @@ public static class IedBrowserEngineeringComposite
         ArgumentNullException.ThrowIfNull(row);
         ArgumentNullException.ThrowIfNull(ledger);
         observed = null!;
+        // One Browser presentation entry point. Model-verified standard
+        // phasors use strict timestamp/source/association matching. A model
+        // with additional neutral/net/res leaves is explicitly independent,
+        // never allowed to bypass this compatibility contract.
+        if (row.VectorComponents.Count > 3)
+            return TryIndependent(row, ledger, unitIndex, monitoring, out observed);
         IReadOnlyList<IedBrowserPolarPlan> plans = row.PhasePlans.Count > 0
             ? row.PhasePlans : row.PolarPlan is { } polar
                 ? new[] { polar } : Array.Empty<IedBrowserPolarPlan>();
-        if (plans.Count == 0) return false;
+        if (plans.Count == 0)
+            return TryIndependent(row, ledger, unitIndex, monitoring, out observed);
 
         var components = new List<string>(plans.Count);
         var authorities = new HashSet<string>(StringComparer.Ordinal);
@@ -128,7 +135,7 @@ public static class IedBrowserEngineeringComposite
                 angle.IsStale == magnitude.IsStale &&
                 Compatible(magnitude, angle))
             {
-                var angleUnit = IedBrowserEngineeringValuePresentation.ResolveUnit(
+                var angleUnit = IedBrowserEngineeringValuePresentation.ResolveVectorAngleUnit(
                     unitIndex, plan.AngleReference, plan.FunctionalConstraint);
                 var suffix = angleUnit switch
                 {
@@ -158,7 +165,24 @@ public static class IedBrowserEngineeringComposite
         return true;
     }
 
-    private static bool Compatible(IedBrowserObservedValue magnitude,
+    private static bool TryIndependent(
+        IedBrowserDetailRow row, IedBrowserLiveValues ledger,
+        IReadOnlyDictionary<string, string?> unitIndex, bool monitoring,
+        out IedBrowserCompositeObservation result)
+    {
+        result = null!;
+        if (!IedBrowserObservedVectorPresentation.TryFormat(
+                ledger, row.VectorComponents, unitIndex, monitoring,
+                out var independent)) return false;
+        result = new IedBrowserCompositeObservation(
+            independent.Value, "Independent " + independent.Source,
+            independent.Provenance, independent.IsStale);
+        return true;
+    }
+
+    // Both standard polar and additional phase/neutral presentation must
+    // agree on the exact same compatibility policy. No duplicate criteria.
+    internal static bool Compatible(IedBrowserObservedValue magnitude,
         IedBrowserObservedValue angle)
     {
         if (magnitude.Association != angle.Association ||
