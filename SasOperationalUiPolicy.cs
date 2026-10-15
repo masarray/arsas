@@ -24,7 +24,7 @@ internal static class SasOperationalUiPolicy
     private static readonly ConditionalWeakTable<object, object> FilteredViews = new();
     private static readonly string[] NavigationButtonNames =
     {
-        "NavExplorerButton", "NavLiveButton", "NavEventsButton", "NavAlarmButton", "NavGooseButton", "NavDiagnosticsButton", "NavNativeFatButton", "NavIedBrowserButton"
+        "NavIedBrowserButton", "NavExplorerButton", "NavEventsButton", "NavAlarmButton", "NavGooseButton", "NavSmvButton", "NavNativeFatButton", "NavDiagnosticsButton"
     };
 
     [ModuleInitializer]
@@ -149,7 +149,7 @@ internal static class SasOperationalUiPolicy
         {
             tabs.SelectionChanged -= OnTabSelectionChanged;
             tabs.SelectionChanged += OnTabSelectionChanged;
-            UpdateNavigation(buttons, tabs.SelectedIndex, pulse: false);
+            UpdateNavigation(buttons, EngineeringNavigationRoute.ButtonForTab(tabs.SelectedIndex), pulse: false);
         }
         else
         {
@@ -170,7 +170,7 @@ internal static class SasOperationalUiPolicy
             .Where(button => button is not null)
             .Cast<Button>()
             .ToArray();
-        UpdateNavigation(buttons, tabs.SelectedIndex, pulse: true);
+        UpdateNavigation(buttons, EngineeringNavigationRoute.ButtonForTab(tabs.SelectedIndex), pulse: true);
     }
 
     private static void OnNavigationClick(object sender, MouseButtonEventArgs args)

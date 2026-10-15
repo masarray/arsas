@@ -818,9 +818,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (sender is not Button button || !int.TryParse(button.Tag?.ToString(), out var index))
             return;
-        index = Math.Clamp(index, 0, IedBrowserWorkspaceIndex);
-        MainTabs.SelectedIndex = index;
-        UpdateNavigationVisuals(index, animate: true);
+        MainTabs.SelectedIndex = EngineeringNavigationRoute.TabForButton(index);
+        UpdateNavigationVisuals(MainTabs.SelectedIndex, animate: true);
     }
 
     private void MainTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -858,6 +857,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             ClearDiagnosticAlert();
         }
+        else if (MainTabs.SelectedIndex == EngineeringNavigationRoute.SmvWorkspaceIndex)
+        {
+            ActivateSelectedSmvWorkspace();
+        }
 
         UpdateNavigationVisuals(MainTabs.SelectedIndex, animate: true);
     }
@@ -867,9 +870,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (WorkflowPillTranslate == null)
             return;
 
-        index = Math.Clamp(index, 0, IedBrowserWorkspaceIndex);
+        index = EngineeringNavigationRoute.ButtonForTab(index);
 
-        // MainWindow is the single owner of all seven Engineering destinations.
+        // MainWindow is the single owner of all eight operator destinations.
         // Keep the same density used by the proven workstation shell while allowing
         // enough width for the Explorer label and the new canonical FAT sibling.
         var availableWidth = ActualWidth > 0d ? ActualWidth : 1480d;
@@ -898,14 +901,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var buttons = new[]
         {
+            NavIedBrowserButton,
             NavExplorerButton,
-            NavLiveButton,
             NavEventsButton,
             NavAlarmButton,
             NavGooseButton,
-            NavDiagnosticsButton,
+            NavSmvButton,
             NavNativeFatButton,
-            NavIedBrowserButton
+            NavDiagnosticsButton
         };
         for (var i = 0; i < buttons.Length; i++)
             buttons[i].Foreground = i == index ? Brushes.White : new SolidColorBrush(Color.FromRgb(71, 84, 103));

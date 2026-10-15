@@ -109,47 +109,47 @@
                             <DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.18" Color="#2563EB"/>
                         </Border.Effect>
                     </Border>
-                    <Button x:Name="NavExplorerButton" Grid.Column="0" Tag="0" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="IEC 61850 Explorer">
+                    <Button x:Name="NavExplorerButton" Grid.Column="1" Tag="1" TabIndex="1" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="Device Explorer">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                             <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
                                 <Path Data="{StaticResource OperatorIecTopologyIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
                             </Viewbox>
-                            <TextBlock Text="IEC 61850 Explorer" VerticalAlignment="Center"/>
+                            <TextBlock Text="Device Explorer" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="NavLiveButton" Grid.Column="1" Tag="1" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="Live Monitor">
+                    <Button x:Name="NavSmvButton" Grid.Column="5" Tag="5" TabIndex="5" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="SMV · Sampled Values">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                             <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
                                 <Path Data="{StaticResource OperatorLiveMonitorIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
                             </Viewbox>
-                            <TextBlock Text="Live Monitor" VerticalAlignment="Center"/>
+                            <TextBlock Text="SMV" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="NavEventsButton" Grid.Column="2" Tag="2" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="Event Log">
+                    <Button x:Name="NavEventsButton" Grid.Column="2" Tag="2" TabIndex="2" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="Event Logs">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                             <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
                                 <Path Data="{StaticResource OperatorEventLogIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
                             </Viewbox>
-                            <TextBlock Text="Event Log" VerticalAlignment="Center"/>
+                            <TextBlock Text="Event Logs" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="NavAlarmButton" Grid.Column="3" Tag="3" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="Alarm">
+                    <Button x:Name="NavAlarmButton" Grid.Column="3" Tag="3" TabIndex="3" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="Annunciator">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                             <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
                                 <Path Data="{StaticResource OperatorAlarmIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
                             </Viewbox>
-                            <TextBlock Text="Alarm" VerticalAlignment="Center"/>
+                            <TextBlock Text="Annunciator" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="NavGooseButton" Grid.Column="4" Tag="4" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="GOOSE Subscriber">
+                    <Button x:Name="NavGooseButton" Grid.Column="4" Tag="4" TabIndex="4" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="GOOSE Sniff">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                             <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
                                 <Path Data="{StaticResource OperatorIecWirelessIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
                             </Viewbox>
-                            <TextBlock Text="GOOSE Subscriber" VerticalAlignment="Center"/>
+                            <TextBlock Text="GOOSE Sniff" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="NavDiagnosticsButton" Grid.Column="5" Tag="5" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}">
+                    <Button x:Name="NavDiagnosticsButton" Grid.Column="7" Tag="7" TabIndex="7" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                             <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
                                 <Path Data="{StaticResource OperatorDiagnosticsIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
@@ -163,15 +163,15 @@
                             </Border>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="NavNativeFatButton" Grid.Column="6" Tag="6" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="FAT">
+                    <Button x:Name="NavNativeFatButton" Grid.Column="6" Tag="6" TabIndex="6" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="Signal Testing">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                             <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
                                 <Path Data="{StaticResource OperatorFatIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
                             </Viewbox>
-                            <TextBlock Text="FAT" VerticalAlignment="Center"/>
+                            <TextBlock Text="Signal Testing" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="NavIedBrowserButton" Grid.Column="7" Tag="7" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="IED Browser">
+                    <Button x:Name="NavIedBrowserButton" Grid.Column="0" Tag="0" TabIndex="0" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="IED Browser">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                             <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
                                 <Path Data="{StaticResource OperatorIedBrowserIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
@@ -191,7 +191,7 @@
                     Style="{StaticResource HiddenTabControl}"
                     SelectionChanged="MainTabs_SelectionChanged">
             <!-- IEC 61850 EXPLORER -->
-            <TabItem Header="IEC 61850 Explorer">
+            <TabItem Header="Device Explorer">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="258"/>
@@ -930,7 +930,7 @@
             </TabItem>
 
             <!-- GLOBAL MULTI-IED LIVE MONITOR -->
-            <TabItem Header="Live Monitor">
+            <TabItem Header="Internal Live Monitor" Visibility="Collapsed" IsEnabled="False">
                 <Border Style="{StaticResource WorkspaceCard}" Padding="12">
                     <DockPanel>
                         <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
@@ -2282,6 +2282,29 @@
                             </Grid>
                         </Grid>
                     </Grid>
+                </Border>
+            </TabItem>
+
+            <!-- Sampled Values uses the existing, hardware-backed SMV viewer/capture workflow.
+                 The host is navigation/status only, not a duplicate SMV decoder. -->
+            <TabItem x:Name="SmvWorkspaceTab" Header="SMV">
+                <Border Style="{StaticResource WorkspaceCard}" Padding="12">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" VerticalAlignment="Center">
+                            <StackPanel>
+                                <TextBlock Text="Sampled Values" Style="{StaticResource WorkspaceTitle}"/>
+                                <TextBlock Text="Capture and inspect IEC 61850-9-2 Sampled Values with the existing native SMV viewer."
+                                           Style="{StaticResource WorkspaceSubtitle}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <Button Content="Open SMV Capture" Style="{StaticResource PrimaryButton}"
+                                    Margin="16,0,0,0" Padding="12,6"
+                                    Click="OpenSmvCapture_Click"
+                                    ToolTip="Reuse the current SMV viewer and preserve the active snapshot"/>
+                        </StackPanel>
+                        <TextBlock x:Name="SmvWorkspaceStatus" Margin="0,14,0,0" FontSize="12"
+                                   Foreground="{StaticResource Muted}"
+                                   Text="Select an IED in Device Explorer to launch the SMV capture workspace."/>
+                    </DockPanel>
                 </Border>
             </TabItem>
         </TabControl>

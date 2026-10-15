@@ -92,7 +92,26 @@ public partial class MainWindow
         if (sender is not Button { CommandParameter: Iec61850MonitorDevice device })
             return;
 
+        OpenSmvWorkspaceForDevice(device);
+    }
+
+    private void ActivateSelectedSmvWorkspace()
+    {
+        if (SelectedDevice is { } device)
+            OpenSmvWorkspaceForDevice(device);
+        else if (SmvWorkspaceStatus is not null)
+            SmvWorkspaceStatus.Text = "Select an IED in Device Explorer, then open SMV capture.";
+    }
+
+    private void OpenSmvCapture_Click(object sender, RoutedEventArgs e)
+        => ActivateSelectedSmvWorkspace();
+
+    private void OpenSmvWorkspaceForDevice(Iec61850MonitorDevice device)
+    {
         SelectedDevice = device;
+        if (SmvWorkspaceStatus is not null)
+            SmvWorkspaceStatus.Text =
+                "SMV capture for " + device.Name + " · existing verified viewer";
 
         if (_activeSmvViewerWindow is { IsLoaded: true } existing)
         {

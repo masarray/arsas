@@ -60,13 +60,13 @@ public sealed class ProductionFatEngineeringTabRegressionTests
         Assert.Equal("NavButton_Click", (string?)fatButton.Attribute("Click"));
         Assert.Equal("{StaticResource SegmentedNavButton}", (string?)fatButton.Attribute("Style"));
         Assert.Contains(fatButton.Descendants(p + "TextBlock"),
-            label => (string?)label.Attribute("Text") == "FAT");
+            label => (string?)label.Attribute("Text") == "Signal Testing");
         Assert.Contains(fatButton.Descendants(p + "Path"),
             path => (string?)path.Attribute("Data") == "{StaticResource OperatorFatIcon}");
         Assert.Contains("Grid.ColumnSpan=\"8\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"NativeFatTab\" Header=\"FAT\"", xaml, StringComparison.Ordinal);
 
-        Assert.Contains("Math.Clamp(index, 0, IedBrowserWorkspaceIndex)", mainSource, StringComparison.Ordinal);
+        Assert.Contains("EngineeringNavigationRoute.TabForButton(index)", mainSource, StringComparison.Ordinal);
         Assert.Contains("var cellWidth = contentWidth / 8d", mainSource, StringComparison.Ordinal);
         Assert.Contains("NavNativeFatButton", mainSource, StringComparison.Ordinal);
 
