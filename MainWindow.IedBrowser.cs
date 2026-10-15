@@ -445,6 +445,21 @@ public partial class MainWindow
                 row.ObservationTooltip = verifiedProvenance;
                 continue;
             }
+            // Prefer the schema-authorized, timestamp-compatible phasor
+            // composer from M2.14. Extra neutral/net/res components retain
+            // the bounded, independently observed presentation below.
+            if (row.VectorComponents.Count <= 3 &&
+                IedBrowserEngineeringComposite.TryCompose(
+                    row, device.LiveValues, engineeringUnits,
+                    device.IsMonitoring, out var composite))
+            {
+                row.Value = composite.IsStale
+                    ? "Offline · " + composite.Text : composite.Text;
+                row.ObservationSource = composite.IsStale
+                    ? "Stale derived " + composite.Source : "Derived " + composite.Source;
+                row.ObservationTooltip = composite.Provenance;
+                continue;
+            }
             if (IedBrowserObservedVectorPresentation.TryFormat(
                     device.LiveValues, row.VectorComponents, engineeringUnits,
                     device.IsMonitoring, out var vector))

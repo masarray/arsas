@@ -17,6 +17,11 @@ public static class IedBrowserStructuredDetails
         // registry; there is no second value cache or additional MMS read.
         var hasLeaf = IedBrowserSchemaIndex.TryGetUniqueProcessLeaf(
             obj, out var processLeaf, out var processFc);
+        var phasePlans = IedBrowserEngineeringComposite.BuildThreePhases(
+            obj.Attributes, obj.Reference);
+        var polarPlan = phasePlans.Count == 0
+            ? IedBrowserEngineeringComposite.BuildPolar(obj.Attributes, obj.Reference)
+            : null;
         // A compound DO such as MMXU.PhV has no unique scalar leaf, but
         // can have a single schema-verified FC for independently observed
         // phase vectors. Never infer this FC from the object's label.
@@ -31,6 +36,8 @@ public static class IedBrowserStructuredDetails
             $"IEC DO declaration · {obj.Reference} · CDC {obj.InferredCdc}")
         {
             IsDataObject = true,
+            PolarPlan = polarPlan,
+            PhasePlans = phasePlans,
             ValueReference = hasLeaf ? processLeaf : obj.Reference,
             FallbackValueReference = hasLeaf ? obj.Reference : "",
             IsEngineeringValue = hasLeaf,
@@ -77,9 +84,19 @@ public static class IedBrowserStructuredDetails
                 .Where(a => a.Reference.StartsWith(a.Prefix, StringComparison.Ordinal))
                 .Select(a => (Reference: a.Reference, Relative: a.Reference[a.Prefix.Length..]))); 
         var foundLeaf = !string.IsNullOrEmpty(leaf);
+        var matchingMembers = exactObject?.Attributes.Where(a =>
+            string.Equals(a.FunctionalConstraint, member.FunctionalConstraint,
+                StringComparison.OrdinalIgnoreCase)).ToArray()
+            ?? Array.Empty<LiveIedDataAttributeModel>();
+        var memberPhasePlans = IedBrowserEngineeringComposite.BuildThreePhases(
+            matchingMembers, identity);
+        var memberPolarPlan = memberPhasePlans.Count == 0
+            ? IedBrowserEngineeringComposite.BuildPolar(matchingMembers, identity) : null;
         return new IedBrowserDetailRow("Data", $"{name} [{member.FunctionalConstraint}]", "Not read",
             depth, "DataSet directory; observed live values or explicit MMS read")
         {
+            PolarPlan = memberPolarPlan,
+            PhasePlans = memberPhasePlans,
             ValueReference = foundLeaf ? leaf! : member.Reference,
             FallbackValueReference = foundLeaf ? member.Reference : "",
             EngineeringUnitReference = foundLeaf ? leaf! : "",
@@ -164,6 +181,14 @@ public static class IedBrowserStructuredDetails
             var hasDirect = matching.attr is not null;
             var attr = hasDirect ? matching.attr : groupArray[0].attr;
             var descendants = groupArray.Where(x => x.parts.Length > pathIndex + 1).ToArray();
+            var fullPrefix = IedBrowserLiveValues.CanonicalReference(attr.ObjectReference) +
+                "." + string.Join(".", groupArray[0].parts.Take(pathIndex + 1));
+            var polar = IedBrowserEngineeringComposite.BuildPolar(
+                groupArray.Select(x => x.attr), fullPrefix);
+            var phases = polar is null
+                ? IedBrowserEngineeringComposite.BuildThreePhases(
+                    groupArray.Select(x => x.attr), fullPrefix)
+                : Array.Empty<IedBrowserPolarPlan>();
             // q/t and alternate instantaneous leaves are not blockers for a
             // model-proven normal engineering value. No first child wins.
             var scalarLeaf = name is "q" or "t" ? null :
@@ -192,6 +217,8 @@ public static class IedBrowserStructuredDetails
                 FallbackValueReference = hasDirect ? scalarLeaf ?? "" : "",
                 EngineeringUnitReference = scalarLeaf ?? "",
                 IsEngineeringValue = scalarLeaf is not null && descendants.Length > 0,
+                PolarPlan = polar,
+                PhasePlans = phases,
                 VectorComponents = name is "q" or "t" ?
                     Array.Empty<IedBrowserVectorComponent>() :
                     ObservedVectors(descendants.Select(x => (
