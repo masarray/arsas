@@ -401,11 +401,10 @@ public sealed class IedBrowserPresentationTests
             new IedBrowserTreeRow("sg", "SGCB", "SGCB", 3, sg), model, true);
         Assert.Contains(sgRows, r => r.Kind == "Section" && r.Name == "Settings");
         var settingRoot = Assert.Single(sgRows.Where(r => r.Kind == "Data" &&
-            r.Name == "ATCC1.BndWid"));
+            r.Name == "ATCC1.BndWid.setMag [SG]"));
         Assert.Equal("Not read", settingRoot.Value);
-        var settingLeaf = Assert.Single(settingRoot.GetChildren());
-        Assert.Equal("setMag [SG]", settingLeaf.Name);
-        Assert.Equal("LD/ATCC1$SG$BndWid$setMag", settingLeaf.ValueReference);
+        Assert.Equal("LD/ATCC1$SG$BndWid$setMag", settingRoot.ValueReference);
+        Assert.Equal("SG", settingRoot.FunctionalConstraint);
         var goose = new LiveIedControlBlockModel { Kind = "GOOSE", Domain = "LD",
             Reference = "LD/LLN0.GO.cb1", DataSetReference = "LD/LLN0.Signals" };
         var gRows = IedBrowserPresentation.Details(
@@ -794,16 +793,16 @@ public sealed class IedBrowserPresentationTests
         var node = new IedBrowserTreeRow("s", "SGCB", "SGCB", 3,
             new LiveIedControlBlockModel { Reference = "LD/LLN0.SGCB", Domain = "LD" });
         var targets = IedBrowserReadPlan.Build(model, node, readAll: false);
-        Assert.Equal(2, targets.Count);
+        Assert.Single(targets);
         Assert.Contains(targets, v => v.Reference == sg.MmsReference && v.FunctionalConstraint == "SG");
-        Assert.Contains(targets, v => v.Reference == se.MmsReference && v.FunctionalConstraint == "SE");
-        Assert.DoesNotContain(targets, v => v.Reference == foreign.MmsReference || v.Reference == mx.MmsReference);
+        Assert.DoesNotContain(targets, v => v.Reference == se.MmsReference ||
+            v.Reference == foreign.MmsReference || v.Reference == mx.MmsReference);
         var rows = IedBrowserPresentation.Details(node, model, connected: true);
         var root = Assert.Single(rows.Where(v => v.Kind == "Data"));
-        Assert.Equal("ATCC1.BndWid", root.Name);
-        Assert.Equal("", root.ValueReference);
-        var sgGroup = Assert.Single(root.GetChildren().Where(v => v.Name == "setMag [SG]"));
-        var leaf = Assert.Single(sgGroup.GetChildren());
+        Assert.Equal("ATCC1.BndWid.setMag [SG]", root.Name);
+        Assert.Equal(IedBrowserLiveValues.CanonicalReference(sg.MmsReference),
+            IedBrowserLiveValues.CanonicalReference(root.ValueReference));
+        var leaf = Assert.Single(root.GetChildren());
         Assert.Equal("f [SG]", leaf.Name);
         Assert.Equal(sg.MmsReference, leaf.ValueReference);
     }

@@ -56,15 +56,17 @@ public static class IedBrowserReadPlan
                 LiveIedLogicalDeviceModel ld => ld.LogicalNodes.SelectMany(ln => ln.DataObjects)
                     .SelectMany(o => o.Attributes),
                 LiveIedDataSetModel set => ForDataSet(all, schema, set),
-                // SGCB page: model-proven SG/SE parameters. The control
-                // state's exact safe fields are appended separately below.
+                // The visible SGCB page is active SG, never an implicit
+                // selection/confirmation of edit-group [SE] attributes.
                 LiveIedControlBlockModel block when page.Kind == "SGCB" =>
                     model.LogicalDevices
-                        .Where(ld => string.Equals(ld.MmsDomain, block.Domain, StringComparison.Ordinal))
+                        .Where(ld => string.Equals(ld.MmsDomain, block.Domain,
+                            StringComparison.Ordinal))
                         .SelectMany(ld => ld.LogicalNodes)
                         .SelectMany(ln => ln.DataObjects)
                         .SelectMany(obj => obj.Attributes)
-                        .Where(attr => attr.FunctionalConstraint is "SG" or "SE"),
+                        .Where(attr => string.Equals(attr.FunctionalConstraint, "SG",
+                            StringComparison.OrdinalIgnoreCase)),
                 // GoCB DataSet member reads do not prove GoEna. Only exact
                 // safe control fields from discovery's FC inventory are legal.
                 LiveIedControlBlockModel when page.Kind == "GoCB" =>
