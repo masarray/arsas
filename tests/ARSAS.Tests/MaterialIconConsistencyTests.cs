@@ -17,14 +17,14 @@ public sealed class MaterialIconConsistencyTests
     private static readonly XNamespace X = "http://schemas.microsoft.com/winfx/2006/xaml";
 
     [Theory]
-    [InlineData("NavExplorerButton", "0", "OperatorIecTopologyIcon")]
-    [InlineData("NavLiveButton", "1", "OperatorLiveMonitorIcon")]
+    [InlineData("NavExplorerButton", "1", "OperatorIecTopologyIcon")]
+    [InlineData("NavSmvButton", "5", "OperatorLiveMonitorIcon")]
     [InlineData("NavEventsButton", "2", "OperatorEventLogIcon")]
     [InlineData("NavAlarmButton", "3", "OperatorAlarmIcon")]
     [InlineData("NavGooseButton", "4", "OperatorIecWirelessIcon")]
-    [InlineData("NavDiagnosticsButton", "5", "OperatorDiagnosticsIcon")]
+    [InlineData("NavDiagnosticsButton", "7", "OperatorDiagnosticsIcon")]
     [InlineData("NavNativeFatButton", "6", "OperatorFatIcon")]
-    [InlineData("NavIedBrowserButton", "7", "OperatorIedBrowserIcon")]
+    [InlineData("NavIedBrowserButton", "0", "OperatorIedBrowserIcon")]
     public void EveryNavigationDestinationOwnsOneGlyphAndSameClickHandler(
         string buttonName, string index, string glyph)
     {
