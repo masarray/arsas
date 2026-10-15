@@ -157,7 +157,9 @@ public sealed class IedBrowserLiveValues
     {
         var fcIndex = key.LastIndexOf('|');
         return fcIndex > 2 && key.AsSpan(0, fcIndex).EndsWith(
-            ".t".AsSpan(), StringComparison.Ordinal);
+            ".t".AsSpan(), StringComparison.Ordinal) ||
+            fcIndex > 2 && key.AsSpan(0, fcIndex).EndsWith(
+                ".LActTm".AsSpan(), StringComparison.Ordinal);
     }
 
     public void PublishReport(Iec61850MonitorPoint point, bool observedReportIngress = false)
