@@ -10,8 +10,15 @@ public sealed class M214SgLastChangedWireEvidenceTests
     [Fact]
     public void ZeroWireUtcTime_IsUnsetGroupChange_NotA1970EngineeringEvent()
     {
-        var time = Iec61850UtcTimeEvidence.Decode(MmsDataValue.UtcTime(
-            Iec61850UtcTime.FromBytes(new byte[8] { 0, 0, 0, 0, 0, 0, 0, 0x3F })));
+        // Typed fixture represents a validated raw eight-byte LActTm from
+        // the pinned engine's decoder; no formatted-date guessing.
+        var time = new Iec61850UtcTimeEvidence
+        {
+            IsDecoded = true, HasWireProvenance = true,
+            RawHex = "000000000000003F",
+            SecondsSinceEpoch = 0, FractionOfSecond24 = 0,
+            Quality = 0x3F, EngineeringUtc = "1970-01-01 00:00:00 UTC"
+        };
         Assert.True(time.HasWireProvenance);
         Assert.Equal(0u, time.SecondsSinceEpoch);
         var ledger = new IedBrowserLiveValues();
@@ -28,8 +35,13 @@ public sealed class M214SgLastChangedWireEvidenceTests
     [Fact]
     public void RealTimestamp_AndUnverifiedText_AreNeverRewrittenAsUnset()
     {
-        var nonzero = Iec61850UtcTimeEvidence.Decode(MmsDataValue.UtcTime(
-            Iec61850UtcTime.FromBytes(new byte[8] { 0x65, 0x10, 0x00, 0x00, 0, 0, 0, 0x3F })));
+        var nonzero = new Iec61850UtcTimeEvidence
+        {
+            IsDecoded = true, HasWireProvenance = true,
+            RawHex = "651000000000003F", SecondsSinceEpoch = 0x65100000,
+            FractionOfSecond24 = 0, Quality = 0x3F,
+            EngineeringUtc = "2023-09-24 00:00:00 UTC"
+        };
         var value = new IedBrowserObservedValue(
             nonzero.EngineeringUtc, "", "", "MMS Read", DateTime.UtcNow,
             TimeBits: nonzero);
