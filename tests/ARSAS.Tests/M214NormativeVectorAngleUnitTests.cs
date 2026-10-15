@@ -44,4 +44,14 @@ public sealed class M214NormativeVectorAngleUnitTests
         Assert.Equal("", IedBrowserEngineeringValuePresentation.ResolveVectorAngleUnit(
             index, field, "MX"));
     }
+    [Fact]
+    public void DegreeFormatterAttachesSymbolDirectlyToObservedNumericAngle()
+    {
+        Assert.Equal("33°", IedBrowserEngineeringValuePresentation.Format("33", "°"));
+        Assert.Equal("0°", IedBrowserEngineeringValuePresentation.Format("0", "°"));
+        Assert.Equal("33°", IedBrowserEngineeringValuePresentation.Format("33°", "°"));
+        Assert.Equal("33 kV", IedBrowserEngineeringValuePresentation.Format("33", "kV"));
+        Assert.Equal("good", IedBrowserEngineeringValuePresentation.Format("good", "°"));
+    }
+
 }

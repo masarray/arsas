@@ -97,6 +97,6 @@ public sealed class IedBrowserActiveSettingProjectionTests
         var rows = IedBrowserPresentation.Details(page, model, true);
         Assert.Empty(rows.Where(r => r.Kind == "Data"));
         Assert.Contains(rows, r => r.Kind == "Message" &&
-            r.Name.Contains("No active-group [SG]", StringComparison.Ordinal));
+            r.Name.Contains("No model-proven SG or SCL SE", StringComparison.Ordinal));
     }
 }

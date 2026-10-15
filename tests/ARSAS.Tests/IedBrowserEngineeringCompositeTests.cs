@@ -118,7 +118,7 @@ public sealed class IedBrowserEngineeringCompositeTests
             phase.AngleReference, "MX", "33", "", "timestamp2", "Report");
         Assert.True(IedBrowserEngineeringComposite.TryCompose(
             row, ledger, new Dictionary<string, string?>(), true, out var output));
-        Assert.Equal("12; angle 33", output.Text);
+        Assert.Equal("12; angle 33°", output.Text);
         Assert.DoesNotContain("∠", output.Text);
         Assert.Contains("independent", output.Provenance);
     }

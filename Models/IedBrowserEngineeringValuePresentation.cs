@@ -80,12 +80,13 @@ public static class IedBrowserEngineeringValuePresentation
         if (string.IsNullOrWhiteSpace(unit) || string.IsNullOrWhiteSpace(raw))
             return raw;
         var value = raw.Trim();
-        if (value.EndsWith(" " + unit, StringComparison.Ordinal))
+        if (value.EndsWith(" " + unit, StringComparison.Ordinal) ||
+            value.EndsWith("°", StringComparison.Ordinal) && unit == "°")
             return value;
         // Only numerical engineering scalars accept an SI unit. Control
         // enumerations, q, t, structured vectors, and status text stay raw.
         return double.TryParse(value, NumberStyles.Float,
             CultureInfo.InvariantCulture, out _)
-            ? value + " " + unit : raw;
+            ? value + (unit == "°" ? "" : " ") + unit : raw;
     }
 }
