@@ -27,7 +27,7 @@ public sealed class M213J_M214CrossThreadCompositionTests
         {
             Name = "PhV",
             Reference = Owner,
-            Attributes = ["phsA", "phsB", "phsC", "neut"]
+            Attributes = new[] { "phsA", "phsB", "phsC", "neut" }
                 .SelectMany(phase => new[]
                 {
                     Leaf(phase, "mag.f"), Leaf(phase, "ang.f")
