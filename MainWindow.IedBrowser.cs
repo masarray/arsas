@@ -584,12 +584,18 @@ public partial class MainWindow
                     device.LiveValues, block, pageKind, field,
                     out var observed, out var reference))
             {
-                row.Value = observed.IsStale ? "Offline · " + observed.Value : observed.Value;
+                var display = IedBrowserControlStateEvidence.FormatObservedField(
+                    pageKind, field, observed);
+                row.Value = observed.IsStale ? "Offline · " + display : display;
                 row.ObservationSource = observed.IsStale
                     ? "Stale MMS Read" : "MMS Read";
                 row.ObservationTooltip = $"{reference} [{block.FunctionalConstraint}]" +
                     $" · {observed.Source} · {observed.ObservedUtc:yyyy-MM-dd HH:mm:ss} UTC" +
-                    $" · association {observed.Association}";
+                    $" · association {observed.Association}" +
+                    (field == "LActTm" && observed.TimeBits is
+                        { IsDecoded: true, HasWireProvenance: true } time
+                        ? $" · wire {time.RawHex} · time quality {time.QualityHex}"
+                        : "");
             }
             else
             {
