@@ -24,9 +24,9 @@ public sealed class AlarmAnnunciatorIntegrationRegressionTests
         Assert.Contains(navGrid.Descendants(p + "Button"), button =>
             (string?)button.Attribute(x + "Name") == "NavAlarmButton" &&
             (string?)button.Attribute("Tag") == "3" &&
-            ((string?)button.Attribute("Content") == "Alarm" ||
+            ((string?)button.Attribute("Content") == "Annunciator" ||
              button.Descendants(p + "TextBlock").Any(label =>
-                 (string?)label.Attribute("Text") == "Alarm")));
+                 (string?)label.Attribute("Text") == "Annunciator")));
         Assert.Contains(navGrid.Descendants(p + "Button"), button =>
             (string?)button.Attribute(x + "Name") == "NavGooseButton" &&
             (string?)button.Attribute("Tag") == "4");
