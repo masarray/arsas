@@ -91,6 +91,23 @@ public sealed class M214RootFirstFileDirectoryTests
     }
 
     [Fact]
+    public async Task UnsafeRootRecordPathCannotHideSafeInventoryOrAuthorizeDownload()
+    {
+        var discovery = await IedBrowserFileDiscoveryPlanner.DiscoverAsync(
+            _ => Task.FromResult<IReadOnlyList<MmsFileDirectoryEntry>>(
+                [File("../escape.CFG", 5), File("readme.txt", 12)]),
+            _ => throw new InvalidOperationException(
+                "No recursive scan should occur without directories."),
+            CancellationToken.None);
+        Assert.Equal(2, discovery.Files.Files.Count);
+        Assert.NotEmpty(discovery.CatalogDiagnostics);
+        Assert.Contains("rejected", discovery.CatalogDiagnostics[0],
+            StringComparison.OrdinalIgnoreCase);
+        Assert.False(discovery.Files.TryGetRecord("../escape.CFG", out _, out _));
+        Assert.False(discovery.Files.TryGetRecord("readme.txt", out _, out _));
+    }
+
+    [Fact]
     public async Task RootIsPublishedBeforeDeeperMmsTraversal()
     {
         var order = new List<string>();
