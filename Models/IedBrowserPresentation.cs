@@ -214,6 +214,11 @@ public sealed record IedBrowserDetailRow(
     // observations on demand. Empty for scalar and q/t rows.
     public IReadOnlyList<IedBrowserVectorComponent> VectorComponents { get; init; } =
         Array.Empty<IedBrowserVectorComponent>();
+    // A small, immutable set of exact ST process leaves, e.g. TapChg
+    // valWTr + posVal. Values are resolved from SSOT on refresh, never cached.
+    // These fields are independent, not a synthetic IEC scalar or phasor.
+    public IReadOnlyList<IedBrowserScalarComponent> ScalarComponents { get; init; } =
+        Array.Empty<IedBrowserScalarComponent>();
     // A typed child of a received q/t field; never treat the entire parent
     // value text as this individual Boolean/time-quality bit.
     public string EvidenceField { get; init; } = "";

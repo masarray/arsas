@@ -17,6 +17,10 @@ public static class IedBrowserStructuredDetails
         // registry; there is no second value cache or additional MMS read.
         var hasLeaf = IedBrowserSchemaIndex.TryGetUniqueProcessLeaf(
             obj, out var processLeaf, out var processFc);
+        var scalarComponents = hasLeaf
+            ? Array.Empty<IedBrowserScalarComponent>()
+            : IedBrowserMultiLeafPresentation.BuildPlan(
+                obj.Attributes, obj.Reference, "ST");
         var allowVector = !IedBrowserEngineeringComposite.IsScalarCdc(obj.InferredCdc);
         var phasePlans = allowVector
             ? IedBrowserEngineeringComposite.BuildThreePhases(
@@ -39,6 +43,7 @@ public static class IedBrowserStructuredDetails
             $"IEC DO declaration · {obj.Reference} · CDC {obj.InferredCdc}")
         {
             IsDataObject = true,
+            ScalarComponents = scalarComponents,
             PolarPlan = polarPlan,
             PhasePlans = phasePlans,
             ValueReference = hasLeaf ? processLeaf : obj.Reference,
@@ -71,12 +76,20 @@ public static class IedBrowserStructuredDetails
         // Static FCD reports can expose only a scalar semantic descendant.
         // Resolve a unique IEC process leaf once from the exact model owner.
         var identity = IedBrowserLiveValues.CanonicalReference(member.Reference);
-        var exactObject = model?.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
+        var objectCandidates = model?.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
             .SelectMany(ln => ln.DataObjects)
             .Where(obj => identity == IedBrowserLiveValues.CanonicalReference(obj.Reference) ||
                 identity.StartsWith(IedBrowserLiveValues.CanonicalReference(obj.Reference) + ".",
                     StringComparison.Ordinal))
-            .OrderByDescending(obj => obj.Reference.Length).FirstOrDefault();
+            .OrderByDescending(obj => obj.Reference.Length).ToArray()
+            ?? Array.Empty<LiveIedDataObjectModel>();
+        // Discovery may list the same DO once per FC. Reuse the exact
+        // engineering grouping; conflicting names fail closed.
+        var matchingOwners = objectCandidates.Length == 0
+            ? Array.Empty<LiveIedDataObjectModel>()
+            : IedBrowserEngineeringObjects.GroupExact(objectCandidates
+                .Where(o => o.Reference == objectCandidates[0].Reference).ToArray());
+        var exactObject = matchingOwners.Count == 1 ? matchingOwners[0] : null;
         // A DataSet FCDA can identify a structured subobject (A.phsA)
         // while the discovered DO owner is A. Resolve only descendants of
         // that exact member and matching FC.
@@ -89,6 +102,15 @@ public static class IedBrowserStructuredDetails
                 .Where(a => a.Reference.StartsWith(a.Prefix, StringComparison.Ordinal))
                 .Select(a => (Reference: a.Reference, Relative: a.Reference[a.Prefix.Length..]))); 
         var foundLeaf = !string.IsNullOrEmpty(leaf);
+        // Only a whole FC=ST FCD containing several exact process leaves
+        // receives a labelled summary. A single FCDA or a scalar leaf keeps
+        // its original direct-binding semantics.
+        var scalarComponents = !foundLeaf && exactObject is not null &&
+            string.Equals(identity, exactObject.Reference, StringComparison.Ordinal) &&
+            string.Equals(member.FunctionalConstraint, "ST", StringComparison.OrdinalIgnoreCase)
+                ? IedBrowserMultiLeafPresentation.BuildPlan(
+                    exactObject.Attributes, identity, "ST")
+                : Array.Empty<IedBrowserScalarComponent>();
         var matchingMembers = exactObject?.Attributes.Where(a =>
             string.Equals(a.FunctionalConstraint, member.FunctionalConstraint,
                 StringComparison.OrdinalIgnoreCase)).ToArray()
@@ -105,6 +127,7 @@ public static class IedBrowserStructuredDetails
         return new IedBrowserDetailRow("Data", $"{name} [{member.FunctionalConstraint}]", "Not read",
             depth, "DataSet directory; observed live values or explicit MMS read")
         {
+            ScalarComponents = scalarComponents,
             PolarPlan = memberPolarPlan,
             PhasePlans = memberPhasePlans,
             ValueReference = foundLeaf ? leaf! : member.Reference,
@@ -145,7 +168,12 @@ public static class IedBrowserStructuredDetails
         if (objectModels.Length == 0)
             return [new("Message", "No exact attribute schema for this DataSet member.", Depth: depth)];
 
-        var parent = objectModels[0];
+        var exactOwners = IedBrowserEngineeringObjects.GroupExact(objectModels
+            .Where(o => o.Reference == objectModels[0].Reference).ToArray());
+        if (exactOwners.Count != 1)
+            return [new("Message",
+                "Ambiguous model ownership for this exact DataSet member.", Depth: depth)];
+        var parent = exactOwners[0];
         var memberCoversObject = string.Equals(
             memberReference, parent.Reference, StringComparison.Ordinal);
         var exactDescendantPrefix = memberReference + ".";
