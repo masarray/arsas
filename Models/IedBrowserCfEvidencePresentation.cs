@@ -87,6 +87,15 @@ public sealed class IedBrowserCfEvidencePresentation
         if (!string.Equals(fc, "CF", StringComparison.OrdinalIgnoreCase) ||
             !owner.EndsWith(".units", StringComparison.Ordinal))
             return false;
+        return TryVerifyUnitPair(owner, out unit, out provenance, out _);
+    }
+
+    private bool TryVerifyUnitPair(string owner, out string unit,
+        out string provenance, out bool fresh)
+    {
+        unit = "";
+        provenance = "";
+        fresh = false;
         var si = owner + ".SIUnit";
         var multiplier = owner + ".multiplier";
         if (!_declaredCf.Contains(Key(si, "CF")) ||
@@ -106,6 +115,7 @@ public sealed class IedBrowserCfEvidencePresentation
         unit = multiplierSymbol + siSymbol;
         provenance = si + " [" + siSource + "]; " +
                      multiplier + " [" + mulSource + "]";
+        fresh = siLive && mulLive;
         return true;
     }
 
@@ -134,7 +144,8 @@ public sealed class IedBrowserCfEvidencePresentation
     /// Extend authoritative signal units using only *observed* CF units.
     /// The model must declare both exact CF leaves next to the measurement
     /// owner. Missing multiplier is not silently interpreted as base unit.
-    /// FC/case/phase isolation is strict and conflicting metadata fails closed.
+    /// FC/case/phase isolation is strict. Fresh exact CF evidence outranks
+    /// older signal metadata; conflicting historical snapshots fail closed.
     /// </summary>
     public IReadOnlyDictionary<string, string?> BuildVerifiedUnits(
         IEnumerable<SignalDefinition> signals, LiveIedModelDiscoveryDocument? model)
@@ -151,8 +162,6 @@ public sealed class IedBrowserCfEvidencePresentation
                 .Select(a => (Reference: IedBrowserLiveValues.CanonicalReference(a.MmsReference),
                               Fc: a.FunctionalConstraint))
                 .Where(a => a.Reference.Length > 0).ToArray();
-            var declared = attrs.Select(a => Key(a.Reference, a.Fc))
-                .ToHashSet(StringComparer.Ordinal);
             foreach (var attr in attrs.Where(a =>
                 string.Equals(a.Fc, "MX", StringComparison.OrdinalIgnoreCase) &&
                 (a.Reference.EndsWith(".mag.f", StringComparison.Ordinal) ||
@@ -161,24 +170,17 @@ public sealed class IedBrowserCfEvidencePresentation
                 var suffix = attr.Reference.EndsWith(".cVal.mag.f", StringComparison.Ordinal)
                     ? ".cVal.mag.f" : ".mag.f";
                 var owner = attr.Reference[..^suffix.Length];
-                var si = owner + ".units.SIUnit";
-                var multiplier = owner + ".units.multiplier";
-                if (!declared.Contains(Key(si, "CF")) ||
-                    !declared.Contains(Key(multiplier, "CF")) ||
-                    !TryGet(si, "CF", out var siRaw, out _, out _) ||
-                    !TryGet(multiplier, "CF", out var mulRaw, out _, out _))
+                if (!TryVerifyUnitPair(owner + ".units", out var composed,
+                        out _, out var fresh))
                     continue;
-                var siSymbol = RenderCfValue(si, "CF", siRaw);
-                var mulSymbol = RenderCfValue(multiplier, "CF", mulRaw);
-                if (!IsProvenSymbol(siRaw, siSymbol, "SIUnit") ||
-                    !IsProvenSymbol(mulRaw, mulSymbol, "multiplier"))
-                    continue;
-                var composed = mulSymbol + siSymbol;
                 var key = Key(owner, "MX");
                 if (!index.TryGetValue(key, out var previous))
                     index.Add(key, composed);
                 else if (!string.Equals(previous, composed, StringComparison.Ordinal))
-                    index[key] = null;
+                    // An exact fresh CF read outranks older signal metadata.
+                    // An historical discovery snapshot cannot silently replace
+                    // an inconsistent current unit: keep that conflict unknown.
+                    index[key] = fresh ? composed : null;
             }
         }
         return index;

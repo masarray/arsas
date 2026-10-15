@@ -148,6 +148,30 @@ public sealed class IedBrowserCfEvidenceM213JTests
     }
 
 
+
+    [Fact]
+    public void FreshExactCfUnitOutranksStaleSignalUnitButSnapshotConflictsFailClosed()
+    {
+        var model = Model();
+        var signals = new[]
+        {
+            new SignalDefinition {
+                ObjectReference = Owner + ".phsA",
+                FunctionalConstraint = "MX", Unit = "V"
+            }
+        };
+        var ledger = new IedBrowserLiveValues();
+        var assoc = ledger.BeginAssociation();
+        Assert.True(ledger.PublishForAssociation(assoc,
+            Owner + ".phsA.units.SIUnit", "CF", "29", "", "", "MMS Read"));
+        Assert.True(ledger.PublishForAssociation(assoc,
+            Owner + ".phsA.units.multiplier", "CF", "3", "", "", "MMS Read"));
+        var display = new IedBrowserCfEvidencePresentation(ledger, model, null);
+        Assert.Equal("kV", IedBrowserEngineeringValuePresentation.ResolveUnit(
+            display.BuildVerifiedUnits(signals, model),
+            Owner + ".phsA.cVal.mag.f", "MX"));
+    }
+
     [Fact]
     public void UnitsParentRequiresBothExactObservedCfLeaves()
     {
