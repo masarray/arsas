@@ -17,9 +17,12 @@ public static class IedBrowserStructuredDetails
         // registry; there is no second value cache or additional MMS read.
         var hasLeaf = IedBrowserSchemaIndex.TryGetUniqueProcessLeaf(
             obj, out var processLeaf, out var processFc);
-        var phasePlans = IedBrowserEngineeringComposite.BuildThreePhases(
-            obj.Attributes, obj.Reference);
-        var polarPlan = phasePlans.Count == 0
+        var allowVector = !IedBrowserEngineeringComposite.IsScalarCdc(obj.InferredCdc);
+        var phasePlans = allowVector
+            ? IedBrowserEngineeringComposite.BuildThreePhases(
+                obj.Attributes, obj.Reference)
+            : Array.Empty<IedBrowserPolarPlan>();
+        var polarPlan = allowVector && phasePlans.Count == 0
             ? IedBrowserEngineeringComposite.BuildPolar(obj.Attributes, obj.Reference)
             : null;
         // A compound DO such as MMXU.PhV has no unique scalar leaf, but
@@ -44,8 +47,8 @@ public static class IedBrowserStructuredDetails
             EngineeringUnitReference = hasLeaf ? processLeaf : "",
             FunctionalConstraint = hasLeaf ? processFc :
                 (uniqueProcessFc is { Length: > 0 } ? uniqueProcessFc : compoundFc),
-            VectorComponents = hasLeaf ? Array.Empty<IedBrowserVectorComponent>() :
-                ObservedVectors(
+            VectorComponents = hasLeaf || !allowVector
+                ? Array.Empty<IedBrowserVectorComponent>() : ObservedVectors(
                     obj.Attributes.Where(a =>
                         string.Equals(a.FunctionalConstraint, compoundFc,
                             StringComparison.OrdinalIgnoreCase))
@@ -53,7 +56,8 @@ public static class IedBrowserStructuredDetails
                         Reference: IedBrowserLiveValues.CanonicalReference(a.MmsReference),
                         Relative: TrimObjectName(a.AttributePath, obj.Name))),
                     compoundFc),
-            LoadChildren = () => AttributeRows(obj.Attributes, obj.Name, depth + 1)
+            LoadChildren = () => AttributeRows(
+                obj.Attributes, obj.Name, depth + 1, allowVector)
         };
     }
 
@@ -88,10 +92,15 @@ public static class IedBrowserStructuredDetails
             string.Equals(a.FunctionalConstraint, member.FunctionalConstraint,
                 StringComparison.OrdinalIgnoreCase)).ToArray()
             ?? Array.Empty<LiveIedDataAttributeModel>();
-        var memberPhasePlans = IedBrowserEngineeringComposite.BuildThreePhases(
-            matchingMembers, identity);
-        var memberPolarPlan = memberPhasePlans.Count == 0
-            ? IedBrowserEngineeringComposite.BuildPolar(matchingMembers, identity) : null;
+        var memberAllowsVector = exactObject is null ||
+            !IedBrowserEngineeringComposite.IsScalarCdc(exactObject.InferredCdc);
+        var memberPhasePlans = memberAllowsVector
+            ? IedBrowserEngineeringComposite.BuildThreePhases(
+                matchingMembers, identity)
+            : Array.Empty<IedBrowserPolarPlan>();
+        var memberPolarPlan = memberAllowsVector && memberPhasePlans.Count == 0
+            ? IedBrowserEngineeringComposite.BuildPolar(matchingMembers, identity)
+            : null;
         return new IedBrowserDetailRow("Data", $"{name} [{member.FunctionalConstraint}]", "Not read",
             depth, "DataSet directory; observed live values or explicit MMS read")
         {
@@ -102,8 +111,8 @@ public static class IedBrowserStructuredDetails
             EngineeringUnitReference = foundLeaf ? leaf! : "",
             IsEngineeringValue = foundLeaf,
             FunctionalConstraint = member.FunctionalConstraint,
-            VectorComponents = exactObject is null ? Array.Empty<IedBrowserVectorComponent>() :
-                ObservedVectors(exactObject.Attributes
+            VectorComponents = exactObject is null || !memberAllowsVector
+                ? Array.Empty<IedBrowserVectorComponent>() : ObservedVectors(exactObject.Attributes
                     .Where(a => string.Equals(a.FunctionalConstraint, member.FunctionalConstraint,
                         StringComparison.OrdinalIgnoreCase))
                     .Select(a => (
@@ -150,22 +159,25 @@ public static class IedBrowserStructuredDetails
 
         return candidateAttributes.Length == 0
             ? [new("Message", "No exact attributes for the member functional constraint.", Depth: depth)]
-            : AttributeRows(candidateAttributes, parent.Name, depth);
+            : AttributeRows(candidateAttributes, parent.Name, depth,
+                !IedBrowserEngineeringComposite.IsScalarCdc(parent.InferredCdc));
     }
 
     public static IReadOnlyList<IedBrowserDetailRow> AttributeRows(
-        IReadOnlyList<LiveIedDataAttributeModel> attributes, string objectName, int depth = 0)
+        IReadOnlyList<LiveIedDataAttributeModel> attributes, string objectName,
+        int depth = 0, bool allowVector = true)
     {
         var descriptors = attributes
             .Select(attr => (attr, parts: TrimObjectName(attr.AttributePath, objectName)
                 .Split('.', StringSplitOptions.RemoveEmptyEntries)))
             .Where(x => x.parts.Length > 0)
             .ToArray();
-        return BuildAt(descriptors, 0, depth);
+        return BuildAt(descriptors, 0, depth, allowVector);
     }
 
     private static IReadOnlyList<IedBrowserDetailRow> BuildAt(
-        (LiveIedDataAttributeModel attr, string[] parts)[] attrs, int pathIndex, int depth)
+        (LiveIedDataAttributeModel attr, string[] parts)[] attrs, int pathIndex,
+        int depth, bool allowVector)
     {
         var result = new List<IedBrowserDetailRow>();
         foreach (var group in attrs.Where(x => x.parts.Length > pathIndex)
@@ -183,9 +195,11 @@ public static class IedBrowserStructuredDetails
             var descendants = groupArray.Where(x => x.parts.Length > pathIndex + 1).ToArray();
             var fullPrefix = IedBrowserLiveValues.CanonicalReference(attr.ObjectReference) +
                 "." + string.Join(".", groupArray[0].parts.Take(pathIndex + 1));
-            var polar = IedBrowserEngineeringComposite.BuildPolar(
-                groupArray.Select(x => x.attr), fullPrefix);
-            var phases = polar is null
+            var polar = allowVector
+                ? IedBrowserEngineeringComposite.BuildPolar(
+                    groupArray.Select(x => x.attr), fullPrefix)
+                : null;
+            var phases = allowVector && polar is null
                 ? IedBrowserEngineeringComposite.BuildThreePhases(
                     groupArray.Select(x => x.attr), fullPrefix)
                 : Array.Empty<IedBrowserPolarPlan>();
@@ -197,7 +211,8 @@ public static class IedBrowserStructuredDetails
                     Relative: string.Join(".", x.parts.Skip(pathIndex + 1)))));
             Func<IReadOnlyList<IedBrowserDetailRow>>? children = null;
             if (descendants.Length > 0)
-                children = () => BuildAt(descendants, pathIndex + 1, depth + 1);
+                children = () => BuildAt(
+                    descendants, pathIndex + 1, depth + 1, allowVector);
             else if (name is "q" or "t" && hasDirect)
                 children = () => name == "q"
                     ? QualityChildren(depth + 1, attr.MmsReference, attr.FunctionalConstraint)
@@ -219,9 +234,8 @@ public static class IedBrowserStructuredDetails
                 IsEngineeringValue = scalarLeaf is not null && descendants.Length > 0,
                 PolarPlan = polar,
                 PhasePlans = phases,
-                VectorComponents = name is "q" or "t" ?
-                    Array.Empty<IedBrowserVectorComponent>() :
-                    ObservedVectors(descendants.Select(x => (
+                VectorComponents = !allowVector || name is "q" or "t" ?
+                    Array.Empty<IedBrowserVectorComponent>() : ObservedVectors(descendants.Select(x => (
                         Reference: IedBrowserLiveValues.CanonicalReference(x.attr.MmsReference),
                         Relative: string.Join(".", x.parts.Skip(pathIndex + 1)))),
                         attr.FunctionalConstraint),

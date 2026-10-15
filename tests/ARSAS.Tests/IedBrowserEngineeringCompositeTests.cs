@@ -199,4 +199,93 @@ public sealed class IedBrowserEngineeringCompositeTests
         Assert.Empty(IedBrowserEngineeringComposite.BuildThreePhases(mixed, owner));
     }
 
+    [Theory]
+    [InlineData("TotW")]
+    [InlineData("TotVAr")]
+    [InlineData("TotVA")]
+    [InlineData("Hz")]
+    public void ScalarMvNeverGainsAngularSemantics_FromMagnitudeOnly(string name)
+    {
+        var owner = "LD/MMXU1." + name;
+        var leaf = new LiveIedDataAttributeModel
+        {
+            ObjectReference = owner, AttributePath = name + ".mag.f",
+            FunctionalConstraint = "MX",
+            MmsReference = "LD/MMXU1$MX$" + name + "$mag$f"
+        };
+        var model = new LiveIedDataObjectModel
+        {
+            Reference = owner, Name = name, InferredCdc = "MV",
+            Attributes = [leaf]
+        };
+        var row = IedBrowserStructuredDetails.DataObject(model, "MX");
+        Assert.Null(row.PolarPlan);
+        Assert.Empty(row.PhasePlans);
+        Assert.Empty(row.VectorComponents);
+        Assert.Equal(IedBrowserLiveValues.CanonicalReference(leaf.MmsReference),
+            IedBrowserLiveValues.CanonicalReference(row.ValueReference));
+        Assert.All(row.GetChildren(), child =>
+        {
+            Assert.Null(child.PolarPlan);
+            Assert.Empty(child.PhasePlans);
+            Assert.Empty(child.VectorComponents);
+        });
+        Assert.Null(IedBrowserEngineeringComposite.BuildPolar(model.Attributes, owner));
+
+        var ledger = new IedBrowserLiveValues();
+        var generation = ledger.BeginAssociation();
+        ledger.PublishForAssociation(generation, leaf.MmsReference,
+            "MX", "50", "", "", "MMS Read");
+        Assert.False(IedBrowserEngineeringComposite.TryCompose(
+            row, ledger, new Dictionary<string, string?>(), false, out _));
+        Assert.True(ledger.TryGet(row.ValueReference, "MX", out var observed));
+        Assert.Equal("50", observed.Value);
+    }
+
+    [Fact]
+    public void DeclaredScalarMvDoesNotBecomePhasor_EvenWithVendorAngleSibling()
+    {
+        const string owner = "LD/MMXU1.Hz";
+        LiveIedDataAttributeModel Attr(string field) => new()
+        {
+            ObjectReference = owner,
+            AttributePath = "Hz." + field,
+            FunctionalConstraint = "MX",
+            MmsReference = "LD/MMXU1$MX$Hz$" + field.Replace('.', '$')
+        };
+        var model = new LiveIedDataObjectModel
+        {
+            Reference = owner, Name = "Hz", InferredCdc = "MV",
+            Attributes = [Attr("mag.f"), Attr("ang.f")]
+        };
+        var rows = IedBrowserStructuredDetails.DataObject(model, "MX");
+        Assert.Null(rows.PolarPlan);
+        Assert.Empty(rows.PhasePlans);
+        Assert.Empty(rows.VectorComponents);
+        var projection = new IedBrowserDetailProjection();
+        projection.Reset(rows.GetChildren());
+        Assert.All(projection.Rows, r =>
+        {
+            Assert.Null(r.PolarPlan);
+            Assert.Empty(r.PhasePlans);
+            Assert.Empty(r.VectorComponents);
+        });
+        Assert.Equal("LD/MMXU1.Hz.mag.f",
+            IedBrowserLiveValues.CanonicalReference(rows.ValueReference));
+    }
+
+    [Fact]
+    public void CompleteVectorShapeStillRendersDeclaredAngle()
+    {
+        var vector = Object();
+        var phase = IedBrowserEngineeringComposite.BuildPolar(
+            vector.Attributes, Owner + ".phsA");
+        Assert.NotNull(phase);
+        Assert.EndsWith(".cVal.ang.f", phase!.AngleReference);
+        // This is a legitimate complex measurement; scalar restrictions must
+        // not suppress phase components or valid three-phase groups.
+        var root = IedBrowserStructuredDetails.DataObject(vector, "MX");
+        Assert.Equal(3, root.PhasePlans.Count);
+    }
+
 }
