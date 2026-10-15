@@ -39,7 +39,7 @@ internal static class MainWindowNavigationLayoutFix
 
     private static readonly string[] CompactLabels =
     [
-        "Browser",
+        "IED Browser",
         "Devices",
         "Events",
         "Alarm",
