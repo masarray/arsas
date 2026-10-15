@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace ArIED61850Tester.Models;
 
 /// <summary>
@@ -39,12 +41,14 @@ public static class IedBrowserObservedVectorPresentation
         {
             var prefix = part.Label.Length == 0 ? "" : part.Label + ": ";
             var hasMag = values.TryGet(part.MagnitudeReference, part.Fc,
-                out var magnitude, preferReport: monitoring);
+                out var magnitude, preferReport: monitoring) && IsFinite(magnitude.Value);
             var hasAng = values.TryGet(part.AngleReference, part.Fc,
-                out var angle, preferReport: monitoring);
+                out var angle, preferReport: monitoring) && IsFinite(angle.Value);
             if (!hasMag && !hasAng) continue;
-            // Components are independent observations, not proof that
-            // magnitude and angle were captured atomically in one report.
+            // One source/association/timestamp compatibility rule for both
+            // the M2.14 three-phase composer and A's extra neutral/residual rows.
+            // An observed but incompatible angle remains independently visible;
+            // never imply it was captured in a coherent phasor pair.
             string text = "";
             if (hasMag)
             {
@@ -59,7 +63,11 @@ public static class IedBrowserObservedVectorPresentation
                     units, part.AngleReference, part.Fc);
                 var rendered = unit == "°" ? angle.Value + "°" :
                     IedBrowserEngineeringValuePresentation.Format(angle.Value, unit);
-                text += (text.Length == 0 ? "" : " ") + "∠ " + rendered;
+                if (hasMag && IedBrowserEngineeringComposite.CanPair(magnitude, angle))
+                    text += " ∠ " + rendered;
+                else
+                    text += (text.Length == 0 ? "" : "; ") + "angle " + rendered +
+                        (hasMag ? " (independent, not paired)" : " (magnitude not observed)");
                 Register(part.AngleReference, angle);
             }
             displayed.Add(prefix + text);
@@ -77,6 +85,10 @@ public static class IedBrowserObservedVectorPresentation
             " · independently observed components (no inferred missing phases)",
             anyStale);
         return true;
+
+        static bool IsFinite(string raw)
+            => double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture,
+                out var number) && double.IsFinite(number);
 
         void Register(string reference, IedBrowserObservedValue value)
         {

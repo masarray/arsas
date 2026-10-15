@@ -126,7 +126,7 @@ public static class IedBrowserEngineeringComposite
                     CultureInfo.InvariantCulture, out var angleNumber) &&
                 double.IsFinite(angleNumber) &&
                 angle.IsStale == magnitude.IsStale &&
-                Compatible(magnitude, angle))
+                CanPair(magnitude, angle))
             {
                 var angleUnit = IedBrowserEngineeringValuePresentation.ResolveVectorAngleUnit(
                     unitIndex, plan.AngleReference, plan.FunctionalConstraint);
@@ -158,7 +158,12 @@ public static class IedBrowserEngineeringComposite
         return true;
     }
 
-    private static bool Compatible(IedBrowserObservedValue magnitude,
+    /// <summary>
+    /// Shared compatibility gate for both the standard three-phase composer and
+    /// additional schema-declared neutral/residual vector rows. An independent
+    /// angle remains observable but is never presented as a paired phasor.
+    /// </summary>
+    internal static bool CanPair(IedBrowserObservedValue magnitude,
         IedBrowserObservedValue angle)
     {
         if (magnitude.Association != angle.Association ||
