@@ -43,11 +43,20 @@ public sealed class M214MergedCfAndVectorAuthorityTests
             Owner + ".neut.cVal.mag.f", "MX", "3", "", "t1", "Report"));
         Assert.True(IedBrowserEngineeringComposite.TryCompose(
             row, ledger, new Dictionary<string, string?>(), true, out var unpaired));
-        Assert.StartsWith("Independent", unpaired.Source);
         Assert.Contains("phsA: 10", unpaired.Text);
-        Assert.Contains("angle 30 (independent, not paired)", unpaired.Text);
-        Assert.Contains("neut: 3", unpaired.Text);
+        Assert.DoesNotContain("angle 30", unpaired.Text);
+        Assert.DoesNotContain("neut: 3", unpaired.Text);
         Assert.DoesNotContain("∠ 30", unpaired.Text);
+        Assert.Contains("other model-proven components on expansion",
+            unpaired.Provenance);
+        // The complete independently observed vector remains accessible
+        // through an explicitly expanded inspection row, never thrown away.
+        var expanded = row with { IsDataObject = false };
+        Assert.True(IedBrowserEngineeringComposite.TryCompose(
+            expanded, ledger, new Dictionary<string, string?>(), true, out var all));
+        Assert.StartsWith("Independent", all.Source);
+        Assert.Contains("angle 30 (independent, not paired)", all.Text);
+        Assert.Contains("neut: 3", all.Text);
 
         Assert.True(ledger.PublishForAssociation(session,
             Owner + ".phsA.cVal.ang.f", "MX", "30", "", "t1", "Report"));
