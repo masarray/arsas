@@ -328,7 +328,30 @@ internal static class P2IndustrialWorkstationUx
         if (text.Length == 0)
             return;
 
-        if (text.Equals("Print Preview", StringComparison.OrdinalIgnoreCase))
+        // MainWindow's formerly text-only tools now share the same Material
+        // icon ownership as the eight destinations. Content stays a string:
+        // no mutation of CommandParameter, Click/IsEnabled or selected page.
+        if (text.Equals("Refresh view", StringComparison.OrdinalIgnoreCase))
+            ApplyTemplate(button, owner, "MaterialRefreshAction");
+        else if (text is "Read" or "Read All" or "Check live RCB")
+            ApplyTemplate(button, owner, "MaterialReadAction");
+        else if (text is "Cancel Read" or "Cancel")
+            ApplyTemplate(button, owner, "MaterialCancelAction");
+        else if (text is "Browse Files" or "Open Project")
+            ApplyTemplate(button, owner, "MaterialFolderAction");
+        else if (text is "Export CSV" or "Export RCB…" or "Export RCB..." or "Download")
+            ApplyTemplate(button, owner, "MaterialDownloadAction");
+        else if (text is "Copy Diagnostic" or "Copy")
+            ApplyTemplate(button, owner, "MaterialCopyAction");
+        else if (text is "Clear" or "Clear Log")
+            ApplyTemplate(button, owner, "MaterialClearAction");
+        else if (text is "← Back" or "Back")
+            ApplyTemplate(button, owner, "MaterialBackAction");
+        else if (text is "ACK" or "ACK IED")
+            ApplyTemplate(button, owner, "MaterialAcknowledgeAction");
+        else if (text is "Model")
+            ApplyTemplate(button, owner, "MaterialSettingsAction");
+        else if (text.Equals("Print Preview", StringComparison.OrdinalIgnoreCase))
             ApplyTemplate(button, owner, "IconPrintContent");
         else if (text.StartsWith("Time Sync", StringComparison.OrdinalIgnoreCase))
             ApplyTemplate(button, owner, "IconClockContent");
