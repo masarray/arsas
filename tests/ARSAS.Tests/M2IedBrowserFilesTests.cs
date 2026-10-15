@@ -26,6 +26,7 @@ public sealed class M2IedBrowserFilesTests
         {
             BaseName = name, RecordId = path,
             Files = files, IsComplete = complete,
+            KnownSizeBytes = withCfg ? 9 : 5,
             Completeness = complete ? "Complete" : "Missing COMTRADE member"
         };
     }
@@ -82,6 +83,47 @@ public sealed class M2IedBrowserFilesTests
             }]);
         Assert.Equal(2, index.Files.Count);
         Assert.True(index.TryGetRecord("/COMTRADE/FAULT001.cfg", out _, out _));
+    }
+
+    [Fact]
+    public void EngineComtradeRecord_IsOneCompactDisplayRow_ForCompleteBundle()
+    {
+        var record = Record();
+        var index = new IedBrowserFileCatalog(new Iec61850FaultRecordCatalog
+        {
+            Records = [record]
+        });
+        Assert.Equal(2, index.Files.Count); // raw provenance remains complete
+        var display = Assert.Single(index.DisplayRows);
+        Assert.Equal("FAULT001", display.Name);
+        Assert.True(display.IsBundle);
+        Assert.Equal(2, display.BundleMemberCount);
+        Assert.Equal(9L, display.SizeBytes);
+        Assert.Equal("/COMTRADE/FAULT001.cfg", display.RemotePath);
+        Assert.True(index.TryGetRecord(display.RemotePath, out var exact, out _));
+        Assert.Same(record, exact);
+    }
+
+    [Fact]
+    public void UnclassifiedDirectoryAndFile_RemainBrowseOnlyWithoutFakeBundle()
+    {
+        var catalog = new IedBrowserFileCatalog(new Iec61850FaultRecordCatalog(),
+        [
+            new MmsFileDirectoryEntry { Name = "notes.txt", Path = "/notes.txt" },
+            new MmsFileDirectoryEntry { Name = "DATA/", Path = "/DATA/" }
+        ]);
+        Assert.Equal(2, catalog.DisplayRows.Count);
+        Assert.All(catalog.DisplayRows, row => Assert.False(row.IsBundle));
+        Assert.False(catalog.TryGetRecord("/notes.txt", out _, out _));
+    }
+
+    [Fact]
+    public void FilesTreeHasOnlyOneNavigationNode_NoDuplicatedFileChildren()
+    {
+        var files = IedBrowserPresentation.Roots(null, [],
+            [new IedBrowserRemoteFile("a.cfg", "/a.cfg", 3, null)]);
+        var root = Assert.Single(files, row => row.Key == "category/files");
+        Assert.False(root.HasChildren);
     }
 
     [Fact]
@@ -205,8 +247,8 @@ public sealed class M2IedBrowserFilesTests
         var x = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml");
         var grid = Assert.Single(xaml.Descendants(p + "DataGrid"),
             e => e.Attribute(x + "Name")?.Value == "IedBrowserFilesGrid");
-        var cols = grid.Descendants(p + "DataGridTextColumn")
-            .Select(c => (string?)c.Attribute("Header")).ToArray();
+        var cols = grid.Element(p + "DataGrid.Columns")!
+            .Elements().Select(c => (string?)c.Attribute("Header")).ToArray();
         Assert.Equal(["Filename", "Time", "Size"], cols);
         Assert.Equal("True", (string?)grid.Attribute("EnableRowVirtualization"));
         Assert.Contains("IedBrowserFile_DoubleClick", grid.ToString(), StringComparison.Ordinal);

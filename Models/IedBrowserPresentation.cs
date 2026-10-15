@@ -313,20 +313,10 @@ public static class IedBrowserPresentation
                 IedBrowserGooseDirectory.Resolve(model, sclModel), "GoCB", labelIed)),
             Category("Reports", "reports", () => ReportGroups(rcbs, labelIed)),
             Category("Setting Groups", "settings", () => BlockGroups(model?.SettingGroupControls, "SGCB", labelIed)),
-            Category("Files", "files", () =>
-                (model?.FileDirectory.Entries.Select(f =>
-                    new IedBrowserTreeRow("file/" + f.Path, f.Name, "File", childDepth, f))
-                    ?? Enumerable.Empty<IedBrowserTreeRow>())
-                .Concat((remoteFiles ?? Array.Empty<IedBrowserRemoteFile>())
-                    .Select(file => new IedBrowserTreeRow(
-                        "remote-file/" + file.RemotePath, file.Name, "File", childDepth, file)))
-                .DistinctBy(row => row.Payload switch
-                {
-                    IedBrowserRemoteFile remote => remote.RemotePath,
-                    LiveIedFileModel file => file.Path,
-                    _ => row.Key
-                }, StringComparer.OrdinalIgnoreCase)
-                .ToArray()),
+            // Files inventory belongs exclusively in the right-side
+            // virtualized grid. Nested file nodes duplicate content and
+            // inflate the compact engineering navigation.
+            new("category/files", "Files", "Category", 0),
             Category("DataSets", "datasets", () => DataSetGroups(model?.DataSets, labelIed)),
             Category("Data Model", "model", () =>
                 model?.LogicalDevices.Select(ld =>

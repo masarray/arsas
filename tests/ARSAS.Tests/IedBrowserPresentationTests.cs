@@ -723,19 +723,29 @@ public sealed class IedBrowserPresentationTests
     }
 
     [Fact]
-    public void RemoteComtradeFiles_AreIncludedInFilesCategoryWithActualMetadata()
+    public void RemoteComtradeFiles_StayInRightGrid_NotDuplicatedInTree()
     {
         var remote = new IedBrowserRemoteFile("FRA00029.cfg", "fault/FRA00029.cfg", 3072L,
             new DateTimeOffset(2026, 10, 13, 10, 20, 0, TimeSpan.Zero));
         var files = IedBrowserPresentation.Roots(null, [], [remote])
             .Single(row => row.Key == "category/files");
-        var row = Assert.Single(IedBrowserPresentation.Details(files, null, true)
-            .Where(r => r.Kind == "Object" && r.NavigateTo?.Kind == "File"));
-        Assert.Equal("3 KB", row.Value);
-        Assert.NotEmpty(row.SecondaryText);
-        var details = IedBrowserPresentation.Details(row.NavigateTo!, null, true);
-        Assert.Contains(details, x => x.Kind == "Property" && x.Name == "Path" &&
-                                      x.Value == "fault/FRA00029.cfg");
+        Assert.False(files.HasChildren);
+        Assert.DoesNotContain(IedBrowserPresentation.Details(files, null, true),
+            row => row.Kind == "Object" && row.NavigateTo?.Kind == "File");
+        // The actual remote MMS FileDirectory entry and its metadata must
+        // survive in the dedicated right-grid projection, unchanged.
+        Assert.Equal("fault/FRA00029.cfg", remote.RemotePath);
+        Assert.Equal("3 KB", remote.SizeText);
+        Assert.NotEmpty(remote.ModifiedText);
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root is not null &&
+               !File.Exists(Path.Combine(root.FullName, "MainWindow.IedBrowser.Files.cs")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var native = File.ReadAllText(
+            Path.Combine(root!.FullName, "MainWindow.IedBrowser.Files.cs"));
+        Assert.Contains("_iedBrowserFileCatalog?.DisplayRows", native,
+            StringComparison.Ordinal);
     }
 
     [Fact]

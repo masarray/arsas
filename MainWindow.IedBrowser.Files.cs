@@ -56,11 +56,15 @@ public partial class MainWindow
 
         // Do not merge SCL-only files with live file identities of different
         // sources as though they were the same verified MMS directory entry.
-        var live = _iedBrowserFileCatalog?.Files ?? Array.Empty<IedBrowserRemoteFile>();
-        // Index live identities once: never run a linear search through
-        // 20,000 FileDirectory entries for every SCL-declared file row.
-        var livePaths = live.Select(file => file.RemotePath)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var live = _iedBrowserFileCatalog?.DisplayRows ??
+            Array.Empty<IedBrowserRemoteFile>();
+        // A verified bundle covers ALL of its engine-declared members;
+        // otherwise SCL fallback could reintroduce CFG/DAT as duplicate
+        // separate rows after we collapsed the live COMTRADE record.
+        var livePaths = _iedBrowserFileCatalog?.Files
+            .Select(file => file.RemotePath)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase)
+            ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var inferred = model?.FileDirectory.Entries
             .Where(file => !string.IsNullOrWhiteSpace(file.Path))
             .Where(file => !livePaths.Contains(file.Path))
@@ -108,7 +112,9 @@ public partial class MainWindow
             _iedBrowserFileTransferOperation is null;
         IedBrowserFileSelectionText.Text = selected is null
             ? "No file selected · Click to select · Double-click to open"
-            : $"Selected: {selected.Name} · Double-click to open · Right-click to download";
+            : selected.IsBundle
+                ? $"Selected record: {selected.Name} · {selected.BundleMemberCount} files · Double-click to open"
+                : $"Selected: {selected.Name} · Browse-only unless a complete record is verified";
         IedBrowserFileSelectionText.ToolTip = selected?.RemotePath;
     }
 
@@ -130,7 +136,12 @@ public partial class MainWindow
         // Install/rebind its contextual action on each actual row load, not in
         // a column-level XAML setter or against an earlier SelectedItem.
         if (e.Row.DataContext is not IedBrowserRemoteFile file) return;
-        var download = new MenuItem { Header = "Download", Tag = file };
+        var download = new MenuItem
+        {
+            Header = "Download complete record", Tag = file,
+            IsEnabled = !file.IsDirectory &&
+                _iedBrowserFileCatalog?.TryGetRecord(file.RemotePath, out _, out _) == true
+        };
         download.Click += IedBrowserFileDownload_Click;
         e.Row.ContextMenu = new ContextMenu { Items = { download } };
     }

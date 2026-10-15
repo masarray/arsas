@@ -17,6 +17,13 @@ public sealed class IedBrowserFileCatalog
 
     public IReadOnlyList<IedBrowserRemoteFile> Files { get; }
 
+    /// <summary>
+    /// One display row per engine-recognized COMTRADE record, never one row
+    /// per CFG/DAT/HDR/INF. Unclassified MMS entries remain visible without
+    /// gaining download permission. This is a projection, not another catalog.
+    /// </summary>
+    public IReadOnlyList<IedBrowserRemoteFile> DisplayRows { get; }
+
     public IedBrowserFileCatalog(Iec61850FaultRecordCatalog catalog,
         IEnumerable<MmsFileDirectoryEntry>? rootEntries = null)
     {
@@ -51,6 +58,34 @@ public sealed class IedBrowserFileCatalog
                     entry.Path, entry.SizeBytes, null, entry.IsLikelyDirectory));
             }
         Files = displayed.Values
+            .OrderBy(row => row.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(row => row.RemotePath, StringComparer.Ordinal)
+            .ToArray();
+
+        var memberPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var bundles = new List<IedBrowserRemoteFile>(catalog.Records.Count);
+        foreach (var record in catalog.Records)
+        {
+            // Only engine-declared members may be collapsed into one bundle.
+            // Keep the CFG as the stable representative for the existing
+            // TryGetRecord/download integrity and ambiguity fences.
+            var configuration = record.Files.FirstOrDefault(file =>
+                file.Kind == Iec61850FaultRecordFileKind.Configuration);
+            var representative = configuration ?? record.Files.FirstOrDefault();
+            if (representative is null ||
+                string.IsNullOrWhiteSpace(representative.RemotePath))
+                continue;
+            foreach (var file in record.Files)
+                if (!string.IsNullOrWhiteSpace(file.RemotePath))
+                    memberPaths.Add(file.RemotePath);
+            bundles.Add(new IedBrowserRemoteFile(
+                record.BaseName, representative.RemotePath,
+                record.HasUnknownSize ? null : record.KnownSizeBytes,
+                record.LastModifiedUtc, IsBundle: true,
+                BundleMemberCount: record.Files.Count));
+        }
+        DisplayRows = bundles.Concat(Files.Where(file =>
+                !memberPaths.Contains(file.RemotePath)))
             .OrderBy(row => row.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(row => row.RemotePath, StringComparer.Ordinal)
             .ToArray();
