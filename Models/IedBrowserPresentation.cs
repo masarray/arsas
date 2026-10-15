@@ -595,6 +595,9 @@ public static class IedBrowserPresentation
                     Field("Number of Setting Groups", "Not read");
                     Field("Active Setting Group", "Not read");
                     Field("Last changed", "Unknown");
+                    Field("MMS state inventory",
+                        IedBrowserControlStateEvidence.ReadTargets(block, "SGCB").Count > 0
+                            ? "Verified read-only attributes" : "Not verified / SCL-only");
                     Field("Affected Logical Devices", block.Domain);
                     Section("Settings");
                     rows.Add(new("DataHeader", "Name", "Value"));
@@ -646,6 +649,9 @@ public static class IedBrowserPresentation
                     Field("VLAN ID", "Not read");
                     Field("VLAN priority", "Not read");
                     Field("Needs commissioning", "Not read");
+                    Field("MMS state inventory",
+                        IedBrowserControlStateEvidence.ReadTargets(block, "GoCB").Count > 0
+                            ? "Verified read-only attributes" : "Not verified / SCL-only");
                     Section("Information received in last GOOSE");
                     Field("Capture status", "Subscriber not capturing", "Passive GOOSE");
                     Field("Frame received at", "—", "Passive GOOSE");

@@ -234,9 +234,9 @@ public partial class MainWindow
                     IedBrowserReadRcb_Click(sender, e);
                     return;
                 case IedBrowserReadSelectionKind.GooseInspectionRequiresSubscriber:
-                    IedBrowserSubtitle.Text =
-                        "GoCB state is not a DataSet FC read. Inspect model metadata or start the existing passive GOOSE Subscriber.";
-                    return;
+                    // A verified MMS GoEna/ndsCom read is allowed. GOOSE
+                    // frame reception still requires the passive subscriber.
+                    break;
             }
         }
         var model = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
@@ -403,7 +403,7 @@ public partial class MainWindow
         IedBrowserReadPageButton.ToolTip = selectedKind == IedBrowserReadSelectionKind.ReadOnlyRcb
             ? "Inspect current RCB attributes through explicit read-only MMS."
             : selectedKind == IedBrowserReadSelectionKind.GooseInspectionRequiresSubscriber
-                ? "GOOSE frames require explicit passive capture, not a generic FC read."
+                ? "Read only verified GoCB MMS fields (GoEna/ndsCom); passive frame data still requires explicit capture."
                 : !hasModel
             ? "Open SCL or discover an IED model before reading values."
             : !canReachIED
@@ -524,10 +524,55 @@ public partial class MainWindow
             row.Value = live.IsStale ? "Offline · " + display : display;
         }
         UpdateIedBrowserGooseDetails();
+        UpdateIedBrowserControlStateDetails();
         UpdateIedBrowserRcbReportDetails();
     }
 
 
+
+
+    private void UpdateIedBrowserControlStateDetails()
+    {
+        if (_iedBrowserRenderedPage is not
+            { Kind: "SGCB" or "GoCB", Payload: LiveIedControlBlockModel block } ||
+            SelectedDevice is not { } device)
+            return;
+
+        var pageKind = _iedBrowserRenderedPage.Kind;
+        var fieldRows = pageKind == "SGCB"
+            ? new[] { ("NumOfSG", "Number of Setting Groups"),
+                      ("ActSG", "Active Setting Group"),
+                      ("LActTm", "Last changed") }
+            : new[] { ("GoEna", "Enabled"),
+                      ("NdsCom", "Needs commissioning") };
+        foreach (var (field, label) in fieldRows)
+        {
+            var row = _iedBrowserDetails.Rows.FirstOrDefault(r =>
+                r.Kind == "Property" && r.Name == label);
+            if (row is null) continue;
+            if (IedBrowserControlStateEvidence.TryRead(
+                    device.LiveValues, block, pageKind, field,
+                    out var observed, out var reference))
+            {
+                row.Value = observed.IsStale ? "Offline · " + observed.Value : observed.Value;
+                row.ObservationSource = observed.IsStale
+                    ? "Stale MMS Read" : "MMS Read";
+                row.ObservationTooltip = $"{reference} [{block.FunctionalConstraint}]" +
+                    $" · {observed.Source} · {observed.ObservedUtc:yyyy-MM-dd HH:mm:ss} UTC" +
+                    $" · association {observed.Association}";
+            }
+            else
+            {
+                row.Value = pageKind == "SGCB" && field == "LActTm"
+                    ? "Unknown" : "Not read";
+                row.ObservationSource = "";
+                row.ObservationTooltip =
+                    IedBrowserControlStateEvidence.IsVerifiedInventory(block, pageKind)
+                    ? $"{field}: not observed; no inferred control state"
+                    : $"{field}: not authorized by exact live FC inventory";
+            }
+        }
+    }
 
     private void UpdateIedBrowserRcbReportDetails()
     {
