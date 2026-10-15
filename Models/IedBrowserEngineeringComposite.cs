@@ -128,7 +128,7 @@ public static class IedBrowserEngineeringComposite
                 angle.IsStale == magnitude.IsStale &&
                 Compatible(magnitude, angle))
             {
-                var angleUnit = IedBrowserEngineeringValuePresentation.ResolveUnit(
+                var angleUnit = IedBrowserEngineeringValuePresentation.ResolveVectorAngleUnit(
                     unitIndex, plan.AngleReference, plan.FunctionalConstraint);
                 var suffix = angleUnit switch
                 {

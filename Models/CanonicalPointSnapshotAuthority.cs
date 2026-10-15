@@ -16,6 +16,19 @@ public sealed record CanonicalPointSnapshotBatch(
 
 public static class CanonicalPointSnapshotAuthority
 {
+    /// <summary>
+    /// Exact IEC reference + FC key for coalescing observational snapshots.
+    /// Legacy PointKey intentionally has display/search normalization and is
+    /// NOT an authority key: it lowercases references and omits FC.
+    /// </summary>
+    public static string UiQueueKey(Iec61850MonitorPoint point)
+    {
+        ArgumentNullException.ThrowIfNull(point);
+        return point.DeviceId + "|" +
+               IedBrowserLiveValues.CanonicalReference(point.IecReference) + "|" +
+               (point.FunctionalConstraint ?? "").Trim().ToUpperInvariant();
+    }
+
     public static Iec61850PointSnapshot NewerSnapshot(
         Iec61850PointSnapshot previous, Iec61850PointSnapshot incoming)
     {

@@ -619,9 +619,15 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             throw new InvalidOperationException($"{device.Name} is not connected. Connect and discover this IED first.");
 
         var staticDataSetReportOnly = Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device);
-        var selected = selectedSignals
+        var eligible = selectedSignals
             .Where(signal => signal.IsSelected && signal.CanPublishToRuntime)
             .Where(signal => !staticDataSetReportOnly || !string.IsNullOrWhiteSpace(signal.DataSetReference))
+            .ToArray();
+        // PointKey is a historical normalized reference without FC. Validate
+        // BEFORE grouping or stopping the active monitor: two distinct IEC
+        // identities must never overwrite each other in runtime state maps.
+        EnsureDistinctRuntimePointIdentities(eligible);
+        var selected = eligible
             .GroupBy(signal => NormalizeReference(signal.ObjectReference), StringComparer.OrdinalIgnoreCase)
             .Select(group => group
                 .OrderByDescending(signal => !string.IsNullOrWhiteSpace(signal.DataSetReference))
@@ -2897,6 +2903,36 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         return normalized.Contains("questionable", StringComparison.Ordinal) ||
                normalized.Contains("invalid", StringComparison.Ordinal) ||
                normalized.Contains("reserved", StringComparison.Ordinal);
+    }
+
+    // O(selected signals), once at explicit Start; no per-Report scans.
+    // Preserve legacy PointKey consumers until a coordinated migration can
+    // update SOE, planners, point lookup, persistence and UI atomically.
+    internal static void EnsureDistinctRuntimePointIdentities(
+        IEnumerable<SignalDefinition> selectedSignals)
+    {
+        ArgumentNullException.ThrowIfNull(selectedSignals);
+        var seen = new Dictionary<string, (string Reference, string Fc)>(
+            StringComparer.OrdinalIgnoreCase);
+        foreach (var signal in selectedSignals)
+        {
+            var reference = IedBrowserLiveValues.CanonicalReference(signal.ObjectReference);
+            var fc = (signal.FunctionalConstraint ?? string.Empty).Trim().ToUpperInvariant();
+            var legacyKey = Iec61850MonitorPoint.NormalizeReference(signal.ObjectReference);
+            if (seen.TryGetValue(legacyKey, out var prior))
+            {
+                if (!string.Equals(prior.Reference, reference, StringComparison.Ordinal) ||
+                    !string.Equals(prior.Fc, fc, StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        $"Cannot monitor ambiguous IEC identities: {prior.Reference} [{prior.Fc}] and " +
+                        $"{reference} [{fc}] share legacy point key '{legacyKey}'. " +
+                        "Review selection; values cannot be safely routed to separate points.");
+            }
+            else
+            {
+                seen.Add(legacyKey, (reference, fc));
+            }
+        }
     }
 
     private static void IndexPointReference(DeviceSession session, Iec61850MonitorPoint point)
