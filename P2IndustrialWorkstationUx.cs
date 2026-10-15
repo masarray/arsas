@@ -261,11 +261,33 @@ internal static class P2IndustrialWorkstationUx
 
     private static void DecorateMainNavigation(MainWindow window)
     {
-        ApplyTemplate(window.FindName("NavExplorerButton") as Button, window, "IconExplorerNavContent");
-        ApplyTemplate(window.FindName("NavLiveButton") as Button, window, "IconMonitorNavContent");
-        ApplyTemplate(window.FindName("NavEventsButton") as Button, window, "IconEventsNavContent");
-        ApplyTemplate(window.FindName("NavGooseButton") as Button, window, "IconGooseNavContent");
-        ApplyTemplate(window.FindName("NavDiagnosticsButton") as Button, window, "IconDiagnosticsNavContent");
+        ApplyNavigationTemplate(window.FindName("NavExplorerButton") as Button, window, "IconExplorerNavContent");
+        ApplyNavigationTemplate(window.FindName("NavLiveButton") as Button, window, "IconMonitorNavContent");
+        ApplyNavigationTemplate(window.FindName("NavEventsButton") as Button, window, "IconEventsNavContent");
+        ApplyNavigationTemplate(window.FindName("NavGooseButton") as Button, window, "IconGooseNavContent");
+        ApplyNavigationTemplate(window.FindName("NavDiagnosticsButton") as Button, window, "IconDiagnosticsNavContent");
+    }
+
+    private static void ApplyNavigationTemplate(Button? button, FrameworkElement owner, string legacyKey)
+    {
+        if (button == null) return;
+
+        // M2.14's operator-supplied SVG is the sole glyph owner when XAML
+        // already supplies a Path inside the navigation content.
+        // P2.1's older DataTemplate wraps Content in a second icon, producing
+        // two Events glyphs at runtime despite each source being valid alone.
+        // Clear any formerly installed P2 template on repeat Loaded/layout.
+        if (button.Content is StackPanel panel &&
+            panel.Children.OfType<Viewbox>().Any(view =>
+                view.Child is System.Windows.Shapes.Path))
+        {
+            button.ClearValue(ContentControl.ContentTemplateProperty);
+            return;
+        }
+
+        // Keep the industrial glyph on legacy text-only destinations and on
+        // Diagnostics (its StackPanel has text + alert badge, no prebuilt Path).
+        ApplyTemplate(button, owner, legacyKey);
     }
 
     private static void DecorateFatActionBar(IoListTestingWindow window)
