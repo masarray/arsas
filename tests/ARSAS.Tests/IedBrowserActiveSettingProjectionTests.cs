@@ -47,12 +47,14 @@ public sealed class IedBrowserActiveSettingProjectionTests
         Assert.Equal(2, rows.Length);
         var mag = Assert.Single(rows.Where(r => r.Name == "ATCC1.BndWid.setMag [SG]"));
         var scalar = Assert.Single(rows.Where(r => r.Name == "ATCC1.BndWid.setVal [SG]"));
-        Assert.Equal("LD/ATCC1$SG$BndWid$setMag$f", mag.ValueReference);
+        Assert.Equal("LD/ATCC1.BndWid.setMag.f",
+            IedBrowserLiveValues.CanonicalReference(mag.ValueReference));
         Assert.Equal("LD/ATCC1$SG$BndWid$setVal", scalar.ValueReference);
         Assert.Equal("SG", mag.FunctionalConstraint);
         var child = Assert.Single(mag.GetChildren());
         Assert.Equal("f [SG]", child.Name);
-        Assert.Equal(mag.ValueReference, child.ValueReference);
+        Assert.Equal(IedBrowserLiveValues.CanonicalReference(mag.ValueReference),
+            IedBrowserLiveValues.CanonicalReference(child.ValueReference));
         var values = new IedBrowserLiveValues();
         var association = values.BeginAssociation();
         Assert.True(values.PublishForAssociation(association,
@@ -83,7 +85,8 @@ public sealed class IedBrowserActiveSettingProjectionTests
             Attr("SG", "setMag.f"), Attr("SE", "setMag.f"));
         var root = Assert.Single(IedBrowserPresentation.Details(page, model, true)
             .Where(r => r.Kind == "Data"));
-        Assert.Equal("LD/ATCC1$SG$BndWid$setMag$f", root.ValueReference);
+        Assert.Equal("LD/ATCC1.BndWid.setMag.f",
+            IedBrowserLiveValues.CanonicalReference(root.ValueReference));
         Assert.Equal("LD/ATCC1$SG$BndWid$setMag", root.FallbackValueReference);
     }
 

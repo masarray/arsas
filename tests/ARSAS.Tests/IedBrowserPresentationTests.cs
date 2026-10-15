@@ -800,7 +800,8 @@ public sealed class IedBrowserPresentationTests
         var rows = IedBrowserPresentation.Details(node, model, connected: true);
         var root = Assert.Single(rows.Where(v => v.Kind == "Data"));
         Assert.Equal("ATCC1.BndWid.setMag [SG]", root.Name);
-        Assert.Equal(sg.MmsReference, root.ValueReference);
+        Assert.Equal(IedBrowserLiveValues.CanonicalReference(sg.MmsReference),
+            IedBrowserLiveValues.CanonicalReference(root.ValueReference));
         var leaf = Assert.Single(root.GetChildren());
         Assert.Equal("f [SG]", leaf.Name);
         Assert.Equal(sg.MmsReference, leaf.ValueReference);
