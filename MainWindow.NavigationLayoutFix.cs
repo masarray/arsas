@@ -27,26 +27,26 @@ internal static class MainWindowNavigationLayoutFix
 
     private static readonly string[] FullLabels =
     [
-        "IEC 61850 Explorer",
-        "Live Monitor",
-        "Event Log",
-        "Alarm",
-        "GOOSE Subscriber",
-        "Diagnostics",
-        "FAT",
-        "IED Browser"
+        "IED Browser",
+        "Device Explorer",
+        "Event Logs",
+        "Annunciator",
+        "GOOSE Sniff",
+        "SMV",
+        "Signal Testing",
+        "Diagnostics"
     ];
 
     private static readonly string[] CompactLabels =
     [
-        "Explorer",
-        "Live",
+        "Browser",
+        "Devices",
         "Events",
         "Alarm",
         "GOOSE",
-        "Diagnostics",
-        "FAT",
-        "Browser"
+        "SMV",
+        "Testing",
+        "Diagnostics"
     ];
 
     [ModuleInitializer]
@@ -98,7 +98,7 @@ internal static class MainWindowNavigationLayoutFix
         if (sender is not MainWindow window || e.Source is not Button button)
             return;
 
-        if (button.Name is not ("NavExplorerButton" or "NavLiveButton" or "NavEventsButton" or "NavAlarmButton" or "NavGooseButton" or "NavDiagnosticsButton" or "NavNativeFatButton" or "NavIedBrowserButton"))
+        if (button.Name is not ("NavIedBrowserButton" or "NavExplorerButton" or "NavEventsButton" or "NavAlarmButton" or "NavGooseButton" or "NavSmvButton" or "NavNativeFatButton" or "NavDiagnosticsButton"))
             return;
 
         // A repeated click on the already-selected tab does not raise SelectionChanged,
@@ -160,7 +160,7 @@ internal static class MainWindowNavigationLayoutFix
 
             // Diagnostics owns a StackPanel containing its text plus the red alert
             // badge. Never replace that Content tree while changing layout density.
-            if (index != 5 && index < labels.Length)
+            if (index != 7 && index < labels.Length)
             {
                 // Preserve the operator SVG glyphs across Loaded/resize. Replacing
                 // Content here would silently erase icons declared in MainWindow.xaml.
@@ -189,14 +189,14 @@ internal static class MainWindowNavigationLayoutFix
     private static Button?[] GetNavigationButtons(MainWindow window)
         =>
         [
+            window.FindName("NavIedBrowserButton") as Button,
             window.FindName("NavExplorerButton") as Button,
-            window.FindName("NavLiveButton") as Button,
             window.FindName("NavEventsButton") as Button,
             window.FindName("NavAlarmButton") as Button,
             window.FindName("NavGooseButton") as Button,
-            window.FindName("NavDiagnosticsButton") as Button,
+            window.FindName("NavSmvButton") as Button,
             window.FindName("NavNativeFatButton") as Button,
-            window.FindName("NavIedBrowserButton") as Button
+            window.FindName("NavDiagnosticsButton") as Button
         ];
 
     private static void UpdatePillGeometry(MainWindow window, double shellWidth)
@@ -240,7 +240,7 @@ internal static class MainWindowNavigationLayoutFix
             contentWidth = Math.Max(0d, shell.Width - shell.Padding.Left - shell.Padding.Right);
 
         var cellWidth = contentWidth / 8d;
-        var target = Math.Clamp(tabs.SelectedIndex, 0, 7) * cellWidth;
+        var target = EngineeringNavigationRoute.ButtonForTab(tabs.SelectedIndex) * cellWidth;
         pill.Width = Math.Max(1d, cellWidth - 2d);
 
         translate.BeginAnimation(TranslateTransform.XProperty, null);
