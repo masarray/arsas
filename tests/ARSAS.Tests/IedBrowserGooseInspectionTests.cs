@@ -34,6 +34,32 @@ public sealed class IedBrowserGooseInspectionTests
     }
 
     [Fact]
+    public void ExactSclGoCbMetadata_ProjectsOnlyConfiguredVlanAndTimingFields()
+    {
+        var expected = Expected() with
+        {
+            SclVlanId = 0, SclVlanPriority = 4,
+            SclMinTimeMs = 0, SclMaxTimeMs = 2000
+        };
+        var fields = IedBrowserGooseInspection.SclNetworkProperties(expected)
+            .ToDictionary(field => field.Name, field => field.Value,
+                StringComparer.Ordinal);
+        Assert.Equal(4, fields.Count);
+        Assert.Equal("0", fields["VLAN ID"]);
+        Assert.Equal("4", fields["VLAN priority"]);
+        Assert.Equal("0", fields["Minimum time (ms)"]);
+        Assert.Equal("2000", fields["Maximum time (ms)"]);
+        Assert.DoesNotContain("Enabled", fields.Keys);
+        Assert.DoesNotContain("Capture status", fields.Keys);
+    }
+
+    [Fact]
+    public void MissingSclGseAddressCannotFabricateNetworkState()
+    {
+        Assert.Empty(IedBrowserGooseInspection.SclNetworkProperties(Expected()));
+    }
+
+    [Fact]
     public void WireDataSetValuesOnlyIfWholeOrderedMemberIdentityMatches()
     {
         var first = new LiveIedDataSetMemberModel { Index = 0,
