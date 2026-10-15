@@ -109,8 +109,22 @@
                             <DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.18" Color="#2563EB"/>
                         </Border.Effect>
                     </Border>
-                    <Button x:Name="NavExplorerButton" Grid.Column="0" Content="IEC 61850 Explorer" Tag="0" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
-                    <Button x:Name="NavLiveButton" Grid.Column="1" Content="Live Monitor" Tag="1" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
+                    <Button x:Name="NavExplorerButton" Grid.Column="0" Tag="0" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="IEC 61850 Explorer">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                <Path Data="{StaticResource MaterialExplorerIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                            </Viewbox>
+                            <TextBlock Text="IEC 61850 Explorer" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="NavLiveButton" Grid.Column="1" Tag="1" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="Live Monitor">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                <Path Data="{StaticResource MaterialLiveIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                            </Viewbox>
+                            <TextBlock Text="Live Monitor" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <Button x:Name="NavEventsButton" Grid.Column="2" Tag="2" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="Event Log">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
                             <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
@@ -127,9 +141,19 @@
                             <TextBlock Text="Alarm" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="NavGooseButton" Grid.Column="4" Content="GOOSE Subscriber" Tag="4" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
+                    <Button x:Name="NavGooseButton" Grid.Column="4" Tag="4" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="GOOSE Subscriber">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                <Path Data="{StaticResource MaterialGooseIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                            </Viewbox>
+                            <TextBlock Text="GOOSE Subscriber" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <Button x:Name="NavDiagnosticsButton" Grid.Column="5" Tag="5" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                <Path Data="{StaticResource MaterialDiagnosticsIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                            </Viewbox>
                             <TextBlock Text="Diagnostics" VerticalAlignment="Center"/>
                             <Border Visibility="{Binding DiagnosticsAlertVisibility}"
                                     Width="17" Height="17" CornerRadius="8.5" Margin="7,0,0,0"

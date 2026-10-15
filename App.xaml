@@ -268,6 +268,12 @@
         <Geometry x:Key="LucideFileInput">M14,2 V8 H20 M14,2 H6 A2,2 0 0 0 4,4 V20 A2,2 0 0 0 6,22 H18 A2,2 0 0 0 20,20 V8 Z M9,15 H15 M12,12 L15,15 L12,18</Geometry>
         <Geometry x:Key="LucideFileOutput">M14,2 V8 H20 M14,2 H6 A2,2 0 0 0 4,4 V20 A2,2 0 0 0 6,22 H18 A2,2 0 0 0 20,20 V8 Z M10,15 H16 M13,12 L16,15 L13,18</Geometry>
         <Geometry x:Key="LucidePlus">M12,5 V19 M5,12 H19</Geometry>
+        <!-- Material Icons filled geometries: normalized original Google viewBox 0 0 24 24.
+             Shared across static XAML and dynamically constructed WPF buttons. -->
+        <Geometry x:Key="MaterialExplorerIcon">M12 2 2 7l10 5 10-5-10-5zm-8 8.5V17l7 3.5v-6.5L4 10.5zm9 10 7-3.5v-6.5l-7 3.5v6.5z</Geometry>
+        <Geometry x:Key="MaterialLiveIcon">M3 3h18v18H3V3zm2 2v14h14V5H5zm2 9h2l2-6 3 9 2-5h2v-2h-3l-1 3-3-9-3 8H7v2z</Geometry>
+        <Geometry x:Key="MaterialGooseIcon">M12 11c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm-5.66-5.66L4.93 6.76C2.99 8.7 2 11.26 2 14s.99 5.3 2.93 7.24l1.41-1.41C4.79 18.28 4 16.19 4 14s.79-4.28 2.34-5.83zM19.07 6.76l-1.41-1.42C19.21 6.89 20 8.98 20 11.17v5.66c0 1.24-.35 2.44-1.02 3.47l1.56 1.25C21.5 20.15 22 18.51 22 16.83v-5.66c0-2.74-.99-5.3-2.93-7.24zM9.17 8.17 7.76 6.76C5.81 8.7 5 11.21 5 14s.81 5.3 2.76 7.24l1.41-1.41C7.62 18.28 7 16.19 7 14s.62-4.28 2.17-5.83zm7.07-1.41-1.41 1.41C16.38 9.72 17 11.81 17 14s-.62 4.28-2.17 5.83l1.41 1.41C18.19 19.3 19 16.79 19 14s-.81-5.3-2.76-7.24z</Geometry>
+        <Geometry x:Key="MaterialDiagnosticsIcon">M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z</Geometry>
         <!-- Exact operator-supplied filled SVG contours (native WPF geometry, shared and static).
              Negative Y is intentional: source SVG viewBox is 0 -960 960 960. -->
         <Geometry x:Key="OperatorIedBrowserIcon">M600-120v-120H440v-400h-80v120H80v-320h280v120h240v-120h280v320H600v-120h-80v320h80v-120h280v320H600ZM160-760v160-160Zm520 400v160-160Zm0-400v160-160Zm0 160h120v-160H680v160Zm0 400h120v-160H680v160ZM160-600h120v-160H160v160Z</Geometry>
