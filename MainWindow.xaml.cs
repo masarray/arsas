@@ -859,7 +859,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         else if (MainTabs.SelectedIndex == EngineeringNavigationRoute.SmvWorkspaceIndex)
         {
-            ActivateSelectedSmvWorkspace();
+            // Switching tabs must never start Npcap discovery or SV capture.
+            // The explicit Open SMV Capture command retains the fast workflow.
+            PrepareSelectedSmvWorkspace();
         }
 
         UpdateNavigationVisuals(MainTabs.SelectedIndex, animate: true);
