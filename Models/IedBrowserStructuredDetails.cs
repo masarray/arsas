@@ -17,10 +17,9 @@ public static class IedBrowserStructuredDetails
         // registry; there is no second value cache or additional MMS read.
         var hasLeaf = IedBrowserSchemaIndex.TryGetUniqueProcessLeaf(
             obj, out var processLeaf, out var processFc);
-        var scalarComponents = hasLeaf
-            ? Array.Empty<IedBrowserScalarComponent>()
-            : IedBrowserMultiLeafPresentation.BuildPlan(
-                obj.Attributes, obj.Reference, "ST");
+        var scalarComponents = IedBrowserMultiLeafPresentation.BuildPlan(
+            obj.Attributes, obj.Reference, "ST");
+        if (scalarComponents.Count > 1) hasLeaf = false;
         var allowVector = !IedBrowserEngineeringComposite.IsScalarCdc(obj.InferredCdc);
         var phasePlans = allowVector
             ? IedBrowserEngineeringComposite.BuildThreePhases(
@@ -68,7 +67,8 @@ public static class IedBrowserStructuredDetails
     }
 
     public static IedBrowserDetailRow Member(LiveIedDataSetMemberModel member,
-        LiveIedModelDiscoveryDocument? model, int depth = 0)
+        LiveIedModelDiscoveryDocument? model, int depth = 0,
+        LiveIedModelDiscoveryDocument? sclModel = null)
     {
         var name = member.Reference;
         var slash = name.IndexOf('/');
@@ -102,15 +102,33 @@ public static class IedBrowserStructuredDetails
                 .Where(a => a.Reference.StartsWith(a.Prefix, StringComparison.Ordinal))
                 .Select(a => (Reference: a.Reference, Relative: a.Reference[a.Prefix.Length..]))); 
         var foundLeaf = !string.IsNullOrEmpty(leaf);
-        // Only a whole FC=ST FCD containing several exact process leaves
-        // receives a labelled summary. A single FCDA or a scalar leaf keeps
-        // its original direct-binding semantics.
-        var scalarComponents = !foundLeaf && exactObject is not null &&
-            string.Equals(identity, exactObject.Reference, StringComparison.Ordinal) &&
-            string.Equals(member.FunctionalConstraint, "ST", StringComparison.OrdinalIgnoreCase)
-                ? IedBrowserMultiLeafPresentation.BuildPlan(
-                    exactObject.Attributes, identity, "ST")
-                : Array.Empty<IedBrowserScalarComponent>();
+        // An exact selected-IED SCL DO can supply missing typed ST directory
+        // declarations, but never MMS evidence or implicit read authority.
+        var wholeStObject = string.Equals(member.FunctionalConstraint, "ST",
+                StringComparison.OrdinalIgnoreCase) &&
+            (exactObject is null || string.Equals(identity,
+                IedBrowserLiveValues.CanonicalReference(exactObject.Reference),
+                StringComparison.Ordinal));
+        var scalarComponents = wholeStObject && exactObject is not null
+            ? IedBrowserMultiLeafPresentation.BuildPlan(
+                exactObject.Attributes, identity, "ST")
+            : Array.Empty<IedBrowserScalarComponent>();
+        if (wholeStObject && scalarComponents.Count < 2 && sclModel is not null)
+        {
+            var sclOwners = IedBrowserEngineeringObjects.GroupExact(
+                sclModel.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
+                    .SelectMany(ln => ln.DataObjects)
+                    .Where(obj => string.Equals(
+                        IedBrowserLiveValues.CanonicalReference(obj.Reference),
+                        identity, StringComparison.Ordinal)).ToArray());
+            if (sclOwners.Count == 1)
+            {
+                var candidate = IedBrowserMultiLeafPresentation.BuildPlan(
+                    sclOwners[0].Attributes, identity, "ST");
+                if (candidate.Count > 1) scalarComponents = candidate;
+            }
+        }
+        if (scalarComponents.Count > 1) foundLeaf = false;
         var matchingMembers = exactObject?.Attributes.Where(a =>
             string.Equals(a.FunctionalConstraint, member.FunctionalConstraint,
                 StringComparison.OrdinalIgnoreCase)).ToArray()

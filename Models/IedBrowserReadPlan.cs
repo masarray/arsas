@@ -85,6 +85,10 @@ public static class IedBrowserReadPlan
                 string.IsNullOrWhiteSpace(a.SclBType) ? a.MmsType : a.SclBType));
         // Exact, model-inventory-proven control state is an additional
         // read-only projection. It is never added to cyclic or Read All scans.
+        // ReadTargets already enforces the status and FC of the verified
+        // attribute inventory, including refusal of SCL-only declarations.
+        // A separate global-GoCB-membership check wrongly rejects legitimate
+        // independently verified MMS control inventories.
         var control = !readAll && page?.Payload is LiveIedControlBlockModel inspectionBlock &&
             page.Kind is "SGCB" or "GoCB"
             ? IedBrowserControlStateEvidence.ReadTargets(inspectionBlock, page.Kind)

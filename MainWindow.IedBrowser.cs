@@ -656,7 +656,12 @@ public partial class MainWindow
 
         var dataSet = !string.IsNullOrWhiteSpace(block.DataSetReference)
             ? block.DataSetReference : scl?.DataSetReference ?? "";
-        _iedBrowserGooseDirectory = model?.DataSets.FirstOrDefault(entry =>
+        // Exact selected-IED SCL DataSet is a directory fallback, never a
+        // received subscriber frame or a substitute for live MMS state.
+        var directoryModel = IedBrowserGooseDirectory.ModelForDataSet(
+            model, device.SclWorkspace?.DesignModel, block);
+        _iedBrowserGooseDirectory = directoryModel?.DataSets.FirstOrDefault(entry =>
+            string.Equals(entry.Domain, block.Domain, StringComparison.Ordinal) &&
             IedBrowserGooseInspection.Canonical(entry.Reference) ==
                 IedBrowserGooseInspection.Canonical(dataSet));
         _iedBrowserGooseExpected = new IedBrowserGooseExpectedIdentity(
@@ -949,7 +954,8 @@ public partial class MainWindow
             _iedBrowserCachedSourceStamp = stamp;
 
             var roots = IedBrowserPresentation.Roots(model, _iedBrowserCachedRcbRows,
-                _iedBrowserRemoteFiles, EffectiveSclIedName(device));
+                _iedBrowserRemoteFiles, EffectiveSclIedName(device),
+                device.SclWorkspace?.DesignModel);
             _iedBrowserTree.Reset(roots, expandedKeys);
             // Reports is the familiar entry point; selecting the category shows its
             // full RCB list on the right. Preserve explicit expansion on same-IED refresh.
