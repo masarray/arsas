@@ -166,6 +166,20 @@ public partial class MainWindow
             IedBrowserDetailStatus.Text = "Connect this IED to browse remote files.";
             return;
         }
+        // The toolbar action must reveal the Files workspace before
+        // starting its read; otherwise a successful directory response is
+        // invisible while the operator stays on SG/Data Model.
+        var filesPage = _iedBrowserTree.FindVisible("category/files");
+        if (filesPage is not null)
+        {
+            _iedBrowserSyncingSelection = true;
+            try { IedBrowserTreeGrid.SelectedItem = filesPage; }
+            finally { _iedBrowserSyncingSelection = false; }
+            _iedBrowserNavigation.SelectFromTree(filesPage);
+            RenderIedBrowserSelection(filesPage,
+                device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel,
+                device.IsConnected);
+        }
         _iedBrowserFilesLoaded = false;
         _ = BrowseIedBrowserFilesAsync(device);
     }
