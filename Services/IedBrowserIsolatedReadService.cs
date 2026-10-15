@@ -37,17 +37,18 @@ public static class IedBrowserIsolatedReadService
                     cancellationToken.ThrowIfCancellationRequested();
                     var read = raw as Iec61850ReadValue;
                     var display = raw?.ToString() ?? "";
-                    if (IedBrowserReportValueAuthority.SafeScalar(display))
+                    if (IedBrowserReadValuePolicy.TryAcceptDisplay(
+                            display, out var accepted, out var reason))
                     {
-                        values.Report(new IedBrowserReadResult(target, display, read?.Quality ?? "",
-                            read?.DeviceTimestamp ?? "", "", read?.UtcTimeEvidence,
-                            read?.QualityEvidence));
+                        values.Report(new IedBrowserReadResult(target, accepted,
+                            read?.Quality ?? "", read?.DeviceTimestamp ?? "", "",
+                            read?.UtcTimeEvidence, read?.QualityEvidence));
                         successful++;
                     }
                     else
                         values.Report(new IedBrowserReadResult(target, "", "", "",
-                            client.LastErrorMessage.Length > 0 ? client.LastErrorMessage :
-                                "IED returned no readable scalar."));
+                            raw is null && client.LastErrorMessage.Length > 0
+                                ? client.LastErrorMessage : reason));
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
