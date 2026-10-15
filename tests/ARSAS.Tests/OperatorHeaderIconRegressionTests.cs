@@ -37,10 +37,10 @@ public sealed class OperatorHeaderIconRegressionTests
     }
 
     [Theory]
-    [InlineData("NavIedBrowserButton", "7", "IED Browser", "OperatorIedBrowserIcon")]
-    [InlineData("NavNativeFatButton", "6", "FAT", "OperatorFatIcon")]
-    [InlineData("NavAlarmButton", "3", "Alarm", "OperatorAlarmIcon")]
-    [InlineData("NavEventsButton", "2", "Event Log", "OperatorEventLogIcon")]
+    [InlineData("NavIedBrowserButton", "0", "IED Browser", "OperatorIedBrowserIcon")]
+    [InlineData("NavNativeFatButton", "6", "Signal Testing", "OperatorFatIcon")]
+    [InlineData("NavAlarmButton", "3", "Annunciator", "OperatorAlarmIcon")]
+    [InlineData("NavEventsButton", "2", "Event Logs", "OperatorEventLogIcon")]
     public void HeaderTabs_PreserveClickIndices_AndTrackButtonForeground(
         string buttonName, string expectedIndex, string caption, string icon)
     {
