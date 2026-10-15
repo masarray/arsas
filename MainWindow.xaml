@@ -2013,6 +2013,13 @@
                                           VirtualizingPanel.VirtualizationMode="Recycling"
                                           ScrollViewer.CanContentScroll="True"
                                           SelectionChanged="IedBrowserTree_SelectionChanged">
+                                    <DataGrid.RowStyle>
+                                        <Style TargetType="{x:Type DataGridRow}">
+                                            <EventSetter Event="PreviewMouseLeftButtonUp"
+                                                         Handler="IedBrowserTreeRow_MouseUp"/>
+                                            <Setter Property="Cursor" Value="Hand"/>
+                                        </Style>
+                                    </DataGrid.RowStyle>
                                     <DataGrid.Columns>
                                         <DataGridTemplateColumn Header="Objects" Width="*">
                                             <DataGridTemplateColumn.CellTemplate>
@@ -2115,6 +2122,8 @@
                                     <ListView.ItemContainerStyle>
                                         <Style TargetType="ListViewItem">
                                             <EventSetter Event="MouseDoubleClick" Handler="IedBrowserDetailItem_DoubleClick"/>
+                                            <EventSetter Event="PreviewMouseLeftButtonUp"
+                                                         Handler="IedBrowserDetailRow_MouseUp"/>
                                             <Setter Property="Padding" Value="0"/>
                                             <Setter Property="Margin" Value="0"/>
                                             <Setter Property="BorderThickness" Value="0"/>

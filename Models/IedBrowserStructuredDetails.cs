@@ -42,6 +42,7 @@ public static class IedBrowserStructuredDetails
             $"IEC DO declaration · {obj.Reference} · CDC {obj.InferredCdc}")
         {
             IsDataObject = true,
+            ReadObjectReference = obj.Reference,
             ScalarComponents = scalarComponents,
             PolarPlan = polarPlan,
             PhasePlans = phasePlans,
