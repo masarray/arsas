@@ -79,6 +79,12 @@ public sealed class IedBrowserControlStateEvidenceTests
             "ActSG", out var observed, out var reference));
         Assert.Equal("3", observed.Value);
         Assert.Equal("LD/LLN0.SGCB.ActSG", reference);
+        // A Report on the same exact IEC reference is not proof of
+        // an explicit control-state MMS Read.
+        Assert.True(values.PublishForAssociation(session, "LD/LLN0$SP$SGCB$NumOfSG",
+            "SP", "9", "", "", "Report"));
+        Assert.False(IedBrowserControlStateEvidence.TryRead(values, block, "SGCB",
+            "NumOfSG", out _, out _));
         Assert.False(IedBrowserControlStateEvidence.TryRead(values, block, "SGCB",
             "EditSG", out _, out _));
         values.MarkOffline();

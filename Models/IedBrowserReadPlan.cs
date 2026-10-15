@@ -83,9 +83,9 @@ public static class IedBrowserReadPlan
                 string.IsNullOrWhiteSpace(a.SclBType) ? a.MmsType : a.SclBType));
         // Exact, model-inventory-proven control state is an additional
         // read-only projection. It is never added to cyclic or Read All scans.
-        var control = !readAll && page?.Payload is LiveIedControlBlockModel block &&
+        var control = !readAll && page?.Payload is LiveIedControlBlockModel inspectionBlock &&
             page.Kind is "SGCB" or "GoCB"
-            ? IedBrowserControlStateEvidence.ReadTargets(block, page.Kind)
+            ? IedBrowserControlStateEvidence.ReadTargets(inspectionBlock, page.Kind)
             : Array.Empty<IedBrowserReadTarget>();
         return attributes.Concat(control)
             .DistinctBy(x => IedBrowserLiveValues.CanonicalReference(x.Reference) + "|" +

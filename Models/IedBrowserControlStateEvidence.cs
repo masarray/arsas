@@ -75,8 +75,14 @@ public static class IedBrowserControlStateEvidence
         exactReference = target.Reference;
         // The canonical ledger, with its association fence and stale state,
         // is the only observation authority. No shadow cache or snapshot merge.
-        return ledger.TryGet(target.Reference, target.FunctionalConstraint,
-            out observed, preferReport: false);
+        if (!ledger.TryGet(target.Reference, target.FunctionalConstraint,
+                out observed, preferReport: false) ||
+            !string.Equals(observed.Source, "MMS Read", StringComparison.Ordinal))
+        {
+            observed = null!;
+            return false;
+        }
+        return true;
     }
     private static string Canonical(string reference)
         => (reference ?? "").Trim().Replace('$', '.');
