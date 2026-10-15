@@ -161,7 +161,15 @@ internal static class MainWindowNavigationLayoutFix
             // Diagnostics owns a StackPanel containing its text plus the red alert
             // badge. Never replace that Content tree while changing layout density.
             if (index != 5 && index < labels.Length)
-                button.Content = labels[index];
+            {
+                // Preserve the operator SVG glyphs across Loaded/resize. Replacing
+                // Content here would silently erase icons declared in MainWindow.xaml.
+                if (button.Content is StackPanel iconContent &&
+                    iconContent.Children.OfType<TextBlock>().FirstOrDefault() is { } caption)
+                    caption.Text = labels[index];
+                else
+                    button.Content = labels[index];
+            }
 
             button.MinHeight = 40;
             button.MinWidth = 0;
