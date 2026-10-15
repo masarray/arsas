@@ -56,10 +56,14 @@ public sealed class M214IsolatedBrowserSchemaLeaseTests
     }
 
     [Fact]
-    public void SecondaryClientRefusesOfflineSchemaInjection()
+    public async Task SecondaryClientRefusesOfflineSchemaInjection()
     {
-        using var client = new NativeIec61850Client();
-        Assert.Throws<InvalidOperationException>(() =>
-            client.BindIsolatedBrowserReadSchema(new LiveIedModelDiscoveryDocument()));
+        var client = new NativeIec61850Client();
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() =>
+                client.BindIsolatedBrowserReadSchema(new LiveIedModelDiscoveryDocument()));
+        }
+        finally { await client.DisposeAsync(); }
     }
 }
