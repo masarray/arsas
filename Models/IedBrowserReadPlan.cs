@@ -31,6 +31,16 @@ public static class IedBrowserReadPlan
     private static readonly HashSet<string> ReadableFc = new(
         ["ST", "MX", "CF", "DC", "SP", "SG", "SE", "EX"], StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// FC CO denotes command parameters, not scalar MMS Read targets.
+    /// Keeping that separate from a genuinely missing read is essential
+    /// during FAT; no control operation is implied by Browser navigation.
+    /// </summary>
+    public static string UnobservedValue(string? functionalConstraint)
+        => string.Equals(functionalConstraint, "CO", StringComparison.OrdinalIgnoreCase)
+            ? "Control only"
+            : "Not read";
+
     public static IReadOnlyList<IedBrowserReadTarget> Build(
         LiveIedModelDiscoveryDocument? model, IedBrowserTreeRow? page,
         bool readAll, string? selectedDoReference = null)
