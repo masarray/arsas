@@ -14,6 +14,7 @@ public sealed class IedBrowserCfEvidencePresentation
 {
     private readonly IedBrowserLiveValues _live;
     private readonly Dictionary<string, string?> _snapshot = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _declaredCf = new(StringComparer.Ordinal);
     public bool HasSnapshot { get; }
 
     public IedBrowserCfEvidencePresentation(
@@ -21,6 +22,12 @@ public sealed class IedBrowserCfEvidencePresentation
         LiveIedCanonicalModel? canonical)
     {
         _live = live ?? throw new ArgumentNullException(nameof(live));
+        if (currentModel is not null)
+            foreach (var a in currentModel.LogicalDevices.SelectMany(d => d.LogicalNodes)
+                         .SelectMany(n => n.DataObjects).SelectMany(o => o.Attributes)
+                         .Where(a => string.Equals(a.FunctionalConstraint, "CF",
+                             StringComparison.OrdinalIgnoreCase)))
+                _declaredCf.Add(Key(a.MmsReference, "CF"));
         if (canonical is null || currentModel is null ||
             !ReferenceEquals(currentModel, canonical.Discovery))
             return;
@@ -63,6 +70,43 @@ public sealed class IedBrowserCfEvidencePresentation
             return true;
         }
         return false;
+    }
+
+
+    /// <summary>
+    /// Compose a units [CF] parent only from two exact, model-declared,
+    /// observed enum leaves. Report/Read and historical snapshots are never
+    /// cross-paired; a partial configuration cannot invent a unit.
+    /// </summary>
+    public bool TryFormatUnitsParent(string reference, string fc,
+        out string unit, out string provenance)
+    {
+        unit = "";
+        provenance = "";
+        var owner = IedBrowserLiveValues.CanonicalReference(reference);
+        if (!string.Equals(fc, "CF", StringComparison.OrdinalIgnoreCase) ||
+            !owner.EndsWith(".units", StringComparison.Ordinal))
+            return false;
+        var si = owner + ".SIUnit";
+        var multiplier = owner + ".multiplier";
+        if (!_declaredCf.Contains(Key(si, "CF")) ||
+            !_declaredCf.Contains(Key(multiplier, "CF")) ||
+            !TryGet(si, "CF", out var siRaw, out var siSource, out var siLive) ||
+            !TryGet(multiplier, "CF", out var mulRaw, out var mulSource, out var mulLive))
+            return false;
+        if (siLive != mulLive ||
+            siSource.StartsWith("Discovery snapshot", StringComparison.Ordinal) !=
+            mulSource.StartsWith("Discovery snapshot", StringComparison.Ordinal))
+            return false;
+        var siSymbol = RenderCfValue(si, "CF", siRaw);
+        var multiplierSymbol = RenderCfValue(multiplier, "CF", mulRaw);
+        if (!IsProvenSymbol(siRaw, siSymbol, "SIUnit") ||
+            !IsProvenSymbol(mulRaw, multiplierSymbol, "multiplier"))
+            return false;
+        unit = multiplierSymbol + siSymbol;
+        provenance = si + " [" + siSource + "]; " +
+                     multiplier + " [" + mulSource + "]";
+        return true;
     }
 
     /// <summary>Exact standard enum registry, never infer units from DO names.</summary>

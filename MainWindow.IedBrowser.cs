@@ -436,6 +436,15 @@ public partial class MainWindow
         foreach (var row in _iedBrowserDetails.Rows)
         {
             if (string.IsNullOrWhiteSpace(row.ValueReference)) continue;
+            if (cfEvidence.TryFormatUnitsParent(
+                    row.ValueReference, row.FunctionalConstraint,
+                    out var verifiedUnit, out var verifiedProvenance))
+            {
+                row.Value = verifiedUnit;
+                row.ObservationSource = "Verified IEC CF configuration";
+                row.ObservationTooltip = verifiedProvenance;
+                continue;
+            }
             if (IedBrowserObservedVectorPresentation.TryFormat(
                     device.LiveValues, row.VectorComponents, engineeringUnits,
                     device.IsMonitoring, out var vector))

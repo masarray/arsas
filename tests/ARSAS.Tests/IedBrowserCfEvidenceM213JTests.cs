@@ -147,6 +147,30 @@ public sealed class IedBrowserCfEvidenceM213JTests
             out _, out _, out _));
     }
 
+
+    [Fact]
+    public void UnitsParentRequiresBothExactObservedCfLeaves()
+    {
+        var model = Model();
+        var ledger = new IedBrowserLiveValues();
+        var association = ledger.BeginAssociation();
+        var cf = new IedBrowserCfEvidencePresentation(ledger, model, null);
+        Assert.False(cf.TryFormatUnitsParent(
+            Owner + ".phsA.units", "CF", out _, out _));
+        Assert.True(ledger.PublishForAssociation(association,
+            Owner + ".phsA.units.SIUnit", "CF", "29", "", "", "MMS Read"));
+        Assert.False(cf.TryFormatUnitsParent(
+            Owner + ".phsA.units", "CF", out _, out _));
+        Assert.True(ledger.PublishForAssociation(association,
+            Owner + ".phsA.units.multiplier", "CF", "3", "", "", "MMS Read"));
+        Assert.True(cf.TryFormatUnitsParent(
+            Owner + ".phsA.units", "CF", out var unit, out var provenance));
+        Assert.Equal("kV", unit);
+        Assert.Contains("SIUnit", provenance);
+        Assert.False(cf.TryFormatUnitsParent(
+            Owner + ".phsB.units", "CF", out _, out _));
+    }
+
     [Fact]
     public void BrowserRefreshBindsCfEvidenceWithoutImplicitMmsRequests()
     {
