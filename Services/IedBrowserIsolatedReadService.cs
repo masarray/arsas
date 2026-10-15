@@ -13,12 +13,13 @@ public static class IedBrowserIsolatedReadService
         Iec61850MonitorDevice device, IReadOnlyList<IedBrowserReadTarget> targets,
         IProgress<IedBrowserReadResult> values, IProgress<IedBrowserReadProgress> progress,
         CancellationToken cancellationToken)
-        => Task.Run(async () =>
+    {
+        // Capture before crossing the UI/thread boundary. The current
+        // monitoring association owns this exact live discovery model;
+        // SCL-only metadata is never promoted to verified MMS schema.
+        var lease = IedBrowserIsolatedReadSchemaLease.Capture(device);
+        return Task.Run(async () =>
         {
-            // Capture before crossing the UI/thread boundary. The current
-            // monitoring association owns this exact live discovery model;
-            // SCL-only metadata is never promoted to verified MMS schema.
-            var lease = IedBrowserIsolatedReadSchemaLease.Capture(device);
             await using var client = new NativeIec61850Client();
             await client.ConnectAsync(device.IpAddress, device.Port, cancellationToken)
                 .ConfigureAwait(false);
@@ -81,4 +82,5 @@ public static class IedBrowserIsolatedReadService
             }
             return successful;
         }, cancellationToken);
+    }
 }
