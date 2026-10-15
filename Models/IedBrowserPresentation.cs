@@ -526,7 +526,8 @@ public static class IedBrowserPresentation
     }
 
     public static IReadOnlyList<IedBrowserDetailRow> Details(
-        IedBrowserTreeRow node, LiveIedModelDiscoveryDocument? model, bool connected)
+        IedBrowserTreeRow node, LiveIedModelDiscoveryDocument? model, bool connected,
+        LiveIedModelDiscoveryDocument? sclModel = null)
     {
         var rows = new List<IedBrowserDetailRow>();
         void Section(string name) => rows.Add(new("Section", name));
@@ -607,32 +608,56 @@ public static class IedBrowserPresentation
                     Field("Affected Logical Devices", block.Domain);
                     Section("Settings");
                     rows.Add(new("DataHeader", "Name", "Value"));
-                    if (model is not null)
+                    if (model is not null || sclModel is not null)
                     {
-                        // Active SG values use the existing lazy IEC DA projector.
-                        // Never collapse all SG/SE attributes into an unbound DO.
-                        var settings = model.LogicalDevices
-                            .Where(ld => string.Equals(ld.MmsDomain, block.Domain,
-                                StringComparison.Ordinal))
-                            .SelectMany(ld => ld.LogicalNodes)
-                            .SelectMany(ln => ln.DataObjects.Select(obj => (Ln: ln, Object: obj)))
-                            .ToArray();
+                        // Live inventory is the acquisition authority. A live
+                        // model may omit configuration settings present in SCL:
+                        // retain those as *labelled declarations*, not invented
+                        // active values or authorization to send MMS Read.
+                        static (LiveIedLogicalNodeModel Ln, LiveIedDataObjectModel Object)[]
+                            InDomain(LiveIedModelDiscoveryDocument? source, string domain)
+                            => source is null ? []
+                                : source.LogicalDevices
+                                    .Where(ld => string.Equals(ld.MmsDomain, domain,
+                                        StringComparison.Ordinal))
+                                    .SelectMany(ld => ld.LogicalNodes)
+                                    .SelectMany(ln => ln.DataObjects.Select(obj =>
+                                        (Ln: ln, Object: obj)))
+                                    .ToArray();
+
+                        var live = InDomain(model, block.Domain);
+                        var scl = InDomain(sclModel, block.Domain);
+                        var liveSg = live.Any(s => s.Object.Attributes.Any(a =>
+                            string.Equals(a.FunctionalConstraint, "SG",
+                                StringComparison.OrdinalIgnoreCase)));
+                        var sclSg = scl.Any(s => s.Object.Attributes.Any(a =>
+                            string.Equals(a.FunctionalConstraint, "SG",
+                                StringComparison.OrdinalIgnoreCase)));
+                        var directory = liveSg ? live : scl;
+                        var fromScl = !liveSg && scl.Length > 0;
+                        // SE exposes the editing declaration, NOT current SG;
+                        // only show this separately labelled if SG is absent.
+                        var fc = liveSg || sclSg ? "SG" : "SE";
+                        if (fromScl)
+                            rows.Add(new("Message",
+                                fc == "SG"
+                                    ? "SCL settings directory only · live MMS SG inventory not verified; Read does not authorize speculative fields."
+                                    : "SCL edit-group [SE] declarations only · not current active [SG] values; no group selection or write."));
                         var shown = 0;
                         var seen = new HashSet<string>(StringComparer.Ordinal);
-                        foreach (var setting in settings)
+                        foreach (var setting in directory)
                         {
-                            var sg = setting.Object.Attributes.Where(a =>
-                                string.Equals(a.FunctionalConstraint, "SG",
+                            var attrs = setting.Object.Attributes.Where(a =>
+                                string.Equals(a.FunctionalConstraint, fc,
                                     StringComparison.OrdinalIgnoreCase)).ToArray();
-                            if (sg.Length == 0) continue;
+                            if (attrs.Length == 0) continue;
                             foreach (var field in IedBrowserStructuredDetails.AttributeRows(
-                                         sg, setting.Object.Name))
+                                         attrs, setting.Object.Name))
                             {
-                                // Prefer a unique scalar descendant when direct
-                                // parent and child declarations coexist.
                                 var refToRead = field.FallbackValueReference.Length > 0
                                     ? field.FallbackValueReference : field.ValueReference;
-                                var identity = setting.Object.Reference + "|" + field.Name;
+                                var identity = setting.Object.Reference + "|" +
+                                    field.Name + "|" + fc;
                                 if (!seen.Add(identity)) continue;
                                 rows.Add(field with
                                 {
@@ -640,14 +665,16 @@ public static class IedBrowserPresentation
                                     ValueReference = refToRead,
                                     FallbackValueReference = refToRead == field.ValueReference
                                         ? "" : field.ValueReference,
-                                    Source = field.Source + " · active SG declaration"
+                                    Source = field.Source + (fromScl
+                                        ? " · SCL declaration; value requires real evidence"
+                                        : " · verified live SG directory")
                                 });
                                 shown++;
                             }
                         }
                         if (shown == 0)
                             rows.Add(new("Message",
-                                "No active-group [SG] parameters in this model; [SE] edit values cannot substitute."));
+                                "No model-proven SG or SCL SE settings for this exact MMS domain; verify SGCB binding and SCL matching."));
                     }
                     else
                         rows.Add(new("Message", "No model is available for SG/SE setting attributes."));
