@@ -429,9 +429,9 @@ public partial class MainWindow
         _iedBrowserLastCfCanonicalModel = device.LiveCanonicalModel;
         // No MMS call occurs during navigation or refresh. Exact CF/DC
         // instance evidence is a labelled discovery snapshot, not a Report.
-        var cfEvidence = new IedBrowserCfEvidencePresentation(device.LiveValues,
-            device.LiveDiscoveryModel, device.LiveCanonicalModel);
         var model = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
+        var cfEvidence = new IedBrowserCfEvidencePresentation(device.LiveValues,
+            model, device.LiveCanonicalModel);
         var engineeringUnits = cfEvidence.BuildVerifiedUnits(device.Signals, model);
         foreach (var row in _iedBrowserDetails.Rows)
         {

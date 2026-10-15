@@ -13,6 +13,16 @@ namespace ArIED61850Tester.Models;
 public sealed class IedBrowserCfEvidencePresentation
 {
     private readonly IedBrowserLiveValues _live;
+    // Weak keys prevent retained IED schemas/snapshots after reload. These
+    // indexes contain declarations and historical evidence only, never
+    // mutable current Report/Read observations.
+    private sealed record SchemaIndex(HashSet<string> DeclaredCf, string[] UnitOwners);
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
+        LiveIedModelDiscoveryDocument, SchemaIndex> SchemaCache = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
+        LiveIedCanonicalModel, Dictionary<string, string?>> SnapshotCache = new();
+    private readonly LiveIedModelDiscoveryDocument? _model;
+    private readonly string[] _unitOwners;
     private readonly Dictionary<string, string?> _snapshot = new(StringComparer.Ordinal);
     private readonly HashSet<string> _declaredCf = new(StringComparer.Ordinal);
     public bool HasSnapshot { get; }
@@ -22,28 +32,60 @@ public sealed class IedBrowserCfEvidencePresentation
         LiveIedCanonicalModel? canonical)
     {
         _live = live ?? throw new ArgumentNullException(nameof(live));
+        _model = currentModel;
         if (currentModel is not null)
-            foreach (var a in currentModel.LogicalDevices.SelectMany(d => d.LogicalNodes)
-                         .SelectMany(n => n.DataObjects).SelectMany(o => o.Attributes)
-                         .Where(a => string.Equals(a.FunctionalConstraint, "CF",
-                             StringComparison.OrdinalIgnoreCase)))
-                _declaredCf.Add(Key(a.MmsReference, "CF"));
-        if (canonical is null || currentModel is null ||
-            !ReferenceEquals(currentModel, canonical.Discovery))
-            return;
-        HasSnapshot = true;
+        {
+            var schema = SchemaCache.GetValue(currentModel, BuildSchema);
+            _declaredCf = schema.DeclaredCf;
+            _unitOwners = schema.UnitOwners;
+        }
+        else _unitOwners = [];
+        if (canonical is not null && currentModel is not null &&
+            ReferenceEquals(currentModel, canonical.Discovery))
+        {
+            HasSnapshot = true;
+            _snapshot = SnapshotCache.GetValue(canonical, BuildSnapshot);
+        }
+    }
+
+    private static SchemaIndex BuildSchema(LiveIedModelDiscoveryDocument model)
+    {
+        var declared = new HashSet<string>(StringComparer.Ordinal);
+        var owners = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var a in model.LogicalDevices.SelectMany(d => d.LogicalNodes)
+                     .SelectMany(n => n.DataObjects).SelectMany(o => o.Attributes))
+        {
+            var reference = IedBrowserLiveValues.CanonicalReference(a.MmsReference);
+            if (reference.Length == 0) continue;
+            if (string.Equals(a.FunctionalConstraint, "CF",
+                    StringComparison.OrdinalIgnoreCase))
+                declared.Add(Key(reference, "CF"));
+            if (!string.Equals(a.FunctionalConstraint, "MX",
+                    StringComparison.OrdinalIgnoreCase)) continue;
+            var suffix = reference.EndsWith(".cVal.mag.f", StringComparison.Ordinal)
+                ? ".cVal.mag.f" : reference.EndsWith(".mag.f", StringComparison.Ordinal)
+                    ? ".mag.f" : "";
+            if (suffix.Length != 0) owners.Add(reference[..^suffix.Length]);
+        }
+        return new SchemaIndex(declared, owners.OrderBy(s => s, StringComparer.Ordinal)
+            .ToArray());
+    }
+
+    private static Dictionary<string, string?> BuildSnapshot(LiveIedCanonicalModel canonical)
+    {
+        var snapshot = new Dictionary<string, string?>(StringComparer.Ordinal);
         foreach (var entry in canonical.InstanceValues)
         {
             if (entry.FunctionalConstraint is not ("CF" or "DC") ||
-                entry.Value is null ||
-                !TryScalar(entry.Value, out var display))
+                entry.Value is null || !TryScalar(entry.Value, out var display))
                 continue;
             var reference = IedBrowserLiveValues.CanonicalReference(entry.Reference);
             if (reference.Length == 0) continue;
             var key = Key(reference, entry.FunctionalConstraint);
-            if (!_snapshot.TryAdd(key, display))
-                _snapshot[key] = null; // conflicting evidence never first-wins
+            if (!snapshot.TryAdd(key, display))
+                snapshot[key] = null;
         }
+        return snapshot;
     }
 
     public bool TryGet(string reference, string fc, out string value,
@@ -154,34 +196,20 @@ public sealed class IedBrowserCfEvidencePresentation
         foreach (var (reference, unit) in
                  IedBrowserEngineeringValuePresentation.BuildUnitIndex(signals))
             index.Add(reference, unit);
-        if (model is null) return index;
-        foreach (var obj in model.LogicalDevices.SelectMany(d => d.LogicalNodes)
-                     .SelectMany(n => n.DataObjects))
+        if (model is null || !ReferenceEquals(model, _model))
+            return index;
+        // O(number of modeled measurement owners), not O(all IED attributes)
+        // per visible Report refresh; the weak-keyed schema is built once.
+        foreach (var owner in _unitOwners)
         {
-            var attrs = obj.Attributes
-                .Select(a => (Reference: IedBrowserLiveValues.CanonicalReference(a.MmsReference),
-                              Fc: a.FunctionalConstraint))
-                .Where(a => a.Reference.Length > 0).ToArray();
-            foreach (var attr in attrs.Where(a =>
-                string.Equals(a.Fc, "MX", StringComparison.OrdinalIgnoreCase) &&
-                (a.Reference.EndsWith(".mag.f", StringComparison.Ordinal) ||
-                 a.Reference.EndsWith(".cVal.mag.f", StringComparison.Ordinal))))
-            {
-                var suffix = attr.Reference.EndsWith(".cVal.mag.f", StringComparison.Ordinal)
-                    ? ".cVal.mag.f" : ".mag.f";
-                var owner = attr.Reference[..^suffix.Length];
-                if (!TryVerifyUnitPair(owner + ".units", out var composed,
-                        out _, out var fresh))
-                    continue;
-                var key = Key(owner, "MX");
-                if (!index.TryGetValue(key, out var previous))
-                    index.Add(key, composed);
-                else if (!string.Equals(previous, composed, StringComparison.Ordinal))
-                    // An exact fresh CF read outranks older signal metadata.
-                    // An historical discovery snapshot cannot silently replace
-                    // an inconsistent current unit: keep that conflict unknown.
-                    index[key] = fresh ? composed : null;
-            }
+            if (!TryVerifyUnitPair(owner + ".units", out var composed,
+                    out _, out var fresh))
+                continue;
+            var key = Key(owner, "MX");
+            if (!index.TryGetValue(key, out var previous))
+                index.Add(key, composed);
+            else if (!string.Equals(previous, composed, StringComparison.Ordinal))
+                index[key] = fresh ? composed : null;
         }
         return index;
     }
