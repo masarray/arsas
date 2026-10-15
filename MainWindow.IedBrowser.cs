@@ -438,18 +438,18 @@ public partial class MainWindow
             if (string.IsNullOrWhiteSpace(row.ValueReference)) continue;
             if (cfEvidence.TryFormatUnitsParent(
                     row.ValueReference, row.FunctionalConstraint,
-                    out var verifiedUnit, out var verifiedProvenance))
+                    out var verifiedUnit, out var verifiedProvenance,
+                    out var verifiedAuthority))
             {
-                row.Value = verifiedUnit;
-                row.ObservationSource = "Verified IEC CF configuration";
+                row.Value = verifiedAuthority.StartsWith("Stale ", StringComparison.Ordinal)
+                    ? "Offline · " + verifiedUnit : verifiedUnit;
+                row.ObservationSource = verifiedAuthority;
                 row.ObservationTooltip = verifiedProvenance;
                 continue;
             }
-            // Prefer the schema-authorized, timestamp-compatible phasor
-            // composer from M2.14. Extra neutral/net/res components retain
-            // the bounded, independently observed presentation below.
-            if (row.VectorComponents.Count <= 3 &&
-                IedBrowserEngineeringComposite.TryCompose(
+            // Single IEC composition entry point, with strict compatible
+            // phasors and independently labelled extra vector components.
+            if (IedBrowserEngineeringComposite.TryCompose(
                     row, device.LiveValues, engineeringUnits,
                     device.IsMonitoring, out var composite))
             {
@@ -458,15 +458,6 @@ public partial class MainWindow
                 row.ObservationSource = composite.IsStale
                     ? "Stale derived " + composite.Source : "Derived " + composite.Source;
                 row.ObservationTooltip = composite.Provenance;
-                continue;
-            }
-            if (IedBrowserObservedVectorPresentation.TryFormat(
-                    device.LiveValues, row.VectorComponents, engineeringUnits,
-                    device.IsMonitoring, out var vector))
-            {
-                row.Value = vector.IsStale ? "Offline · " + vector.Value : vector.Value;
-                row.ObservationSource = vector.Source;
-                row.ObservationTooltip = vector.Provenance;
                 continue;
             }
             var found = IedBrowserDetailEvidenceResolver.TryResolve(
