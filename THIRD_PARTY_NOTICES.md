@@ -46,5 +46,6 @@ and are used only for the ARSAS user interface. Original icon names and licensin
 remain Google's; ARSAS does not claim authorship of Google's icon designs.
 
 Source: https://github.com/google/material-design-icons
+Complete Apache-2.0 text is included in `Assets/Icons/MaterialIcons-LICENSE.txt` and published as `THIRD_PARTY/Material-Icons-LICENSE.txt`.
 License: https://github.com/google/material-design-icons/blob/master/LICENSE
 The exact glyph-to-action mapping is maintained in the UI regression tests.
