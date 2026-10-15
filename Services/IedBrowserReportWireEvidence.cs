@@ -21,6 +21,16 @@ public static class IedBrowserReportWireEvidence
         {
             var reference = IedBrowserLiveValues.CanonicalReference(reported.MemberReference);
             var fc = reported.Member?.FunctionalConstraint ?? "";
+            // When OptFlds contains DataRef, its on-wire identity must agree
+            // with the resolved DataSet member before any raw quality/time
+            // evidence is bound to a Browser DO. Absence of optional DataRef
+            // preserves the existing engine-verified member/index route.
+            // Never resolve a disagreement by short name or suffix.
+            if (!string.IsNullOrWhiteSpace(reported.DataReference) &&
+                !string.Equals(
+                    IedBrowserLiveValues.CanonicalReference(reported.DataReference),
+                    reference, StringComparison.Ordinal))
+                continue;
             var payload = reported.Value;
             if (reported.FailureCode.HasValue || payload is null ||
                 string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(fc))
