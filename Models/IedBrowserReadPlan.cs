@@ -56,8 +56,8 @@ public static class IedBrowserReadPlan
                 LiveIedLogicalDeviceModel ld => ld.LogicalNodes.SelectMany(ln => ln.DataObjects)
                     .SelectMany(o => o.Attributes),
                 LiveIedDataSetModel set => ForDataSet(all, schema, set),
-                // Read-only SG/SE FC data, owned by the exact logical device.
-                // No edit-group selection, confirmation, writes or implicit activation.
+                // SGCB page: model-proven SG/SE parameters. The control
+                // state's exact safe fields are appended separately below.
                 LiveIedControlBlockModel block when page.Kind == "SGCB" =>
                     model.LogicalDevices
                         .Where(ld => string.Equals(ld.MmsDomain, block.Domain, StringComparison.Ordinal))
@@ -65,7 +65,8 @@ public static class IedBrowserReadPlan
                         .SelectMany(ln => ln.DataObjects)
                         .SelectMany(obj => obj.Attributes)
                         .Where(attr => attr.FunctionalConstraint is "SG" or "SE"),
-                // A DataSet read cannot inspect GoEna or prove GOOSE reception.
+                // GoCB DataSet member reads do not prove GoEna. Only exact
+                // safe control fields from discovery's FC inventory are legal.
                 LiveIedControlBlockModel when page.Kind == "GoCB" =>
                     Array.Empty<LiveIedDataAttributeModel>(),
                 LiveIedControlBlockModel block when !string.IsNullOrWhiteSpace(block.DataSetReference) =>
@@ -75,11 +76,18 @@ public static class IedBrowserReadPlan
             };
         }
 
-        return selected.Where(a => ReadableFc.Contains(a.FunctionalConstraint))
+        var attributes = selected.Where(a => ReadableFc.Contains(a.FunctionalConstraint))
             .Where(a => !string.IsNullOrWhiteSpace(a.MmsReference))
             .Select(a => new IedBrowserReadTarget(
                 a.MmsReference, a.FunctionalConstraint,
-                string.IsNullOrWhiteSpace(a.SclBType) ? a.MmsType : a.SclBType))
+                string.IsNullOrWhiteSpace(a.SclBType) ? a.MmsType : a.SclBType));
+        // Exact, model-inventory-proven control state is an additional
+        // read-only projection. It is never added to cyclic or Read All scans.
+        var control = !readAll && page?.Payload is LiveIedControlBlockModel inspectionBlock &&
+            page.Kind is "SGCB" or "GoCB"
+            ? IedBrowserControlStateEvidence.ReadTargets(inspectionBlock, page.Kind)
+            : Array.Empty<IedBrowserReadTarget>();
+        return attributes.Concat(control)
             .DistinctBy(x => IedBrowserLiveValues.CanonicalReference(x.Reference) + "|" +
                 x.FunctionalConstraint.Trim().ToUpperInvariant(), StringComparer.Ordinal)
             .ToArray();
