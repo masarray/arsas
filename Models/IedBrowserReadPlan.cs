@@ -3,8 +3,10 @@ using AR.Iec61850.Discovery;
 namespace ArIED61850Tester.Models;
 
 /// <summary>
-/// Typed selection routes avoid treating an FC DataSet read as control-block status.
+/// Explicit, non-cyclic read plans. Only model-proven FC leaf attributes are allowed;
+/// controls are never operated, created, reserved, enabled or written.
 /// </summary>
+/// <summary>Typed selection routes avoid treating an FC DataSet read as control-block status.</summary>
 public enum IedBrowserReadSelectionKind
 {
     FcAttributes,

@@ -17,22 +17,42 @@ public static class IedBrowserStructuredDetails
         // registry; there is no second value cache or additional MMS read.
         var hasLeaf = IedBrowserSchemaIndex.TryGetUniqueProcessLeaf(
             obj, out var processLeaf, out var processFc);
-        var phases = IedBrowserEngineeringComposite.BuildThreePhases(
+        var phasePlans = IedBrowserEngineeringComposite.BuildThreePhases(
             obj.Attributes, obj.Reference);
-        var polar = phases.Count == 0
+        var polarPlan = phasePlans.Count == 0
             ? IedBrowserEngineeringComposite.BuildPolar(obj.Attributes, obj.Reference)
             : null;
+        // A compound DO such as MMXU.PhV has no unique scalar leaf, but
+        // can have a single schema-verified FC for independently observed
+        // phase vectors. Never infer this FC from the object's label.
+        var candidateFcs = obj.Attributes
+            .Where(a => a.FunctionalConstraint is "MX" or "ST")
+            .Select(a => (a.FunctionalConstraint ?? "").Trim().ToUpperInvariant())
+            .Where(fc => fc.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .Take(2).ToArray();
+        var compoundFc = candidateFcs.Length == 1 ? candidateFcs[0] : "";
         return new IedBrowserDetailRow("Data", obj.Name, "Not read", depth,
             $"IEC DO declaration · {obj.Reference} · CDC {obj.InferredCdc}")
         {
             IsDataObject = true,
-            PolarPlan = polar,
-            PhasePlans = phases,
+            PolarPlan = polarPlan,
+            PhasePlans = phasePlans,
             ValueReference = hasLeaf ? processLeaf : obj.Reference,
             FallbackValueReference = hasLeaf ? obj.Reference : "",
             IsEngineeringValue = hasLeaf,
             EngineeringUnitReference = hasLeaf ? processLeaf : "",
-            FunctionalConstraint = hasLeaf ? processFc : uniqueProcessFc ?? "",
+            FunctionalConstraint = hasLeaf ? processFc :
+                (uniqueProcessFc is { Length: > 0 } ? uniqueProcessFc : compoundFc),
+            VectorComponents = hasLeaf ? Array.Empty<IedBrowserVectorComponent>() :
+                ObservedVectors(
+                    obj.Attributes.Where(a =>
+                        string.Equals(a.FunctionalConstraint, compoundFc,
+                            StringComparison.OrdinalIgnoreCase))
+                    .Select(a => (
+                        Reference: IedBrowserLiveValues.CanonicalReference(a.MmsReference),
+                        Relative: TrimObjectName(a.AttributePath, obj.Name))),
+                    compoundFc),
             LoadChildren = () => AttributeRows(obj.Attributes, obj.Name, depth + 1)
         };
     }
@@ -64,24 +84,35 @@ public static class IedBrowserStructuredDetails
                 .Where(a => a.Reference.StartsWith(a.Prefix, StringComparison.Ordinal))
                 .Select(a => (Reference: a.Reference, Relative: a.Reference[a.Prefix.Length..]))); 
         var foundLeaf = !string.IsNullOrEmpty(leaf);
-        var members = exactObject?.Attributes.Where(a =>
+        var matchingMembers = exactObject?.Attributes.Where(a =>
             string.Equals(a.FunctionalConstraint, member.FunctionalConstraint,
                 StringComparison.OrdinalIgnoreCase)).ToArray()
             ?? Array.Empty<LiveIedDataAttributeModel>();
-        var memberPhases = IedBrowserEngineeringComposite.BuildThreePhases(
-            members, identity);
-        var memberPolar = memberPhases.Count == 0
-            ? IedBrowserEngineeringComposite.BuildPolar(members, identity) : null;
+        var memberPhasePlans = IedBrowserEngineeringComposite.BuildThreePhases(
+            matchingMembers, identity);
+        var memberPolarPlan = memberPhasePlans.Count == 0
+            ? IedBrowserEngineeringComposite.BuildPolar(matchingMembers, identity) : null;
         return new IedBrowserDetailRow("Data", $"{name} [{member.FunctionalConstraint}]", "Not read",
             depth, "DataSet directory; observed live values or explicit MMS read")
         {
-            PolarPlan = memberPolar,
-            PhasePlans = memberPhases,
+            PolarPlan = memberPolarPlan,
+            PhasePlans = memberPhasePlans,
             ValueReference = foundLeaf ? leaf! : member.Reference,
             FallbackValueReference = foundLeaf ? member.Reference : "",
             EngineeringUnitReference = foundLeaf ? leaf! : "",
             IsEngineeringValue = foundLeaf,
             FunctionalConstraint = member.FunctionalConstraint,
+            VectorComponents = exactObject is null ? Array.Empty<IedBrowserVectorComponent>() :
+                ObservedVectors(exactObject.Attributes
+                    .Where(a => string.Equals(a.FunctionalConstraint, member.FunctionalConstraint,
+                        StringComparison.OrdinalIgnoreCase))
+                    .Select(a => (
+                        Reference: IedBrowserLiveValues.CanonicalReference(a.MmsReference),
+                        Relative: IedBrowserLiveValues.CanonicalReference(a.MmsReference)
+                            .StartsWith(identity + ".", StringComparison.Ordinal)
+                            ? IedBrowserLiveValues.CanonicalReference(a.MmsReference)[(identity.Length + 1)..]
+                            : "")),
+                    member.FunctionalConstraint),
             LoadChildren = () => DataSetMemberChildren(member, model, depth + 1)
         };
     }
@@ -188,6 +219,12 @@ public static class IedBrowserStructuredDetails
                 IsEngineeringValue = scalarLeaf is not null && descendants.Length > 0,
                 PolarPlan = polar,
                 PhasePlans = phases,
+                VectorComponents = name is "q" or "t" ?
+                    Array.Empty<IedBrowserVectorComponent>() :
+                    ObservedVectors(descendants.Select(x => (
+                        Reference: IedBrowserLiveValues.CanonicalReference(x.attr.MmsReference),
+                        Relative: string.Join(".", x.parts.Skip(pathIndex + 1)))),
+                        attr.FunctionalConstraint),
                 EvidenceKind = hasDirect && name == "q" ? "Quality" :
                     hasDirect && name == "t" ? "Timestamp" : "",
                 FunctionalConstraint = groupArray.All(x =>
@@ -198,6 +235,64 @@ public static class IedBrowserStructuredDetails
             });
         }
         return result;
+    }
+
+
+    /// <summary>
+    /// Vector eligibility is schema-only: a matching normal cVal/mag+ang pair
+    /// with the SAME phase, FC and exact path. Never infer from a DO label,
+    /// use instCVal as a substitute, or bind a neighboring phase.
+    /// Multiple phases are allowed as separate independently observed
+    /// components; the runtime presentation must not invent missing phases.
+    /// </summary>
+    private static IReadOnlyList<IedBrowserVectorComponent> ObservedVectors(
+        IEnumerable<(string Reference, string Relative)> attributes, string fc)
+    {
+        if (string.IsNullOrWhiteSpace(fc)) return [];
+        var parts = new Dictionary<string, (string Label, string Mag, string Ang)>(
+            StringComparer.Ordinal);
+        foreach (var (reference, relative) in attributes)
+        {
+            var tokens = relative.Split('.', StringSplitOptions.RemoveEmptyEntries);
+            if (tokens.Length < 2 || tokens[^1] != "f") continue;
+            var axis = tokens[^2];
+            if (axis is not ("mag" or "ang")) continue;
+            var isCVal = tokens.Length >= 3 && tokens[^3] == "cVal";
+            var prefix = isCVal ? tokens[..^3] : tokens[..^2];
+            // Do not treat instant/derived/vendor vectors as the steady cVal.
+            if (prefix.Any(p => p is "instCVal" or "instMag")) continue;
+            // Normal IEC vector syntax: mag.f / ang.f or cVal.mag.f /
+            // cVal.ang.f, with at most one phase name before cVal.
+            if (prefix.Length > 1) continue;
+            var label = prefix.Length == 1 ? prefix[0] : "";
+            // Direct mag/ang and cVal.mag/cVal.ang belong to different
+            // structure owners. Never cross-pair them even when both are
+            // descendants of the same presentation row.
+            var key = label + "|" + (isCVal ? "cVal" : "direct");
+            if (!parts.TryGetValue(key, out var pair)) pair = (label, "", "");
+            if (axis == "mag")
+                pair = (label, pair.Mag.Length == 0 ? reference : "", pair.Ang);
+            else
+                pair = (label, pair.Mag, pair.Ang.Length == 0 ? reference : "");
+            parts[key] = pair;
+        }
+        var complete = parts.Values.Where(p => p.Mag.Length > 0 && p.Ang.Length > 0)
+            .GroupBy(p => p.Label, StringComparer.Ordinal)
+            .Where(group => group.Count() == 1)
+            .Select(group => group.First())
+            // Phase display order follows IEC measurement convention; other
+            // exact schema children remain deterministically ordered.
+            .OrderBy(p => p.Label switch
+            {
+                "phsA" => 0, "phsB" => 1, "phsC" => 2,
+                "neut" => 3, "net" => 4, "res" => 5, _ => 6
+            })
+            .ThenBy(p => p.Label, StringComparer.Ordinal)
+            .ToArray();
+        return complete
+            .Select(p => new IedBrowserVectorComponent(
+                p.Label, p.Mag, p.Ang, fc.Trim().ToUpperInvariant()))
+            .ToArray();
     }
 
     // Returns a scalar only when the entire candidate set proves a unique

@@ -24,6 +24,7 @@ public partial class MainWindow
     private bool _iedBrowserSyncingSelection;
     private int _iedBrowserNavigationRenderTicket;
     private long _iedBrowserLastLiveVersion = -1;
+    private LiveIedCanonicalModel? _iedBrowserLastCfCanonicalModel;
     private IedBrowserTreeRow? _iedBrowserRenderedPage;
     private bool? _iedBrowserRenderedConnected;
     private bool _iedBrowserForceRefresh;
@@ -251,7 +252,9 @@ public partial class MainWindow
             return;
         }
 
-        var bindingIndex = new IedBrowserReadBindingIndex(device);
+        // A cached-model connection can replace the catalog. Bind only after
+        // connection and reject a previously planned schema.
+        IedBrowserReadBindingIndex? bindingIndex = null;
         var cts = CancellationTokenSource.CreateLinkedTokenSource(_applicationCancellation.Token);
         // Read All may include thousands of attributes. It is cancellable by the
         // operator, never a new continuous acquisition/polling process.
@@ -278,8 +281,9 @@ public partial class MainWindow
             readValues.Drain(result =>
             {
                 if (!ReferenceEquals(_iedBrowserReadOperation, cts) ||
-                    sourceDevice.LiveValues.Association != readAssociation)
-                    return; // new association or replaced read flight
+                    sourceDevice.LiveValues.Association != readAssociation ||
+                    bindingIndex is not { IsCurrent: true })
+                    return; // superseded association, catalog or read flight
                 if (result.Error.Length != 0 || string.IsNullOrWhiteSpace(result.Value))
                 {
                     failures++;
@@ -317,7 +321,13 @@ public partial class MainWindow
                     throw new InvalidOperationException("MMS connection was not established.");
             }
 
+            // Pre-connect targets cannot be executed against a replaced model.
+            if (!ReferenceEquals(model,
+                    sourceDevice.LiveDiscoveryModel ?? sourceDevice.SclWorkspace?.DesignModel))
+                throw new InvalidOperationException(
+                    "Browser model changed during connection; select the current model and retry Read.");
             readAssociation = sourceDevice.LiveValues.Association;
+            bindingIndex = new IedBrowserReadBindingIndex(sourceDevice);
             var readProgress = new Progress<IedBrowserReadProgress>(p =>
             {
                 if (ReferenceEquals(_iedBrowserReadOperation, cts) &&
@@ -335,6 +345,9 @@ public partial class MainWindow
             // All producers have returned: consume the final queued results
             // synchronously before calculating counts and closing this flight.
             DrainReadResults();
+            if (bindingIndex is not { IsCurrent: true })
+                throw new InvalidOperationException(
+                    "Browser catalog changed during Read; obsolete result rows were not admitted.");
             if (!cts.IsCancellationRequested && ReferenceEquals(SelectedDevice, sourceDevice))
             {
                 device.ApplyBrowserReadProgress(targets.Count, targets.Count);
@@ -409,16 +422,34 @@ public partial class MainWindow
             SelectedDevice is not { } device)
             return;
         var version = device.LiveValues.Version;
-        if (_iedBrowserLastLiveVersion == version) return;
+        if (_iedBrowserLastLiveVersion == version &&
+            ReferenceEquals(_iedBrowserLastCfCanonicalModel, device.LiveCanonicalModel))
+            return;
         _iedBrowserLastLiveVersion = version;
-        // Unit index is built once per actual received-value revision, not
-        // per row or on every render. Unit is authoritative signal metadata.
-        var engineeringUnits = IedBrowserEngineeringValuePresentation.BuildUnitIndex(
-            device.Signals);
+        _iedBrowserLastCfCanonicalModel = device.LiveCanonicalModel;
+        // No MMS call occurs during navigation or refresh. Exact CF/DC
+        // instance evidence is a labelled discovery snapshot, not a Report.
+        var model = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
+        var cfEvidence = new IedBrowserCfEvidencePresentation(device.LiveValues,
+            model, device.LiveCanonicalModel);
+        var engineeringUnits = cfEvidence.BuildVerifiedUnits(device.Signals, model);
         foreach (var row in _iedBrowserDetails.Rows)
         {
-            // Derived display is rebuilt from the canonical ledger. No new
-            // protocol reads, derived registry values, or per-frame model walk.
+            if (string.IsNullOrWhiteSpace(row.ValueReference)) continue;
+            if (cfEvidence.TryFormatUnitsParent(
+                    row.ValueReference, row.FunctionalConstraint,
+                    out var verifiedUnit, out var verifiedProvenance,
+                    out var verifiedAuthority))
+            {
+                row.Value = verifiedAuthority.StartsWith("Stale ", StringComparison.Ordinal)
+                    ? "Offline · " + verifiedUnit : verifiedUnit;
+                row.ObservationSource = verifiedAuthority;
+                row.ObservationTooltip = verifiedProvenance;
+                continue;
+            }
+            // Single compositing authority: strict IEC phasor pairing for
+            // normal phases, explicit independent evidence for extra model
+            // components. Never bypass source/time/association checks.
             if (IedBrowserEngineeringComposite.TryCompose(
                     row, device.LiveValues, engineeringUnits,
                     device.IsMonitoring, out var composite))
@@ -430,15 +461,29 @@ public partial class MainWindow
                 row.ObservationTooltip = composite.Provenance;
                 continue;
             }
-            if (string.IsNullOrWhiteSpace(row.ValueReference)) continue;
             var found = IedBrowserDetailEvidenceResolver.TryResolve(
                 device.LiveValues, row, _iedBrowserValueSchemaIndex,
                 device.IsMonitoring, out var live, out var observedReference);
             if (!found)
             {
-                row.Value = "Not read";
-                row.ObservationSource = "";
-                row.ObservationTooltip = "";
+                // Only exact model-bound, previously captured canonical
+                // instance evidence may populate an unread CF/DC value.
+                // It remains visibly a historical discovery snapshot.
+                if (row.FunctionalConstraint is "CF" or "DC" &&
+                    cfEvidence.TryGet(row.ValueReference, row.FunctionalConstraint,
+                        out var snapshot, out var provenance, out _))
+                {
+                    row.Value = IedBrowserCfEvidencePresentation.RenderCfValue(
+                        row.ValueReference, row.FunctionalConstraint, snapshot);
+                    row.ObservationSource = "Discovery snapshot";
+                    row.ObservationTooltip = provenance;
+                }
+                else
+                {
+                    row.Value = "Not read";
+                    row.ObservationSource = "";
+                    row.ObservationTooltip = "";
+                }
                 continue;
             }
             row.ObservationSource = live.IsStale
@@ -457,7 +502,8 @@ public partial class MainWindow
                 display = IedBrowserUtcTimeQualityPresentation.FormatField(
                     live.TimeBits, row.EvidenceField);
             else if (row.EvidenceField.Length == 0)
-                display = live.Value;
+                display = IedBrowserCfEvidencePresentation.RenderCfValue(
+                    row.ValueReference, row.FunctionalConstraint, live.Value);
             else
                 display = "Not exposed";
             if (row.IsEngineeringValue && row.EvidenceField.Length == 0)
@@ -1056,7 +1102,7 @@ public partial class MainWindow
         IedBrowserObjectPath.ToolTip = reference;
         IedBrowserDetailStatus.Text = row.Payload is RcbExportRow r
             ? r.Inspection.Summary(connected)
-            : connected ? "Connected · cached model metadata (not a live read)"
+            : connected ? "Connected · Report values shown; use Read for CF/DC configuration values"
                         : "Offline · cached SCL/discovery model";
         ReplaceIedBrowserDetails(IedBrowserPresentation.Details(row, model, connected));
         _iedBrowserLastLiveVersion = -1;

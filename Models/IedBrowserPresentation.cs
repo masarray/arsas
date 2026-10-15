@@ -205,10 +205,15 @@ public sealed record IedBrowserDetailRow(
     // Units apply to engineering aggregates only, never to primitive f/q/t.
     public bool IsEngineeringValue { get; init; }
     public string EngineeringUnitReference { get; init; } = "";
-    // Immutable, model-verified composite descriptors. No values or WPF objects cached.
+    // Exact M2.14 timestamp-compatible polar plan for CMV and PPV vectors.
     public IedBrowserPolarPlan? PolarPlan { get; init; }
     public IReadOnlyList<IedBrowserPolarPlan> PhasePlans { get; init; } =
         Array.Empty<IedBrowserPolarPlan>();
+    // Model-declared vector leaves only. Immutable row descriptor, not an
+    // alternative value store; each component is resolved from canonical live
+    // observations on demand. Empty for scalar and q/t rows.
+    public IReadOnlyList<IedBrowserVectorComponent> VectorComponents { get; init; } =
+        Array.Empty<IedBrowserVectorComponent>();
     // A typed child of a received q/t field; never treat the entire parent
     // value text as this individual Boolean/time-quality bit.
     public string EvidenceField { get; init; } = "";
