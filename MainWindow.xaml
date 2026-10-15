@@ -111,8 +111,22 @@
                     </Border>
                     <Button x:Name="NavExplorerButton" Grid.Column="0" Content="IEC 61850 Explorer" Tag="0" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
                     <Button x:Name="NavLiveButton" Grid.Column="1" Content="Live Monitor" Tag="1" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
-                    <Button x:Name="NavEventsButton" Grid.Column="2" Content="Event Log" Tag="2" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
-                    <Button x:Name="NavAlarmButton" Grid.Column="3" Content="Alarm" Tag="3" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
+                    <Button x:Name="NavEventsButton" Grid.Column="2" Tag="2" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="Event Log">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                <Path Data="{StaticResource OperatorEventLogIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                            </Viewbox>
+                            <TextBlock Text="Event Log" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="NavAlarmButton" Grid.Column="3" Tag="3" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="Alarm">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                <Path Data="{StaticResource OperatorAlarmIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                            </Viewbox>
+                            <TextBlock Text="Alarm" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <Button x:Name="NavGooseButton" Grid.Column="4" Content="GOOSE Subscriber" Tag="4" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
                     <Button x:Name="NavDiagnosticsButton" Grid.Column="5" Tag="5" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -125,8 +139,22 @@
                             </Border>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="NavNativeFatButton" Grid.Column="6" Content="FAT" Tag="6" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
-                    <Button x:Name="NavIedBrowserButton" Grid.Column="7" Content="IED Browser" Tag="7" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
+                    <Button x:Name="NavNativeFatButton" Grid.Column="6" Tag="6" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="FAT">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                <Path Data="{StaticResource OperatorFatIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                            </Viewbox>
+                            <TextBlock Text="FAT" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="NavIedBrowserButton" Grid.Column="7" Tag="7" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="IED Browser">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                <Path Data="{StaticResource OperatorIedBrowserIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                            </Viewbox>
+                            <TextBlock Text="IED Browser" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </Grid>
             </Border>
 
@@ -216,7 +244,7 @@
                                             ToolTip="Add an IEC 61850 IED by IP address">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <Viewbox Width="13" Height="13" Margin="0,0,5,0">
-                                                <Path Data="{StaticResource LucidePlus}" Style="{StaticResource LucideIcon}" Stroke="White"/>
+                                                <Path Data="{StaticResource OperatorAddIedIcon}" Fill="White" Stretch="Uniform"/>
                                             </Viewbox>
                                             <TextBlock Text="Add IED" FontWeight="SemiBold"/>
                                         </StackPanel>

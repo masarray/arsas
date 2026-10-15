@@ -72,6 +72,17 @@ public partial class MainWindow
         toggle.Checked += GlobalSntpToggle_Changed;
         toggle.Unchecked += GlobalSntpToggle_Changed;
 
+        var clockIcon = new Path
+        {
+            Data = (Geometry)FindResource("OperatorNtpServerIcon"),
+            Fill = ink,
+            Width = 18, Height = 18,
+            Stretch = Stretch.Uniform,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(9, 0, 0, 0),
+            IsHitTestVisible = false
+        };
+
         var label = new TextBlock
         {
             Text = "NTP Server",
@@ -80,7 +91,7 @@ public partial class MainWindow
             FontWeight = FontWeights.SemiBold,
             Foreground = ink,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(9, 0, 12, 0)
+            Margin = new Thickness(6, 0, 12, 0)
         };
 
         var itemStyle = new Style(typeof(ComboBoxItem));
@@ -151,6 +162,7 @@ public partial class MainWindow
             VerticalAlignment = VerticalAlignment.Center
         };
         contents.Children.Add(toggle);
+        contents.Children.Add(clockIcon);
         contents.Children.Add(label);
         contents.Children.Add(picker);
         contents.Children.Add(heartbeat);
