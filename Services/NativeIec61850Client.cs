@@ -54,6 +54,22 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
     public string DetectedIedName => DetectedIdentity.IedName;
     public LiveIedModelDiscoveryDocument? LastLiveModel => _liveModel;
 
+    /// <summary>
+    /// Explicit Browser-only schema binding for a secondary read-only association.
+    /// The caller must hold a current same-IED live-discovery lease; never accept
+    /// SCL declarations as authoritative online MMS attribute inventories.
+    /// This installs only the ARIEC scalar/structure projection schema, with
+    /// no discovery, reports, subscription or MMS write side effects.
+    /// </summary>
+    internal void BindIsolatedBrowserReadSchema(LiveIedModelDiscoveryDocument verifiedLiveModel)
+    {
+        ArgumentNullException.ThrowIfNull(verifiedLiveModel);
+        if (!IsConnected || _liveModel is not null || _lastDiscovery is not null)
+            throw new InvalidOperationException(
+                "Read-only Browser schema binding requires a connected, fresh secondary MMS client.");
+        _liveModel = verifiedLiveModel;
+    }
+
     public async Task ConnectAsync(string ipAddress, int port, CancellationToken cancellationToken)
     {
         await DisposeControlSessionsAsync().ConfigureAwait(false);
