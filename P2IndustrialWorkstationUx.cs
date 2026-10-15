@@ -285,8 +285,7 @@ internal static class P2IndustrialWorkstationUx
             return;
         }
 
-        // Keep the industrial glyph on legacy text-only destinations and on
-        // Diagnostics (its StackPanel has text + alert badge, no prebuilt Path).
+        // Preserve a legacy icon only for navigation without a Material SVG.
         ApplyTemplate(button, owner, legacyKey);
     }
 

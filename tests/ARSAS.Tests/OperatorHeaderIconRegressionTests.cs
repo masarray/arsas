@@ -59,6 +59,37 @@ public sealed class OperatorHeaderIconRegressionTests
             (string?)path.Attribute("Fill"));
     }
 
+    [Theory]
+    [InlineData("NavExplorerButton", "MaterialExplorerIcon")]
+    [InlineData("NavLiveButton", "MaterialLiveIcon")]
+    [InlineData("NavGooseButton", "MaterialGooseIcon")]
+    [InlineData("NavDiagnosticsButton", "MaterialDiagnosticsIcon")]
+    public void PreviouslyLegacyNavigationUsesOneSharedMaterialGlyph(string buttonName, string resource)
+    {
+        var view = XDocument.Load(Find("MainWindow.xaml"));
+        var button = Assert.Single(view.Descendants(P + "Button"),
+            item => (string?)item.Attribute(X + "Name") == buttonName);
+        var path = Assert.Single(button.Descendants(P + "Path"));
+        Assert.Equal("{StaticResource " + resource + "}", (string?)path.Attribute("Data"));
+        Assert.Single(button.Descendants(P + "Viewbox"));
+        var app = XDocument.Load(Find("App.xaml"));
+        Assert.Single(app.Descendants(P + "Geometry"),
+            element => (string?)element.Attribute(X + "Key") == resource);
+    }
+
+    [Fact]
+    public void CenterHeroAndGeneralTestingLauncherUseSameMaterialAddIedShape()
+    {
+        var hero = File.ReadAllText(Find("MainWindow.ExplorerHeroActions.cs"));
+        var launcher = File.ReadAllText(Find("MainWindow.IoTesting.cs"));
+        foreach (var source in new[] { hero, launcher })
+        {
+            Assert.Contains("\"OperatorAddIedIcon\"", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("\"LucidePlus\"", source, StringComparison.Ordinal);
+            Assert.Contains("iconResource.StartsWith(\"Lucide\"", source, StringComparison.Ordinal);
+        }
+    }
+
     [Fact]
     public void ResponsiveLayout_UpdatesCaptionsWithoutOverwritingSvgContents()
     {

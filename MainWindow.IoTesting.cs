@@ -106,7 +106,7 @@ public partial class MainWindow
         actions.Children.Clear();
         actions.Children.Add(CreateLauncherButton(
             "Add IED",
-            "LucidePlus",
+            "OperatorAddIedIcon",
             "PrimaryButton",
             AddRelay_Click,
             Brushes.White,
@@ -208,9 +208,12 @@ public partial class MainWindow
         var icon = new System.Windows.Shapes.Path
         {
             Data = TryFindResource(iconResource) as Geometry,
-            Style = TryFindResource("LucideIcon") as Style
+            Style = iconResource.StartsWith("Lucide", StringComparison.Ordinal)
+                ? TryFindResource("LucideIcon") as Style : null,
+            Fill = iconResource.StartsWith("Lucide", StringComparison.Ordinal)
+                ? Brushes.Transparent : iconStroke ?? (Brush)TryFindResource("Ink")
         };
-        if (iconStroke != null)
+        if (iconStroke != null && iconResource.StartsWith("Lucide", StringComparison.Ordinal))
             icon.Stroke = iconStroke;
 
         var buttonContent = new StackPanel
