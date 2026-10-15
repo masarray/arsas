@@ -95,12 +95,39 @@ public partial class MainWindow
         OpenSmvWorkspaceForDevice(device);
     }
 
+    /// <summary>
+    /// Present an inert tab landing state. A selection change must not create
+    /// a viewer, enumerate Npcap adapters or begin a passive wire capture.
+    /// </summary>
+    private void PrepareSelectedSmvWorkspace()
+    {
+        if (SmvWorkspaceStatus is null) return;
+        if (SelectedDevice is not { } selected)
+        {
+            SmvWorkspaceStatus.Text =
+                "Select an IED in Device Explorer, then press Open SMV Capture.";
+            return;
+        }
+
+        if (_activeSmvViewerWindow is { IsLoaded: true } viewer &&
+            viewer.DeviceId.Equals(selected.DeviceId, StringComparison.OrdinalIgnoreCase))
+        {
+            SmvWorkspaceStatus.Text =
+                $"SMV viewer is already open for {selected.Name}; snapshot retained.";
+            return;
+        }
+
+        SmvWorkspaceStatus.Text =
+            $"Ready for {selected.Name} · press Open SMV Capture to inspect adapters and streams.";
+    }
+
     private void ActivateSelectedSmvWorkspace()
     {
         if (SelectedDevice is { } device)
             OpenSmvWorkspaceForDevice(device);
         else if (SmvWorkspaceStatus is not null)
-            SmvWorkspaceStatus.Text = "Select an IED in Device Explorer, then open SMV capture.";
+            SmvWorkspaceStatus.Text =
+                "Select an IED in Device Explorer, then press Open SMV Capture.";
     }
 
     private void OpenSmvCapture_Click(object sender, RoutedEventArgs e)
