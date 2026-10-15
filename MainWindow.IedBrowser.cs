@@ -24,6 +24,7 @@ public partial class MainWindow
     private bool _iedBrowserSyncingSelection;
     private int _iedBrowserNavigationRenderTicket;
     private long _iedBrowserLastLiveVersion = -1;
+    private LiveIedCanonicalModel? _iedBrowserLastCfCanonicalModel;
     private IedBrowserTreeRow? _iedBrowserRenderedPage;
     private bool? _iedBrowserRenderedConnected;
     private bool _iedBrowserForceRefresh;
@@ -421,8 +422,11 @@ public partial class MainWindow
             SelectedDevice is not { } device)
             return;
         var version = device.LiveValues.Version;
-        if (_iedBrowserLastLiveVersion == version) return;
+        if (_iedBrowserLastLiveVersion == version &&
+            ReferenceEquals(_iedBrowserLastCfCanonicalModel, device.LiveCanonicalModel))
+            return;
         _iedBrowserLastLiveVersion = version;
+        _iedBrowserLastCfCanonicalModel = device.LiveCanonicalModel;
         // No MMS call occurs during navigation or refresh. Exact CF/DC
         // instance evidence is a labelled discovery snapshot, not a Report.
         var cfEvidence = new IedBrowserCfEvidencePresentation(device.LiveValues,

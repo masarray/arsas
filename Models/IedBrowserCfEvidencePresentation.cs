@@ -95,9 +95,10 @@ public sealed class IedBrowserCfEvidencePresentation
     public IReadOnlyDictionary<string, string?> BuildVerifiedUnits(
         IEnumerable<SignalDefinition> signals, LiveIedModelDiscoveryDocument? model)
     {
-        var index = new Dictionary<string, string?>(
-            IedBrowserEngineeringValuePresentation.BuildUnitIndex(signals),
-            StringComparer.Ordinal);
+        var index = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var (reference, unit) in
+                 IedBrowserEngineeringValuePresentation.BuildUnitIndex(signals))
+            index.Add(reference, unit);
         if (model is null) return index;
         foreach (var obj in model.LogicalDevices.SelectMany(d => d.LogicalNodes)
                      .SelectMany(n => n.DataObjects))
