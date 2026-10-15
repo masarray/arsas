@@ -21,6 +21,10 @@ public static class IedBrowserReportWireEvidence
         {
             var reference = IedBrowserLiveValues.CanonicalReference(reported.MemberReference);
             var fc = reported.Member?.FunctionalConstraint ?? "";
+            // DataRef is optional. If present it must agree with the verified
+            // DataSet member AND explicit FC, or the raw q/t is quarantined.
+            if (!DataReferenceAgreesWithMember(reported.DataReference, reference, fc))
+                continue;
             var payload = reported.Value;
             if (reported.FailureCode.HasValue || payload is null ||
                 string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(fc))
@@ -55,6 +59,27 @@ public static class IedBrowserReportWireEvidence
                 result.Add(new NativeBrowserReportRawEvidence(reference, fc, quality, time));
         }
         return result;
+    }
+
+
+    private static bool DataReferenceAgreesWithMember(
+        string? dataReference, string memberReference, string memberFc)
+    {
+        if (string.IsNullOrWhiteSpace(dataReference))
+            return true;
+        var wire = dataReference.Trim();
+        if (!string.Equals(IedBrowserLiveValues.CanonicalReference(wire),
+                memberReference, StringComparison.Ordinal))
+            return false;
+        // The canonical ledger deliberately drops the MMS $FC$ segment.
+        // Recheck this separately to reject cross-FC alias collisions.
+        var fcStart = wire.IndexOf('$');
+        if (fcStart < 0)
+            return true;
+        var fcEnd = wire.IndexOf('$', fcStart + 1);
+        return fcEnd > fcStart + 1 &&
+            string.Equals(wire[(fcStart + 1)..fcEnd], memberFc,
+                StringComparison.OrdinalIgnoreCase);
     }
 
     private static MmsQualityEvidence? DecodeQuality(MmsDataValue raw)
