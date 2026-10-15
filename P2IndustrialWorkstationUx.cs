@@ -262,7 +262,7 @@ internal static class P2IndustrialWorkstationUx
     private static void DecorateMainNavigation(MainWindow window)
     {
         ApplyNavigationTemplate(window.FindName("NavExplorerButton") as Button, window, "IconExplorerNavContent");
-        ApplyNavigationTemplate(window.FindName("NavLiveButton") as Button, window, "IconMonitorNavContent");
+        ApplyNavigationTemplate(window.FindName("NavSmvButton") as Button, window, "IconMonitorNavContent");
         ApplyNavigationTemplate(window.FindName("NavEventsButton") as Button, window, "IconEventsNavContent");
         ApplyNavigationTemplate(window.FindName("NavGooseButton") as Button, window, "IconGooseNavContent");
         ApplyNavigationTemplate(window.FindName("NavDiagnosticsButton") as Button, window, "IconDiagnosticsNavContent");
