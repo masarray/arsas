@@ -460,6 +460,19 @@ public partial class MainWindow
                 row.ObservationTooltip = composite.Provenance;
                 continue;
             }
+            // A model-proven compound ST DataSet member can contain two
+            // independently received process leaves. Show both labels rather
+            // than claiming the whole parent was unread or choosing one.
+            if (IedBrowserMultiLeafPresentation.TryCompose(
+                    row, device.LiveValues, device.IsMonitoring,
+                    out var multi))
+            {
+                row.Value = multi.IsStale ? "Offline · " + multi.Text : multi.Text;
+                row.ObservationSource = multi.IsStale
+                    ? "Stale " + multi.Source : multi.Source;
+                row.ObservationTooltip = multi.Provenance;
+                continue;
+            }
             var found = IedBrowserDetailEvidenceResolver.TryResolve(
                 device.LiveValues, row, _iedBrowserValueSchemaIndex,
                 device.IsMonitoring, out var live, out var observedReference);
