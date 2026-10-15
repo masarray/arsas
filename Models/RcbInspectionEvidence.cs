@@ -96,9 +96,9 @@ public sealed class RcbInspectionEvidence
                 !string.IsNullOrWhiteSpace(live?.ReportId) ? source : ModelSource),
             new("DataSet reference", Show(row.DataSetReference),
                 row.IsSourceBacked ? "SCL / effective read-only DataSet binding" : "Discovery / effective read-only DataSet binding"),
-            Field("Enabled / RptEna", live?.Enabled, string.Empty, source),
-            Field("Reservation", live?.Reservation, string.Empty, source),
-            Field("Reserve time (s)", live?.ReserveTime, string.Empty, source),
+            StateField("Enabled / RptEna", live?.Enabled, Model.Enabled, connected, source),
+            StateField("Reservation", live?.Reservation, Model.Reservation, connected, source),
+            StateField("Reserve time (s)", live?.ReserveTime, Model.ReserveTime, connected, source),
             Field("Owner", live?.Owner, string.Empty, source),
             Field("Trigger options", live?.TriggerOptions, Model.TriggerOptions, source),
             Field("Optional fields", live?.OptionalFields, Model.OptionalFields, source),
@@ -108,6 +108,35 @@ public sealed class RcbInspectionEvidence
             new("DataSet members", row.MemberCount > 0 ? row.MemberCount.ToString() : "—", "Directory / model members")
         };
         return list;
+    }
+
+    private RcbInspectionProperty StateField(
+        string name, string? checkedValue, string? discoveryValue,
+        bool connected, string liveSource)
+    {
+        if (UsableObservation(checkedValue))
+            return new(name, checkedValue!.Trim(), liveSource);
+
+        // A successful connect/discovery may already have observed RptEna,
+        // Resv, and ResvTms. It is historical metadata, NOT the present
+        // RCB reservation/enable state and never proof of local ownership.
+        // Source-backed SCL declarations do not contain these observations.
+        if (connected && ModelSource == "Saved discovery model (not live state)" &&
+            UsableObservation(discoveryValue))
+            return new(name, discoveryValue!.Trim(),
+                "Discovery snapshot (historical; explicit MMS check for current state)");
+
+        return new(name, "—", "Current MMS state not verified");
+    }
+
+    private static bool UsableObservation(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        var text = value.Trim();
+        return text is not ("—" or "-" or "?") &&
+               !text.Equals("Unknown", StringComparison.OrdinalIgnoreCase) &&
+               !text.Equals("Not read", StringComparison.OrdinalIgnoreCase) &&
+               !text.Equals("Unavailable", StringComparison.OrdinalIgnoreCase);
     }
 
     private RcbInspectionProperty Field(string name, string? live, string? model, string liveSource)
