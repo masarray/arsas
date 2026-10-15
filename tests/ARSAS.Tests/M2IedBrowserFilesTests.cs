@@ -177,6 +177,27 @@ public sealed class M2IedBrowserFilesTests
     }
 
     [Fact]
+    public void BrowseFilesToolbar_RevealsExistingFilesPageBeforeDirectoryRead()
+    {
+        var source = File.ReadAllText(Find("MainWindow.IedBrowser.cs"));
+        var start = source.IndexOf("private void IedBrowserBrowseFiles_Click",
+            StringComparison.Ordinal);
+        var end = source.IndexOf("private void IedBrowserRefresh_Click",
+            start, StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start);
+        var handler = source[start..end];
+        var navigate = handler.IndexOf("FindVisible(\"category/files\")",
+            StringComparison.Ordinal);
+        var read = handler.IndexOf("BrowseIedBrowserFilesAsync(device)",
+            StringComparison.Ordinal);
+        Assert.True(navigate >= 0 && read > navigate);
+        Assert.Contains("RenderIedBrowserSelection(filesPage", handler,
+            StringComparison.Ordinal);
+        Assert.Contains("_iedBrowserSyncingSelection = true", handler,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void NativeFilesGrid_ExposesThreeColumns_AndBoundedActions()
     {
         var xaml = XDocument.Load(Find("MainWindow.xaml"));
