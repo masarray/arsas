@@ -30,7 +30,8 @@ public static class IedBrowserEngineeringComposite
     ];
 
     public static IedBrowserPolarPlan? BuildPolar(
-        IEnumerable<LiveIedDataAttributeModel> attributes, string owner)
+        IEnumerable<LiveIedDataAttributeModel> attributes, string owner,
+        bool requireAngle = true)
     {
         var declared = attributes.Where(a =>
             string.Equals(a.FunctionalConstraint, "MX", StringComparison.OrdinalIgnoreCase))
@@ -46,11 +47,20 @@ public static class IedBrowserEngineeringComposite
             var magnitude = owner + magSuffix;
             if (!declared.Contains(magnitude)) continue;
             var angle = owner + angleSuffix;
+            if (requireAngle && !declared.Contains(angle))
+                continue; // a scalar MV mag.f must not become a phasor
             return new IedBrowserPolarPlan(magnitude,
                 declared.Contains(angle) ? angle : "", "MX");
         }
         return null;
     }
+
+    // CDC authority is an engine-derived data object type, never a name
+    // heuristic (TotW/Hz) or a guessed unit. A typed scalar MV must remain
+    // scalar even when a malformed/vendor schema advertises an ang sibling.
+    public static bool IsScalarCdc(string? cdc)
+        => string.Equals((cdc ?? "").Trim(), "MV",
+            StringComparison.OrdinalIgnoreCase);
 
     public static IReadOnlyList<IedBrowserPolarPlan> BuildThreePhases(
         IEnumerable<LiveIedDataAttributeModel> attributes, string owner)
@@ -63,7 +73,10 @@ public static class IedBrowserEngineeringComposite
             var complete = true;
             for (var i = 0; i < names.Length; i++)
             {
-                var result = BuildPolar(all, owner + "." + names[i]);
+                // A proven three-phase family may still present magnitude
+                // if an angle leaf is absent. Scalar DOs have no phase family.
+                var result = BuildPolar(all, owner + "." + names[i],
+                    requireAngle: false);
                 if (result is null) { complete = false; break; }
                 phases[i] = result with { Phase = names[i] };
             }
