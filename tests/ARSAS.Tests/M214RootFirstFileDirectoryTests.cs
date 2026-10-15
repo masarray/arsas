@@ -16,8 +16,8 @@ public sealed class M214RootFirstFileDirectoryTests
         var published = 0;
         var result = await IedBrowserFileDiscoveryPlanner.DiscoverAsync(
             _ => Task.FromResult<IReadOnlyList<MmsFileDirectoryEntry>>(
-                [File("/config.xml", 128), File("/IED.CFG", 128),
-                 File("/IED.DAT", 1024)]),
+                [File("config.xml", 128), File("IED.CFG", 128),
+                 File("IED.DAT", 1024)]),
             _ => { scans++; return Task.FromResult(new Iec61850FaultRecordCatalog()); },
             CancellationToken.None,
             publishRoot: catalog =>
@@ -30,7 +30,7 @@ public sealed class M214RootFirstFileDirectoryTests
         Assert.Equal(1, published);
         Assert.Equal(3, result.Files.Files.Count);
         Assert.Null(result.CatalogWarning);
-        Assert.True(result.Files.TryGetRecord("/IED.CFG", out _, out _));
+        Assert.True(result.Files.TryGetRecord("IED.CFG", out _, out _));
     }
 
     [Fact]
