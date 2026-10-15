@@ -34,3 +34,18 @@ Before every public or commercial release:
 3. inspect the portable archive for unexpected binaries, captures, manuals, logs, screenshots, or customer data;
 4. preserve required license and attribution documents; and
 5. confirm compliance with `docs/CLEAN_ROOM_AND_INTEROPERABILITY_POLICY.md`.
+
+## Google Material Icons / Material Symbols
+
+Selected interface icons use locally embedded vector paths from Google's official
+[Material Design Icons](https://github.com/google/material-design-icons) repository,
+licensed under the **Apache License, Version 2.0**. The operator-provided
+Material Symbols shapes previously present in ARSAS remain unchanged. New 24dp
+shapes are embedded in `App.xaml`, require no Google font or network dependency,
+and are used only for the ARSAS user interface. Original icon names and licensing
+remain Google's; ARSAS does not claim authorship of Google's icon designs.
+
+Source: https://github.com/google/material-design-icons
+Complete Apache-2.0 text is included in `Assets/Icons/MaterialIcons-LICENSE.txt` and published as `THIRD_PARTY/Material-Icons-LICENSE.txt`.
+License: https://github.com/google/material-design-icons/blob/master/LICENSE
+The exact glyph-to-action mapping is maintained in the UI regression tests.

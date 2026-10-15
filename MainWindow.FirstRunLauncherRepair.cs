@@ -126,21 +126,21 @@ public partial class MainWindow
                 actions.Children.Clear();
                 actions.Children.Add(CreateLauncherButton(
                     "Open SCL",
-                    "LucideFileInput",
+                    "MaterialUploadFileIcon",
                     "SoftButton",
                     OpenScl_Click,
                     null,
                     new Thickness(0, 0, 8, 0)));
                 actions.Children.Add(CreateLauncherButton(
                     "Add IED by IP",
-                    "LucidePlus",
+                    "OperatorAddIedIcon",
                     "PrimaryButton",
                     AddRelay_Click,
                     Brushes.White,
                     new Thickness(0, 0, 8, 0)));
                 actions.Children.Add(CreateLauncherButton(
                     "Open Project",
-                    "LucideFolderOpen",
+                    "MaterialFolderOpenIcon",
                     "SoftButton",
                     OpenProject_Click,
                     null,

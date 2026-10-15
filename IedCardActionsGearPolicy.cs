@@ -9,7 +9,7 @@ using ArIED61850Tester.Models;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Adds a dedicated Lucide-style gear button to every IED card. The existing pencil
+/// Adds a dedicated Google Material settings button to every IED card. The existing pencil
 /// remains the direct Edit Signals shortcut; the gear is the explicit entry point for
 /// the reusable IED Actions chooser (Static DataSet, Browse IED, Select Signals,
 /// RCB Engineering, COMTRADE and Close).
@@ -20,27 +20,9 @@ internal static class IedCardActionsGearPolicy
     private const string GearToolTip = "IED Actions — Static DataSet, Browse IED, Select Signals, RCB Engineering, COMTRADE";
     private const double GearOpticalSize = 16d;
 
-    // Exact Lucide Settings outline supplied by the product owner, translated from the
-    // SVG 24x24 path into equivalent absolute WPF arc commands. The center circle is
-    // the SVG <circle cx="12" cy="12" r="3"/> expressed as a second geometry figure.
-    // Keeping the canonical Lucide proportions plus a 16 px optical box prevents this
-    // circular icon from looking smaller than the neighboring 14 px Play/Pencil/Save glyphs.
-    private static readonly Geometry GearGeometry = Geometry.Parse(
-        "M9.671,4.136 " +
-        "A2.34,2.34 0 0 1 14.33,4.136 " +
-        "A2.34,2.34 0 0 0 17.649,6.051 " +
-        "A2.34,2.34 0 0 1 19.979,10.084 " +
-        "A2.34,2.34 0 0 0 19.979,13.915 " +
-        "A2.34,2.34 0 0 1 17.649,17.948 " +
-        "A2.34,2.34 0 0 0 14.33,19.863 " +
-        "A2.34,2.34 0 0 1 9.671,19.863 " +
-        "A2.34,2.34 0 0 0 6.351,17.948 " +
-        "A2.34,2.34 0 0 1 4.021,13.915 " +
-        "A2.34,2.34 0 0 0 4.021,10.084 " +
-        "A2.34,2.34 0 0 1 6.35,6.051 " +
-        "A2.34,2.34 0 0 0 9.671,4.136 " +
-        "M15,12 A3,3 0 1 1 9,12 A3,3 0 1 1 15,12");
-
+    // MaterialSettingsIcon comes from the shared Google Material WPF registry.
+    // Preserve the existing 16dp optical size and actions layout while giving
+    // the sixth IED-card action the same filled visual language as the others.
     [ModuleInitializer]
     internal static void Initialize()
     {
@@ -112,17 +94,13 @@ internal static class IedCardActionsGearPolicy
         button.MinWidth = 0;
         button.HorizontalAlignment = HorizontalAlignment.Stretch;
 
-        var iconStroke = new SolidColorBrush(Color.FromRgb(49, 93, 191));
-        iconStroke.Freeze();
+        var iconFill = new SolidColorBrush(Color.FromRgb(49, 93, 191));
+        iconFill.Freeze();
         var icon = new System.Windows.Shapes.Path
         {
-            Data = GearGeometry,
-            Stroke = iconStroke,
-            Fill = Brushes.Transparent,
-            StrokeThickness = 2d,
-            StrokeLineJoin = PenLineJoin.Round,
-            StrokeStartLineCap = PenLineCap.Round,
-            StrokeEndLineCap = PenLineCap.Round,
+            Data = (Geometry)Application.Current.FindResource("MaterialSettingsIcon"),
+            Fill = iconFill,
+            StrokeThickness = 0d,
             Stretch = Stretch.Uniform,
             SnapsToDevicePixels = true
         };

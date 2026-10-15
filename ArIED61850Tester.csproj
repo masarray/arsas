@@ -62,6 +62,9 @@
     <None Update="TRADEMARK.md" CopyToPublishDirectory="PreserveNewest" />
     <None Update="COPYRIGHT.md" CopyToPublishDirectory="PreserveNewest" />
     <None Update="THIRD_PARTY_NOTICES.md" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="Assets\Icons\MaterialIcons-LICENSE.txt"
+          CopyToPublishDirectory="PreserveNewest"
+          TargetPath="THIRD_PARTY\Material-Icons-LICENSE.txt" />
     <None Update="Assets\Fonts\Inter-LICENSE.txt"
           CopyToPublishDirectory="PreserveNewest"
           TargetPath="THIRD_PARTY\Inter-LICENSE.txt" />

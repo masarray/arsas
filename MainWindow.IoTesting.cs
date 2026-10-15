@@ -106,14 +106,14 @@ public partial class MainWindow
         actions.Children.Clear();
         actions.Children.Add(CreateLauncherButton(
             "Add IED",
-            "LucidePlus",
+            "OperatorAddIedIcon",
             "PrimaryButton",
             AddRelay_Click,
             Brushes.White,
             new Thickness(0, 0, 10, 0)));
         actions.Children.Add(CreateLauncherButton(
             "Open Project",
-            "LucideFolderOpen",
+            "MaterialFolderOpenIcon",
             "SoftButton",
             OpenProject_Click,
             null,
@@ -168,21 +168,21 @@ public partial class MainWindow
         });
         content.Children.Add(CreateLauncherButton(
             "Open SCL for FAT",
-            "LucideFileInput",
+            "MaterialUploadFileIcon",
             "PrimaryButton",
             OpenSclFatTesting_Click,
             Brushes.White,
             new Thickness(0, 0, 0, 8)));
         content.Children.Add(CreateLauncherButton(
             "Open IO List Workbook",
-            "LucideFileInput",
+            "MaterialUploadFileIcon",
             "SoftButton",
             OpenIoListTesting_Click,
             null,
             new Thickness(0, 0, 0, 8)));
         content.Children.Add(CreateLauncherButton(
             "Open ARSAS Project",
-            "LucideFolderOpen",
+            "MaterialFolderOpenIcon",
             "SoftButton",
             OpenIoListPackage_Click,
             null,
@@ -208,10 +208,17 @@ public partial class MainWindow
         var icon = new System.Windows.Shapes.Path
         {
             Data = TryFindResource(iconResource) as Geometry,
-            Style = TryFindResource("LucideIcon") as Style
+            Style = TryFindResource("MaterialIconGlyph") as Style
         };
         if (iconStroke != null)
-            icon.Stroke = iconStroke;
+            icon.Fill = iconStroke;
+        else
+            icon.SetBinding(System.Windows.Shapes.Shape.FillProperty,
+                new Binding(nameof(Control.Foreground))
+                {
+                    RelativeSource = new RelativeSource(
+                        RelativeSourceMode.FindAncestor, typeof(Button), 1)
+                });
 
         var buttonContent = new StackPanel
         {
