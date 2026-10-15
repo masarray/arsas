@@ -737,7 +737,13 @@ public sealed class IedBrowserPresentationTests
         Assert.Equal("fault/FRA00029.cfg", remote.RemotePath);
         Assert.Equal("3 KB", remote.SizeText);
         Assert.NotEmpty(remote.ModifiedText);
-        var native = File.ReadAllText(Find("MainWindow.IedBrowser.Files.cs"));
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root is not null &&
+               !File.Exists(Path.Combine(root.FullName, "MainWindow.IedBrowser.Files.cs")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var native = File.ReadAllText(
+            Path.Combine(root!.FullName, "MainWindow.IedBrowser.Files.cs"));
         Assert.Contains("_iedBrowserFileCatalog?.DisplayRows", native,
             StringComparison.Ordinal);
     }
