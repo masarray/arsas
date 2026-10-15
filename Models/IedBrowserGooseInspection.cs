@@ -10,10 +10,33 @@ namespace ArIED61850Tester.Models;
 public sealed record IedBrowserGooseExpectedIdentity(
     string IedName, string GoCbRef, string DataSetReference, string GoId,
     ushort? AppId, uint? ConfRev, string SclDestinationMac,
-    string SclGoId, ushort? SclAppId);
+    string SclGoId, ushort? SclAppId,
+    ushort? SclVlanId = null, byte? SclVlanPriority = null,
+    uint? SclMinTimeMs = null, uint? SclMaxTimeMs = null);
 
 public static class IedBrowserGooseInspection
 {
+    /// <summary>
+    /// Optional static SCL GSE address/time properties, accepted only after
+    /// caller's exact GoCB/SCL scope and conflict checks. Never claim live
+    /// GoEna or subscriber frame state from these configuration values.
+    /// </summary>
+    public static IReadOnlyList<(string Name, string Value)> SclNetworkProperties(
+        IedBrowserGooseExpectedIdentity expected)
+    {
+        ArgumentNullException.ThrowIfNull(expected);
+        var values = new List<(string Name, string Value)>(4);
+        if (expected.SclVlanId is { } vid)
+            values.Add(("VLAN ID", vid.ToString(CultureInfo.InvariantCulture)));
+        if (expected.SclVlanPriority is { } priority)
+            values.Add(("VLAN priority", priority.ToString(CultureInfo.InvariantCulture)));
+        if (expected.SclMinTimeMs is { } min)
+            values.Add(("Minimum time (ms)", min.ToString(CultureInfo.InvariantCulture)));
+        if (expected.SclMaxTimeMs is { } max)
+            values.Add(("Maximum time (ms)", max.ToString(CultureInfo.InvariantCulture)));
+        return values;
+    }
+
     public static string Canonical(string? value) => (value ?? "").Trim().Replace('$', '.');
 
     public static GooseStreamSnapshot? Select(
