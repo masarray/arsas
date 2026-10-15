@@ -3,7 +3,7 @@ namespace ArIED61850Tester.Models;
 /// <summary>One file proven by the existing remote COMTRADE/FileDirectory service.</summary>
 public sealed record IedBrowserRemoteFile(
     string Name, string RemotePath, long? SizeBytes, DateTimeOffset? ModifiedUtc,
-    bool IsDirectory = false)
+    bool IsDirectory = false, bool IsBundle = false, int BundleMemberCount = 0)
 {
     public string SizeText => IsDirectory ? "Folder"
         : SizeBytes is not { } size ? "Size unknown"
