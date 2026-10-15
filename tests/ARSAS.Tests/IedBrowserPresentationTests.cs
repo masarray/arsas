@@ -793,16 +793,15 @@ public sealed class IedBrowserPresentationTests
         var node = new IedBrowserTreeRow("s", "SGCB", "SGCB", 3,
             new LiveIedControlBlockModel { Reference = "LD/LLN0.SGCB", Domain = "LD" });
         var targets = IedBrowserReadPlan.Build(model, node, readAll: false);
-        Assert.Equal(2, targets.Count);
+        Assert.Single(targets);
         Assert.Contains(targets, v => v.Reference == sg.MmsReference && v.FunctionalConstraint == "SG");
-        Assert.Contains(targets, v => v.Reference == se.MmsReference && v.FunctionalConstraint == "SE");
-        Assert.DoesNotContain(targets, v => v.Reference == foreign.MmsReference || v.Reference == mx.MmsReference);
+        Assert.DoesNotContain(targets, v => v.Reference == se.MmsReference ||
+            v.Reference == foreign.MmsReference || v.Reference == mx.MmsReference);
         var rows = IedBrowserPresentation.Details(node, model, connected: true);
         var root = Assert.Single(rows.Where(v => v.Kind == "Data"));
-        Assert.Equal("ATCC1.BndWid", root.Name);
-        Assert.Equal("", root.ValueReference);
-        var sgGroup = Assert.Single(root.GetChildren().Where(v => v.Name == "setMag [SG]"));
-        var leaf = Assert.Single(sgGroup.GetChildren());
+        Assert.Equal("ATCC1.BndWid.setMag [SG]", root.Name);
+        Assert.Equal(sg.MmsReference, root.ValueReference);
+        var leaf = Assert.Single(root.GetChildren());
         Assert.Equal("f [SG]", leaf.Name);
         Assert.Equal(sg.MmsReference, leaf.ValueReference);
     }
