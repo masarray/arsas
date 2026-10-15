@@ -26,6 +26,7 @@ public sealed class M2IedBrowserFilesTests
         {
             BaseName = name, RecordId = path,
             Files = files, IsComplete = complete,
+            KnownSizeBytes = withCfg ? 9 : 5,
             Completeness = complete ? "Complete" : "Missing COMTRADE member"
         };
     }
@@ -119,11 +120,7 @@ public sealed class M2IedBrowserFilesTests
     [Fact]
     public void FilesTreeHasOnlyOneNavigationNode_NoDuplicatedFileChildren()
     {
-        var model = new AR.Iec61850.Discovery.LiveIedModelDiscoveryDocument
-        {
-            FileDirectory = new AR.Iec61850.Discovery.LiveIedFileDirectoryModel()
-        };
-        var files = IedBrowserPresentation.Roots(model, [],
+        var files = IedBrowserPresentation.Roots(null, [],
             [new IedBrowserRemoteFile("a.cfg", "/a.cfg", 3, null)]);
         var root = Assert.Single(files, row => row.Key == "category/files");
         Assert.False(root.HasChildren);
