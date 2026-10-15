@@ -44,6 +44,9 @@ public partial class MainWindow
     private bool _iedBrowserFilesLoading;
     private CancellationTokenSource? _iedBrowserFileReadOperation;
     private CancellationTokenSource? _iedBrowserReadOperation;
+    // Last explicit Read's failure reasons only. No secondary scalar store.
+    // Model/association/IED identity gates prevent stale errors after reconnect.
+    private IedBrowserReadFailureEvidence? _iedBrowserReadFailureEvidence;
     private IedBrowserGooseExpectedIdentity? _iedBrowserGooseExpected;
     private LiveIedDataSetModel? _iedBrowserGooseDirectory;
 
@@ -308,6 +311,7 @@ public partial class MainWindow
         // Read All may include thousands of attributes. It is cancellable by the
         // operator, never a new continuous acquisition/polling process.
         _iedBrowserReadOperation = cts;
+        _iedBrowserReadFailureEvidence = null; // new sweep supersedes old failures
         var sourceDevice = device;
         var successes = 0;
         var failures = 0;
@@ -340,10 +344,12 @@ public partial class MainWindow
                 if (result.Error.Length != 0 || !scalarValid)
                 {
                     failures++;
+                    var message = result.Error.Length != 0
+                        ? result.Error : scalarReason;
+                    _iedBrowserReadFailureEvidence?.RecordFailure(result.Target, message);
+                    changed = true; // failed reads are visible even with zero scalar updates
                     if (failureExamples.Count < 3)
                     {
-                        var message = result.Error.Length != 0
-                            ? result.Error : scalarReason;
                         if (message.Length > 180)
                             message = message[..180] + "…";
                         failureExamples.Add(
@@ -358,6 +364,7 @@ public partial class MainWindow
                     result.Quality, result.DeviceTimestamp, "MMS Read",
                     result.UtcTimeEvidence, result.QualityEvidence);
                 if (!accepted) return;
+                _iedBrowserReadFailureEvidence?.ClearFailure(result.Target);
                 successes++;
                 // Never overwrite a report-owned point during live acquisition.
                 if (!sourceDevice.IsMonitoring)
@@ -365,7 +372,10 @@ public partial class MainWindow
                 changed = true;
             });
             if (changed && ReferenceEquals(SelectedDevice, sourceDevice))
+            {
+                _iedBrowserLastLiveVersion = -1; // failure-only drain also changes row evidence
                 RefreshIedBrowserVisibleValues();
+            }
         }
         device.ResetDiscoveryProgress("Preparing read-only MMS values…",
             readAll ? "Reading all IED values" : selectedDo is not null
@@ -392,6 +402,7 @@ public partial class MainWindow
                     "Browser model changed during connection; select the current model and retry Read.");
             readAssociation = sourceDevice.LiveValues.Association;
             bindingIndex = new IedBrowserReadBindingIndex(sourceDevice);
+            _iedBrowserReadFailureEvidence = new IedBrowserReadFailureEvidence(sourceDevice);
             var readProgress = new Progress<IedBrowserReadProgress>(p =>
             {
                 if (ReferenceEquals(_iedBrowserReadOperation, cts) &&
@@ -558,6 +569,15 @@ public partial class MainWindow
                     row.ObservationSource = "Discovery snapshot";
                     row.ObservationTooltip = provenance;
                 }
+                else if (_iedBrowserReadFailureEvidence?.TryGet(
+                             device, row.ValueReference, row.FallbackValueReference,
+                             row.FunctionalConstraint, out var readFailure) == true)
+                {
+                    row.Value = "Unavailable";
+                    row.ObservationSource = "MMS Read failed";
+                    row.ObservationTooltip =
+                        $"{row.ValueReference} [{row.FunctionalConstraint}] · {readFailure}";
+                }
                 else
                 {
                     row.Value = IedBrowserReadPlan.UnobservedValue(
@@ -644,13 +664,29 @@ public partial class MainWindow
             }
             else
             {
-                row.Value = pageKind == "SGCB" && field == "LActTm"
-                    ? "Unknown" : "Not read";
-                row.ObservationSource = "";
-                row.ObservationTooltip =
-                    IedBrowserControlStateEvidence.IsVerifiedInventory(block, pageKind)
-                    ? $"{field}: not observed; no inferred control state"
-                    : $"{field}: not authorized by exact live FC inventory";
+                var target = IedBrowserControlStateEvidence.ReadTargets(block, pageKind)
+                    .FirstOrDefault(item => item.Reference.EndsWith(
+                        "." + field, StringComparison.Ordinal));
+                if (target is not null &&
+                    _iedBrowserReadFailureEvidence?.TryGet(device,
+                        target.Reference, "", target.FunctionalConstraint,
+                        out var failure) == true)
+                {
+                    row.Value = "Unavailable";
+                    row.ObservationSource = "MMS Read failed";
+                    row.ObservationTooltip =
+                        $"{target.Reference} [{target.FunctionalConstraint}] · {failure}";
+                }
+                else
+                {
+                    row.Value = pageKind == "SGCB" && field == "LActTm"
+                        ? "Unknown" : "Not read";
+                    row.ObservationSource = "";
+                    row.ObservationTooltip =
+                        IedBrowserControlStateEvidence.IsVerifiedInventory(block, pageKind)
+                        ? $"{field}: not observed; no inferred control state"
+                        : $"{field}: not authorized by exact live FC inventory";
+                }
             }
         }
     }
@@ -926,6 +962,7 @@ public partial class MainWindow
                 _iedBrowserForceRefresh = true;
             }
             CancelIedBrowserRead();
+            _iedBrowserReadFailureEvidence = null;
             _iedBrowserSnapshot = null;
         }
         if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
