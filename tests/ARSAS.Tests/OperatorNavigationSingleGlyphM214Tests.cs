@@ -3,7 +3,6 @@ using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Shapes;
 using System.Xml.Linq;
 
 namespace ARSAS.Tests;
@@ -37,7 +36,7 @@ public sealed class OperatorNavigationSingleGlyphM214Tests
             var owner = new Border();
             var oldTemplate = new DataTemplate();
             owner.Resources.Add("IconEventsNavContent", oldTemplate);
-            var icon = new Path();
+            var icon = new System.Windows.Shapes.Path();
             var svg = new Viewbox { Width = 15, Height = 15, Child = icon };
             var content = new StackPanel { Orientation = Orientation.Horizontal };
             content.Children.Add(svg);
