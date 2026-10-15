@@ -336,7 +336,8 @@ public static class IedBrowserStructuredDetails
                     : TimeChildren(depth + 1, attr.MmsReference, attr.FunctionalConstraint);
 
             result.Add(new IedBrowserDetailRow("Data",
-                $"{name} [{attr.FunctionalConstraint}]", "Not read", depth,
+                $"{name} [{attr.FunctionalConstraint}]",
+                IedBrowserReadPlan.UnobservedValue(attr.FunctionalConstraint), depth,
                 $"IEC declaration · {attr.MmsReference} · {attr.TypeSource}")
             {
                 // A structured intermediate row may have its own observed
