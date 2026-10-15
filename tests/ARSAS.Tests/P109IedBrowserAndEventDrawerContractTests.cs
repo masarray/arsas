@@ -6,12 +6,12 @@ namespace ARSAS.Tests;
 public sealed class P109IedBrowserAndEventDrawerContractTests
 {
     [Fact]
-    public void BrowserIsAnEighthPermanentNativeTab_WithoutRenumberingExistingWorkflows()
+    public void BrowserIsFirstOperatorDestination_WithoutRenumberingItsNativeWorkspace()
     {
         var xaml = Read("MainWindow.xaml");
         var code = Read("MainWindow.IedBrowser.cs");
         Assert.Contains("x:Name=\"IedBrowserTab\" Header=\"IED Browser\"", xaml);
-        Assert.Contains("x:Name=\"NavIedBrowserButton\" Grid.Column=\"7\"", xaml);
+        Assert.Contains("x:Name=\"NavIedBrowserButton\" Grid.Column=\"0\"", xaml);
         Assert.Contains("x:Name=\"NativeFatTab\" Header=\"FAT\"", xaml);
         Assert.Contains("x:Name=\"IedBrowserTreeGrid\"", xaml);
         Assert.Contains("x:Name=\"IedBrowserDetailList\"", xaml);
