@@ -32,6 +32,16 @@ public static class IedBrowserRioSidecarBridge
         if (candidates.Length == 0)
             return catalog;
 
+        // Index once: O(root entries + records). Large fault directories
+        // must not repeat a linear candidate scan for every record.
+        var rootByIdentity = candidates
+            .GroupBy(entry => Identity(entry.Path))
+            .ToDictionary(group => group.Key, group => group.Take(2).ToArray());
+        var recordCounts = catalog.Records
+            .GroupBy(record => (NormalizeDirectory(record.RemoteDirectory),
+                record.BaseName))
+            .ToDictionary(group => group.Key, group => group.Count());
+
         var changed = false;
         var records = new Iec61850FaultRecordSet[catalog.Records.Count];
         for (var i = 0; i < records.Length; i++)
@@ -44,26 +54,15 @@ public static class IedBrowserRioSidecarBridge
                 record.Files.Any(f => f.Extension.Equals(".rio", StringComparison.OrdinalIgnoreCase)))
                 continue;
 
-            // Require exact base name and same directory; do not borrow an
-            // identical name from another MMS folder, IED or SCL inventory.
-            var matching = candidates.Where(e =>
-            {
-                var (directory, basename) = Identity(e.Path);
-                return string.Equals(directory, NormalizeDirectory(record.RemoteDirectory),
-                           StringComparison.Ordinal) &&
-                       string.Equals(basename, record.BaseName, StringComparison.Ordinal);
-            }).ToArray();
-            // Case-folded aliases and duplicate directory evidence are ambiguous,
-            // even when their bytes or sizes agree. Refuse silent selection.
-            if (matching.Length != 1)
+            // Case-folded aliases and duplicate directory evidence are
+            // ambiguous. Never choose an arbitrary first MMS file.
+            var identity = (NormalizeDirectory(record.RemoteDirectory), record.BaseName);
+            if (!rootByIdentity.TryGetValue(identity, out var matching) ||
+                matching.Length != 1 || recordCounts[identity] != 1)
                 continue;
             var entry = matching[0];
             if (record.Files.Any(f => string.Equals(f.RemotePath, entry.Path,
-                    StringComparison.OrdinalIgnoreCase)) ||
-                catalog.Records.Count(r =>
-                    string.Equals(NormalizeDirectory(r.RemoteDirectory),
-                        NormalizeDirectory(record.RemoteDirectory), StringComparison.Ordinal) &&
-                    string.Equals(r.BaseName, record.BaseName, StringComparison.Ordinal)) != 1)
+                    StringComparison.OrdinalIgnoreCase)))
                 continue;
 
             var name = FileName(entry.Path);
