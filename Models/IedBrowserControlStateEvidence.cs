@@ -85,6 +85,42 @@ public static class IedBrowserControlStateEvidence
         return true;
     }
     /// <summary>
+    /// Error-only status for exactly the verified SGCB / GoCB MMS leaf.
+    /// Manual Read's latest attempt takes precedence over initial hydration;
+    /// neither failure is allowed to claim a live value or new FC.
+    /// The consumer checks LiveValues success before calling this method.
+    /// </summary>
+    public static bool TryReadFailure(
+        Iec61850MonitorDevice device, LiveIedControlBlockModel block,
+        string pageKind, string field,
+        IedBrowserReadFailureEvidence? manual,
+        IedBrowserReadFailureEvidence? initial,
+        out string reason, out string source, out string exactReference)
+    {
+        reason = "";
+        source = "";
+        exactReference = "";
+        var target = ReadTargets(block, pageKind).FirstOrDefault(item =>
+            item.Reference.EndsWith("." + field, StringComparison.Ordinal));
+        if (target is null) return false;
+        exactReference = target.Reference;
+        if (manual?.TryGet(device, target.Reference, "",
+                target.FunctionalConstraint, out reason) == true)
+        {
+            source = "MMS manual Read failed";
+            return true;
+        }
+        if (initial?.TryGet(device, target.Reference, "",
+                target.FunctionalConstraint, out reason) == true)
+        {
+            source = "MMS initial Read failed";
+            return true;
+        }
+        reason = "";
+        return false;
+    }
+
+    /// <summary>
     /// SGCB LActTm is a real relay value, but an all-zero wire UTC-Time
     /// denotes an unset time rather than an actual group-change in 1970.
     /// A formatted date alone is never proof: require exact raw MMS bytes.

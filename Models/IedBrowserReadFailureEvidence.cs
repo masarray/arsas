@@ -9,6 +9,9 @@ namespace ArIED61850Tester.Models;
 /// conversion, retry or live state. Exact reference/FC, same IED object,
 /// association and projection epoch are required on every UI lookup.
 /// </summary>
+public sealed record IedBrowserReadFailureSample(
+    string Reference, string FunctionalConstraint, string Reason);
+
 public sealed class IedBrowserReadFailureEvidence
 {
     private const int MaxFailureEntries = 4096;
@@ -66,6 +69,32 @@ public sealed class IedBrowserReadFailureEvidence
         if (IsCurrent(_owner))
             lock (_gate)
                 _failed.Remove(Key(target.Reference, target.FunctionalConstraint));
+    }
+
+    /// <summary>
+    /// Bounded immutable sample of error-only evidence from the current IED,
+    /// association and verified model/epoch. No process values or MMS IO.
+    /// </summary>
+    public IReadOnlyList<IedBrowserReadFailureSample> SnapshotCurrent(
+        Iec61850MonitorDevice device, int maxEntries = 12)
+    {
+        if (maxEntries <= 0 || !IsCurrent(device))
+            return Array.Empty<IedBrowserReadFailureSample>();
+        lock (_gate)
+        {
+            if (!IsCurrent(device))
+                return Array.Empty<IedBrowserReadFailureSample>();
+            return _failed.OrderBy(item => item.Key, StringComparer.Ordinal)
+                .Take(Math.Min(maxEntries, 32))
+                .Select(item =>
+                {
+                    var separator = item.Key.LastIndexOf('|');
+                    return new IedBrowserReadFailureSample(
+                        item.Key[..separator], item.Key[(separator + 1)..],
+                        item.Value);
+                })
+                .ToArray();
+        }
     }
 
     public bool TryGet(Iec61850MonitorDevice device,

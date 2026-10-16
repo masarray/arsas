@@ -166,6 +166,18 @@ internal static class DiagnosticReportBuilder
                 }
                 builder.AppendLine($"Connected        : {device.IsConnected}");
                 builder.AppendLine($"Monitoring       : {device.IsMonitoring}");
+                // Diagnostic projection only: no MMS reads, new caches, or
+                // synthetic values. Samples are scoped to the active IED.
+                builder.AppendLine($"Browser ledger   : association={device.LiveValues.Association}, version={device.LiveValues.Version}, offline={device.LiveValues.IsOffline}");
+                var hydrationFailures = device.InitialHydrationFailures?
+                    .SnapshotCurrent(device, maxEntries: 12) ??
+                    Array.Empty<IedBrowserReadFailureSample>();
+                builder.AppendLine($"Initial MMS errors (sample max 12): {hydrationFailures.Count}");
+                foreach (var evidence in hydrationFailures)
+                {
+                    var detail = evidence.Reason.Replace('\r', ' ').Replace('\n', ' ');
+                    builder.AppendLine($"  {evidence.Reference} [{evidence.FunctionalConstraint}] : {detail}");
+                }
                 builder.AppendLine($"Busy             : {device.IsBusy}");
                 builder.AppendLine($"Status           : {device.Status}");
                 builder.AppendLine($"Detail           : {device.Detail}");
