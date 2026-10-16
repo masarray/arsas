@@ -939,7 +939,7 @@ public partial class MainWindow
             // A real GOOSE frame can arrive without a model FCDA directory.
             // Expose the actual allData vector as UNBOUND wire slots; do not
             // invent IEC references or claim model-backed member identity.
-            if (_iedBrowserGooseDirectory is null &&
+            if (ordered is null &&
                 IedBrowserGooseInspection.OrderedWireEntries(frameView) is { } slots &&
                 !_iedBrowserDetails.Rows.Any(row => row.GooseSlot >= 0))
                 foreach (var leaf in slots)
@@ -953,7 +953,7 @@ public partial class MainWindow
                         ObservationTooltip = frameView.GoCbRef + " · allData #" +
                             (leaf.DataSetIndex + 1)
                     });
-            var rawSlots = _iedBrowserGooseDirectory is null
+            var rawSlots = ordered is null
                 ? IedBrowserGooseInspection.OrderedWireEntries(frameView) : null;
             foreach (var row in _iedBrowserDetails.Rows)
             {
