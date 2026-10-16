@@ -6,21 +6,13 @@ namespace ARSAS.Tests;
 
 public sealed class M217TypedDoublePointLiveModelTests
 {
-    private static readonly (string Raw, string Display)[] DpcCodes =
-    [
-        ("00", "Intermediate [00]"),
-        ("01", "Open [01]"),
-        ("10", "Close [10]"),
-        ("11", "Bad state [11]")
-    ];
-
     private static LiveIedDataAttributeModel Attr(
         string owner, string path, string fc = "ST", string bType = "Enum") => new()
     {
         ObjectReference = owner,
         AttributePath = owner[(owner.LastIndexOf('.') + 1)..] + "." + path,
-        MmsReference = owner.Replace(".", "$", StringComparison.Ordinal)
-            .Replace("$", "$", StringComparison.Ordinal) + "$" + path,
+        MmsReference = owner[..owner.IndexOf('.')] + "$" + fc + "$" +
+            owner[(owner.IndexOf('.') + 1)..].Replace('.', '$') + "$" + path,
         FunctionalConstraint = fc,
         SclBType = bType,
         TypeSource = "LiveTypeSpecification"
