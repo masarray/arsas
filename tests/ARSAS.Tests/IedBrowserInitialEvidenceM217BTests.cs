@@ -23,20 +23,46 @@ public sealed class IedBrowserInitialEvidenceM217BTests
 
     private static LiveIedModelDiscoveryDocument Model(bool duplicate = false)
     {
-        var attributes = new List<LiveIedDataAttributeModel>
-        {
-            Attr(Mod, "ST"), Attr(Health, "ST"),
-            Attr(NamPlt, "DC", "VisString255"), Attr(Position, "ST", "Dbpos")
-        };
-        if (duplicate) attributes.Add(Attr(Mod, "ST"));
+        var modAttributes = new List<LiveIedDataAttributeModel> { Attr(Mod, "ST") };
+        if (duplicate) modAttributes.Add(Attr(Mod, "ST"));
         return new LiveIedModelDiscoveryDocument
         {
             LogicalDevices = [new LiveIedLogicalDeviceModel
             {
-                LogicalNodes = [new LiveIedLogicalNodeModel
-                {
-                    DataObjects = [new LiveIedDataObjectModel { Attributes = attributes }]
-                }]
+                LogicalNodes =
+                [
+                    new LiveIedLogicalNodeModel
+                    {
+                        DataObjects =
+                        [
+                            new LiveIedDataObjectModel
+                            {
+                                Name = "Mod", Reference = "LD/LLN0.Mod",
+                                InferredCdc = "ENS", Attributes = modAttributes
+                            },
+                            new LiveIedDataObjectModel
+                            {
+                                Name = "Health", Reference = "LD/LLN0.Health",
+                                InferredCdc = "ENS", Attributes = [Attr(Health, "ST")]
+                            },
+                            new LiveIedDataObjectModel
+                            {
+                                Name = "NamPlt", Reference = "LD/LLN0.NamPlt",
+                                InferredCdc = "LPL",
+                                Attributes = [Attr(NamPlt, "DC", "VisString255")]
+                            }
+                        ]
+                    },
+                    new LiveIedLogicalNodeModel
+                    {
+                        DataObjects = [new LiveIedDataObjectModel
+                        {
+                            Name = "Pos", Reference = "LD/XCBR1.Pos",
+                            InferredCdc = "DPC",
+                            Attributes = [Attr(Position, "ST", "Dbpos")]
+                        }]
+                    }
+                ]
             }]
         };
     }
@@ -82,6 +108,9 @@ public sealed class IedBrowserInitialEvidenceM217BTests
         Assert.Equal("GE", name.Value);
         Assert.True(device.LiveValues.TryGet("LD/XCBR1.Pos.stVal", "ST", out var pos));
         Assert.Equal("bits(40,unused=6)", pos.Value); // DPC decoding remains presentation-only
+        Assert.Equal("Open [01]", IedBrowserDoublePointPresentation.Format(
+            pos.Value, "LD/XCBR1.Pos.stVal", "LD/XCBR1.Pos", "ST",
+            new IedBrowserSchemaIndex(model)));
         Assert.Equal(0, IedBrowserInitialEvidenceProjection.Publish(device, Model(),
             _ => throw new Exception("replaced model must not be queried")));
     }
