@@ -12,13 +12,14 @@ public sealed class IedBrowserInitialEvidenceM217BTests
     private const string Position = "LD/XCBR1$ST$Pos$stVal";
 
     private static LiveIedDataAttributeModel Attr(string mms, string fc, string type = "Enum")
-        => new()
+    {
+        var canonical = IedBrowserLiveValues.CanonicalReference(mms);
+        return new LiveIedDataAttributeModel
         {
-            ObjectReference = IedBrowserLiveValues.CanonicalReference(mms)
-                .Split('.')[0] + "." + IedBrowserLiveValues.CanonicalReference(mms)
-                .Split('.')[1],
+            ObjectReference = canonical[..canonical.LastIndexOf('.')],
             MmsReference = mms, FunctionalConstraint = fc, SclBType = type
         };
+    }
 
     private static LiveIedModelDiscoveryDocument Model(bool duplicate = false)
     {
@@ -137,6 +138,38 @@ public sealed class IedBrowserInitialEvidenceM217BTests
         };
         Assert.Equal(0, IedBrowserInitialEvidenceProjection.Publish(device, model,
             reference => entries.TryGetValue(reference, out var result) ? result : null));
-        Assert.Equal(0, device.LiveValues.Version - 1); // association established; no values published
+        Assert.Equal(1L, device.LiveValues.Version); // association established; no values published
     }
+    [Fact]
+    public void MultipleIedsAndOfflineModelsCannotBorrowInitialEvidence()
+    {
+        var model = Model();
+        var first = Connected(model);
+        var second = Connected(model);
+        Assert.Equal(1, IedBrowserInitialEvidenceProjection.Publish(first, model,
+            reference => reference == Mod ? Value("LD/LLN0.Mod.stVal", "ST", 1) : null));
+        Assert.True(first.LiveValues.TryGet("LD/LLN0.Mod.stVal", "ST", out _));
+        Assert.False(second.LiveValues.TryGet("LD/LLN0.Mod.stVal", "ST", out _));
+        first.IsConnected = false;
+        Assert.Equal(0, IedBrowserInitialEvidenceProjection.Publish(first, model,
+            _ => throw new Exception("offline model must never query cached evidence")));
+    }
+
+    [Fact]
+    public void FastConnectAndSmartReconnectReuseTheSameLedgerPublication()
+    {
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root != null &&
+               !File.Exists(Path.Combine(root.FullName, "Services",
+                   "Iec61850MonitorRuntime.cs")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var source = File.ReadAllText(Path.Combine(root!.FullName, "Services",
+            "Iec61850MonitorRuntime.cs"));
+        Assert.Contains("SCL initial MMS scalar evidence reused", source);
+        Assert.Contains("session.Device.LiveValues.Association;\n        PublishTrustedSclInitialEvidence(session);",
+            source.Replace("\r\n", "\n", StringComparison.Ordinal));
+        Assert.Contains("client.TryGetTrustedSclInitialValue(reference", source);
+    }
+
 }
