@@ -42,6 +42,7 @@ public sealed class M217DGooseRcbFilesUxRegressionTests
         Assert.NotNull(root);
         var xaml = File.ReadAllText(Path.Combine(root!.FullName, "MainWindow.xaml"));
         var source = File.ReadAllText(Path.Combine(root.FullName, "MainWindow.IedBrowser.cs"));
+        Assert.Contains("Margin=\"10,0,5,0\"", xaml);
         Assert.Contains("IedBrowserGooseSubscribeButton", xaml);
         Assert.Contains("Click=\"IedBrowserGooseSubscribe_Click\"", xaml);
         Assert.Contains("OpenIedGooseSubscriber(device);", source);

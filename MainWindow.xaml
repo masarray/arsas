@@ -2278,7 +2278,8 @@
                                         <DataGridTemplateColumn Header="Filename" Width="*" MinWidth="185">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
-                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                                                Margin="10,0,5,0">
                                                         <!-- Vector geometry supplied for the File List:
                                                              no font icon and no raster dependency. -->
                                                         <!-- Stretch an SVG-space geometry into a real 18px
