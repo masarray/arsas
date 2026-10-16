@@ -2218,8 +2218,20 @@
                                           AlternatingRowBackground="#F0F4F9"
                                           GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EDF1F6"
                                           LoadingRow="IedBrowserFile_LoadingRow">
+                                    <DataGrid.ColumnHeaderStyle>
+                                        <Style TargetType="{x:Type DataGridColumnHeader}">
+                                            <Setter Property="Background" Value="#DDEBF9"/>
+                                            <Setter Property="Foreground" Value="#274766"/>
+                                            <Setter Property="BorderBrush" Value="#CCDDEE"/>
+                                            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                                            <Setter Property="VerticalContentAlignment" Value="Center"/>
+                                            <Setter Property="Padding" Value="7,3"/>
+                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                        </Style>
+                                    </DataGrid.ColumnHeaderStyle>
                                     <DataGrid.RowStyle>
                                         <Style TargetType="{x:Type DataGridRow}">
+                                            <Setter Property="Background" Value="#FFFFFF"/>
                                             <EventSetter Event="MouseDoubleClick" Handler="IedBrowserFile_DoubleClick"/>
                                             <EventSetter Event="PreviewMouseRightButtonDown" Handler="IedBrowserFile_RightClick"/>
                                             <Setter Property="ToolTip" Value="{Binding RemotePath}"/>
@@ -2228,6 +2240,9 @@
                                             <Setter Property="BorderThickness" Value="3,0,0,0"/>
                                             <Setter Property="BorderBrush" Value="Transparent"/>
                                             <Style.Triggers>
+                                                <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                                                    <Setter Property="Background" Value="#EDF4FC"/>
+                                                </Trigger>
                                                 <Trigger Property="IsMouseOver" Value="True">
                                                     <Setter Property="Background" Value="#EAF3FF"/>
                                                 </Trigger>
@@ -2262,10 +2277,12 @@
                                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                         <!-- Vector geometry supplied for the File List:
                                                              no font icon and no raster dependency. -->
-                                                        <Viewbox Width="17" Height="17" Margin="0,0,7,0">
-                                                            <Path Fill="#315F8D"
-                                                                  Data="M824-120 636-308q-41 32-90.5 50T440-240q-90 0-162.5-44T163-400h98q34 37 79.5 58.5T440-320q100 0 170-70t70-170q0-100-70-170t-170-70q-94 0-162.5 63.5T201-580h-80q8-127 99.5-213.5T440-880q134 0 227 93t93 227q0 56-18 105.5T692-364l188 188-56 56ZM397-400l-63-208-52 148H80v-60h160l66-190h60l61 204 43-134h60l60 120h30v60h-67l-47-94-50 154h-59Z"/>
-                                                        </Viewbox>
+                                                        <!-- Stretch an SVG-space geometry into a real 18px
+                                                             WPF Path. The original -960 coordinate system
+                                                             must not render outside a 17px Viewbox viewport. -->
+                                                        <Path Width="18" Height="18" Margin="0,0,7,0"
+                                                              Fill="#2367AD" Stretch="Uniform"
+                                                              Data="M824-120 636-308q-41 32-90.5 50T440-240q-90 0-162.5-44T163-400h98q34 37 79.5 58.5T440-320q100 0 170-70t70-170q0-100-70-170t-170-70q-94 0-162.5 63.5T201-580h-80q8-127 99.5-213.5T440-880q134 0 227 93t93 227q0 56-18 105.5T692-364l188 188-56 56ZM397-400l-63-208-52 148H80v-60h160l66-190h60l60 120h30v60h-67l-47-94-50 154h-59Z"/>
                                                         <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
                                                                    TextTrimming="CharacterEllipsis"/>
                                                     </StackPanel>
