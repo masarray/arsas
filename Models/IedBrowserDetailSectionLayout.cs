@@ -27,8 +27,23 @@ public static class IedBrowserDetailSectionLayout
                 continue;
             }
             var end = index + 1;
-            while (end < raw.Count && raw[end].Kind != "Section")
+            while (end < raw.Count)
+            {
+                if (raw[end].Kind == "Section")
+                {
+                    // TrgOps and OptFlds are children of the same RCB, not
+                    // independent root sections. Their FlagGroup rows remain
+                    // the existing engine-backed read-only projections.
+                    if (section.Name == "Control Block attributes" &&
+                        raw[end].Name is "Trigger options" or "Optional fields")
+                    {
+                        end++;
+                        continue;
+                    }
+                    break;
+                }
                 end++;
+            }
             if (end == index + 1)
             {
                 result.Add(section);

@@ -463,6 +463,15 @@ public partial class MainWindow
     }
 
 
+    private void IedBrowserGooseSubscribe_Click(object sender, RoutedEventArgs e)
+    {
+        if (SelectedDevice is not { IsDemo: false } device ||
+            _iedBrowserRenderedPage?.Kind != "GoCB")
+            return;
+        // Shared Npcap-based subscriber, no second GOOSE receive/decoder path.
+        OpenIedGooseSubscriber(device);
+    }
+
     private void RefreshIedBrowserReadButtons()
     {
         if (IedBrowserReadPageButton == null) return;
@@ -476,6 +485,16 @@ public partial class MainWindow
         // Opening a browsed SCL is always offline-safe. Explicit Read can then
         // open a cached-model MMS association; no background connect or polling.
         var selectedKind = IedBrowserReadPlan.SelectionKind(_iedBrowserNavigation.Current);
+        if (IedBrowserGooseSubscribeButton is not null)
+        {
+            IedBrowserGooseSubscribeButton.Visibility =
+                _iedBrowserRenderedPage?.Kind == "GoCB"
+                    ? Visibility.Visible : Visibility.Collapsed;
+            IedBrowserGooseSubscribeButton.IsEnabled =
+                device is { IsDemo: false } && _iedBrowserReadOperation == null;
+            IedBrowserGooseSubscribeButton.Content = IsGooseCapturing
+                ? "View GOOSE Capture" : "Subscribe GOOSE";
+        }
         IedBrowserReadPageButton.Content = selectedKind == IedBrowserReadSelectionKind.ReadOnlyRcb
             ? "Inspect RCB"
             : connected ? "Read" : "Connect & Read";

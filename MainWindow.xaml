@@ -1987,6 +1987,10 @@
                                         Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         Click="IedBrowserReadValues_Click"
                                         ToolTip="Read model-proven IEC data attributes sequentially; progress appears on the IED card."/>
+                                <Button x:Name="IedBrowserGooseSubscribeButton" Content="Subscribe GOOSE"
+                                        Style="{StaticResource SoftButton}" Margin="0,0,6,0"
+                                        Visibility="Collapsed" Click="IedBrowserGooseSubscribe_Click"
+                                        ToolTip="Open existing passive GOOSE Subscriber for this IED; choose a capture adapter. Does not enable GoEna or write MMS."/>
                                 <Button x:Name="IedBrowserCancelReadButton" Content="Cancel Read"
                                         Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         IsEnabled="False" Click="IedBrowserCancelRead_Click"
