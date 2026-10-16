@@ -621,15 +621,10 @@ public partial class MainWindow
             // SAME exact reference/FC canonical value. Use the existing IEC
             // operator formatter only when the current model declares DPC.
             // No name-only inference and no mutation of raw report evidence.
-            if (row.EvidenceField.Length == 0 &&
-                row.FunctionalConstraint == "ST" &&
-                _iedBrowserValueSchemaIndex is { } valueSchema &&
-                (valueSchema.IsDeclaredDoublePointValue(
-                     observedReference, row.FunctionalConstraint) ||
-                 valueSchema.IsDeclaredDoublePointValue(
-                     row.ValueReference, row.FunctionalConstraint)))
-                display = Iec61850ValueFormatter.FormatReportProcessValue(
-                    display, "Dbpos", "", "Position", observedReference);
+            if (row.EvidenceField.Length == 0)
+                display = IedBrowserDoublePointPresentation.Format(
+                    display, observedReference, row.ValueReference,
+                    row.FunctionalConstraint, _iedBrowserValueSchemaIndex);
             if (row.IsEngineeringValue && row.EvidenceField.Length == 0)
                 display = IedBrowserEngineeringValuePresentation.Format(
                     display, IedBrowserEngineeringValuePresentation.ResolveUnit(
