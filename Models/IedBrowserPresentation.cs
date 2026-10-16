@@ -564,13 +564,12 @@ public static class IedBrowserPresentation
                     ? observed.TriggerOptions : rcb.Inspection.Model.TriggerOptions;
                 var optRaw = !string.IsNullOrWhiteSpace(observed?.OptionalFields)
                     ? observed.OptionalFields : rcb.Inspection.Model.OptionalFields;
-                Section("Trigger options");
+                // Flags belong to their parent Control Block attributes.
                 rows.Add(new IedBrowserDetailRow("FlagGroup", "Trigger options",
                     Source: $"Raw TrgOps: {trgRaw}; {rcb.Inspection.ModelSource}")
                 {
                     Flags = IedBrowserReportFlags.TriggerOptions(trgRaw)
                 });
-                Section("Optional fields");
                 rows.Add(new IedBrowserDetailRow("FlagGroup", "Optional fields",
                     Source: $"Raw OptFlds: {optRaw}; {rcb.Inspection.ModelSource}")
                 {

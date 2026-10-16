@@ -44,7 +44,7 @@ public sealed class IedBrowserPresentationTests
     }
 
     [Fact]
-    public void ReportDetail_UsesOneContiguousThreeSectionLayout_AndPreservesOrderedMembers()
+    public void ReportDetail_NestsOptionsWithinControlBlock_AndPreservesOrderedMembers()
     {
         var first = new LiveIedDataSetMemberModel { Index = 1, Reference = "LD/LLN0.A", FunctionalConstraint = "ST" };
         var duplicated = new LiveIedDataSetMemberModel { Index = 2, Reference = "LD/LLN0.A", FunctionalConstraint = "ST" };
@@ -67,8 +67,18 @@ public sealed class IedBrowserPresentationTests
         var node = new IedBrowserTreeRow("reports/rcb", "brcb01", "RCB", 4, rcb);
         var details = IedBrowserPresentation.Details(node, model, connected: false);
         Assert.Equal(
-            ["Control Block attributes", "Trigger options", "Optional fields", "Information received in last Report", "Data"],
+            ["Control Block attributes", "Information received in last Report", "Data"],
             details.Where(r => r.Kind == "Section").Select(r => r.Name).ToArray());
+        Assert.Equal(["Trigger options", "Optional fields"],
+            details.Where(r => r.Kind == "FlagGroup").Select(r => r.Name).ToArray());
+        var projection = new IedBrowserDetailProjection();
+        projection.Reset(details);
+        var controlBlock = projection.Rows.First(row =>
+            row.Kind == "Section" && row.Name == "Control Block attributes");
+        Assert.Contains(controlBlock.GetChildren(), row => row.Name == "Trigger options");
+        Assert.Contains(controlBlock.GetChildren(), row => row.Name == "Optional fields");
+        projection.Toggle(controlBlock);
+        Assert.DoesNotContain(projection.Rows, row => row.Kind == "FlagGroup");
         var members = details.Where(r => r.Kind == "Data").ToArray();
         Assert.Equal(2, members.Length);
         Assert.Equal("LLN0.A [ST]", members[0].Name);

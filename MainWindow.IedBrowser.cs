@@ -22,7 +22,6 @@ public partial class MainWindow
     private readonly IedBrowserDetailProjection _iedBrowserDetails = new();
     private readonly IedBrowserNavigationTrail _iedBrowserNavigation = new();
     private bool _iedBrowserSyncingSelection;
-    private string? _iedBrowserSelectedDoReference;
     private int _iedBrowserNavigationRenderTicket;
     private long _iedBrowserLastLiveVersion = -1;
     private LiveIedCanonicalModel? _iedBrowserLastCfCanonicalModel;
@@ -34,6 +33,9 @@ public partial class MainWindow
     private IedBrowserSchemaIndex? _iedBrowserValueSchemaIndex;
     private MmsRcbAvailabilityResult? _iedBrowserCachedSnapshot;
     private IReadOnlyList<RcbExportRow> _iedBrowserCachedRcbRows = Array.Empty<RcbExportRow>();
+    // A single cheap change signature for the existing active RCB inventory.
+    // No RCB read/poll/write: this only invalidates stale Browser indicators.
+    private string _iedBrowserCallerRcbSignature = "";
     private string _iedBrowserCachedSourcePath = string.Empty;
     private DateTime _iedBrowserCachedSourceStamp;
     private Iec61850MonitorDevice? _iedBrowserObservedDevice;
@@ -211,6 +213,15 @@ public partial class MainWindow
         IedEditRcbMulti_Click(new Button { Tag = device }, new RoutedEventArgs());
     }
 
+    private void IedBrowserGooseSubscribe_Click(object sender, RoutedEventArgs e)
+    {
+        if (SelectedDevice is not { IsDemo: false } device ||
+            _iedBrowserRenderedPage?.Kind != "GoCB")
+            return;
+        // The operator opts into the *existing* GOOSE Sniff Npcap capture.
+        OpenIedGooseSubscriber(device);
+    }
+
     private async void IedBrowserReadRcb_Click(object sender, RoutedEventArgs e)
     {
         var device = SelectedDevice;
@@ -218,6 +229,8 @@ public partial class MainWindow
             return;
 
         var sourceDevice = device;
+        var checkAssociation = device.LiveValues.Association;
+        var checkModel = device.LiveDiscoveryModel;
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(35));
         _iedBrowserReadOperation = cts;
         IedBrowserReadRcbButton.IsEnabled = false;
@@ -228,6 +241,8 @@ public partial class MainWindow
             var result = await _rcbAvailabilityProbe.CheckAsync(device, cts.Token);
             if (cts.IsCancellationRequested || !ReferenceEquals(SelectedDevice, sourceDevice) ||
                 !ReferenceEquals(_iedBrowserObservedDevice, sourceDevice) || !sourceDevice.IsConnected ||
+                sourceDevice.LiveValues.Association != checkAssociation ||
+                !ReferenceEquals(sourceDevice.LiveDiscoveryModel, checkModel) ||
                 MainTabs.SelectedIndex != IedBrowserWorkspaceIndex)
                 return;
 
@@ -287,12 +302,10 @@ public partial class MainWindow
         }
         var model = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
         var currentPage = _iedBrowserNavigation.Current;
-        var selectedDo = !readAll &&
-            ReferenceEquals(_iedBrowserRenderedPage, currentPage) &&
-            currentPage?.Payload is LiveIedLogicalNodeModel
-                ? _iedBrowserSelectedDoReference : null;
-        var targets = IedBrowserReadPlan.Build(
-            model, currentPage, readAll, selectedDo);
+        // Clicking a DO expands its visual children; it must NOT silently
+        // shrink the next Read from the entire LN to one last-clicked DO.
+        // Operator Read is the selected page; Read All is the whole model.
+        var targets = IedBrowserReadPlan.Build(model, currentPage, readAll);
         if (targets.Count == 0)
         {
             IedBrowserSubtitle.Text = "No model-verified readable FC attributes in this selection.";
@@ -378,8 +391,7 @@ public partial class MainWindow
             }
         }
         device.ResetDiscoveryProgress("Preparing read-only MMS values…",
-            readAll ? "Reading all IED values" : selectedDo is not null
-                ? "Reading selected DO " + selectedDo : "Reading Browser values");
+            readAll ? "Reading all IED values" : "Reading current Browser page");
         device.IsBrowserReading = true; // Preserve the ongoing report monitor lifecycle.
         IedBrowserReadPageButton.IsEnabled = false;
         IedBrowserReadAllButton.IsEnabled = false;
@@ -488,8 +500,13 @@ public partial class MainWindow
             : !canReachIED
                 ? "Bind an MMS IP address to this IED before reading live values."
                 : connected
-                    ? "Read this model-verified object through bounded MMS reads."
+                    ? "Read all safe FC attributes on this page (entire LN for an LN selection); expand/click on a DO does not narrow the Read."
                     : "Connect using this IED model and read selected values on demand; no RCB or cyclic polling.";
+        IedBrowserGooseSubscribeButton.Visibility =
+            _iedBrowserNavigation.Current?.Kind == "GoCB"
+                ? Visibility.Visible : Visibility.Collapsed;
+        IedBrowserGooseSubscribeButton.IsEnabled =
+            device is { IsDemo: false } && !GooseActionBusy;
         IedBrowserReadPageButton.IsEnabled = ready;
         IedBrowserReadAllButton.IsEnabled = ready;
         IedBrowserCancelReadButton.IsEnabled = _iedBrowserReadOperation != null;
@@ -515,6 +532,22 @@ public partial class MainWindow
         if (MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
             SelectedDevice is not { } device)
             return;
+        // Report plans activate asynchronously AFTER IsMonitoring changes.
+        // Refresh the existing RCB tree once on actual activation/cleanup,
+        // otherwise "used by ARSAS" glyphs remain stuck at the old state.
+        if (_iedBrowserCachedRcbRows.Count > 0 &&
+            ReferenceEquals(_iedBrowserCachedDevice, device))
+        {
+            var activeSignature = ActiveRcbSignature(device);
+            if (!string.Equals(_iedBrowserCallerRcbSignature, activeSignature,
+                StringComparison.Ordinal))
+            {
+                _iedBrowserCallerRcbSignature = activeSignature;
+                _iedBrowserForceRefresh = true;
+                Dispatcher.BeginInvoke(DispatcherPriority.Background,
+                    new Action(RefreshIedBrowser));
+            }
+        }
         var version = device.LiveValues.Version;
         if (_iedBrowserLastLiveVersion == version &&
             ReferenceEquals(_iedBrowserLastCfCanonicalModel, device.LiveCanonicalModel))
@@ -879,6 +912,10 @@ public partial class MainWindow
             .FirstOrDefault(x => ReferenceEquals(frameView, x.Display)).Raw;
         if (frameView is not null && received is not null)
         {
+            Put("GOOSE ID", frameView.GoId, "Received PDU · exact GoCB");
+            Put("DataSet reference", frameView.DataSetReference, "Received PDU · exact GoCB");
+            Put("Application ID", frameView.AppIdText, "Received Ethernet GOOSE header");
+            Put("Configuration revision", frameView.ConfigurationRevisionText, "Received PDU");
             Put("Capture status", "Received · exact GoCB verified", "Passive GOOSE");
             Put("Frame received at", received.CaptureTimestamp.ToLocalTime()
                 .ToString("yyyy-MM-dd HH:mm:ss.fff zzz",
@@ -899,6 +936,26 @@ public partial class MainWindow
             var ordered = _iedBrowserGooseDirectory is null
                 ? null : IedBrowserGooseInspection.VerifiedMembers(frameView,
                     _iedBrowserGooseDirectory);
+            // A real GOOSE frame can arrive without a model FCDA directory.
+            // Expose the actual allData vector as UNBOUND wire slots; do not
+            // invent IEC references or claim model-backed member identity.
+            if (ordered is null &&
+                IedBrowserGooseInspection.OrderedWireEntries(frameView) is { } slots &&
+                !_iedBrowserDetails.Rows.Any(row => row.Name.StartsWith(
+                    "Wire entry #", StringComparison.Ordinal)))
+                foreach (var leaf in slots)
+                    _iedBrowserDetails.Rows.Add(new IedBrowserDetailRow(
+                        "Data", $"Wire entry #{leaf.DataSetIndex + 1} (unbound)",
+                        leaf.Value, 0,
+                        "Actual passive GOOSE allData; no verified FCDA directory")
+                    {
+                        GooseSlot = leaf.DataSetIndex,
+                        ObservationSource = "GOOSE frame · wire only",
+                        ObservationTooltip = frameView.GoCbRef + " · allData #" +
+                            (leaf.DataSetIndex + 1)
+                    });
+            var rawSlots = ordered is null
+                ? IedBrowserGooseInspection.OrderedWireEntries(frameView) : null;
             foreach (var row in _iedBrowserDetails.Rows)
             {
                 if (row.GooseSlot < 0) continue;
@@ -914,7 +971,18 @@ public partial class MainWindow
                         "] · passive received " + received.CaptureTimestamp.ToString("O",
                             System.Globalization.CultureInfo.InvariantCulture);
                 }
-                else if (row.ObservationSource == "GOOSE frame")
+                else if (rawSlots is not null && row.GooseSlot < rawSlots.Count &&
+                         row.Name.StartsWith("Wire entry #", StringComparison.Ordinal))
+                {
+                    // Never project a raw slot onto an unverified FCDA name
+                    // when the advertised directory contradicts received allData.
+                    row.Value = rawSlots[row.GooseSlot].Value;
+                    row.ObservationSource = "GOOSE frame · wire only";
+                    row.ObservationTooltip = frameView.GoCbRef + " · allData #" +
+                        (row.GooseSlot + 1) + " · unbound";
+                }
+                else if (row.ObservationSource.StartsWith("GOOSE frame",
+                    StringComparison.Ordinal))
                 {
                     row.Value = "Not read";
                     row.ObservationSource = "";
@@ -929,7 +997,9 @@ public partial class MainWindow
                 "Passive capture; not an MMS GoCB read");
             foreach (var row in _iedBrowserDetails.Rows)
             {
-                if (row.GooseSlot < 0 || row.ObservationSource != "GOOSE frame") continue;
+                if (row.GooseSlot < 0 ||
+                    !row.ObservationSource.StartsWith("GOOSE frame", StringComparison.Ordinal))
+                    continue;
                 row.Value = "Not read";
                 row.ObservationSource = "";
                 row.ObservationTooltip = "";
@@ -955,6 +1025,7 @@ public partial class MainWindow
         _iedBrowserFileCatalog = null;
         _iedBrowserObservedDevice = device;
         _iedBrowserSnapshot = null;
+        _iedBrowserCallerRcbSignature = "";
         _iedBrowserFileOwner = device;
         _iedBrowserRemoteFiles = Array.Empty<IedBrowserRemoteFile>();
         _iedBrowserFilesLoaded = false;
@@ -999,6 +1070,12 @@ public partial class MainWindow
         if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
             RefreshIedBrowser();
     }
+
+    private string ActiveRcbSignature(Iec61850MonitorDevice device)
+        => string.Join("|", _runtime.GetActiveBrowserRcbReferences(device.DeviceId)
+            .Select(NormalizeRcbReference)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(key => key, StringComparer.OrdinalIgnoreCase));
 
     private void RefreshIedBrowser()
     {
@@ -1092,6 +1169,7 @@ public partial class MainWindow
             var callerOwned = _runtime.GetActiveBrowserRcbReferences(device.DeviceId)
                 .Select(NormalizeRcbReference)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            _iedBrowserCallerRcbSignature = ActiveRcbSignature(device);
             foreach (var report in rcbs)
             {
                 if (!callerOwned.Contains(NormalizeRcbReference(report.Reference)))
@@ -1205,14 +1283,6 @@ public partial class MainWindow
             IedBrowserClickOriginIsButton(e.OriginalSource,
                 (DependencyObject)sender))
             return;
-        if (!string.IsNullOrEmpty(detail.ReadObjectReference) &&
-            _iedBrowserNavigation.Current?.Payload is LiveIedLogicalNodeModel)
-        {
-            _iedBrowserSelectedDoReference = detail.ReadObjectReference;
-            IedBrowserReadPageButton.ToolTip =
-                "Read all model-proven safe FC attributes in selected DO " +
-                detail.ReadObjectReference + "; no writes or automatic polling.";
-        }
         if (!detail.HasChildren) return;
         ToggleIedBrowserDetails(detail);
         e.Handled = true;
@@ -1349,8 +1419,6 @@ public partial class MainWindow
     private void RenderIedBrowserSelection(
         IedBrowserTreeRow? row, LiveIedModelDiscoveryDocument? model, bool connected)
     {
-        if (!ReferenceEquals(_iedBrowserRenderedPage, row))
-            _iedBrowserSelectedDoReference = null;
         _iedBrowserRenderedPage = row;
         _iedBrowserRenderedConnected = connected;
         _iedBrowserGooseExpected = null;

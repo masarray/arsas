@@ -1872,8 +1872,12 @@
                         </Border>
                     </DataTemplate>
                     <DataTemplate x:Key="BrowserFlagGroupRow">
-                        <Border Padding="7,5" BorderBrush="#DCE4EF" BorderThickness="0,0,0,1">
-                            <ItemsControl ItemsSource="{Binding Flags}" ToolTip="{Binding Tooltip}">
+                        <Border Padding="12,5" BorderBrush="#DCE4EF" BorderThickness="0,0,0,1">
+                            <StackPanel>
+                                <TextBlock Text="{Binding Name}" FontSize="10.4"
+                                           FontWeight="SemiBold" Foreground="#4D6781"
+                                           Margin="0,0,0,3"/>
+                                <ItemsControl ItemsSource="{Binding Flags}" ToolTip="{Binding Tooltip}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
@@ -1886,7 +1890,8 @@
                                                   FontSize="11.2" Foreground="#344860"/>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                                </ItemsControl>
+                            </StackPanel>
                         </Border>
                     </DataTemplate>
                     <DataTemplate x:Key="BrowserObjectRow">
@@ -1983,6 +1988,10 @@
                                         Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         Click="IedBrowserReadValues_Click"
                                         ToolTip="Read values for the current Browser object over MMS. Live monitoring uses the report stream."/>
+                                <Button x:Name="IedBrowserGooseSubscribeButton" Content="Subscribe GOOSE"
+                                        Visibility="Collapsed" Style="{StaticResource SoftButton}" Margin="0,0,6,0"
+                                        Click="IedBrowserGooseSubscribe_Click"
+                                        ToolTip="Open existing GOOSE Sniff capture and select the IED station NIC"/>
                                 <Button x:Name="IedBrowserReadAllButton" Content="Read All" Tag="All"
                                         Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         Click="IedBrowserReadValues_Click"
@@ -2274,7 +2283,8 @@
                                         <DataGridTemplateColumn Header="Filename" Width="*" MinWidth="185">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
-                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                                                Margin="9,0,0,0">
                                                         <!-- Vector geometry supplied for the File List:
                                                              no font icon and no raster dependency. -->
                                                         <!-- Stretch an SVG-space geometry into a real 18px
