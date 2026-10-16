@@ -886,8 +886,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         if (!_activeControlTargets.TryAdd(targetKey, 0))
             throw new InvalidOperationException("A command is already running for this object.");
 
-        if (Volatile.Read(ref session.ControlFlightQuarantined) != 0 ||
-            Interlocked.CompareExchange(ref session.ControlCommandActive, 1, 0) != 0)
+        if (!Iec61850ControlFlightAdmission.TryEnter(
+                ref session.ControlCommandActive, ref session.ControlFlightQuarantined))
         {
             _activeControlTargets.TryRemove(targetKey, out _);
             throw new InvalidOperationException(
@@ -908,7 +908,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         }
         finally
         {
-            Interlocked.Exchange(ref session.ControlCommandActive, 0);
+            Iec61850ControlFlightAdmission.Release(ref session.ControlCommandActive);
             _activeControlTargets.TryRemove(targetKey, out _);
         }
     }
@@ -950,8 +950,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
     public bool IsControlFlightUnavailable(string deviceId)
         => _sessions.TryGetValue(deviceId, out var session) &&
-            (Volatile.Read(ref session.ControlCommandActive) != 0 ||
-             Volatile.Read(ref session.ControlFlightQuarantined) != 0);
+            (Iec61850ControlFlightAdmission.IsUnavailable(
+                ref session.ControlCommandActive, ref session.ControlFlightQuarantined));
 
     public async Task<Iec61850ControlCommandResult> ExecuteControlAsync(
         string deviceId,
@@ -977,8 +977,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         // Association-wide single-flight, not merely one lock per control
         // object. Different CSWIs on the same MMS socket must never accumulate
         // behind the native semaphore while the report loop is paused.
-        if (Volatile.Read(ref session.ControlFlightQuarantined) != 0 ||
-            Interlocked.CompareExchange(ref session.ControlCommandActive, 1, 0) != 0)
+        if (!Iec61850ControlFlightAdmission.TryEnter(
+                ref session.ControlCommandActive, ref session.ControlFlightQuarantined))
         {
             _activeControlTargets.TryRemove(targetKey, out _);
             Log("WARN", session.Device.Name,
@@ -1001,7 +1001,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         }
         catch (TimeoutException)
         {
-            Interlocked.Exchange(ref session.ControlFlightQuarantined, 1);
+            Iec61850ControlFlightAdmission.Quarantine(ref session.ControlFlightQuarantined);
             nativeCancellation.Cancel();
             Log("ERROR", session.Device.Name,
                 $"CONTROL_OUTCOME_UNKNOWN_TIMEOUT: {request.Signal.ObjectReference}; deadline={ControlFlightDeadline.TotalSeconds:0}s; nativeCompleted={nativeFlight?.IsCompleted}; no further commands on this MMS association. Actual IED position must be checked before reconnect.");
@@ -1012,7 +1012,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         {
             if (nativeFlight is { IsCompleted: false })
             {
-                Interlocked.Exchange(ref session.ControlFlightQuarantined, 1);
+                Iec61850ControlFlightAdmission.Quarantine(ref session.ControlFlightQuarantined);
                 nativeCancellation.Cancel();
                 Log("WARN", session.Device.Name,
                     $"CONTROL_CANCEL_OUTCOME_UNKNOWN: {request.Signal.ObjectReference}; native flight not completed; association quarantined.");
@@ -1033,7 +1033,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             else
             {
                 nativeCancellation.Dispose();
-                Interlocked.Exchange(ref session.ControlCommandActive, 0);
+                Iec61850ControlFlightAdmission.Release(ref session.ControlCommandActive);
                 _activeControlTargets.TryRemove(targetKey, out _);
             }
         }
@@ -1148,7 +1148,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         finally
         {
             nativeCancellation.Dispose();
-            Interlocked.Exchange(ref session.ControlCommandActive, 0);
+            Iec61850ControlFlightAdmission.Release(ref session.ControlCommandActive);
             _activeControlTargets.TryRemove(targetKey, out _);
         }
     }
