@@ -46,14 +46,18 @@ public static class IedBrowserGooseInspection
         ArgumentNullException.ThrowIfNull(candidates);
         var control = Canonical(expected.GoCbRef);
         var dataSet = Canonical(expected.DataSetReference);
-        if (control.Length == 0 || dataSet.Length == 0 ||
-            string.IsNullOrWhiteSpace(expected.IedName)) return null;
+        if (control.Length == 0 || string.IsNullOrWhiteSpace(expected.IedName)) return null;
 
         // Two publishers with the same GoCb identity are ambiguous, never last-one-wins.
         var matches = candidates.Where(frame =>
-            string.Equals(frame.ModelIedName, expected.IedName, StringComparison.Ordinal) &&
+            // A missing model DataSet cannot veto a uniquely identified
+            // actual PDU. Never borrow a DIFFERENT IED model's binding.
+            (frame.ModelIedName.Length == 0 ||
+             string.Equals(frame.ModelIedName, expected.IedName, StringComparison.Ordinal)) &&
             string.Equals(Canonical(frame.GoCbRef), control, StringComparison.Ordinal) &&
-            string.Equals(Canonical(frame.DataSetReference), dataSet, StringComparison.Ordinal) &&
+            frame.DataSetReference.Length > 0 &&
+            (dataSet.Length == 0 ||
+             string.Equals(Canonical(frame.DataSetReference), dataSet, StringComparison.Ordinal)) &&
             (string.IsNullOrWhiteSpace(expected.GoId) ||
                 string.Equals(frame.GoId, expected.GoId, StringComparison.Ordinal)) &&
             (!expected.AppId.HasValue || AppId(frame.AppIdText) == expected.AppId.Value) &&
@@ -87,6 +91,26 @@ public static class IedBrowserGooseInspection
                 return null;
         }
         return frame.Leaves;
+    }
+
+    /// <summary>
+    /// Passive actual allData slots are visible even when MMS did not expose
+    /// a DataSet directory. Never infer an FCDA name or fabricate a value.
+    /// </summary>
+    public static IReadOnlyList<GooseLeafValueSnapshot>? OrderedWireEntries(
+        GooseStreamSnapshot frame)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+        if (frame.WireDataSetEntryCount <= 0 ||
+            frame.Leaves.Count != frame.WireDataSetEntryCount)
+            return null;
+        var ordered = frame.Leaves.OrderBy(x => x.DataSetIndex).ToArray();
+        for (var i = 0; i < ordered.Length; i++)
+            if (ordered[i].DataSetIndex != i ||
+                string.IsNullOrWhiteSpace(ordered[i].Value) ||
+                ordered[i].Value == "<missing in frame>")
+                return null;
+        return ordered;
     }
 
     private static ushort? AppId(string value)
