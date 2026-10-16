@@ -46,7 +46,7 @@ public sealed class M217GDataSetSclSchemaFallbackTests
         };
 
     private static LiveIedDataAttributeModel[] ThreePhase()
-        => ["phsA", "phsB", "phsC"].SelectMany(phase =>
+        => new[] { "phsA", "phsB", "phsC" }.SelectMany(phase =>
             new[] { Attr("MX", phase + ".cVal.mag.f"),
                 Attr("MX", phase + ".cVal.ang.f"),
                 Attr("MX", phase + ".q"),
