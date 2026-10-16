@@ -15,6 +15,9 @@ public sealed class IedBrowserSchemaIndex
     private readonly Dictionary<string, string> _primaryLeaves =
         new(StringComparer.Ordinal);
     private readonly HashSet<string> _dataObjects = new(StringComparer.Ordinal);
+    // Schema-only DPC stVal/DO identities, computed once on model replacement.
+    // Never classify arbitrary numeric enums or a name-only Pos as Dbpos.
+    private readonly HashSet<string> _declaredDoublePointValues = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _qualityLeaves =
         new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _timestampLeaves =
@@ -66,6 +69,17 @@ public sealed class IedBrowserSchemaIndex
                     !reference.StartsWith(owner + ".", StringComparison.Ordinal))
                     continue;
                 var relative = reference[(owner.Length + 1)..];
+                // IEC DPC declarations and exact Dbpos BTypes are the only
+                // authority for double-point display. Both the precise
+                // process leaf and its own DO row may use this presentation.
+                if (fc == "ST" && relative == "stVal" &&
+                    (string.Equals(obj.InferredCdc, "DPC", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(attr.SclBType, "Dbpos", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(attr.SclBType, "DPC", StringComparison.OrdinalIgnoreCase)))
+                {
+                    _declaredDoublePointValues.Add(Key(reference, fc));
+                    _declaredDoublePointValues.Add(Key(owner, fc));
+                }
                 // A structured DO such as PPV contains CDC subobjects
                 // phsAB/phsBC/phsCA, each with its own q/t. Index their
                 // exact declared parent path instead of dropping the nested
@@ -205,6 +219,19 @@ public sealed class IedBrowserSchemaIndex
         return Ancestors(IedBrowserLiveValues.CanonicalReference(reference)).Any(
             ancestor => members.TryGetValue(ancestor, out var constraints) &&
                         constraints.Contains(targetFc));
+    }
+
+    /// <summary>
+    /// True only for the exact model-proven DPC process stVal (or its
+    /// declaring DO) and FC=ST. A report's text is never typing authority.
+    /// Use solely for operator presentation; the canonical ledger remains raw.
+    /// </summary>
+    public bool IsDeclaredDoublePointValue(string? reference, string? fc)
+    {
+        if (NormalizeFc(fc) != "ST") return false;
+        var identity = IedBrowserLiveValues.CanonicalReference(reference);
+        return identity.Length > 0 &&
+            _declaredDoublePointValues.Contains(Key(identity, "ST"));
     }
 
     /// <summary>
