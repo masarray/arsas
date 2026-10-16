@@ -287,7 +287,7 @@ public partial class MainWindow
         }
         var model = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
         var currentPage = _iedBrowserNavigation.Current;
-        var selectedDo = !readAll &&
+        var selectedDo = !readAll && sender is not Button { Tag: "LN" } &&
             ReferenceEquals(_iedBrowserRenderedPage, currentPage) &&
             currentPage?.Payload is LiveIedLogicalNodeModel
                 ? _iedBrowserSelectedDoReference : null;
@@ -509,6 +509,25 @@ public partial class MainWindow
                 : connected
                     ? "Read this model-verified object through bounded MMS reads."
                     : "Connect using this IED model and read selected values on demand; no RCB or cyclic polling.";
+        var focusedDo = selectedKind == IedBrowserReadSelectionKind.FcAttributes &&
+            _iedBrowserNavigation.Current?.Payload is LiveIedLogicalNodeModel &&
+            !string.IsNullOrWhiteSpace(_iedBrowserSelectedDoReference);
+        if (IedBrowserReadLnButton is not null)
+        {
+            IedBrowserReadLnButton.Visibility =
+                focusedDo ? Visibility.Visible : Visibility.Collapsed;
+            IedBrowserReadLnButton.IsEnabled = ready;
+        }
+        if (focusedDo)
+        {
+            IedBrowserReadPageButton.Content = "Read DO";
+            IedBrowserReadPageButton.ToolTip = "Read only " +
+                _iedBrowserSelectedDoReference +
+                "; choose Read LN for the entire Logical Node.";
+        }
+        else if (selectedKind == IedBrowserReadSelectionKind.FcAttributes &&
+                 _iedBrowserNavigation.Current?.Payload is LiveIedLogicalNodeModel)
+            IedBrowserReadPageButton.Content = "Read LN";
         IedBrowserReadPageButton.IsEnabled = ready;
         IedBrowserReadAllButton.IsEnabled = ready;
         IedBrowserCancelReadButton.IsEnabled = _iedBrowserReadOperation != null;
@@ -1228,9 +1247,7 @@ public partial class MainWindow
             _iedBrowserNavigation.Current?.Payload is LiveIedLogicalNodeModel)
         {
             _iedBrowserSelectedDoReference = detail.ReadObjectReference;
-            IedBrowserReadPageButton.ToolTip =
-                "Read all model-proven safe FC attributes in selected DO " +
-                detail.ReadObjectReference + "; no writes or automatic polling.";
+            RefreshIedBrowserReadButtons(); // expose separate Read DO and Read LN scope
         }
         if (!detail.HasChildren) return;
         ToggleIedBrowserDetails(detail);
@@ -1411,6 +1428,7 @@ public partial class MainWindow
             connected, SelectedDevice?.SclWorkspace?.DesignModel));
         _iedBrowserLastLiveVersion = -1;
         RefreshIedBrowserVisibleValues();
+        RefreshIedBrowserReadButtons();
         // Folder entry opens at its first child, regardless of the scroll
         // position in the previously inspected RCB, LN or DataSet.
         if (_iedBrowserDetails.Rows.Count > 0)

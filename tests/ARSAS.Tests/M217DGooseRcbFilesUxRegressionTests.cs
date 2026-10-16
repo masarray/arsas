@@ -49,4 +49,20 @@ public sealed class M217DGooseRcbFilesUxRegressionTests
         Assert.Contains("View GOOSE Capture", source);
         Assert.DoesNotContain("SubscribeAsync(", source);
     }
+    [Fact]
+    public void FocusedDoDoesNotConcealWholeLogicalNodeRead()
+    {
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root != null && !File.Exists(Path.Combine(root.FullName, "MainWindow.IedBrowser.cs")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var xaml = File.ReadAllText(Path.Combine(root!.FullName, "MainWindow.xaml"));
+        var code = File.ReadAllText(Path.Combine(root.FullName, "MainWindow.IedBrowser.cs"));
+        Assert.Contains("IedBrowserReadLnButton", xaml);
+        Assert.Contains("Tag=\"LN\"", xaml);
+        Assert.Contains("sender is not Button { Tag: \"LN\" }", code);
+        Assert.Contains("IedBrowserReadPageButton.Content = \"Read DO\"", code);
+        Assert.Contains("choose Read LN for the entire Logical Node.", code);
+    }
+
 }
