@@ -22,7 +22,6 @@ public partial class MainWindow
     private readonly IedBrowserDetailProjection _iedBrowserDetails = new();
     private readonly IedBrowserNavigationTrail _iedBrowserNavigation = new();
     private bool _iedBrowserSyncingSelection;
-    private string? _iedBrowserSelectedDoReference;
     private int _iedBrowserNavigationRenderTicket;
     private long _iedBrowserLastLiveVersion = -1;
     private LiveIedCanonicalModel? _iedBrowserLastCfCanonicalModel;
@@ -303,12 +302,10 @@ public partial class MainWindow
         }
         var model = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
         var currentPage = _iedBrowserNavigation.Current;
-        var selectedDo = !readAll &&
-            ReferenceEquals(_iedBrowserRenderedPage, currentPage) &&
-            currentPage?.Payload is LiveIedLogicalNodeModel
-                ? _iedBrowserSelectedDoReference : null;
-        var targets = IedBrowserReadPlan.Build(
-            model, currentPage, readAll, selectedDo);
+        // Clicking a DO expands its visual children; it must NOT silently
+        // shrink the next Read from the entire LN to one last-clicked DO.
+        // Operator Read is the selected page; Read All is the whole model.
+        var targets = IedBrowserReadPlan.Build(model, currentPage, readAll);
         if (targets.Count == 0)
         {
             IedBrowserSubtitle.Text = "No model-verified readable FC attributes in this selection.";
@@ -394,8 +391,7 @@ public partial class MainWindow
             }
         }
         device.ResetDiscoveryProgress("Preparing read-only MMS values…",
-            readAll ? "Reading all IED values" : selectedDo is not null
-                ? "Reading selected DO " + selectedDo : "Reading Browser values");
+            readAll ? "Reading all IED values" : "Reading current Browser page");
         device.IsBrowserReading = true; // Preserve the ongoing report monitor lifecycle.
         IedBrowserReadPageButton.IsEnabled = false;
         IedBrowserReadAllButton.IsEnabled = false;
@@ -504,7 +500,7 @@ public partial class MainWindow
             : !canReachIED
                 ? "Bind an MMS IP address to this IED before reading live values."
                 : connected
-                    ? "Read this model-verified object through bounded MMS reads."
+                    ? "Read all safe FC attributes on this page (entire LN for an LN selection); expand/click on a DO does not narrow the Read."
                     : "Connect using this IED model and read selected values on demand; no RCB or cyclic polling.";
         IedBrowserGooseSubscribeButton.Visibility =
             _iedBrowserNavigation.Current?.Kind == "GoCB"
@@ -1283,14 +1279,6 @@ public partial class MainWindow
             IedBrowserClickOriginIsButton(e.OriginalSource,
                 (DependencyObject)sender))
             return;
-        if (!string.IsNullOrEmpty(detail.ReadObjectReference) &&
-            _iedBrowserNavigation.Current?.Payload is LiveIedLogicalNodeModel)
-        {
-            _iedBrowserSelectedDoReference = detail.ReadObjectReference;
-            IedBrowserReadPageButton.ToolTip =
-                "Read all model-proven safe FC attributes in selected DO " +
-                detail.ReadObjectReference + "; no writes or automatic polling.";
-        }
         if (!detail.HasChildren) return;
         ToggleIedBrowserDetails(detail);
         e.Handled = true;
@@ -1427,8 +1415,6 @@ public partial class MainWindow
     private void RenderIedBrowserSelection(
         IedBrowserTreeRow? row, LiveIedModelDiscoveryDocument? model, bool connected)
     {
-        if (!ReferenceEquals(_iedBrowserRenderedPage, row))
-            _iedBrowserSelectedDoReference = null;
         _iedBrowserRenderedPage = row;
         _iedBrowserRenderedConnected = connected;
         _iedBrowserGooseExpected = null;
