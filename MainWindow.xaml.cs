@@ -1495,7 +1495,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private bool RejectCommandWhenIedFlightUnavailable(
         Iec61850MonitorDevice? device, SignalDefinition signal)
     {
-        if (device is null || !_runtime.IsControlFlightUnavailable(device.DeviceId))
+        // The UI is advisory. The runtime's atomic association-wide gate is
+        // authoritative, including sticky uncertain-outcome quarantine.
+        // Reuse existing CommandSignals state instead of mirroring a new
+        // runtime busy flag into the WPF view model.
+        if (device is null ||
+            !device.CommandSignals.Any(active => active.ControlCommandBusy))
             return false;
         const string reason =
             "another IED command is still active or its wire outcome is unresolved";
@@ -1735,6 +1740,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             signal.ControlLastResult = "Command cancelled; if Operate was already dispatched, verify actual IED position.";
             SetStatus($"{device.Name}: {signal.Name} command cancelled; verify the final process state.");
+        }
+        catch (InvalidOperationException ex) when (
+            ex.Message.Contains("control", StringComparison.OrdinalIgnoreCase) &&
+            (ex.Message.Contains("in progress", StringComparison.OrdinalIgnoreCase) ||
+             ex.Message.Contains("unresolved", StringComparison.OrdinalIgnoreCase)))
+        {
+            signal.ControlLastResult = "Command NOT SENT: " + ex.Message;
+            AddLog("WARN", device.Name,
+                $"CONTROL_UI_LOCAL_GATE: {signal.ObjectReference}; {ex.Message}");
+            SetStatus($"{device.Name}: {signal.Name} — command not sent; prior flight active or unresolved.");
+            MarkDiagnosticAlert();
+            ShowControlShout(Iec61850ControlShout.FromLocalRejection(
+                "another control flight is active or unresolved. Verify actual IED status before retrying"));
         }
         catch (TimeoutException ex)
         {
