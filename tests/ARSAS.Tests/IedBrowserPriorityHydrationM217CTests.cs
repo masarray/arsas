@@ -166,6 +166,47 @@ public sealed class IedBrowserPriorityHydrationM217CTests
     }
 
     [Fact]
+    public void ReattachedExplorerSignalsMirrorExistingReadEvidenceExactlyOnce()
+    {
+        var model = Model(Obj("LLN0", "Health", "ST", "ENS", "stVal"));
+        var device = new Iec61850MonitorDevice { LiveDiscoveryModel = model, IsConnected = true };
+        var reference = "LD/LLN0.Health.stVal";
+        var association = device.LiveValues.Association;
+        Assert.True(device.LiveValues.PublishForAssociation(association,
+            reference, "ST", "2", "", "", "MMS Read"));
+        var signal = new SignalDefinition
+        {
+            ObjectReference = reference, FunctionalConstraint = "ST"
+        };
+        device.Signals.ReplaceAll([signal]);
+        var index = new IedBrowserReadBindingIndex(device);
+        Assert.Equal(1, index.ProjectCurrentReadSignals(device.LiveValues, association));
+        Assert.Equal("2", signal.Value);
+        Assert.Equal("Unknown", signal.Quality);
+        Assert.Equal("-", signal.DeviceTimestamp);
+        Assert.Equal(CanonicalSignalObservationState.LiveRead, signal.ObservationState);
+        Assert.Equal(association, signal.ObservationAssociation);
+        Assert.False(device.LiveValues.TryGet(reference, "MX", out _));
+
+        // Replaced UI catalog cannot receive queued old projections.
+        var replacement = new SignalDefinition
+        {
+            ObjectReference = reference, FunctionalConstraint = "ST"
+        };
+        device.Signals.ReplaceAll([replacement]);
+        Assert.Equal(0, index.ProjectCurrentReadSignals(device.LiveValues, association));
+        Assert.Equal(1, new IedBrowserReadBindingIndex(device)
+            .ProjectCurrentReadSignals(device.LiveValues, association));
+        Assert.Equal("2", replacement.Value);
+        device.IsMonitoring = true;
+        Assert.Equal(0, new IedBrowserReadBindingIndex(device)
+            .ProjectCurrentReadSignals(device.LiveValues, association));
+        device.IsConnected = false;
+        Assert.Equal(0, new IedBrowserReadBindingIndex(device)
+            .ProjectCurrentReadSignals(device.LiveValues, association));
+    }
+
+    [Fact]
     public void RuntimeHydrationIsSerialBudgetedAndUsesCurrentLedgerWithoutControlWrites()
     {
         DirectoryInfo? dir = new(AppContext.BaseDirectory);
@@ -185,5 +226,7 @@ public sealed class IedBrowserPriorityHydrationM217CTests
         Assert.Contains("ReferenceEquals(device.LiveDiscoveryModel, model)", src);
         var ui = File.ReadAllText(Path.Combine(dir.FullName, "MainWindow.IedBrowser.cs"));
         Assert.Contains("device.InitialHydrationFailures?.TryGet(", ui);
+        var main = File.ReadAllText(Path.Combine(dir.FullName, "MainWindow.xaml.cs"));
+        Assert.Contains("ProjectCurrentReadSignals(", main);
     }
 }

@@ -956,6 +956,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 _signalOwners[signal] = device;
             }
             device.Signals.AddRange(signals);
+            // Full discovery returns before the GUI signal catalog is attached.
+            // Project already-verified initial MMS Read evidence from the
+            // per-IED ledger once; no duplicate value cache or MMS activity.
+            if (device.IsConnected)
+                new IedBrowserReadBindingIndex(device).ProjectCurrentReadSignals(
+                    device.LiveValues, device.LiveValues.Association);
             device.HasDiscoveryCache = signals.Count > 0;
             ApplySclLiveComparison(device, signals);
             ScheduleGooseBindingRefreshFromWorkspace();

@@ -191,7 +191,7 @@ public static class IedBrowserReadPlan
         if (station && obj.Name == "NamPlt" && fc == "DC" &&
             leaf.Length > 0 && !leaf.Contains('.')) return 2;
         if (isStatus) return 3;
-        if (position && fc == "ST" && leaf is "q" or "t") return 4;
+        if (position && fc == "ST" && leaf is ("q" or "t")) return 4;
         if (obj.Name == "NamPlt" && fc == "DC" &&
             leaf.Length > 0 && !leaf.Contains('.')) return 5;
         return -1;
