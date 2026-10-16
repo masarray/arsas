@@ -200,13 +200,31 @@ public static class IedBrowserReadPlan
                 StringComparison.Ordinal) ? 1 : 0)
             .ThenBy(target => target.Reference, StringComparer.Ordinal)
             .Take(8).ToArray();
-        // Prioritize verified control-block state and then finite LN image,
-        // without an extra background service or second observation cache.
-        return settings.Concat(goose).Concat(candidates)
+        // Critical station Mod/Beh/Health must never starve behind multiple
+        // optional control blocks or slow LActTm reads on a 10s envelope.
+        // The priority-sorted LN plan already puts these at priority zero.
+        var critical = candidates.Where(target =>
+            IsCriticalStationStatus(target.Reference, target.FunctionalConstraint));
+        return critical.Concat(settings).Concat(goose).Concat(candidates)
             .DistinctBy(target => IedBrowserLiveValues.CanonicalReference(target.Reference) +
                 "|" + target.FunctionalConstraint.Trim().ToUpperInvariant(),
                 StringComparer.Ordinal)
             .Take(maxTargets).ToArray();
+    }
+
+    private static bool IsCriticalStationStatus(string reference, string fc)
+    {
+        if (!string.Equals(fc, "ST", StringComparison.OrdinalIgnoreCase))
+            return false;
+        var normalized = IedBrowserLiveValues.CanonicalReference(reference);
+        var slash = normalized.LastIndexOf('/');
+        var dot = normalized.IndexOf('.', slash + 1);
+        if (dot < 0) return false;
+        var ln = normalized[(slash + 1)..dot];
+        return (ln == "LLN0" || IsLnClass(ln, "LPHD")) &&
+               (normalized.EndsWith(".Mod.stVal", StringComparison.Ordinal) ||
+                normalized.EndsWith(".Beh.stVal", StringComparison.Ordinal) ||
+                normalized.EndsWith(".Health.stVal", StringComparison.Ordinal));
     }
 
     private static int InitialPriority(
