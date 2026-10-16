@@ -2935,12 +2935,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             UiFlushTimer_Tick(null, EventArgs.Empty);
             devices = Devices.ToArray();
             logs = Logs.ToArray();
+            // Freeze the passive Browser evidence before any asynchronous
+            // diagnostic probe; no network request is made for GOOSE here.
+            var browserGooseEvidence = CaptureIedBrowserGooseEvidence();
             var report = await DiagnosticReportBuilder.BuildAsync(
                 devices,
                 logs,
                 SelectedDevice,
                 _applicationCancellation.Token);
 
+            report += browserGooseEvidence;
             Clipboard.SetText(report, TextDataFormat.UnicodeText);
             SetStatus($"Diagnostic report copied ({report.Length:N0} characters). Paste it into the support conversation.");
             AddLog("INFO", "Diagnostics", "Support diagnostic report copied to clipboard.");
