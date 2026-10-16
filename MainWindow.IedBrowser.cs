@@ -941,7 +941,8 @@ public partial class MainWindow
             // invent IEC references or claim model-backed member identity.
             if (ordered is null &&
                 IedBrowserGooseInspection.OrderedWireEntries(frameView) is { } slots &&
-                !_iedBrowserDetails.Rows.Any(row => row.GooseSlot >= 0))
+                !_iedBrowserDetails.Rows.Any(row => row.Name.StartsWith(
+                    "Wire entry #", StringComparison.Ordinal)))
                 foreach (var leaf in slots)
                     _iedBrowserDetails.Rows.Add(new IedBrowserDetailRow(
                         "Data", $"Wire entry #{leaf.DataSetIndex + 1} (unbound)",
