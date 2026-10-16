@@ -736,12 +736,12 @@ public partial class MainWindow
                 if (IedBrowserControlStateEvidence.TryReadFailure(
                         device, block, pageKind, field,
                         _iedBrowserReadFailureEvidence, device.InitialHydrationFailures,
-                        out var failure, out var source, out var reference))
+                        out var failure, out var source, out var failedReference))
                 {
                     row.Value = "Unavailable";
                     row.ObservationSource = source;
                     row.ObservationTooltip =
-                        $"{reference} [{block.FunctionalConstraint}] · {source} · {failure}";
+                        $"{failedReference} [{block.FunctionalConstraint}] · {source} · {failure}";
                 }
                 else
                 {
