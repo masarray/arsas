@@ -5,7 +5,7 @@ namespace ARSAS.Tests;
 public sealed class M214BrowserCollapsibleReportSectionsTests
 {
     [Fact]
-    public void RcbSections_AreExpandedByDefault_AndOperatorMayCollapseIndependently()
+    public void RcbFlagsCollapseWithControlBlockWhileLastReportRemainsIndependent()
     {
         var source = new[]
         {
@@ -29,7 +29,7 @@ public sealed class M214BrowserCollapsibleReportSectionsTests
             row.Kind == "Section" && row.Name == "Information received in last Report");
         Assert.True(controls.IsExpanded);
         Assert.True(received.IsExpanded);
-        Assert.Equal(2, controls.GetChildren().Count);
+        Assert.Equal(4, controls.GetChildren().Count);
         Assert.Equal(2, received.GetChildren().Count);
         model.Toggle(controls);
         Assert.False(controls.IsExpanded);
@@ -38,7 +38,7 @@ public sealed class M214BrowserCollapsibleReportSectionsTests
         Assert.Contains(model.Rows, row => row.Name == "Data");
         model.Toggle(received);
         Assert.DoesNotContain(model.Rows, row => row.Name == "Received frame count");
-        Assert.Contains(model.Rows, row => row.Name == "Trigger options");
+        Assert.DoesNotContain(model.Rows, row => row.Name == "Trigger options");
         model.Toggle(controls);
         model.Toggle(received);
         Assert.Equal(source.Length, model.Rows.Count);

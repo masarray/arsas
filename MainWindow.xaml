@@ -1983,10 +1983,18 @@
                                         Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         Click="IedBrowserReadValues_Click"
                                         ToolTip="Read values for the current Browser object over MMS. Live monitoring uses the report stream."/>
+                                <Button x:Name="IedBrowserReadLnButton" Content="Read LN" Tag="LN"
+                                        Visibility="Collapsed" Style="{StaticResource SoftButton}" Margin="0,0,6,0"
+                                        Click="IedBrowserReadValues_Click"
+                                        ToolTip="Read all model-proven attributes in this LN, not just the focused Data Object."/>
                                 <Button x:Name="IedBrowserReadAllButton" Content="Read All" Tag="All"
                                         Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         Click="IedBrowserReadValues_Click"
                                         ToolTip="Read model-proven IEC data attributes sequentially; progress appears on the IED card."/>
+                                <Button x:Name="IedBrowserGooseSubscribeButton" Content="Subscribe GOOSE"
+                                        Style="{StaticResource SoftButton}" Margin="0,0,6,0"
+                                        Visibility="Collapsed" Click="IedBrowserGooseSubscribe_Click"
+                                        ToolTip="Open existing passive GOOSE Subscriber for this IED; choose a capture adapter. Does not enable GoEna or write MMS."/>
                                 <Button x:Name="IedBrowserCancelReadButton" Content="Cancel Read"
                                         Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         IsEnabled="False" Click="IedBrowserCancelRead_Click"
@@ -2274,7 +2282,8 @@
                                         <DataGridTemplateColumn Header="Filename" Width="*" MinWidth="185">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
-                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                                                Margin="10,0,5,0">
                                                         <!-- Vector geometry supplied for the File List:
                                                              no font icon and no raster dependency. -->
                                                         <!-- Stretch an SVG-space geometry into a real 18px

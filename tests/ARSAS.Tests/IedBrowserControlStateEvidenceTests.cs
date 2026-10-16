@@ -115,4 +115,90 @@ public sealed class IedBrowserControlStateEvidenceTests
             "GoCB/SCL", "SCL", "GoCB", 3, Block("GSEControl", "GO", "BCU",
                 status: "Model", fields: ["GoEna"])), readAll: false));
     }
+    [Fact]
+    public void FullLiveInitialHydrationIncludesOnlyVerifiedReadOnlySgcbStatus()
+    {
+        var verified = Block(fields: ["NumOfSG", "ActSG", "LActTm", "EditSG", "CnfEdit"]);
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel { MmsDomain = "LD" }],
+            SettingGroupControls = [verified]
+        };
+        var values = new IedBrowserLiveValues();
+        var session = values.BeginAssociation();
+        var plan = IedBrowserReadPlan.BuildInitialPriority(model, values, 32);
+        Assert.Equal(3, plan.Count);
+        Assert.True(plan[0].Reference.EndsWith(".ActSG", StringComparison.Ordinal));
+        Assert.True(plan[1].Reference.EndsWith(".NumOfSG", StringComparison.Ordinal));
+        Assert.True(plan[2].Reference.EndsWith(".LActTm", StringComparison.Ordinal));
+        Assert.All(plan, target => Assert.Equal("SP", target.FunctionalConstraint));
+        Assert.Contains(plan, target => target.Reference.EndsWith(".ActSG", StringComparison.Ordinal));
+        Assert.DoesNotContain(plan, target => target.Reference.Contains("EditSG", StringComparison.Ordinal) ||
+            target.Reference.Contains("CnfEdit", StringComparison.Ordinal));
+
+        Assert.True(values.PublishForAssociation(session, "LD/LLN0.SGCB.ActSG",
+            "SP", "1", "", "", "MMS Read"));
+        Assert.Equal(2, IedBrowserReadPlan.BuildInitialPriority(model, values, 32).Count);
+        Assert.Single(IedBrowserReadPlan.BuildInitialPriority(model, values, 1));
+        values.BeginAssociation();
+        Assert.Equal(3, IedBrowserReadPlan.BuildInitialPriority(model, values, 32).Count);
+    }
+
+    [Fact]
+    public void InitialSgcbPlanRejectsSclOnlyAndAmbiguousInventory()
+    {
+        var valid = Block(fields: ["NumOfSG", "ActSG"]);
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel { MmsDomain = "LD" }],
+            SettingGroupControls = [valid, valid,
+                Block(status: "SCL", fields: ["LActTm"])]
+        };
+        var ledger = new IedBrowserLiveValues();
+        ledger.BeginAssociation();
+        Assert.Empty(IedBrowserReadPlan.BuildInitialPriority(model, ledger, 32));
+    }
+
+    [Fact]
+    public void FullLiveHydrationIncludesOnlyExactGoCbReadOnlyState()
+    {
+        var goose = Block("GSEControl", "GO", "BCU",
+            fields: ["GoEna", "NdsCom", "DatSet", "ConfRev"]);
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel { MmsDomain = "LD" }],
+            GooseControlBlocks = [goose]
+        };
+        var ledger = new IedBrowserLiveValues();
+        var association = ledger.BeginAssociation();
+        var plan = IedBrowserReadPlan.BuildInitialPriority(model, ledger, 32);
+        Assert.Equal(2, plan.Count);
+        Assert.All(plan, target => Assert.Equal("GO", target.FunctionalConstraint));
+        Assert.Contains(plan, target => target.Reference.EndsWith(".GoEna", StringComparison.Ordinal));
+        Assert.Contains(plan, target => target.Reference.EndsWith(".NdsCom", StringComparison.Ordinal));
+        Assert.DoesNotContain(plan, target => target.Reference.EndsWith(".DatSet", StringComparison.Ordinal));
+
+        Assert.True(ledger.PublishForAssociation(association,
+            "LD/LLN0.BCU.GoEna", "GO", "true", "", "", "MMS Read"));
+        Assert.Single(IedBrowserReadPlan.BuildInitialPriority(model, ledger, 32));
+        ledger.BeginAssociation();
+        Assert.Equal(2, IedBrowserReadPlan.BuildInitialPriority(model, ledger, 32).Count);
+    }
+
+    [Fact]
+    public void InitialGoCbStatusNeverBorrowsSclOnlyOrDuplicateControlIdentity()
+    {
+        var valid = Block("GSEControl", "GO", "BCU", fields: ["GoEna", "NdsCom"]);
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel { MmsDomain = "LD" }],
+            GooseControlBlocks = [valid, valid,
+                Block("GSEControl", "GO", "OTHER", status: "SCL",
+                    fields: ["GoEna"])]
+        };
+        var ledger = new IedBrowserLiveValues();
+        ledger.BeginAssociation();
+        Assert.Empty(IedBrowserReadPlan.BuildInitialPriority(model, ledger, 32));
+    }
+
 }

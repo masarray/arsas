@@ -163,7 +163,68 @@ public static class IedBrowserReadPlan
                 string.IsNullOrWhiteSpace(x.attr.SclBType)
                     ? x.attr.MmsType : x.attr.SclBType))
             .ToArray();
-        return candidates;
+        // SGCB is not an LN DataObject. Its exact GetNameList FC inventory
+        // must be admitted through the same bounded read plan, not skipped
+        // because the generic attribute walker cannot see the control block.
+        // Only read-only NumOfSG/ActSG/LActTm; never EditSG/CnfEdit/SE.
+        var settings = verifiedLiveModel.SettingGroupControls
+            .SelectMany(block => IedBrowserControlStateEvidence.ReadTargets(block, "SGCB"))
+            .GroupBy(target => IedBrowserLiveValues.CanonicalReference(target.Reference) +
+                               "|" + target.FunctionalConstraint,
+                StringComparer.Ordinal)
+            .Where(group => group.Count() == 1)
+            .Select(group => group.First())
+            .Where(target => !ledger.TryGet(target.Reference,
+                target.FunctionalConstraint, out var observed) ||
+                observed.IsStale || observed.Association != association)
+            .OrderBy(target => target.Reference.EndsWith(".LActTm",
+                StringComparison.Ordinal) ? 1 : 0)
+            .ThenBy(target => target.Reference, StringComparer.Ordinal)
+            .ToArray();
+        // Likewise, GoEna/NdsCom belong to the exact live GO control
+        // inventory, not ordinary data-object attributes or received GOOSE
+        // frames. A passive subscriber cannot prove either MMS status.
+        // Limit background status reads for dense GoCB catalogs; unvisited
+        // objects retain honest Not read evidence.
+        var goose = verifiedLiveModel.GooseControlBlocks
+            .SelectMany(block => IedBrowserControlStateEvidence.ReadTargets(block, "GoCB"))
+            .GroupBy(target => IedBrowserLiveValues.CanonicalReference(target.Reference) +
+                               "|" + target.FunctionalConstraint,
+                StringComparer.Ordinal)
+            .Where(group => group.Count() == 1)
+            .Select(group => group.First())
+            .Where(target => !ledger.TryGet(target.Reference,
+                target.FunctionalConstraint, out var observed) ||
+                observed.IsStale || observed.Association != association)
+            .OrderBy(target => target.Reference.EndsWith(".NdsCom",
+                StringComparison.Ordinal) ? 1 : 0)
+            .ThenBy(target => target.Reference, StringComparer.Ordinal)
+            .Take(8).ToArray();
+        // Critical station Mod/Beh/Health must never starve behind multiple
+        // optional control blocks or slow LActTm reads on a 10s envelope.
+        // The priority-sorted LN plan already puts these at priority zero.
+        var critical = candidates.Where(target =>
+            IsCriticalStationStatus(target.Reference, target.FunctionalConstraint));
+        return critical.Concat(settings).Concat(goose).Concat(candidates)
+            .DistinctBy(target => IedBrowserLiveValues.CanonicalReference(target.Reference) +
+                "|" + target.FunctionalConstraint.Trim().ToUpperInvariant(),
+                StringComparer.Ordinal)
+            .Take(maxTargets).ToArray();
+    }
+
+    private static bool IsCriticalStationStatus(string reference, string fc)
+    {
+        if (!string.Equals(fc, "ST", StringComparison.OrdinalIgnoreCase))
+            return false;
+        var normalized = IedBrowserLiveValues.CanonicalReference(reference);
+        var slash = normalized.LastIndexOf('/');
+        var dot = normalized.IndexOf('.', slash + 1);
+        if (dot < 0) return false;
+        var ln = normalized[(slash + 1)..dot];
+        return (ln == "LLN0" || IsLnClass(ln, "LPHD")) &&
+               (normalized.EndsWith(".Mod.stVal", StringComparison.Ordinal) ||
+                normalized.EndsWith(".Beh.stVal", StringComparison.Ordinal) ||
+                normalized.EndsWith(".Health.stVal", StringComparison.Ordinal));
     }
 
     private static int InitialPriority(
