@@ -472,10 +472,43 @@ public partial class MainWindow
     private void IedBrowserGooseSubscribe_Click(object sender, RoutedEventArgs e)
     {
         if (SelectedDevice is not { IsDemo: false } device ||
-            _iedBrowserRenderedPage?.Kind != "GoCB")
+            _iedBrowserRenderedPage?.Kind != "GoCB" || GooseActionBusy)
             return;
-        // Shared Npcap-based subscriber, no second GOOSE receive/decoder path.
-        OpenIedGooseSubscriber(device);
+        // The Browser is an independent view of the SAME Npcap subscriber;
+        // never navigate to the Sniff tab or instantiate another receiver.
+        if (IsGooseCapturing)
+        {
+            UpdateIedBrowserGooseDetails();
+            return;
+        }
+        if (GooseAdapters.Count == 0)
+            RefreshGooseAdapters();
+        if (SelectedGooseAdapter is null)
+        {
+            var proposed = ResolveGooseAdapterForIed(device, out var route);
+            if (proposed is not null)
+                SelectedGooseAdapter = proposed;
+            else
+                IedBrowserDetailStatus.Text =
+                    "Select the station capture adapter here, then press Subscribe GOOSE. " + route;
+        }
+        IedBrowserGooseAdapterCombo.Visibility = Visibility.Visible;
+        if (SelectedGooseAdapter is null)
+        {
+            IedBrowserGooseAdapterCombo.Focus();
+            RefreshIedBrowserReadButtons();
+            return;
+        }
+        // Existing start path owns decoder, bound model, lifetime and UI queue.
+        StartGooseSubscriber_Click(sender, e);
+        RefreshIedBrowserReadButtons();
+    }
+
+    private async void IedBrowserGooseStop_Click(object sender, RoutedEventArgs e)
+    {
+        if (!IsGooseCapturing || GooseActionBusy) return;
+        await StopGooseSubscriberAsync();
+        RefreshIedBrowserReadButtons();
     }
 
     private void RefreshIedBrowserReadButtons()
@@ -499,7 +532,18 @@ public partial class MainWindow
             IedBrowserGooseSubscribeButton.IsEnabled =
                 device is { IsDemo: false } && _iedBrowserReadOperation == null;
             IedBrowserGooseSubscribeButton.Content = IsGooseCapturing
-                ? "View GOOSE Capture" : "Subscribe GOOSE";
+                ? "View live GOOSE" : "Subscribe GOOSE";
+            IedBrowserGooseSubscribeButton.IsEnabled =
+                device is { IsDemo: false } && !GooseActionBusy;
+            IedBrowserGooseStopButton.Visibility =
+                _iedBrowserRenderedPage?.Kind == "GoCB" && IsGooseCapturing
+                    ? Visibility.Visible : Visibility.Collapsed;
+            IedBrowserGooseStopButton.IsEnabled = !GooseActionBusy;
+            IedBrowserGooseAdapterCombo.Visibility =
+                _iedBrowserRenderedPage?.Kind == "GoCB" &&
+                (!IsGooseCapturing || GooseAdapters.Count > 0)
+                    ? Visibility.Visible : Visibility.Collapsed;
+            IedBrowserGooseAdapterCombo.IsEnabled = !IsGooseCapturing && !GooseActionBusy;
         }
         IedBrowserReadPageButton.Content = selectedKind == IedBrowserReadSelectionKind.ReadOnlyRcb
             ? "Inspect RCB"

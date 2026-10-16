@@ -150,4 +150,45 @@ public sealed class IedBrowserGooseInspectionTests
     }
 
 
+    [Fact]
+    public void FullyQualifiedWireGoCbCanBeObservedWithoutMmsDataSetDirectory()
+    {
+        var expected = Expected() with { DataSetReference = "", GoId = "",
+            AppId = null, ConfRev = null };
+        var raw = Frame() with { ModelIedName = "", BindingSource = "Unbound" };
+        Assert.Same(raw, IedBrowserGooseInspection.Select(expected, [raw]));
+        Assert.Null(IedBrowserGooseInspection.Select(expected,
+            [raw with { GoCbRef = "LD/LLN0$GO$DIFFERENT" }]));
+        Assert.Null(IedBrowserGooseInspection.Select(expected, [raw, raw with
+            { StreamKey = "other-publisher" }]));
+        Assert.Null(IedBrowserGooseInspection.Select(
+            expected with { GoCbRef = "BCU" }, [raw]));
+        Assert.Null(IedBrowserGooseInspection.Select(
+            expected with { DataSetReference = "LD/LLN0.OTHER" }, [raw]));
+        Assert.Null(IedBrowserGooseInspection.Select(
+            expected, [raw with { ModelIedName = "OTHER" }]));
+    }
+
+    [Fact]
+    public void BrowserSubscribeIsInlineAndSharesOriginalNpcapStartStop()
+    {
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root != null && !File.Exists(Path.Combine(root.FullName, "MainWindow.xaml")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var xaml = File.ReadAllText(Path.Combine(root!.FullName, "MainWindow.xaml"));
+        var src = File.ReadAllText(Path.Combine(root.FullName, "MainWindow.IedBrowser.cs"));
+        Assert.Contains("IedBrowserGooseAdapterCombo", xaml);
+        Assert.Contains("IedBrowserGooseStopButton", xaml);
+        Assert.Contains("StartGooseSubscriber_Click(sender, e);", src);
+        Assert.Contains("await StopGooseSubscriberAsync();", src);
+        var offset = src.IndexOf("private void IedBrowserGooseSubscribe_Click(", StringComparison.Ordinal);
+        var end = src.IndexOf("private async void IedBrowserGooseStop_Click(", offset, StringComparison.Ordinal);
+        Assert.True(offset >= 0 && end > offset);
+        Assert.DoesNotContain("OpenIedGooseSubscriber(", src[offset..end]);
+        Assert.DoesNotContain("MainTabs.SelectedIndex =", src[offset..end]);
+        Assert.DoesNotContain("new GooseSubscriberRuntime(", src[offset..end]);
+    }
+
+
 }
