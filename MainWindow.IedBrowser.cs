@@ -609,6 +609,14 @@ public partial class MainWindow
                     row.ValueReference, row.FunctionalConstraint, live.Value);
             else
                 display = "Not exposed";
+            // IEC UTC wire timestamps are UTC instants, unlike offsetless
+            // vendor display strings that may already be operator-local.
+            // Convert only when explicit UTC/offset evidence exists.
+            if (row.EvidenceField.Length == 0 &&
+                (row.EvidenceKind == "Timestamp" ||
+                 row.ValueReference.EndsWith(".t", StringComparison.Ordinal) ||
+                 row.ValueReference.EndsWith(".LActTm", StringComparison.Ordinal)))
+                display = IedBrowserLocalTimePresentation.Format(display);
             if (row.IsEngineeringValue && row.EvidenceField.Length == 0)
                 display = IedBrowserEngineeringValuePresentation.Format(
                     display, IedBrowserEngineeringValuePresentation.ResolveUnit(
@@ -651,6 +659,8 @@ public partial class MainWindow
             {
                 var display = IedBrowserControlStateEvidence.FormatObservedField(
                     pageKind, field, observed);
+                if (field == "LActTm")
+                    display = IedBrowserLocalTimePresentation.Format(display);
                 row.Value = observed.IsStale ? "Offline · " + display : display;
                 row.ObservationSource = observed.IsStale
                     ? "Stale MMS Read" : "MMS Read";
