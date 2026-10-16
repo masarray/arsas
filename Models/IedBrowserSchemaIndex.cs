@@ -219,10 +219,12 @@ public sealed class IedBrowserSchemaIndex
             string.IsNullOrWhiteSpace(fc) ||
             !_members.TryGetValue(IedBrowserLiveValues.CanonicalReference(dataSet), out var members))
             return false;
-        var targetFc = NormalizeFc(fc);
-        return Ancestors(IedBrowserLiveValues.CanonicalReference(reference)).Any(
-            ancestor => members.TryGetValue(ancestor, out var constraints) &&
-                        constraints.Contains(targetFc));
+        // Read targeting and Report admission must use the SAME declared
+        // ancestor-FC authority. 'Any matching ancestor' is unsafe when a
+        // more specific FCDA contradicts its FCD parent (MX vs ST).
+        // In that case Report already fails closed; Read must do so too.
+        return TryResolveReportFc(dataSet, reference, out var verifiedFc) &&
+               string.Equals(verifiedFc, NormalizeFc(fc), StringComparison.Ordinal);
     }
 
     // IEC 61850 defines Pos on these switching LNs as DPC. This is a

@@ -53,6 +53,7 @@ public sealed class IedBrowserTreeRow : ObservableObject
         {
             AR.Iec61850.Mms.MmsRcbOperationalAvailability.UsedByCaller => "●",
             AR.Iec61850.Mms.MmsRcbOperationalAvailability.InUse => "◆",
+            AR.Iec61850.Mms.MmsRcbOperationalAvailability.Unknown => "?",
             _ => ""
         } : "";
     public string RcbUsageTooltip => Payload is RcbExportRow report
@@ -62,6 +63,9 @@ public sealed class IedBrowserTreeRow : ObservableObject
                 "Active in the current ARSAS monitoring session",
             AR.Iec61850.Mms.MmsRcbOperationalAvailability.InUse =>
                 "RCB in use by another client (read-only RCB status)",
+            AR.Iec61850.Mms.MmsRcbOperationalAvailability.Unknown =>
+                "RCB occupancy unknown; use Check live RCB for a read-only availability snapshot. " +
+                report.Reason,
             _ => report.Reason
         } : "";
 

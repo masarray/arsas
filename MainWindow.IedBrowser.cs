@@ -38,6 +38,7 @@ public partial class MainWindow
     private DateTime _iedBrowserCachedSourceStamp;
     private Iec61850MonitorDevice? _iedBrowserObservedDevice;
     private MmsRcbAvailabilityResult? _iedBrowserSnapshot;
+    private IedBrowserRcbCheckLease? _iedBrowserSnapshotLease;
     private IReadOnlyList<IedBrowserRemoteFile> _iedBrowserRemoteFiles = Array.Empty<IedBrowserRemoteFile>();
     private Iec61850MonitorDevice? _iedBrowserFileOwner;
     private bool _iedBrowserFilesLoaded;
@@ -218,6 +219,9 @@ public partial class MainWindow
             return;
 
         var sourceDevice = device;
+        // A 35-second read-only check may outlive a fast disconnect/reconnect.
+        // Freeze the existing per-IED association and schema identities now.
+        var checkLease = new IedBrowserRcbCheckLease(sourceDevice);
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(35));
         _iedBrowserReadOperation = cts;
         IedBrowserReadRcbButton.IsEnabled = false;
@@ -227,10 +231,12 @@ public partial class MainWindow
         {
             var result = await _rcbAvailabilityProbe.CheckAsync(device, cts.Token);
             if (cts.IsCancellationRequested || !ReferenceEquals(SelectedDevice, sourceDevice) ||
-                !ReferenceEquals(_iedBrowserObservedDevice, sourceDevice) || !sourceDevice.IsConnected ||
+                !ReferenceEquals(_iedBrowserObservedDevice, sourceDevice) ||
+                !checkLease.IsCurrent(sourceDevice) ||
                 MainTabs.SelectedIndex != IedBrowserWorkspaceIndex)
                 return;
 
+            _iedBrowserSnapshotLease = checkLease;
             _iedBrowserSnapshot = result;
             RefreshIedBrowser();
         }
@@ -990,6 +996,7 @@ public partial class MainWindow
         _iedBrowserFileCatalog = null;
         _iedBrowserObservedDevice = device;
         _iedBrowserSnapshot = null;
+        _iedBrowserSnapshotLease = null;
         _iedBrowserFileOwner = device;
         _iedBrowserRemoteFiles = Array.Empty<IedBrowserRemoteFile>();
         _iedBrowserFilesLoaded = false;
@@ -1030,6 +1037,7 @@ public partial class MainWindow
             CancelIedBrowserRead();
             _iedBrowserReadFailureEvidence = null;
             _iedBrowserSnapshot = null;
+            _iedBrowserSnapshotLease = null;
         }
         if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
             RefreshIedBrowser();
@@ -1042,6 +1050,15 @@ public partial class MainWindow
 
         var device = SelectedDevice;
         ObserveIedBrowserDevice(device);
+        // A captured probe is not live state across a new MMS association
+        // even when the selected UI card never changed.
+        if (_iedBrowserSnapshot != null &&
+            (_iedBrowserSnapshotLease?.IsCurrent(device) != true))
+        {
+            _iedBrowserSnapshot = null;
+            _iedBrowserSnapshotLease = null;
+            _iedBrowserForceRefresh = true;
+        }
         IedBrowserReadRcbButton.IsEnabled = device?.IsConnected == true &&
                                             device.IsBusy == false && _iedBrowserReadOperation == null;
         RefreshIedBrowserReadButtons();

@@ -72,8 +72,10 @@ public sealed class M2IedSchemaIndexTests
         Assert.False(index.TryResolveReportFc(DataSet, Position + ".stVal", out _));
         Assert.True(index.TryResolveReportFc(DataSet, Position + ".q", out var fc));
         Assert.Equal("ST", fc);
-        Assert.True(index.ContainsDataSetMember(DataSet, Position + ".stVal", "ST"));
-        Assert.True(index.ContainsDataSetMember(DataSet, Position + ".stVal", "MX"));
+        // Previously Read admitted either FC here while Report rejected
+        // both. The same ambiguous FCD/FCDA ancestry must now fail closed.
+        Assert.False(index.ContainsDataSetMember(DataSet, Position + ".stVal", "ST"));
+        Assert.False(index.ContainsDataSetMember(DataSet, Position + ".stVal", "MX"));
         Assert.False(index.ContainsDataSetMember(DataSet, "LD/CSWI10.Pos", "ST"));
     }
 
