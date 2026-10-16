@@ -516,6 +516,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
             device.IsConnected = true;
             session.BrowserObservationAssociation = device.LiveValues.Association;
+            if (connectionPath == Iec61850ConnectionPath.SclAssisted)
+                Log("INFO", device.Name,
+                    $"SCL initial MMS scalar evidence reused in the shared per-IED ledger: {PublishTrustedSclInitialEvidence(session)}.");
             device.LastDiagnosticSnapshot = session.Client.CaptureDiagnosticSnapshot(
                 connectionPath == Iec61850ConnectionPath.SclAssisted
                     ? "Verified SCL-assisted connection complete"
@@ -606,6 +609,23 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         else
             await session.Client.ConnectAsync(device.IpAddress, device.Port, cancellationToken).ConfigureAwait(false);
         return path;
+    }
+
+    // SCL-assisted transport already performed bounded real MMS reads. Reuse
+    // their verified scalar leaves; do not create another acquisition lane.
+    private int PublishTrustedSclInitialEvidence(DeviceSession session)
+    {
+        var device = session.Device;
+        var client = session.Client;
+        if (!_sessions.TryGetValue(device.DeviceId, out var active) ||
+            !ReferenceEquals(active, session) || !client.IsConnected ||
+            !client.HasTrustedSclOnlineAuthority ||
+            device.LiveDiscoveryModel is not { } model ||
+            !ReferenceEquals(model, client.LastLiveModel))
+            return 0;
+        return IedBrowserInitialEvidenceProjection.Publish(device, model,
+            reference => client.TryGetTrustedSclInitialValue(reference, out var value)
+                ? value : null);
     }
 
     public async Task<IReadOnlyList<Iec61850MonitorPoint>> StartMonitoringAsync(
@@ -2248,6 +2268,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.NextHealthProbeUtc = session.RecoveryWarmupUntilUtc;
         session.Device.IsConnected = true;
         session.BrowserObservationAssociation = session.Device.LiveValues.Association;
+        PublishTrustedSclInitialEvidence(session);
         session.Device.Status = "Monitoring";
         session.Device.AcquisitionMode = session.StaticDataSetReportOnly
             ? "MMS recovered • Static DataSet report re-arm pending"
