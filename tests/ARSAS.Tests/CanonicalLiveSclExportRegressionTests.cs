@@ -469,8 +469,16 @@ public sealed class CanonicalLiveSclExportRegressionTests
             typedBscTrial.GetProperty("baseEngineCommit").GetString());
         Assert.Equal("036e2c00d83a0815b6160147b14ea05975057965",
             typedBscTrial.GetProperty("exactCommit").GetString());
+        var rioSidecar = root.GetProperty("m214RioSidecarTrial");
         Assert.Equal(typedBscTrial.GetProperty("exactCommit").GetString(),
+            rioSidecar.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal("aecaa3c73519d53e86223c8d1226f3ffd99a6743", rioSidecar.GetProperty("exactCommit").GetString());
+        Assert.Equal(rioSidecar.GetProperty("exactCommit").GetString(),
             root.GetProperty("commit").GetString());
+        Assert.Equal("code-trial-not-physical",
+            rioSidecar.GetProperty("status").GetString());
+        Assert.True(rioSidecar.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(rioSidecar.GetProperty("mainlinePromotionForbidden").GetBoolean());
         Assert.Equal("engine-ci-success-consumer-ci-pending-not-physical",
             typedBscTrial.GetProperty("status").GetString());
         Assert.Equal(38328335496L, typedBscTrial.GetProperty("engineCiRun").GetInt64());
@@ -508,7 +516,7 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.True(zivTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
         Assert.True(zivTrial.GetProperty("fullDiscoveryFallbackForbidden").GetBoolean());
         Assert.True(zivTrial.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
-        Assert.Equal(169, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(170, root.GetProperty("sourcePullRequest").GetInt32());
         Assert.True(genericTrial.GetProperty("typedSemanticGateRequired").GetBoolean());
         Assert.True(genericTrial.GetProperty("associationScopedInventoryRequired").GetBoolean());
         Assert.True(genericTrial.GetProperty("vendorDispatchForbidden").GetBoolean());
