@@ -1617,8 +1617,16 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                             ".q", StringComparison.Ordinal);
                         var isDirectTime = evidence.CarrierReference.EndsWith(
                             ".t", StringComparison.Ordinal);
-                        if (!isExactDo && !isDirectQuality && !isDirectTime)
-                            continue; // never attribute nested DA evidence to owner DO
+                        // PPV.phsAB is a declared nested CDC carrier: its
+                        // typed q/t belong to phsAB alone, not other phases.
+                        // Require exact declared companion + FC, never a
+                        // suffix match or generic ancestor inference.
+                        var isExactNestedCarrier =
+                            evidenceSchema.IsDeclaredCompanionContainer(
+                                evidence.CarrierReference, evidenceFc);
+                        if (!isExactDo && !isExactNestedCarrier &&
+                            !isDirectQuality && !isDirectTime)
+                            continue; // reject unknown structured carriers
                         if (evidence.QualityBits is { } quality &&
                             evidenceSchema.TryGetQualityCompanion(
                                 evidence.CarrierReference, evidenceFc, out var qRef))
