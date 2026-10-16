@@ -200,16 +200,79 @@ public static class IedBrowserReadPlan
                 StringComparison.Ordinal) ? 1 : 0)
             .ThenBy(target => target.Reference, StringComparer.Ordinal)
             .Take(8).ToArray();
+        // A tiny verified analog seed makes the initial DataSet MMXU image
+        // useful even before GI/Report or a manual Read. Only literal live
+        // MMS MX magnitude leaves that are covered by the exact declared
+        // DataSet FC may enter; selected SCL shapes are NEVER read targets.
+        // Six values share the SAME existing 32-target/10-second envelope,
+        // not an extra background poll or MMS association.
+        const int initialAnalogSeedLimit = 6;
+        var analog = verifiedLiveModel.LogicalDevices
+            .SelectMany(ld => ld.LogicalNodes)
+            .SelectMany(ln => ln.DataObjects)
+            .Where(obj =>
+            {
+                var owner = IedBrowserLiveValues.CanonicalReference(obj.Reference);
+                var slash = owner.LastIndexOf('/');
+                var dot = owner.IndexOf('.', slash + 1);
+                return dot > slash && IsLnClass(owner[(slash + 1)..dot], "MMXU");
+            })
+            .SelectMany(obj => obj.Attributes)
+            .Where(attr =>
+            {
+                var reference = IedBrowserLiveValues.CanonicalReference(attr.MmsReference);
+                if (!string.Equals(attr.FunctionalConstraint, "MX",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    !(reference.EndsWith(".mag.f", StringComparison.Ordinal) ||
+                      reference.EndsWith(".cVal.mag.f", StringComparison.Ordinal)))
+                    return false;
+                // Live DataSet coverage, not a nearby LN/IED or SCL guess.
+                return verifiedLiveModel.DataSets.Any(set =>
+                    schema.ContainsDataSetMember(set.Reference, reference, "MX"));
+            })
+            .GroupBy(attr => IedBrowserLiveValues.CanonicalReference(attr.MmsReference)
+                + "|MX", StringComparer.Ordinal)
+            .Where(group => group.Count() == 1)
+            .Select(group => group.First())
+            .Where(attr => !ledger.TryGet(attr.MmsReference, "MX", out var observed) ||
+                observed.IsStale || observed.Association != association)
+            .OrderBy(attr => AnalogSeedRank(
+                IedBrowserLiveValues.CanonicalReference(attr.MmsReference)))
+            .ThenBy(attr => attr.MmsReference, StringComparer.Ordinal)
+            .Take(initialAnalogSeedLimit)
+            .Select(attr => new IedBrowserReadTarget(attr.MmsReference, "MX",
+                string.IsNullOrWhiteSpace(attr.SclBType) ?
+                    attr.MmsType : attr.SclBType))
+            .ToArray();
         // Critical station Mod/Beh/Health must never starve behind multiple
         // optional control blocks or slow LActTm reads on a 10s envelope.
         // The priority-sorted LN plan already puts these at priority zero.
         var critical = candidates.Where(target =>
             IsCriticalStationStatus(target.Reference, target.FunctionalConstraint));
-        return critical.Concat(settings).Concat(goose).Concat(candidates)
+        // Quickly read status and at most six MX magnitudes before slower
+        // optional q/t/nameplate/GoCB timing fields. Do not starve analog
+        // behind a large control inventory, and preserve the global cap.
+        var fastSg = settings.Where(target =>
+            !target.Reference.EndsWith(".LActTm", StringComparison.Ordinal));
+        var firstGo = goose.Where(target =>
+            target.Reference.EndsWith(".GoEna", StringComparison.Ordinal))
+            .Take(2);
+        return critical.Concat(fastSg.Take(4)).Concat(firstGo).Concat(analog)
+            .Concat(settings).Concat(goose).Concat(candidates)
             .DistinctBy(target => IedBrowserLiveValues.CanonicalReference(target.Reference) +
                 "|" + target.FunctionalConstraint.Trim().ToUpperInvariant(),
                 StringComparer.Ordinal)
             .Take(maxTargets).ToArray();
+    }
+
+    private static int AnalogSeedRank(string reference)
+    {
+        // Deterministic priority for canonical IEC three-phase magnitude.
+        // No value may be invented for an absent angle, quality or phase.
+        if (reference.EndsWith(".phsA.cVal.mag.f", StringComparison.Ordinal)) return 0;
+        if (reference.EndsWith(".phsB.cVal.mag.f", StringComparison.Ordinal)) return 1;
+        if (reference.EndsWith(".phsC.cVal.mag.f", StringComparison.Ordinal)) return 2;
+        return 3;
     }
 
     private static bool IsCriticalStationStatus(string reference, string fc)
