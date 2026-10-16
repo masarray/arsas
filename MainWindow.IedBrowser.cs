@@ -230,6 +230,8 @@ public partial class MainWindow
             return;
 
         var sourceDevice = device;
+        var checkAssociation = device.LiveValues.Association;
+        var checkModel = device.LiveDiscoveryModel;
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(35));
         _iedBrowserReadOperation = cts;
         IedBrowserReadRcbButton.IsEnabled = false;
@@ -240,6 +242,8 @@ public partial class MainWindow
             var result = await _rcbAvailabilityProbe.CheckAsync(device, cts.Token);
             if (cts.IsCancellationRequested || !ReferenceEquals(SelectedDevice, sourceDevice) ||
                 !ReferenceEquals(_iedBrowserObservedDevice, sourceDevice) || !sourceDevice.IsConnected ||
+                sourceDevice.LiveValues.Association != checkAssociation ||
+                !ReferenceEquals(sourceDevice.LiveDiscoveryModel, checkModel) ||
                 MainTabs.SelectedIndex != IedBrowserWorkspaceIndex)
                 return;
 
