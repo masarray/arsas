@@ -141,6 +141,16 @@ public sealed class M217TypedDoublePointLiveModelTests
     }
 
     [Fact]
+    public void ContradictoryExplicitCdc_NeverOverriddenByStandardLnFallback()
+    {
+        const string owner = "LD/XCBR1.Pos";
+        var schema = Index(Obj(owner, "SPS"));
+        Assert.False(schema.IsDeclaredDoublePointValue(owner + ".stVal", "ST"));
+        Assert.Equal("off", IedBrowserDoublePointPresentation.Format(
+            "off", owner + ".stVal", owner, "ST", schema));
+    }
+
+    [Fact]
     public void GenericEnumsMustNotBeMisrepresentedAsBreakerPosition()
     {
         Assert.Equal("1", Iec61850ValueFormatter.Format(1, "Enum", ""));
