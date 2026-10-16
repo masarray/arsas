@@ -129,4 +129,25 @@ public sealed class IedBrowserGooseInspectionTests
     }
 
 
+    [Fact]
+    public void CopyDiagnosticsReusesOnlyExistingSubscriberFrameIndex()
+    {
+        DirectoryInfo? folder = new(AppContext.BaseDirectory);
+        while (folder is not null &&
+               !File.Exists(Path.Combine(folder.FullName, "MainWindow.xaml.cs")))
+            folder = folder.Parent;
+        Assert.NotNull(folder);
+        var main = File.ReadAllText(Path.Combine(folder!.FullName, "MainWindow.xaml.cs"));
+        var browser = File.ReadAllText(Path.Combine(folder.FullName, "MainWindow.IedBrowser.cs"));
+        Assert.Contains("CaptureIedBrowserGooseEvidence()", main);
+        Assert.Contains("GOOSE BROWSER ACCEPTANCE EVIDENCE (passive, non-MMS)", browser);
+        Assert.Contains("_latestGooseFrames.Values", browser);
+        Assert.Contains("TTL-expired-or-invalid", browser);
+        Assert.Contains("identity-or-model-binding-mismatch", browser);
+        Assert.Contains("ordered-member-directory-not-verified", browser);
+        Assert.Contains("var browserGooseEvidence = CaptureIedBrowserGooseEvidence();", main);
+        Assert.Contains("report += browserGooseEvidence;", main);
+    }
+
+
 }
