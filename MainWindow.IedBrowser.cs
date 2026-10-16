@@ -617,6 +617,19 @@ public partial class MainWindow
                  row.ValueReference.EndsWith(".t", StringComparison.Ordinal) ||
                  row.ValueReference.EndsWith(".LActTm", StringComparison.Ordinal)))
                 display = IedBrowserLocalTimePresentation.Format(display);
+            // Data Model, DataSets and Report details are projections of the
+            // SAME exact reference/FC canonical value. Use the existing IEC
+            // operator formatter only when the current model declares DPC.
+            // No name-only inference and no mutation of raw report evidence.
+            if (row.EvidenceField.Length == 0 &&
+                row.FunctionalConstraint == "ST" &&
+                _iedBrowserValueSchemaIndex is { } valueSchema &&
+                (valueSchema.IsDeclaredDoublePointValue(
+                     observedReference, row.FunctionalConstraint) ||
+                 valueSchema.IsDeclaredDoublePointValue(
+                     row.ValueReference, row.FunctionalConstraint)))
+                display = Iec61850ValueFormatter.FormatReportProcessValue(
+                    display, "Dbpos", "", "Position", observedReference);
             if (row.IsEngineeringValue && row.EvidenceField.Length == 0)
                 display = IedBrowserEngineeringValuePresentation.Format(
                     display, IedBrowserEngineeringValuePresentation.ResolveUnit(
