@@ -224,6 +224,19 @@ public sealed class IedBrowserSchemaIndex
         => _dataObjects.Contains(IedBrowserLiveValues.CanonicalReference(reference));
 
     /// <summary>
+    /// A structured Report carrier may be an exact nested CDC container,
+    /// rather than a top-level DO. It may supply raw q/t ONLY when that
+    /// same container and FC actually declare a matching companion leaf.
+    /// </summary>
+    public bool IsDeclaredCompanionContainer(string? reference, string? fc)
+    {
+        var owner = IedBrowserLiveValues.CanonicalReference(reference);
+        if (owner.Length == 0 || string.IsNullOrWhiteSpace(fc)) return false;
+        var key = Key(owner, fc);
+        return _qualityLeaves.ContainsKey(key) || _timestampLeaves.ContainsKey(key);
+    }
+
+    /// <summary>
     /// Bind a real Report quality payload only to the closest declared owning
     /// DO's q leaf with the identical FC. A similarly named sibling is excluded.
     /// </summary>
