@@ -75,7 +75,8 @@ public sealed class IedBrowserSchemaIndex
                 if (fc == "ST" && relative == "stVal" &&
                     (string.Equals(obj.InferredCdc, "DPC", StringComparison.OrdinalIgnoreCase) ||
                      string.Equals(attr.SclBType, "Dbpos", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(attr.SclBType, "DPC", StringComparison.OrdinalIgnoreCase)))
+                     string.Equals(attr.SclBType, "DPC", StringComparison.OrdinalIgnoreCase) ||
+                     IsStandardSwitchPosition(owner)))
                 {
                     _declaredDoublePointValues.Add(Key(reference, fc));
                     _declaredDoublePointValues.Add(Key(owner, fc));
@@ -219,6 +220,28 @@ public sealed class IedBrowserSchemaIndex
         return Ancestors(IedBrowserLiveValues.CanonicalReference(reference)).Any(
             ancestor => members.TryGetValue(ancestor, out var constraints) &&
                         constraints.Contains(targetFc));
+    }
+
+    // IEC 61850 defines Pos on these switching LNs as DPC. This is a
+    // standard LN+DO declaration, not an arbitrary UI name heuristic.
+    // A declared ST stVal is still mandatory to authorize its value.
+    private static bool IsStandardSwitchPosition(string owner)
+    {
+        var slash = owner.LastIndexOf('/');
+        if (slash < 0) return false;
+        var lnPath = owner[(slash + 1)..];
+        var dot = lnPath.IndexOf('.');
+        if (dot < 1 || !string.Equals(lnPath[(dot + 1)..], "Pos", StringComparison.Ordinal))
+            return false;
+        var ln = lnPath[..dot];
+        foreach (var standardClass in new[] { "XCBR", "XSWI", "CSWI" })
+        {
+            if (!ln.StartsWith(standardClass, StringComparison.Ordinal)) continue;
+            var instance = ln[standardClass.Length..];
+            if (instance.Length == 0 || instance.All(char.IsDigit))
+                return true;
+        }
+        return false;
     }
 
     /// <summary>
