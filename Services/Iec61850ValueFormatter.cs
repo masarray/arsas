@@ -32,8 +32,8 @@ public static class Iec61850ValueFormatter
             sbyte b => AppendUnit(b.ToString(CultureInfo.InvariantCulture), unit),
             short s => AppendUnit(s.ToString(CultureInfo.InvariantCulture), unit),
             ushort s => AppendUnit(s.ToString(CultureInfo.InvariantCulture), unit),
-            int i when dataType.Equals("Enum", StringComparison.OrdinalIgnoreCase) && i == 1 => "Open",
-            int i when dataType.Equals("Enum", StringComparison.OrdinalIgnoreCase) && i == 2 => "Closed",
+            // Generic IEC enums (Mod, Beh, Health, etc.) have their own
+            // mappings. 1/2 are NOT universally Open/Close.
             int i => AppendUnit(i.ToString(CultureInfo.InvariantCulture), unit),
             uint i => AppendUnit(i.ToString(CultureInfo.InvariantCulture), unit),
             long l => AppendUnit(l.ToString(CultureInfo.InvariantCulture), unit),
