@@ -733,18 +733,15 @@ public partial class MainWindow
             }
             else
             {
-                var target = IedBrowserControlStateEvidence.ReadTargets(block, pageKind)
-                    .FirstOrDefault(item => item.Reference.EndsWith(
-                        "." + field, StringComparison.Ordinal));
-                if (target is not null &&
-                    _iedBrowserReadFailureEvidence?.TryGet(device,
-                        target.Reference, "", target.FunctionalConstraint,
-                        out var failure) == true)
+                if (IedBrowserControlStateEvidence.TryReadFailure(
+                        device, block, pageKind, field,
+                        _iedBrowserReadFailureEvidence, device.InitialHydrationFailures,
+                        out var failure, out var source, out var failedReference))
                 {
                     row.Value = "Unavailable";
-                    row.ObservationSource = "MMS Read failed";
+                    row.ObservationSource = source;
                     row.ObservationTooltip =
-                        $"{target.Reference} [{target.FunctionalConstraint}] · {failure}";
+                        $"{failedReference} [{block.FunctionalConstraint}] · {source} · {failure}";
                 }
                 else
                 {
