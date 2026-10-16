@@ -2,9 +2,17 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "036e2c00d83a0815b6160147b14ea05975057965",
-  "sourcePullRequest": 169,
-  "purpose": "P10.9V: exact typed live BSC authority over stale SPC static projection; preserves P10.9U CSWI Pos recovery. Engine CI green; ZIV bench acceptance pending.",
+  "commit": "aecaa3c73519d53e86223c8d1226f3ffd99a6743",
+  "sourcePullRequest": 170,
+  "purpose": "M2.14 consumer-only candidate pin from the P10.9V engine: exact same-directory/basename RIO sidecar inclusion in COMTRADE record and transactional download. Physical acceptance pending; previous control and report authority retained.",
+  "m214RioSidecarTrial": {
+    "baseEngineCommit": "036e2c00d83a0815b6160147b14ea05975057965",
+    "exactCommit": "aecaa3c73519d53e86223c8d1226f3ffd99a6743",
+    "sourcePullRequest": 170,
+    "status": "code-trial-not-physical",
+    "physicalQualificationRequired": true,
+    "mainlinePromotionForbidden": true
+  },
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
