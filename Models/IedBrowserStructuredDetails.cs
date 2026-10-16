@@ -8,6 +8,71 @@ namespace ArIED61850Tester.Models;
 /// </summary>
 public static class IedBrowserStructuredDetails
 {
+    /// <summary>
+    /// DataSet presentation may use the selected IED's exact SCL schema
+    /// when live discovery did not expose any declarations for this member FC.
+    /// This never authorizes an MMS Read or supplies an observation: the
+    /// Browser value remains keyed to the original member reference and FC.
+    /// Ambiguous live ownership must NOT silently fall back to SCL.
+    /// </summary>
+    private static LiveIedDataObjectModel? PresentationOwner(
+        string memberReference, string memberFc,
+        LiveIedModelDiscoveryDocument? liveModel,
+        LiveIedModelDiscoveryDocument? sclModel,
+        out bool sclOnly)
+    {
+        sclOnly = false;
+        if (memberReference.Length == 0 || string.IsNullOrWhiteSpace(memberFc))
+            return null;
+
+        static (LiveIedDataObjectModel? Owner, bool Ambiguous) Find(
+            LiveIedModelDiscoveryDocument? source, string reference)
+        {
+            var owners = source?.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
+                .SelectMany(ln => ln.DataObjects)
+                .Where(obj => reference == IedBrowserLiveValues.CanonicalReference(obj.Reference) ||
+                    reference.StartsWith(
+                        IedBrowserLiveValues.CanonicalReference(obj.Reference) + ".",
+                        StringComparison.Ordinal))
+                .OrderByDescending(obj => obj.Reference.Length).ToArray();
+            if (owners is not { Length: > 0 })
+                return (null, false);
+            var best = IedBrowserLiveValues.CanonicalReference(owners[0].Reference);
+            var grouped = IedBrowserEngineeringObjects.GroupExact(
+                owners.Where(o => IedBrowserLiveValues.CanonicalReference(o.Reference) == best)
+                    .ToArray());
+            return grouped.Count == 1
+                ? (grouped[0], false) : (null, true);
+        }
+
+        var live = Find(liveModel, memberReference);
+        if (live.Ambiguous) return null;
+        if (live.Owner is { } proven &&
+            proven.Attributes.Any(a =>
+                string.Equals(a.FunctionalConstraint, memberFc,
+                    StringComparison.OrdinalIgnoreCase) &&
+                (string.Equals(IedBrowserLiveValues.CanonicalReference(a.MmsReference),
+                    memberReference, StringComparison.Ordinal) ||
+                 IedBrowserLiveValues.CanonicalReference(a.MmsReference)
+                    .StartsWith(memberReference + ".", StringComparison.Ordinal))))
+            return proven;
+
+        // Do not merge two competing SCL/type inventories or borrow an LN
+        // from a different domain: the member's fully-qualified owner must
+        // be present in this selected-IED SCL projection.
+        var scl = Find(sclModel, memberReference);
+        if (scl.Ambiguous || scl.Owner is null)
+            return live.Owner;
+        if (!scl.Owner.Attributes.Any(a =>
+                string.Equals(a.FunctionalConstraint, memberFc,
+                    StringComparison.OrdinalIgnoreCase) &&
+                IedBrowserLiveValues.CanonicalReference(a.MmsReference)
+                    .StartsWith(memberReference + ".", StringComparison.Ordinal)))
+            return live.Owner;
+        sclOnly = true;
+        return scl.Owner;
+    }
+
     /// <summary>One DO row; child DAs/BDAs materialize only when expanded.</summary>
     public static IedBrowserDetailRow DataObject(
         LiveIedDataObjectModel obj, string? uniqueProcessFc, int depth = 0)
@@ -77,20 +142,8 @@ public static class IedBrowserStructuredDetails
         // Static FCD reports can expose only a scalar semantic descendant.
         // Resolve a unique IEC process leaf once from the exact model owner.
         var identity = IedBrowserLiveValues.CanonicalReference(member.Reference);
-        var objectCandidates = model?.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
-            .SelectMany(ln => ln.DataObjects)
-            .Where(obj => identity == IedBrowserLiveValues.CanonicalReference(obj.Reference) ||
-                identity.StartsWith(IedBrowserLiveValues.CanonicalReference(obj.Reference) + ".",
-                    StringComparison.Ordinal))
-            .OrderByDescending(obj => obj.Reference.Length).ToArray()
-            ?? Array.Empty<LiveIedDataObjectModel>();
-        // Discovery may list the same DO once per FC. Reuse the exact
-        // engineering grouping; conflicting names fail closed.
-        var matchingOwners = objectCandidates.Length == 0
-            ? Array.Empty<LiveIedDataObjectModel>()
-            : IedBrowserEngineeringObjects.GroupExact(objectCandidates
-                .Where(o => o.Reference == objectCandidates[0].Reference).ToArray());
-        var exactObject = matchingOwners.Count == 1 ? matchingOwners[0] : null;
+        var exactObject = PresentationOwner(identity, member.FunctionalConstraint,
+            model, sclModel, out var usingSclSchema);
         // A DataSet FCDA can identify a structured subobject (A.phsA)
         // while the discovered DO owner is A. Resolve only descendants of
         // that exact member and matching FC.
@@ -144,7 +197,9 @@ public static class IedBrowserStructuredDetails
             ? IedBrowserEngineeringComposite.BuildPolar(matchingMembers, identity)
             : null;
         return new IedBrowserDetailRow("Data", $"{name} [{member.FunctionalConstraint}]", "Not read",
-            depth, "DataSet directory; observed live values or explicit MMS read")
+            depth, usingSclSchema
+                ? "Selected-IED SCL structure only; values require exact live evidence"
+                : "DataSet directory; observed live values or explicit MMS read")
         {
             ScalarComponents = scalarComponents,
             PolarPlan = memberPolarPlan,
@@ -165,34 +220,28 @@ public static class IedBrowserStructuredDetails
                             ? IedBrowserLiveValues.CanonicalReference(a.MmsReference)[(identity.Length + 1)..]
                             : "")),
                     member.FunctionalConstraint),
-            LoadChildren = () => DataSetMemberChildren(member, model, depth + 1)
+            LoadChildren = () => DataSetMemberChildren(
+                member, model, depth + 1, sclModel)
         };
     }
 
     public static IReadOnlyList<IedBrowserDetailRow> DataSetMemberChildren(
-        LiveIedDataSetMemberModel member, LiveIedModelDiscoveryDocument? model, int depth)
+        LiveIedDataSetMemberModel member, LiveIedModelDiscoveryDocument? model, int depth,
+        LiveIedModelDiscoveryDocument? sclModel = null)
     {
-        if (model is null) return [new("Message", "No model type hierarchy is available.", Depth: depth)];
+        if (model is null && sclModel is null)
+            return [new("Message", "No model type hierarchy is available.", Depth: depth)];
 
         // MMS $FC$ and canonical IEC dotted references must resolve to the
         // SAME case-sensitive object identity. A string prefix alone is never
         // enough: Pos.stVal must not expose Pos.stValue/vendor siblings.
         var memberReference = IedBrowserLiveValues.CanonicalReference(member.Reference);
-        var objectModels = model.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
-            .SelectMany(ln => ln.DataObjects)
-            .Where(obj => string.Equals(obj.Reference, memberReference, StringComparison.Ordinal) ||
-                memberReference.StartsWith(obj.Reference + ".", StringComparison.Ordinal))
-            .OrderByDescending(obj => obj.Reference.Length)
-            .ToArray();
-        if (objectModels.Length == 0)
-            return [new("Message", "No exact attribute schema for this DataSet member.", Depth: depth)];
-
-        var exactOwners = IedBrowserEngineeringObjects.GroupExact(objectModels
-            .Where(o => o.Reference == objectModels[0].Reference).ToArray());
-        if (exactOwners.Count != 1)
+        var parent = PresentationOwner(memberReference, member.FunctionalConstraint,
+            model, sclModel, out var sclOnly);
+        if (parent is null)
             return [new("Message",
-                "Ambiguous model ownership for this exact DataSet member.", Depth: depth)];
-        var parent = exactOwners[0];
+                "No unique matching live/SCL attribute schema for this DataSet member.",
+                Depth: depth)];
         var memberCoversObject = string.Equals(
             memberReference, parent.Reference, StringComparison.Ordinal);
         var exactDescendantPrefix = memberReference + ".";
