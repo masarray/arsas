@@ -2,6 +2,7 @@ using System.Xml.Linq;
 using AR.Iec61850.Discovery;
 using AR.Iec61850.Mms;
 using ArIED61850Tester.Models;
+using ArIED61850Tester.Protocol.Mms;
 
 namespace ARSAS.Tests;
 
@@ -127,18 +128,14 @@ public sealed class M216BrowserLocalTimeAndNestedQualityTests
         Assert.True(live.TryGet(exact, "MX", out var textOnly));
         Assert.Null(textOnly.QualityBits);
         Assert.Equal("Not exposed",
-            ArIED61850Tester.Iec61850QualityPresentation.FormatObserved(
+            Iec61850QualityPresentation.FormatObserved(
                 textOnly.Value, "Overflow"));
-        var typed = MmsQualityDecoder.TryDecodeRendered(
-            "bits(0000,unused=3)", out var parsed);
-        if (typed)
-        {
-            Assert.True(live.PublishForAssociation(association, exact,
-                "MX", parsed.Summary, "", "", "Report quality · raw MMS",
-                qualityEvidence: parsed));
-            Assert.True(live.TryGet(exact, "MX", out var reported));
-            Assert.Equal("false", reported.QualityBits?.FormatField("Overflow"));
-        }
+        Assert.True(MmsQualityDecoder.TryDecode([3, 0, 0], out var parsed));
+        Assert.True(live.PublishForAssociation(association, exact,
+            "MX", parsed.Summary, "", "", "Report quality · raw MMS",
+            qualityEvidence: parsed));
+        Assert.True(live.TryGet(exact, "MX", out var reported));
+        Assert.Equal("false", reported.QualityBits?.FormatField("Overflow"));
     }
 
     [Fact]
