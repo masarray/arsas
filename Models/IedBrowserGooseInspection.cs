@@ -65,14 +65,21 @@ public static class IedBrowserGooseInspection
         ArgumentNullException.ThrowIfNull(candidates);
         var control = Canonical(expected.GoCbRef);
         var dataSet = Canonical(expected.DataSetReference);
-        if (control.Length == 0 || dataSet.Length == 0 ||
-            string.IsNullOrWhiteSpace(expected.IedName)) return null;
+        // GoCB full wire reference is the mandatory authority. Some IEDs
+        // expose GO controls but not their DatSet attributes via MMS; a
+        // received, exact GoCB can still be inspected in *unbound allData*
+        // order. Never infer an FCDA reference from its position.
+        if (control.Length == 0 || !control.Contains('/'))
+            return null;
 
         // Two publishers with the same GoCb identity are ambiguous, never last-one-wins.
         var matches = candidates.Where(frame =>
-            string.Equals(frame.ModelIedName, expected.IedName, StringComparison.Ordinal) &&
+            (string.IsNullOrEmpty(frame.ModelIedName) ||
+                string.Equals(frame.ModelIedName, expected.IedName, StringComparison.Ordinal)) &&
             string.Equals(Canonical(frame.GoCbRef), control, StringComparison.Ordinal) &&
-            string.Equals(Canonical(frame.DataSetReference), dataSet, StringComparison.Ordinal) &&
+            (dataSet.Length == 0 ||
+                string.Equals(Canonical(frame.DataSetReference), dataSet,
+                    StringComparison.Ordinal)) &&
             (string.IsNullOrWhiteSpace(expected.GoId) ||
                 string.Equals(frame.GoId, expected.GoId, StringComparison.Ordinal)) &&
             (!expected.AppId.HasValue || AppId(frame.AppIdText) == expected.AppId.Value) &&

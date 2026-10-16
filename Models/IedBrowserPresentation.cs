@@ -727,7 +727,7 @@ public static class IedBrowserPresentation
                         IedBrowserGooseDirectory.ModelForDataSet(model, sclModel, block);
                     var linkedGooseSet = FindDataSet(gooseDirectoryModel, block.DataSetReference);
                     if (linkedGooseSet is null)
-                        rows.Add(new("Message", "No exact DataSet member directory for this GoCB in selected IED models."));
+                        rows.Add(new("Message", "No exact FCDA directory yet. A matching GOOSE frame will display its received allData slots without guessed signal names."));
                     else
                     {
                         var ordered = linkedGooseSet.Members.OrderBy(m => m.Index).ToArray();

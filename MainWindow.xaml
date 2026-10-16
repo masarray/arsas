@@ -1991,10 +1991,20 @@
                                         Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         Click="IedBrowserReadValues_Click"
                                         ToolTip="Read model-proven IEC data attributes sequentially; progress appears on the IED card."/>
+                                <ComboBox x:Name="IedBrowserGooseAdapterCombo"
+                                          Width="195" Height="30" Margin="0,0,5,0"
+                                          ItemsSource="{Binding GooseAdapters}"
+                                          SelectedItem="{Binding SelectedGooseAdapter, Mode=TwoWay}"
+                                          DisplayMemberPath="DisplayText" Visibility="Collapsed"
+                                          ToolTip="Station Ethernet capture adapter. Choosing an adapter never starts capture automatically."/>
+                                <Button x:Name="IedBrowserGooseStopButton" Content="Stop GOOSE"
+                                        Style="{StaticResource SoftButton}" Margin="0,0,5,0"
+                                        Visibility="Collapsed" Click="IedBrowserGooseStop_Click"
+                                        ToolTip="Stop the existing passive GOOSE subscriber; no MMS writes."/>
                                 <Button x:Name="IedBrowserGooseSubscribeButton" Content="Subscribe GOOSE"
                                         Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         Visibility="Collapsed" Click="IedBrowserGooseSubscribe_Click"
-                                        ToolTip="Open existing passive GOOSE Subscriber for this IED; choose a capture adapter. Does not enable GoEna or write MMS."/>
+                                        ToolTip="Start or inspect the existing read-only subscriber here in IED Browser, without switching workspace or writing MMS."/>
                                 <Button x:Name="IedBrowserCancelReadButton" Content="Cancel Read"
                                         Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         IsEnabled="False" Click="IedBrowserCancelRead_Click"

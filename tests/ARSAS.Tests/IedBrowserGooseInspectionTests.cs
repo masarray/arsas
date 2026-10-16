@@ -150,4 +150,90 @@ public sealed class IedBrowserGooseInspectionTests
     }
 
 
+    [Fact]
+    public void FullyQualifiedWireGoCbCanBeObservedWithoutMmsDataSetDirectory()
+    {
+        var expected = Expected() with { DataSetReference = "", GoId = "",
+            AppId = null, ConfRev = null };
+        var raw = Frame() with { ModelIedName = "", BindingSource = "Unbound" };
+        Assert.Same(raw, IedBrowserGooseInspection.Select(expected, [raw]));
+        Assert.Null(IedBrowserGooseInspection.Select(expected,
+            [raw with { GoCbRef = "LD/LLN0$GO$DIFFERENT" }]));
+        Assert.Null(IedBrowserGooseInspection.Select(expected, [raw, raw with
+            { StreamKey = "other-publisher" }]));
+        Assert.Null(IedBrowserGooseInspection.Select(
+            expected with { GoCbRef = "BCU" }, [raw]));
+        Assert.Null(IedBrowserGooseInspection.Select(
+            expected with { DataSetReference = "LD/LLN0.OTHER" }, [raw]));
+        Assert.Null(IedBrowserGooseInspection.Select(
+            expected, [raw with { ModelIedName = "OTHER" }]));
+    }
+
+    [Fact]
+    public void BrowserSubscribeIsInlineAndSharesOriginalNpcapStartStop()
+    {
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root != null && !File.Exists(Path.Combine(root.FullName, "MainWindow.xaml")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var xaml = File.ReadAllText(Path.Combine(root!.FullName, "MainWindow.xaml"));
+        var src = File.ReadAllText(Path.Combine(root.FullName, "MainWindow.IedBrowser.cs"));
+        Assert.Contains("IedBrowserGooseAdapterCombo", xaml);
+        Assert.Contains("IedBrowserGooseStopButton", xaml);
+        Assert.Contains("StartGooseSubscriber_Click(sender, e);", src);
+        Assert.Contains("await StopGooseSubscriberAsync();", src);
+        var offset = src.IndexOf("private void IedBrowserGooseSubscribe_Click(", StringComparison.Ordinal);
+        var end = src.IndexOf("private async void IedBrowserGooseStop_Click(", offset, StringComparison.Ordinal);
+        Assert.True(offset >= 0 && end > offset);
+        Assert.DoesNotContain("OpenIedGooseSubscriber(", src[offset..end]);
+        Assert.DoesNotContain("MainTabs.SelectedIndex =", src[offset..end]);
+        Assert.DoesNotContain("new GooseSubscriberRuntime(", src[offset..end]);
+    }
+
+
+    [Fact]
+    public void WireDataSetDirectoryUsesExactDomainAndReferenceNotGoId()
+    {
+        var live = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel { MmsDomain = "LD" }],
+            DataSets = [new LiveIedDataSetModel
+            {
+                Domain = "LD", Reference = "LD/LLN0.GOOSE2",
+                Members = [new LiveIedDataSetMemberModel
+                {
+                    Index = 0, Reference = "LD/CSWI6.Pos.stVal",
+                    FunctionalConstraint = "ST"
+                }]
+            }]
+        };
+        var exact = IedBrowserGooseDirectory.ResolveWireDataSet(
+            live, null, "LD", "LD/LLN0$GOOSE2");
+        Assert.NotNull(exact);
+        Assert.Same(live.DataSets[0], exact.Value.Set);
+        Assert.Null(IedBrowserGooseDirectory.ResolveWireDataSet(
+            live, null, "LD", "LD/LLN0.GOOSE1"));
+        Assert.Null(IedBrowserGooseDirectory.ResolveWireDataSet(
+            live, null, "OTHER", "LD/LLN0.GOOSE2"));
+    }
+
+    [Fact]
+    public void BrowserHasUnboundWireAllDataFallbackWithoutRewritingLedger()
+    {
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root != null &&
+               !File.Exists(Path.Combine(root.FullName, "MainWindow.IedBrowser.cs")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var source = File.ReadAllText(Path.Combine(root!.FullName,
+            "MainWindow.IedBrowser.cs"));
+        Assert.Contains("ResolveWireDataSet(", source);
+        Assert.Contains("allData[{slot + 1}] · unbound", source);
+        Assert.Contains("GOOSE raw allData · unbound", source);
+        Assert.Contains("Not current", source);
+        Assert.Contains("Received GOOSE PDU datSet", source);
+        Assert.DoesNotContain("device.LiveValues.PublishForAssociation(", source);
+    }
+
+
 }

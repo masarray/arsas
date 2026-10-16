@@ -472,10 +472,43 @@ public partial class MainWindow
     private void IedBrowserGooseSubscribe_Click(object sender, RoutedEventArgs e)
     {
         if (SelectedDevice is not { IsDemo: false } device ||
-            _iedBrowserRenderedPage?.Kind != "GoCB")
+            _iedBrowserRenderedPage?.Kind != "GoCB" || GooseActionBusy)
             return;
-        // Shared Npcap-based subscriber, no second GOOSE receive/decoder path.
-        OpenIedGooseSubscriber(device);
+        // The Browser is an independent view of the SAME Npcap subscriber;
+        // never navigate to the Sniff tab or instantiate another receiver.
+        if (IsGooseCapturing)
+        {
+            UpdateIedBrowserGooseDetails();
+            return;
+        }
+        if (GooseAdapters.Count == 0)
+            RefreshGooseAdapters();
+        if (SelectedGooseAdapter is null)
+        {
+            var proposed = ResolveGooseAdapterForIed(device, out var route);
+            if (proposed is not null)
+                SelectedGooseAdapter = proposed;
+            else
+                IedBrowserDetailStatus.Text =
+                    "Select the station capture adapter here, then press Subscribe GOOSE. " + route;
+        }
+        IedBrowserGooseAdapterCombo.Visibility = Visibility.Visible;
+        if (SelectedGooseAdapter is null)
+        {
+            IedBrowserGooseAdapterCombo.Focus();
+            RefreshIedBrowserReadButtons();
+            return;
+        }
+        // Existing start path owns decoder, bound model, lifetime and UI queue.
+        StartGooseSubscriber_Click(sender, e);
+        RefreshIedBrowserReadButtons();
+    }
+
+    private async void IedBrowserGooseStop_Click(object sender, RoutedEventArgs e)
+    {
+        if (!IsGooseCapturing || GooseActionBusy) return;
+        await StopGooseSubscriberAsync();
+        RefreshIedBrowserReadButtons();
     }
 
     private void RefreshIedBrowserReadButtons()
@@ -499,7 +532,18 @@ public partial class MainWindow
             IedBrowserGooseSubscribeButton.IsEnabled =
                 device is { IsDemo: false } && _iedBrowserReadOperation == null;
             IedBrowserGooseSubscribeButton.Content = IsGooseCapturing
-                ? "View GOOSE Capture" : "Subscribe GOOSE";
+                ? "View live GOOSE" : "Subscribe GOOSE";
+            IedBrowserGooseSubscribeButton.IsEnabled =
+                device is { IsDemo: false } && !GooseActionBusy;
+            IedBrowserGooseStopButton.Visibility =
+                _iedBrowserRenderedPage?.Kind == "GoCB" && IsGooseCapturing
+                    ? Visibility.Visible : Visibility.Collapsed;
+            IedBrowserGooseStopButton.IsEnabled = !GooseActionBusy;
+            IedBrowserGooseAdapterCombo.Visibility =
+                _iedBrowserRenderedPage?.Kind == "GoCB" &&
+                (!IsGooseCapturing || GooseAdapters.Count > 0)
+                    ? Visibility.Visible : Visibility.Collapsed;
+            IedBrowserGooseAdapterCombo.IsEnabled = !IsGooseCapturing && !GooseActionBusy;
         }
         IedBrowserReadPageButton.Content = selectedKind == IedBrowserReadSelectionKind.ReadOnlyRcb
             ? "Inspect RCB"
@@ -945,7 +989,17 @@ public partial class MainWindow
             .FirstOrDefault(x => ReferenceEquals(frameView, x.Display)).Raw;
         if (frameView is not null && received is not null)
         {
-            Put("Capture status", "Received · exact GoCB verified", "Passive GOOSE");
+            Put("Capture status",
+                string.IsNullOrWhiteSpace(frameView.ModelIedName)
+                    ? "Receiving · exact wire GoCB, publisher model unbound"
+                    : "Receiving · exact GoCB and publisher model matched",
+                "Passive GOOSE; never implies MMS state or publisher authentication");
+            Put("GOOSE ID", frameView.GoId, "Received GOOSE PDU GoID");
+            Put("DataSet reference", frameView.DataSetReference,
+                "Received GOOSE PDU datSet");
+            Put("Application ID", frameView.AppIdText, "Received Ethernet APPID");
+            Put("Configuration revision", frameView.ConfigurationRevisionText,
+                "Received GOOSE PDU confRev");
             Put("Frame received at", received.CaptureTimestamp.ToLocalTime()
                 .ToString("yyyy-MM-dd HH:mm:ss.fff zzz",
                     System.Globalization.CultureInfo.InvariantCulture), "Passive capture time");
@@ -962,13 +1016,83 @@ public partial class MainWindow
                 "Received timeAllowedToLive");
             Put("Frame DataSet entries", frameView.WireDataSetEntryCount.ToString(
                 System.Globalization.CultureInfo.InvariantCulture), "Received allData");
+            // Some devices expose GO/GoEna but omit GO/DatSet in the MMS
+            // control inventory. Once a full matching wire GoCB is received,
+            // resolve its *exact wire datSet* against the selected IED model.
+            // Do not infer a link from GOOSE ID or the number of entries.
+            if (_iedBrowserGooseDirectory is null &&
+                _iedBrowserRenderedPage?.Payload is LiveIedControlBlockModel block &&
+                SelectedDevice is { } selected)
+            {
+                var wireSet = IedBrowserGooseDirectory.ResolveWireDataSet(
+                    selected.LiveDiscoveryModel, selected.SclWorkspace?.DesignModel,
+                    block.Domain, frameView.DataSetReference);
+                if (wireSet is { } resolved)
+                    _iedBrowserGooseDirectory = resolved.Set;
+            }
             var ordered = _iedBrowserGooseDirectory is null
                 ? null : IedBrowserGooseInspection.VerifiedMembers(frameView,
                     _iedBrowserGooseDirectory);
+
+            // Append only when the member shape changes. Existing flat
+            // virtualized rows are updated in place each UI coalescing tick;
+            // never rebuild the tree or mirror wire values into MMS LiveValues.
+            var wireSlots = _iedBrowserDetails.Rows
+                .Where(row => row.GooseSlot >= 0 && row.GooseReference.Length == 0)
+                .ToArray();
+            var limit = Math.Min(frameView.Leaves.Count, 128);
+            if (ordered is not null)
+            {
+                foreach (var slot in wireSlots)
+                    _iedBrowserDetails.Rows.Remove(slot);
+                // The model directory may have become available only after
+                // the wire datSet was observed. Attach the exact FCDA rows
+                // once without replacing the whole virtualized Browser view.
+                if (!_iedBrowserDetails.Rows.Any(row =>
+                        row.GooseSlot >= 0 && row.GooseReference.Length != 0) &&
+                    _iedBrowserGooseDirectory is { } directory &&
+                    SelectedDevice is { } owner)
+                {
+                    var descriptors = directory.Members.OrderBy(m => m.Index).ToArray();
+                    var sourceModel = owner.LiveDiscoveryModel ??
+                        owner.SclWorkspace?.DesignModel;
+                    for (var slot = 0; slot < descriptors.Length; slot++)
+                    {
+                        var member = descriptors[slot];
+                        _iedBrowserDetails.Rows.Add(
+                            IedBrowserStructuredDetails.Member(member, sourceModel) with
+                            {
+                                GooseSlot = slot, GooseReference = member.Reference,
+                                GooseFc = member.FunctionalConstraint
+                            });
+                    }
+                }
+            }
+            else if (wireSlots.Length != limit)
+            {
+                foreach (var slot in wireSlots)
+                    _iedBrowserDetails.Rows.Remove(slot);
+                for (var slot = 0; slot < limit; slot++)
+                    _iedBrowserDetails.Rows.Add(new IedBrowserDetailRow(
+                        "Data", $"allData[{slot + 1}] · unbound", "Not received",
+                        Source: "GOOSE received wire order; FCDA is not verified")
+                    {
+                        GooseSlot = slot
+                    });
+            }
             foreach (var row in _iedBrowserDetails.Rows)
             {
                 if (row.GooseSlot < 0) continue;
-                if (ordered is not null && row.GooseSlot < ordered.Count &&
+                if (row.GooseReference.Length == 0 &&
+                    ordered is null && row.GooseSlot < frameView.Leaves.Count)
+                {
+                    row.Value = frameView.Leaves[row.GooseSlot].Value;
+                    row.ObservationSource = "GOOSE raw allData · unbound";
+                    row.ObservationTooltip =
+                        $"allData[{row.GooseSlot + 1}] from {frameView.GoCbRef} " +
+                        $"· received {received.CaptureTimestamp:O}; no FCDA claim";
+                }
+                else if (ordered is not null && row.GooseSlot < ordered.Count &&
                     IedBrowserGooseInspection.Canonical(row.GooseReference) ==
                         IedBrowserGooseInspection.Canonical(ordered[row.GooseSlot].SignalReference) &&
                     string.Equals(row.GooseFc, ordered[row.GooseSlot].FunctionalConstraint,
@@ -980,9 +1104,10 @@ public partial class MainWindow
                         "] · passive received " + received.CaptureTimestamp.ToString("O",
                             System.Globalization.CultureInfo.InvariantCulture);
                 }
-                else if (row.ObservationSource == "GOOSE frame")
+                else if (row.ObservationSource is "GOOSE frame" or
+                    "GOOSE raw allData · unbound")
                 {
-                    row.Value = "Not read";
+                    row.Value = "Not current";
                     row.ObservationSource = "";
                     row.ObservationTooltip = "";
                 }
@@ -998,8 +1123,10 @@ public partial class MainWindow
                 "Passive capture · exact identity and received TTL required; not an MMS GoCB read");
             foreach (var row in _iedBrowserDetails.Rows)
             {
-                if (row.GooseSlot < 0 || row.ObservationSource != "GOOSE frame") continue;
-                row.Value = "Not read";
+                if (row.GooseSlot < 0 ||
+                    row.ObservationSource is not ("GOOSE frame" or
+                        "GOOSE raw allData · unbound")) continue;
+                row.Value = "Not current";
                 row.ObservationSource = "";
                 row.ObservationTooltip = "";
             }
