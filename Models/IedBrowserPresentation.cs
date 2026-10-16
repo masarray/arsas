@@ -244,6 +244,7 @@ public sealed record IedBrowserDetailRow(
     public string RcbUsageGlyph => NavigateTo?.RcbUsageGlyph ?? "";
     public string RcbUsageTooltip => NavigateTo?.RcbUsageTooltip ?? "";
 
+    public bool ExpandByDefault { get; init; }
     public bool HasChildren => LoadChildren is not null;
     public Visibility ChevronVisibility => HasChildren ? Visibility.Visible : Visibility.Hidden;
     public bool IsExpanded { get; internal set; }
@@ -259,7 +260,21 @@ public sealed class IedBrowserDetailProjection
 {
     public BulkObservableCollection<IedBrowserDetailRow> Rows { get; } = new();
 
-    public void Reset(IReadOnlyList<IedBrowserDetailRow> rows) => Rows.ReplaceAll(rows);
+    public void Reset(IReadOnlyList<IedBrowserDetailRow> rows)
+    {
+        // Attach UI-only collapsibility to exact section boundaries. Do not
+        // mutate source projection rows or create a second evidence store.
+        var sections = IedBrowserDetailSectionLayout.Attach(rows);
+        var display = new List<IedBrowserDetailRow>(sections.Count);
+        foreach (var row in sections)
+        {
+            display.Add(row);
+            if (!row.ExpandByDefault || !row.HasChildren) continue;
+            row.IsExpanded = true;
+            display.AddRange(row.GetChildren());
+        }
+        Rows.ReplaceAll(display);
+    }
 
     public void Toggle(IedBrowserDetailRow row)
     {
