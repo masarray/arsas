@@ -18,9 +18,9 @@ public sealed class IedBrowserFileCatalog
     public IReadOnlyList<IedBrowserRemoteFile> Files { get; }
 
     /// <summary>
-    /// One display row per engine-recognized COMTRADE record, never one row
-    /// per CFG/DAT/HDR/INF. Unclassified MMS entries remain visible without
-    /// gaining download permission. This is a projection, not another catalog.
+    /// One display row per ARIEC-recognized COMTRADE primary record, including
+    /// a physically observed root RIO sidecar when safely attached upstream.
+    /// Unclassified MMS entries remain browse-only. No second primary catalog.
     /// </summary>
     public IReadOnlyList<IedBrowserRemoteFile> DisplayRows { get; }
 
@@ -66,7 +66,8 @@ public sealed class IedBrowserFileCatalog
         var bundles = new List<IedBrowserRemoteFile>(catalog.Records.Count);
         foreach (var record in catalog.Records)
         {
-            // Only engine-declared members may be collapsed into one bundle.
+            // Only engine-proven primary members and exact MMS-root RIO
+            // sidecars may be collapsed into one physical bundle.
             // Keep the CFG as the stable representative for the existing
             // TryGetRecord/download integrity and ambiguity fences.
             var configuration = record.Files.FirstOrDefault(file =>

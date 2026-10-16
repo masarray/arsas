@@ -110,10 +110,18 @@ public partial class MainWindow
             _iedBrowserFileCatalog?.TryGetRecord(selected.RemotePath, out _, out _) == true;
         IedBrowserFilesDownloadSelectedButton.IsEnabled = canDownload &&
             _iedBrowserFileTransferOperation is null;
+        var members = canDownload && selected is { IsBundle: true } &&
+            _iedBrowserFileCatalog!.TryGetRecord(selected.RemotePath,
+                out var verifiedRecord, out _)
+            ? " · " + string.Join(" + ", verifiedRecord.Files
+                .Select(member => member.Extension.TrimStart('.').ToUpperInvariant())
+                .Where(ext => ext.Length > 0)
+                .Distinct(StringComparer.Ordinal))
+            : "";
         IedBrowserFileSelectionText.Text = selected is null
             ? "No file selected · Click to select · Double-click to open"
             : selected.IsBundle
-                ? $"Selected record: {selected.Name} · {selected.BundleMemberCount} files · Double-click to open"
+                ? $"Selected record: {selected.Name} · {selected.BundleMemberCount} files{members} · Double-click to open"
                 : $"Selected: {selected.Name} · Browse-only unless a complete record is verified";
         IedBrowserFileSelectionText.ToolTip = selected?.RemotePath;
     }
