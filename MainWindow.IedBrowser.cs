@@ -34,6 +34,9 @@ public partial class MainWindow
     private IedBrowserSchemaIndex? _iedBrowserValueSchemaIndex;
     private MmsRcbAvailabilityResult? _iedBrowserCachedSnapshot;
     private IReadOnlyList<RcbExportRow> _iedBrowserCachedRcbRows = Array.Empty<RcbExportRow>();
+    // A single cheap change signature for the existing active RCB inventory.
+    // No RCB read/poll/write: this only invalidates stale Browser indicators.
+    private string _iedBrowserCallerRcbSignature = "";
     private string _iedBrowserCachedSourcePath = string.Empty;
     private DateTime _iedBrowserCachedSourceStamp;
     private Iec61850MonitorDevice? _iedBrowserObservedDevice;
@@ -529,6 +532,22 @@ public partial class MainWindow
         if (MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
             SelectedDevice is not { } device)
             return;
+        // Report plans activate asynchronously AFTER IsMonitoring changes.
+        // Refresh the existing RCB tree once on actual activation/cleanup,
+        // otherwise "used by ARSAS" glyphs remain stuck at the old state.
+        if (_iedBrowserCachedRcbRows.Count > 0 &&
+            ReferenceEquals(_iedBrowserCachedDevice, device))
+        {
+            var activeSignature = ActiveRcbSignature(device);
+            if (!string.Equals(_iedBrowserCallerRcbSignature, activeSignature,
+                StringComparison.Ordinal))
+            {
+                _iedBrowserCallerRcbSignature = activeSignature;
+                _iedBrowserForceRefresh = true;
+                Dispatcher.BeginInvoke(DispatcherPriority.Background,
+                    new Action(RefreshIedBrowser));
+            }
+        }
         var version = device.LiveValues.Version;
         if (_iedBrowserLastLiveVersion == version &&
             ReferenceEquals(_iedBrowserLastCfCanonicalModel, device.LiveCanonicalModel))
@@ -1002,6 +1021,7 @@ public partial class MainWindow
         _iedBrowserFileCatalog = null;
         _iedBrowserObservedDevice = device;
         _iedBrowserSnapshot = null;
+        _iedBrowserCallerRcbSignature = "";
         _iedBrowserFileOwner = device;
         _iedBrowserRemoteFiles = Array.Empty<IedBrowserRemoteFile>();
         _iedBrowserFilesLoaded = false;
@@ -1046,6 +1066,12 @@ public partial class MainWindow
         if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
             RefreshIedBrowser();
     }
+
+    private string ActiveRcbSignature(Iec61850MonitorDevice device)
+        => string.Join("|", _runtime.GetActiveBrowserRcbReferences(device.DeviceId)
+            .Select(NormalizeRcbReference)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(key => key, StringComparer.OrdinalIgnoreCase));
 
     private void RefreshIedBrowser()
     {
@@ -1139,6 +1165,7 @@ public partial class MainWindow
             var callerOwned = _runtime.GetActiveBrowserRcbReferences(device.DeviceId)
                 .Select(NormalizeRcbReference)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            _iedBrowserCallerRcbSignature = ActiveRcbSignature(device);
             foreach (var report in rcbs)
             {
                 if (!callerOwned.Contains(NormalizeRcbReference(report.Reference)))
