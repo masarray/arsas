@@ -83,13 +83,14 @@ public sealed class M217DFieldEvidenceConvergenceTests
     }
 
     private static LiveIedControlBlockModel Sgcb(
-        string status = "AttributeInventoryOnly")
+        string status = "AttributeInventoryOnly",
+        string domain = "BCUGEF650", string fc = "SP")
         => new()
         {
             Name = "SGCB", Kind = "SettingGroupControl",
-            Domain = "BCUGEF650", LogicalNode = "LLN0",
-            Reference = "BCUGEF650/LLN0.SP.SGCB",
-            FunctionalConstraint = "SP", DiscoveryStatus = status,
+            Domain = domain, LogicalNode = "LLN0",
+            Reference = domain + "/LLN0." + fc + ".SGCB",
+            FunctionalConstraint = fc, DiscoveryStatus = status,
             Attributes = ["NumOfSG", "ActSG", "LActTm", "EditSG", "CnfEdit"]
         };
 
@@ -129,10 +130,9 @@ public sealed class M217DFieldEvidenceConvergenceTests
         var ledger = new IedBrowserLiveValues();
         ledger.BeginAssociation();
         Assert.Empty(IedBrowserReadPlan.BuildInitialPriority(Model(Sgcb("SCL")), ledger, 32));
-        var wrong = Sgcb() with { Domain = "OTHER" };
+        var wrong = Sgcb(domain: "OTHER");
         Assert.Empty(IedBrowserReadPlan.BuildInitialPriority(Model(wrong), ledger, 32));
-        var invalid = Sgcb() with { FunctionalConstraint = "CF",
-            Reference = "BCUGEF650/LLN0.CF.SGCB" };
+        var invalid = Sgcb(fc: "CF");
         Assert.Empty(IedBrowserReadPlan.BuildInitialPriority(Model(invalid), ledger, 32));
         ledger.MarkOffline();
         Assert.Empty(IedBrowserReadPlan.BuildInitialPriority(Model(Sgcb()), ledger, 32));
@@ -178,6 +178,8 @@ public sealed class M217DFieldEvidenceConvergenceTests
         Assert.Contains("sourceDevice.LiveValues.Association != checkAssociation", browser);
         Assert.Contains("ReferenceEquals(sourceDevice.LiveDiscoveryModel, checkModel)", browser);
         Assert.Contains("_iedBrowserCallerRcbSignature", browser);
+        Assert.DoesNotContain("_iedBrowserSelectedDoReference", browser);
+        Assert.Contains("IedBrowserReadPlan.Build(model, currentPage, readAll)", browser);
         Assert.Contains("GetActiveBrowserRcbReferences(device.DeviceId)", browser);
         var xaml = Find("MainWindow.xaml");
         Assert.Contains("IedBrowserGooseSubscribeButton", xaml);
