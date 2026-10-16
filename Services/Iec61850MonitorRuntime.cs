@@ -170,6 +170,89 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         return succeeded;
     }
 
+    private const int InitialHydrationMaxTargets = 32;
+    private static readonly TimeSpan InitialHydrationTotalBudget = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// One-shot, bounded after full LIVE discovery. No new MMS transport or
+    /// polling scheduler: the existing ReadBrowserValuesAsync serializes reads
+    /// on ARIEC's per-association IO gate, with a 5s per-leaf deadline.
+    /// A 10s envelope also bounds worst-case device latency/negative replies.
+    /// </summary>
+    private async Task HydratePriorityInitialEvidenceAsync(
+        DeviceSession session, AR.Iec61850.Discovery.LiveIedModelDiscoveryDocument model,
+        CancellationToken cancellationToken)
+    {
+        var device = session.Device;
+        if (!_sessions.TryGetValue(device.DeviceId, out var active) ||
+            !ReferenceEquals(active, session) || !session.Client.IsConnected ||
+            !device.IsConnected || device.IsMonitoring ||
+            !ReferenceEquals(device.LiveDiscoveryModel, model))
+            return;
+
+        var association = device.LiveValues.Association;
+        var plan = IedBrowserReadPlan.BuildInitialPriority(
+            model, device.LiveValues, InitialHydrationMaxTargets);
+        if (plan.Count == 0) return;
+
+        // This existing failure-only type is bound to the accepted live model
+        // instead of the mutable UI Signals collection, which is rebuilt after
+        // ConnectAndDiscover returns. It never owns a process value.
+        var failures = new IedBrowserReadFailureEvidence(device, bindToLiveModel: true);
+        device.InitialHydrationFailures = failures;
+        var inbox = new IedBrowserReadResultInbox(static () => { });
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budget.CancelAfter(InitialHydrationTotalBudget);
+        var exhausted = false;
+        try
+        {
+            await ReadBrowserValuesAsync(device, plan, inbox,
+                new Progress<IedBrowserReadProgress>(static _ => { }),
+                budget.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            exhausted = true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Log("WARN", device.Name, $"Priority initial MMS Read stopped: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        var published = 0;
+        var failed = 0;
+        var completed = inbox.Drain(result =>
+        {
+            // All read results are observationally tied to this exact
+            // association, model object, runtime session and schema epoch.
+            if (!_sessions.TryGetValue(device.DeviceId, out var current) ||
+                !ReferenceEquals(current, session) || !session.Client.IsConnected ||
+                !device.IsConnected || device.LiveValues.Association != association ||
+                !ReferenceEquals(device.LiveDiscoveryModel, model) ||
+                device.IsMonitoring)
+                return;
+            if (result.Error.Length == 0 &&
+                device.LiveValues.PublishForAssociation(association,
+                    result.Target.Reference, result.Target.FunctionalConstraint,
+                    result.Value, result.Quality, result.DeviceTimestamp, "MMS Read",
+                    result.UtcTimeEvidence, result.QualityEvidence))
+            {
+                failures.ClearFailure(result.Target);
+                published++;
+            }
+            else if (result.Error.Length > 0)
+            {
+                failures.RecordFailure(result.Target, result.Error);
+                failed++;
+            }
+        });
+        Log("INFO", device.Name,
+            $"Bounded priority initial MMS evidence: planned={plan.Count}, " +
+            $"completed={completed}, published={published}, failed={failed}, " +
+            $"budget={InitialHydrationTotalBudget.TotalSeconds:0}s, exhausted={exhausted}, " +
+            $"association={association}; no implicit Read All or RCB/control activity.");
+    }
+
     public async Task<int> EnrichSelectedStaticDataSetUnitsAsync(
         Iec61850MonitorDevice device,
         CancellationToken cancellationToken)
@@ -389,6 +472,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     signal.ReportCoverage = "Polling fallback";
                 }
             }
+
+            // Discovery is schema-only; reuse the existing sequential Browser MMS
+            // Read route for a finite priority image before publishing Ready.
+            if (device.LiveDiscoveryModel is { } acceptedModel &&
+                ReferenceEquals(acceptedModel, session.Client.LastLiveModel))
+                await HydratePriorityInitialEvidenceAsync(
+                    session, acceptedModel, cancellationToken).ConfigureAwait(false);
 
             var liveSignalCount = signals.Count(signal => signal.CanPublishAsSignal);
             var controlSignalCount = signals.Count(signal => signal.IsControlSignal);

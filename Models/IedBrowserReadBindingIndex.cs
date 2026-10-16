@@ -90,14 +90,7 @@ public sealed class IedBrowserReadBindingIndex
         if (_signals.TryGetValue(key, out var signals))
             foreach (var signal in signals)
             {
-                signal.Value = observed.Value;
-                // A new observation with absent metadata must not retain
-                // the previous observation's quality or timestamp.
-                signal.Quality = CanonicalPointSnapshotAuthority.QualityOrUnknown(observed.Quality);
-                signal.DeviceTimestamp = CanonicalPointSnapshotAuthority.TimestampOrUnavailable(
-                    observed.DeviceTimestamp);
-                signal.MarkCanonicalObservation(
-                    CanonicalSignalObservationState.LiveRead, association);
+                ApplyObservedReadSignal(signal, observed, association);
                 updated++;
             }
         if (_points.TryGetValue(key, out var points))
@@ -113,6 +106,51 @@ public sealed class IedBrowserReadBindingIndex
                 updated++;
             }
         return updated;
+    }
+
+    /// <summary>
+    /// One read-only catch-up when the UI attaches a newly discovered signal
+    /// catalog. The existing ledger remains the only value owner; this never
+    /// issues MMS or creates process edges. Index already binds exact FC and
+    /// only the model-verified DO-to-primary-leaf aliases.
+    /// </summary>
+    public int ProjectCurrentReadSignals(IedBrowserLiveValues live, long association)
+    {
+        ArgumentNullException.ThrowIfNull(live);
+        if (!IsCurrent || !_device.IsConnected || _device.IsMonitoring ||
+            live.IsOffline || live.Association != association)
+            return 0;
+        var updated = 0;
+        var projected = new HashSet<SignalDefinition>();
+        foreach (var (key, signals) in _signals)
+        {
+            var split = key.LastIndexOf('|');
+            if (split < 1 ||
+                !live.TryGet(key[..split], key[(split + 1)..], out var observed,
+                    preferReport: false) ||
+                observed.IsStale || observed.Association != association ||
+                !string.Equals(observed.Source, "MMS Read", StringComparison.Ordinal))
+                continue;
+            foreach (var signal in signals)
+            {
+                if (signal.IsControlSignal || !projected.Add(signal)) continue;
+                ApplyObservedReadSignal(signal, observed, association);
+                updated++;
+            }
+        }
+        return updated;
+    }
+
+    private static void ApplyObservedReadSignal(
+        SignalDefinition signal, IedBrowserObservedValue observed, long association)
+    {
+        signal.Value = observed.Value;
+        // Never borrow quality or device time from an earlier UI frame.
+        signal.Quality = CanonicalPointSnapshotAuthority.QualityOrUnknown(observed.Quality);
+        signal.DeviceTimestamp =
+            CanonicalPointSnapshotAuthority.TimestampOrUnavailable(observed.DeviceTimestamp);
+        signal.MarkCanonicalObservation(
+            CanonicalSignalObservationState.LiveRead, association);
     }
 
     /// <summary>

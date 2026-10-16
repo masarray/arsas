@@ -495,6 +495,21 @@ public partial class MainWindow
         IedBrowserCancelReadButton.IsEnabled = _iedBrowserReadOperation != null;
     }
 
+    private bool TryGetBrowserReadFailure(
+        Iec61850MonitorDevice device, IedBrowserDetailRow row, out string reason)
+    {
+        if (_iedBrowserReadFailureEvidence?.TryGet(
+                device, row.ValueReference, row.FallbackValueReference,
+                row.FunctionalConstraint, out reason) == true)
+            return true;
+        if (device.InitialHydrationFailures?.TryGet(
+                device, row.ValueReference, row.FallbackValueReference,
+                row.FunctionalConstraint, out reason) == true)
+            return true;
+        reason = "";
+        return false;
+    }
+
     private void RefreshIedBrowserVisibleValues()
     {
         if (MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
@@ -569,9 +584,7 @@ public partial class MainWindow
                     row.ObservationSource = "Discovery snapshot";
                     row.ObservationTooltip = provenance;
                 }
-                else if (_iedBrowserReadFailureEvidence?.TryGet(
-                             device, row.ValueReference, row.FallbackValueReference,
-                             row.FunctionalConstraint, out var readFailure) == true)
+                else if (TryGetBrowserReadFailure(device, row, out var readFailure))
                 {
                     row.Value = "Unavailable";
                     row.ObservationSource = "MMS Read failed";
