@@ -1775,8 +1775,17 @@
                 <TabItem.Resources>
                     <DataTemplate x:Key="BrowserSectionRow">
                         <Border Background="#E8EDF4" BorderBrush="#D4DCE6" BorderThickness="0,1,0,1" Padding="7,3">
-                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="11.5"
-                                       Foreground="#2D4056" VerticalAlignment="Center"/>
+                            <DockPanel LastChildFill="True">
+                                <Button DockPanel.Dock="Left" Tag="{Binding}"
+                                        Content="{Binding ToggleGlyph}" Visibility="{Binding ChevronVisibility}"
+                                        Click="IedBrowserDetailToggle_Click"
+                                        Background="Transparent" BorderThickness="0"
+                                        Width="18" Height="18" Padding="0" Margin="0,0,3,0"
+                                        Focusable="False" FontSize="11.5"
+                                        ToolTip="Collapse or expand this section"/>
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="11.5"
+                                           Foreground="#2D4056" VerticalAlignment="Center"/>
+                            </DockPanel>
                         </Border>
                     </DataTemplate>
                     <DataTemplate x:Key="BrowserPropertyRow">
