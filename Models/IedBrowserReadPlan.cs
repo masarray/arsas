@@ -179,9 +179,26 @@ public static class IedBrowserReadPlan
                 observed.IsStale || observed.Association != association)
             .OrderBy(target => target.Reference, StringComparer.Ordinal)
             .ToArray();
-        // Prefer these three live settings over optional generic LN attributes,
-        // while honoring the existing hard target limit and skipping duplicates.
-        return settings.Concat(candidates)
+        // Likewise, GoEna/NdsCom belong to the exact live GO control
+        // inventory, not ordinary data-object attributes or received GOOSE
+        // frames. A passive subscriber cannot prove either MMS status.
+        // Limit background status reads for dense GoCB catalogs; unvisited
+        // objects retain honest Not read evidence.
+        var goose = verifiedLiveModel.GooseControlBlocks
+            .SelectMany(block => IedBrowserControlStateEvidence.ReadTargets(block, "GoCB"))
+            .GroupBy(target => IedBrowserLiveValues.CanonicalReference(target.Reference) +
+                               "|" + target.FunctionalConstraint,
+                StringComparer.Ordinal)
+            .Where(group => group.Count() == 1)
+            .Select(group => group.First())
+            .Where(target => !ledger.TryGet(target.Reference,
+                target.FunctionalConstraint, out var observed) ||
+                observed.IsStale || observed.Association != association)
+            .OrderBy(target => target.Reference, StringComparer.Ordinal)
+            .Take(8).ToArray();
+        // Prioritize verified control-block state and then finite LN image,
+        // without an extra background service or second observation cache.
+        return settings.Concat(goose).Concat(candidates)
             .DistinctBy(target => IedBrowserLiveValues.CanonicalReference(target.Reference) +
                 "|" + target.FunctionalConstraint.Trim().ToUpperInvariant(),
                 StringComparer.Ordinal)

@@ -156,4 +156,46 @@ public sealed class IedBrowserControlStateEvidenceTests
         Assert.Empty(IedBrowserReadPlan.BuildInitialPriority(model, ledger, 32));
     }
 
+    [Fact]
+    public void FullLiveHydrationIncludesOnlyExactGoCbReadOnlyState()
+    {
+        var goose = Block("GSEControl", "GO", "BCU",
+            fields: ["GoEna", "NdsCom", "DatSet", "ConfRev"]);
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel { MmsDomain = "LD" }],
+            GooseControlBlocks = [goose]
+        };
+        var ledger = new IedBrowserLiveValues();
+        var association = ledger.BeginAssociation();
+        var plan = IedBrowserReadPlan.BuildInitialPriority(model, ledger, 32);
+        Assert.Equal(2, plan.Count);
+        Assert.All(plan, target => Assert.Equal("GO", target.FunctionalConstraint));
+        Assert.Contains(plan, target => target.Reference.EndsWith(".GoEna", StringComparison.Ordinal));
+        Assert.Contains(plan, target => target.Reference.EndsWith(".NdsCom", StringComparison.Ordinal));
+        Assert.DoesNotContain(plan, target => target.Reference.EndsWith(".DatSet", StringComparison.Ordinal));
+
+        Assert.True(ledger.PublishForAssociation(association,
+            "LD/LLN0.BCU.GoEna", "GO", "true", "", "", "MMS Read"));
+        Assert.Single(IedBrowserReadPlan.BuildInitialPriority(model, ledger, 32));
+        ledger.BeginAssociation();
+        Assert.Equal(2, IedBrowserReadPlan.BuildInitialPriority(model, ledger, 32).Count);
+    }
+
+    [Fact]
+    public void InitialGoCbStatusNeverBorrowsSclOnlyOrDuplicateControlIdentity()
+    {
+        var valid = Block("GSEControl", "GO", "BCU", fields: ["GoEna", "NdsCom"]);
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel { MmsDomain = "LD" }],
+            GooseControlBlocks = [valid, valid,
+                Block("GSEControl", "GO", "OTHER", status: "SCL",
+                    fields: ["GoEna"])]
+        };
+        var ledger = new IedBrowserLiveValues();
+        ledger.BeginAssociation();
+        Assert.Empty(IedBrowserReadPlan.BuildInitialPriority(model, ledger, 32));
+    }
+
 }
