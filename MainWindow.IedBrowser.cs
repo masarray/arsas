@@ -719,6 +719,20 @@ public partial class MainWindow
                     row.ValueReference, row.FunctionalConstraint, live.Value);
             else
                 display = "Not exposed";
+            // An actually observed q/t leaf with no verified raw bit-level
+            // metadata is not an unexposed IEC attribute. Report/MMS value
+            // ingress succeeded; only the expansion into individual flags
+            // is unavailable. Preserve this distinction to guide BCUGE
+            // diagnosis without inventing false quality/timeQuality bits.
+            if (row.EvidenceField.Length > 0 &&
+                display == "Not exposed" &&
+                row.EvidenceKind is "Quality" or "Timestamp")
+            {
+                display = "Not decoded";
+                row.ObservationTooltip +=
+                    " · Exact q/t leaf observed, but raw typed bit evidence " +
+                    "was not verified; do not infer flags from text.";
+            }
             // IEC UTC wire timestamps are UTC instants, unlike offsetless
             // vendor display strings that may already be operator-local.
             // Convert only when explicit UTC/offset evidence exists.
