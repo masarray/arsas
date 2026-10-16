@@ -76,7 +76,10 @@ public sealed class IedBrowserSchemaIndex
                     (string.Equals(obj.InferredCdc, "DPC", StringComparison.OrdinalIgnoreCase) ||
                      string.Equals(attr.SclBType, "Dbpos", StringComparison.OrdinalIgnoreCase) ||
                      string.Equals(attr.SclBType, "DPC", StringComparison.OrdinalIgnoreCase) ||
-                     IsStandardSwitchPosition(owner)))
+                     ((string.IsNullOrWhiteSpace(obj.InferredCdc) ||
+                       string.Equals(obj.InferredCdc, "Unknown",
+                           StringComparison.OrdinalIgnoreCase)) &&
+                      IsStandardSwitchPosition(owner))))
                 {
                     _declaredDoublePointValues.Add(Key(reference, fc));
                     _declaredDoublePointValues.Add(Key(owner, fc));
