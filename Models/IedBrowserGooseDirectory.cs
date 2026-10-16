@@ -34,6 +34,40 @@ public static class IedBrowserGooseDirectory
         return blocks;
     }
 
+    /// <summary>
+    /// Recover a directory ONLY after a matching received GoCB supplies an
+    /// actual wire DataSet identity. Offline SCL may enrich that exact IED
+    /// domain, but no DataSet is guessed from the GoCB name or array length.
+    /// Reject duplicate definitions rather than choosing the first.
+    /// </summary>
+    public static (LiveIedModelDiscoveryDocument Model, LiveIedDataSetModel Set)?
+        ResolveWireDataSet(LiveIedModelDiscoveryDocument? live,
+            LiveIedModelDiscoveryDocument? scl, string domain, string wireReference)
+    {
+        if (string.IsNullOrWhiteSpace(domain) ||
+            string.IsNullOrWhiteSpace(wireReference))
+            return null;
+        static LiveIedDataSetModel? Exact(
+            LiveIedModelDiscoveryDocument? source, string domain, string reference)
+        {
+            var matches = source?.DataSets.Where(set =>
+                string.Equals(set.Domain, domain, StringComparison.Ordinal) &&
+                string.Equals(IedBrowserGooseInspection.Canonical(set.Reference),
+                    IedBrowserGooseInspection.Canonical(reference),
+                    StringComparison.Ordinal)).Take(2).ToArray();
+            return matches is { Length: 1 } ? matches[0] : null;
+        }
+        if (Exact(live, domain, wireReference) is { } verified)
+            return (live!, verified);
+        // SCL is a directory, not wire evidence. Match only a domain present
+        // in the selected device's live discovery (or an offline SCL session).
+        if (live is not null &&
+            !live.LogicalDevices.Any(ld => ld.MmsDomain == domain))
+            return null;
+        return Exact(scl, domain, wireReference) is { } fallback
+            ? (scl!, fallback) : null;
+    }
+
     public static LiveIedModelDiscoveryDocument? ModelForDataSet(
         LiveIedModelDiscoveryDocument? live,
         LiveIedModelDiscoveryDocument? scl,

@@ -191,4 +191,49 @@ public sealed class IedBrowserGooseInspectionTests
     }
 
 
+    [Fact]
+    public void WireDataSetDirectoryUsesExactDomainAndReferenceNotGoId()
+    {
+        var live = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel { MmsDomain = "LD" }],
+            DataSets = [new LiveIedDataSetModel
+            {
+                Domain = "LD", Reference = "LD/LLN0.GOOSE2",
+                Members = [new LiveIedDataSetMemberModel
+                {
+                    Index = 0, Reference = "LD/CSWI6.Pos.stVal",
+                    FunctionalConstraint = "ST"
+                }]
+            }]
+        };
+        var exact = IedBrowserGooseDirectory.ResolveWireDataSet(
+            live, null, "LD", "LD/LLN0$GOOSE2");
+        Assert.NotNull(exact);
+        Assert.Same(live.DataSets[0], exact.Value.Set);
+        Assert.Null(IedBrowserGooseDirectory.ResolveWireDataSet(
+            live, null, "LD", "LD/LLN0.GOOSE1"));
+        Assert.Null(IedBrowserGooseDirectory.ResolveWireDataSet(
+            live, null, "OTHER", "LD/LLN0.GOOSE2"));
+    }
+
+    [Fact]
+    public void BrowserHasUnboundWireAllDataFallbackWithoutRewritingLedger()
+    {
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root != null &&
+               !File.Exists(Path.Combine(root.FullName, "MainWindow.IedBrowser.cs")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var source = File.ReadAllText(Path.Combine(root!.FullName,
+            "MainWindow.IedBrowser.cs"));
+        Assert.Contains("ResolveWireDataSet(", source);
+        Assert.Contains("allData[{slot + 1}] · unbound", source);
+        Assert.Contains("GOOSE raw allData · unbound", source);
+        Assert.Contains("Not current", source);
+        Assert.Contains("Received GOOSE PDU datSet", source);
+        Assert.DoesNotContain("device.LiveValues.PublishForAssociation(", source);
+    }
+
+
 }
