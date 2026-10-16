@@ -66,10 +66,14 @@ public sealed class IedBrowserSchemaIndex
                     !reference.StartsWith(owner + ".", StringComparison.Ordinal))
                     continue;
                 var relative = reference[(owner.Length + 1)..];
-                if (relative == "q")
-                    _qualityLeaves[Key(owner, fc)] = reference;
-                if (relative == "t")
-                    _timestampLeaves[Key(owner, fc)] = reference;
+                // A structured DO such as PPV contains CDC subobjects
+                // phsAB/phsBC/phsCA, each with its own q/t. Index their
+                // exact declared parent path instead of dropping the nested
+                // raw evidence or borrowing another phase's flags.
+                if (relative == "q" || relative.EndsWith(".q", StringComparison.Ordinal))
+                    _qualityLeaves[Key(reference[..^2], fc)] = reference;
+                if (relative == "t" || relative.EndsWith(".t", StringComparison.Ordinal))
+                    _timestampLeaves[Key(reference[..^2], fc)] = reference;
                 if (!ProcessLeaves.Contains(relative)) continue;
                 if (!primaries.TryGetValue(fc, out var paths))
                 {
@@ -228,11 +232,19 @@ public sealed class IedBrowserSchemaIndex
         quality = "";
         if (string.IsNullOrWhiteSpace(reportReference) || string.IsNullOrWhiteSpace(fc))
             return false;
-        foreach (var owner in Ancestors(IedBrowserLiveValues.CanonicalReference(reportReference)))
+        // Closest exact schema-declared CDC q wins. An FCD nested phase
+        // may own its own q even when only its outer PPV is an IEC DO.
+        var reference = IedBrowserLiveValues.CanonicalReference(reportReference);
+        if (reference.EndsWith(".q", StringComparison.Ordinal) &&
+            _qualityLeaves.TryGetValue(Key(reference[..^2], fc), out var own) &&
+            string.Equals(own, reference, StringComparison.Ordinal))
         {
-            if (!_dataObjects.Contains(owner)) continue;
-            return _qualityLeaves.TryGetValue(Key(owner, fc), out quality!);
+            quality = own;
+            return true;
         }
+        foreach (var owner in Ancestors(reference))
+            if (_qualityLeaves.TryGetValue(Key(owner, fc), out quality!))
+                return true;
         return false;
     }
 
@@ -245,11 +257,17 @@ public sealed class IedBrowserSchemaIndex
         timestamp = "";
         if (string.IsNullOrWhiteSpace(reportReference) || string.IsNullOrWhiteSpace(fc))
             return false;
-        foreach (var owner in Ancestors(IedBrowserLiveValues.CanonicalReference(reportReference)))
+        var reference = IedBrowserLiveValues.CanonicalReference(reportReference);
+        if (reference.EndsWith(".t", StringComparison.Ordinal) &&
+            _timestampLeaves.TryGetValue(Key(reference[..^2], fc), out var own) &&
+            string.Equals(own, reference, StringComparison.Ordinal))
         {
-            if (!_dataObjects.Contains(owner)) continue;
-            return _timestampLeaves.TryGetValue(Key(owner, fc), out timestamp!);
+            timestamp = own;
+            return true;
         }
+        foreach (var owner in Ancestors(reference))
+            if (_timestampLeaves.TryGetValue(Key(owner, fc), out timestamp!))
+                return true;
         return false;
     }
 
