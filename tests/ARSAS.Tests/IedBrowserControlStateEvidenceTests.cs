@@ -115,4 +115,45 @@ public sealed class IedBrowserControlStateEvidenceTests
             "GoCB/SCL", "SCL", "GoCB", 3, Block("GSEControl", "GO", "BCU",
                 status: "Model", fields: ["GoEna"])), readAll: false));
     }
+    [Fact]
+    public void FullLiveInitialHydrationIncludesOnlyVerifiedReadOnlySgcbStatus()
+    {
+        var verified = Block(fields: ["NumOfSG", "ActSG", "LActTm", "EditSG", "CnfEdit"]);
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel { MmsDomain = "LD" }],
+            SettingGroupControls = [verified]
+        };
+        var values = new IedBrowserLiveValues();
+        var session = values.BeginAssociation();
+        var plan = IedBrowserReadPlan.BuildInitialPriority(model, values, 32);
+        Assert.Equal(3, plan.Count);
+        Assert.All(plan, target => Assert.Equal("SP", target.FunctionalConstraint));
+        Assert.Contains(plan, target => target.Reference.EndsWith(".ActSG", StringComparison.Ordinal));
+        Assert.DoesNotContain(plan, target => target.Reference.Contains("EditSG", StringComparison.Ordinal) ||
+            target.Reference.Contains("CnfEdit", StringComparison.Ordinal));
+
+        Assert.True(values.PublishForAssociation(session, "LD/LLN0.SGCB.ActSG",
+            "SP", "1", "", "", "MMS Read"));
+        Assert.Equal(2, IedBrowserReadPlan.BuildInitialPriority(model, values, 32).Count);
+        Assert.Single(IedBrowserReadPlan.BuildInitialPriority(model, values, 1));
+        values.BeginAssociation();
+        Assert.Equal(3, IedBrowserReadPlan.BuildInitialPriority(model, values, 32).Count);
+    }
+
+    [Fact]
+    public void InitialSgcbPlanRejectsSclOnlyAndAmbiguousInventory()
+    {
+        var valid = Block(fields: ["NumOfSG", "ActSG"]);
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel { MmsDomain = "LD" }],
+            SettingGroupControls = [valid, valid,
+                Block(status: "SCL", fields: ["LActTm"])]
+        };
+        var ledger = new IedBrowserLiveValues();
+        ledger.BeginAssociation();
+        Assert.Empty(IedBrowserReadPlan.BuildInitialPriority(model, ledger, 32));
+    }
+
 }

@@ -163,7 +163,29 @@ public static class IedBrowserReadPlan
                 string.IsNullOrWhiteSpace(x.attr.SclBType)
                     ? x.attr.MmsType : x.attr.SclBType))
             .ToArray();
-        return candidates;
+        // SGCB is not an LN DataObject. Its exact GetNameList FC inventory
+        // must be admitted through the same bounded read plan, not skipped
+        // because the generic attribute walker cannot see the control block.
+        // Only read-only NumOfSG/ActSG/LActTm; never EditSG/CnfEdit/SE.
+        var settings = verifiedLiveModel.SettingGroupControls
+            .SelectMany(block => IedBrowserControlStateEvidence.ReadTargets(block, "SGCB"))
+            .GroupBy(target => IedBrowserLiveValues.CanonicalReference(target.Reference) +
+                               "|" + target.FunctionalConstraint,
+                StringComparer.Ordinal)
+            .Where(group => group.Count() == 1)
+            .Select(group => group.First())
+            .Where(target => !ledger.TryGet(target.Reference,
+                target.FunctionalConstraint, out var observed) ||
+                observed.IsStale || observed.Association != association)
+            .OrderBy(target => target.Reference, StringComparer.Ordinal)
+            .ToArray();
+        // Prefer these three live settings over optional generic LN attributes,
+        // while honoring the existing hard target limit and skipping duplicates.
+        return settings.Concat(candidates)
+            .DistinctBy(target => IedBrowserLiveValues.CanonicalReference(target.Reference) +
+                "|" + target.FunctionalConstraint.Trim().ToUpperInvariant(),
+                StringComparer.Ordinal)
+            .Take(maxTargets).ToArray();
     }
 
     private static int InitialPriority(
