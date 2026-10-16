@@ -1492,6 +1492,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         SetStatus($"{device.Name}: refreshed {candidates.Length} control value(s).");
     }
 
+    private bool RejectCommandWhenIedFlightUnavailable(
+        Iec61850MonitorDevice? device, SignalDefinition signal)
+    {
+        if (device is null || !_runtime.IsControlFlightUnavailable(device.DeviceId))
+            return false;
+        const string reason =
+            "another IED command is still active or its wire outcome is unresolved";
+        signal.ControlLastResult = "Command not sent: " + reason +
+            ". Verify process status before recovery.";
+        AddLog("WARN", device.Name,
+            $"CONTROL_UI_SINGLE_FLIGHT: rejected {signal.ObjectReference}; " +
+            "same-IED control flight already active or quarantined; no Operate requested.");
+        SetStatus($"{device.Name}: {signal.Name} — command not sent; {reason}.");
+        ShowControlShout(Iec61850ControlShout.FromLocalRejection(reason));
+        return true;
+    }
+
     private async void ControlStageAction_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button button || button.Tag is not SignalDefinition signal ||
@@ -1501,6 +1518,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var device = _signalOwners.TryGetValue(signal, out var owner) ? owner : SelectedDevice;
         if (device is null || !device.IsConnected || signal.ControlInspectionBusy || signal.ControlCommandBusy)
+            return;
+        if (RejectCommandWhenIedFlightUnavailable(device, signal))
             return;
         DismissControlShout();
 
@@ -1568,6 +1587,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
 
         var device = _signalOwners.TryGetValue(signal, out var owner) ? owner : SelectedDevice;
+        if (RejectCommandWhenIedFlightUnavailable(device, signal))
+            return;
         AddLog("INFO", device?.Name ?? "IED",
             $"Confirm click received: {signal.ObjectReference}; pending={signal.ControlConfirmationPending}; action={signal.ControlPendingAction}; value={signal.ControlPendingValue}; commandBusy={signal.ControlCommandBusy}; inspectionBusy={signal.ControlInspectionBusy}.");
 
@@ -1615,6 +1636,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         var device = _signalOwners.TryGetValue(signal, out var owner) ? owner : SelectedDevice;
+        if (RejectCommandWhenIedFlightUnavailable(device, signal))
+            return;
         if (!signal.TryBeginDirectControlCommand(
                 requestedValue,
                 button.Content?.ToString()?.Trim() ?? requestedValue,
@@ -1710,8 +1733,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (OperationCanceledException)
         {
-            signal.ControlLastResult = "Command cancelled.";
-            SetStatus($"{device.Name}: {signal.Name} command cancelled.");
+            signal.ControlLastResult = "Command cancelled; if Operate was already dispatched, verify actual IED position.";
+            SetStatus($"{device.Name}: {signal.Name} command cancelled; verify the final process state.");
+        }
+        catch (TimeoutException ex)
+        {
+            signal.ControlLastResult =
+                "Control outcome UNKNOWN — MMS flight exceeded deadline. " +
+                "Verify IED process state and reconnect before another command.";
+            AddLog("ERROR", device.Name,
+                $"CONTROL_UI_TIMEOUT: {signal.ObjectReference}; {ex.Message}");
+            SetStatus($"{device.Name}: {signal.Name} control outcome UNKNOWN; check Diagnostics.");
+            MarkDiagnosticAlert();
+            ShowControlShout(Iec61850ControlShout.FromLocalRejection(
+                "Control timed out with UNKNOWN wire outcome. Verify the IED position and reconnect; do not blindly retry"));
         }
         catch (Exception ex)
         {
