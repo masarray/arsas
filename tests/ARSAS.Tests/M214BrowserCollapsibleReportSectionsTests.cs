@@ -58,7 +58,9 @@ public sealed class M214BrowserCollapsibleReportSectionsTests
         model.Reset(source);
         var section = model.Rows[0];
         model.Toggle(section);
-        source[1].Value = "2"; // canonical value may advance during collapse
+        // The retained projected child is refreshed from the canonical
+        // ledger when the operator re-expands; no independent value cache.
+        section.GetChildren()[0].Value = "2";
         model.Toggle(section);
         Assert.Equal("2", model.Rows[1].Value);
     }
