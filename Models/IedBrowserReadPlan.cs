@@ -177,7 +177,9 @@ public static class IedBrowserReadPlan
             .Where(target => !ledger.TryGet(target.Reference,
                 target.FunctionalConstraint, out var observed) ||
                 observed.IsStale || observed.Association != association)
-            .OrderBy(target => target.Reference, StringComparer.Ordinal)
+            .OrderBy(target => target.Reference.EndsWith(".LActTm",
+                StringComparison.Ordinal) ? 1 : 0)
+            .ThenBy(target => target.Reference, StringComparer.Ordinal)
             .ToArray();
         // Likewise, GoEna/NdsCom belong to the exact live GO control
         // inventory, not ordinary data-object attributes or received GOOSE
@@ -194,7 +196,9 @@ public static class IedBrowserReadPlan
             .Where(target => !ledger.TryGet(target.Reference,
                 target.FunctionalConstraint, out var observed) ||
                 observed.IsStale || observed.Association != association)
-            .OrderBy(target => target.Reference, StringComparer.Ordinal)
+            .OrderBy(target => target.Reference.EndsWith(".NdsCom",
+                StringComparison.Ordinal) ? 1 : 0)
+            .ThenBy(target => target.Reference, StringComparer.Ordinal)
             .Take(8).ToArray();
         // Prioritize verified control-block state and then finite LN image,
         // without an extra background service or second observation cache.

@@ -128,6 +128,9 @@ public sealed class IedBrowserControlStateEvidenceTests
         var session = values.BeginAssociation();
         var plan = IedBrowserReadPlan.BuildInitialPriority(model, values, 32);
         Assert.Equal(3, plan.Count);
+        Assert.True(plan[0].Reference.EndsWith(".ActSG", StringComparison.Ordinal));
+        Assert.True(plan[1].Reference.EndsWith(".NumOfSG", StringComparison.Ordinal));
+        Assert.True(plan[2].Reference.EndsWith(".LActTm", StringComparison.Ordinal));
         Assert.All(plan, target => Assert.Equal("SP", target.FunctionalConstraint));
         Assert.Contains(plan, target => target.Reference.EndsWith(".ActSG", StringComparison.Ordinal));
         Assert.DoesNotContain(plan, target => target.Reference.Contains("EditSG", StringComparison.Ordinal) ||
