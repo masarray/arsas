@@ -103,8 +103,10 @@ public sealed class M217DRcbAssociationAndAnalogFcParityTests
         Assert.True(schema.TryResolveReportFc(DataSet, uncontested, out var fc));
         Assert.Equal("MX", fc);
         Assert.True(schema.ContainsDataSetMember(DataSet, uncontested, "mx"));
+        // FCD legitimately covers all of its declared descendants;
+        // a sibling DO (not a descendant) must never match the prefix.
         Assert.False(schema.ContainsDataSetMember(DataSet,
-            uncontested.Replace("phsB", "phsb", StringComparison.Ordinal), "MX"));
+            uncontested.Replace(".PhV.", ".PhVx.", StringComparison.Ordinal), "MX"));
 
         var page = new IedBrowserTreeRow("datasets/set/" + DataSet,
             "Phasors", "DataSet", 3, model.DataSets[0]);
