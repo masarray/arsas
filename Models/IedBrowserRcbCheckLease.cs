@@ -1,4 +1,5 @@
 using AR.Iec61850.Discovery;
+using AR.Iec61850.Scl.Workspace;
 
 namespace ArIED61850Tester.Models;
 
