@@ -157,13 +157,38 @@ public static class IedBrowserReadPlan
                         observed.IsStale || observed.Association != association)
             .OrderBy(x => x.Priority)
             .ThenBy(x => x.Reference, StringComparer.Ordinal)
-            .Take(maxTargets)
-            .Select(x => new IedBrowserReadTarget(
+            .Select(x => (x.Priority, Target: new IedBrowserReadTarget(
                 x.attr.MmsReference, x.Fc,
                 string.IsNullOrWhiteSpace(x.attr.SclBType)
-                    ? x.attr.MmsType : x.attr.SclBType))
+                    ? x.attr.MmsType : x.attr.SclBType)))
             .ToArray();
-        return candidates;
+
+        // SGCB status was missing because it lives in the live control-block
+        // inventory, NOT in ordinary LogicalNode.DataObject attribute lists.
+        // Read only model-verified SP/SG/SE NumOfSG, ActSG, LActTm.
+        // EditSG/CnfEdit or SCL-only declarations never authorize MMS requests.
+        var verifiedDomains = verifiedLiveModel.LogicalDevices.Select(ld => ld.MmsDomain)
+            .ToHashSet(StringComparer.Ordinal);
+        var settingState = verifiedLiveModel.SettingGroupControls
+            .Where(block => verifiedDomains.Contains(block.Domain))
+            .SelectMany(block => IedBrowserControlStateEvidence.ReadTargets(block, "SGCB"))
+            .GroupBy(target => IedBrowserLiveValues.CanonicalReference(target.Reference) +
+                               "|" + target.FunctionalConstraint, StringComparer.Ordinal)
+            .Where(group => group.Count() == 1)
+            .Select(group => group.First())
+            .Where(target => !ledger.TryGet(target.Reference, target.FunctionalConstraint,
+                out var observed) || observed.IsStale || observed.Association != association)
+            .OrderBy(target => target.Reference, StringComparer.Ordinal);
+
+        // Respect process-critical LLN0/LPHD and switching position first.
+        // SGCB three-field status outranks bulk nameplate/ordinary LN reads.
+        return candidates.Where(x => x.Priority <= 1).Select(x => x.Target)
+            .Concat(settingState)
+            .Concat(candidates.Where(x => x.Priority > 1).Select(x => x.Target))
+            .DistinctBy(target => IedBrowserLiveValues.CanonicalReference(target.Reference) +
+                "|" + target.FunctionalConstraint, StringComparer.Ordinal)
+            .Take(maxTargets)
+            .ToArray();
     }
 
     private static int InitialPriority(
