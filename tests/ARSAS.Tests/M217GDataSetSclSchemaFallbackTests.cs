@@ -96,7 +96,9 @@ public sealed class M217GDataSetSclSchemaFallbackTests
             Attr("MX", "phsA.cVal.ang.f")));
         var scl = Model(Obj(ThreePhase()));
         var row = IedBrowserStructuredDetails.Member(Member(), live, sclModel: scl);
-        Assert.Single(row.PhasePlans);
+        // A single live phase is not a full three-phase vector, but it
+        // must remain live-only: SCL cannot manufacture phsB/phsC leaves.
+        Assert.Empty(row.PhasePlans);
         Assert.DoesNotContain("SCL structure only", row.Tooltip);
         var children = IedBrowserStructuredDetails.DataSetMemberChildren(
             Member(), live, 1, scl);
@@ -146,5 +148,21 @@ public sealed class M217GDataSetSclSchemaFallbackTests
         var page = new IedBrowserTreeRow("datasets/set/" + dataSet.Reference,
             dataSet.Name, "DataSet", 3, dataSet);
         Assert.Empty(IedBrowserReadPlan.Build(liveWithSet, page, readAll: false));
+    }    [Fact]
+    public void ObservedQualityWithoutTypedBitsIsNotMislabeledNotExposed()
+    {
+        DirectoryInfo? folder = new(AppContext.BaseDirectory);
+        while (folder is not null &&
+            !File.Exists(Path.Combine(folder.FullName, "MainWindow.IedBrowser.cs")))
+            folder = folder.Parent;
+        Assert.NotNull(folder);
+        var code = File.ReadAllText(Path.Combine(folder!.FullName,
+            "MainWindow.IedBrowser.cs"));
+        Assert.Contains("display == \"Not exposed\"", code);
+        Assert.Contains("display = \"Not decoded\";", code);
+        Assert.Contains("raw typed bit evidence", code);
+        Assert.Contains("row.EvidenceKind is \"Quality\" or \"Timestamp\"", code);
     }
+
+
 }
