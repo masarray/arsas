@@ -37,6 +37,25 @@ public static class IedBrowserGooseInspection
         return values;
     }
 
+    /// <summary>
+    /// A passive frame is current only within its *received* IEC 61850
+    /// timeAllowedToLive. The subscriber owns wire decoding and sequence
+    /// supervision; this is a stateless UI admission rule. Invalid/zero TTL,
+    /// future timestamps and expired frames may be shown as historical
+    /// evidence, never as current Browser values.
+    /// </summary>
+    public static bool IsFrameCurrent(
+        DateTimeOffset capturedUtc, long timeAllowedToLiveMilliseconds,
+        DateTimeOffset nowUtc)
+    {
+        if (timeAllowedToLiveMilliseconds <= 0 || capturedUtc > nowUtc)
+            return false;
+        // No int-sized millisecond conversion: preserve the exact unsigned
+        // PDU TTL range in long arithmetic, without wraparound.
+        return (nowUtc - capturedUtc).TotalMilliseconds <
+            timeAllowedToLiveMilliseconds;
+    }
+
     public static string Canonical(string? value) => (value ?? "").Trim().Replace('$', '.');
 
     public static GooseStreamSnapshot? Select(

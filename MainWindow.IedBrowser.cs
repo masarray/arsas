@@ -562,7 +562,16 @@ public partial class MainWindow
         var version = device.LiveValues.Version;
         if (_iedBrowserLastLiveVersion == version &&
             ReferenceEquals(_iedBrowserLastCfCanonicalModel, device.LiveCanonicalModel))
+        {
+            // Passive GOOSE TTL expiry and received RCB continuity are not
+            // version increments of the MMS value ledger. Project the existing
+            // evidence on the UI flush tick even when no MMS value changed.
+            if (_iedBrowserRenderedPage?.Kind == "GoCB")
+                UpdateIedBrowserGooseDetails();
+            else if (_iedBrowserRenderedPage?.Kind == "RCB")
+                UpdateIedBrowserRcbReportDetails();
             return;
+        }
         _iedBrowserLastLiveVersion = version;
         _iedBrowserLastCfCanonicalModel = device.LiveCanonicalModel;
         // No MMS call occurs during navigation or refresh. Exact CF/DC
@@ -908,13 +917,29 @@ public partial class MainWindow
 
         // Filter raw bounded cache by exact GoCB before building display leaves.
         // Two different publisher streams claiming the same identity are rejected.
+        var nowUtc = DateTimeOffset.UtcNow;
+        var controlReference = IedBrowserGooseInspection.Canonical(identity.GoCbRef);
+        // Existing bounded subscriber cache; never open another capture or
+        // promote any GOOSE sample to the MMS/Report value ledger. Filter by
+        // *wire* TTL BEFORE choosing the two unique identity candidates.
         var found = IsGooseCapturing
             ? _latestGooseFrames.Values.Where(frame =>
                 IedBrowserGooseInspection.Canonical(frame.Frame.Pdu.GoCbRef) ==
-                IedBrowserGooseInspection.Canonical(identity.GoCbRef)).Take(2)
+                    controlReference &&
+                IedBrowserGooseInspection.IsFrameCurrent(
+                    frame.CaptureTimestamp,
+                    frame.Frame.Pdu.TimeAllowedToLiveMilliseconds, nowUtc))
+                .Take(2)
                 .Select(frame => (Raw: frame,
                     Display: BuildGooseStreamSnapshot(frame, _gooseBindingCatalog))).ToArray()
             : Array.Empty<(GooseSubscriberFrameSnapshot Raw, GooseStreamSnapshot Display)>();
+        var expiredSameControl = IsGooseCapturing && found.Length == 0 &&
+            _latestGooseFrames.Values.Any(frame =>
+                IedBrowserGooseInspection.Canonical(frame.Frame.Pdu.GoCbRef) ==
+                    controlReference &&
+                !IedBrowserGooseInspection.IsFrameCurrent(
+                    frame.CaptureTimestamp,
+                    frame.Frame.Pdu.TimeAllowedToLiveMilliseconds, nowUtc));
         var frameView = IedBrowserGooseInspection.Select(identity, found.Select(x => x.Display));
         var received = frameView is null ? null : found
             .FirstOrDefault(x => ReferenceEquals(frameView, x.Display)).Raw;
@@ -965,9 +990,12 @@ public partial class MainWindow
         }
         else
         {
-            Put("Capture status", IsGooseCapturing
-                ? "No uniquely verified matching frame" : "Subscriber not capturing",
-                "Passive capture; not an MMS GoCB read");
+            Put("Capture status", !IsGooseCapturing
+                ? "Subscriber not capturing"
+                : expiredSameControl
+                    ? "GOOSE frame expired · no current live value"
+                    : "No uniquely verified matching current frame",
+                "Passive capture · exact identity and received TTL required; not an MMS GoCB read");
             foreach (var row in _iedBrowserDetails.Rows)
             {
                 if (row.GooseSlot < 0 || row.ObservationSource != "GOOSE frame") continue;

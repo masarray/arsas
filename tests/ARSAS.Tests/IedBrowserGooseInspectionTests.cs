@@ -84,4 +84,49 @@ public sealed class IedBrowserGooseInspectionTests
             Members = [first, first] };
         Assert.Null(IedBrowserGooseInspection.VerifiedMembers(frame, ambiguous));
     }
+    [Theory]
+    [InlineData(0, 0, false)]
+    [InlineData(-1, 1000, false)]
+    [InlineData(0, 1000, true)]
+    [InlineData(999, 1000, true)]
+    [InlineData(1000, 1000, false)]
+    [InlineData(1001, 1000, false)]
+    public void BrowserOnlyAdmitsGooseFramesInsideReceivedTimeAllowedToLive(
+        int ageMilliseconds, long ttlMilliseconds, bool current)
+    {
+        var now = new DateTimeOffset(2026, 10, 16, 12, 0, 0, TimeSpan.Zero);
+        var sample = now.AddMilliseconds(-ageMilliseconds);
+        Assert.Equal(current, IedBrowserGooseInspection.IsFrameCurrent(
+            sample, ttlMilliseconds, now));
+    }
+
+    [Fact]
+    public void HugeTtlAndClockSkewDoNotOverflowOrCreateFutureEvidence()
+    {
+        var now = new DateTimeOffset(2026, 10, 16, 12, 0, 0, TimeSpan.Zero);
+        Assert.True(IedBrowserGooseInspection.IsFrameCurrent(
+            now.AddDays(-1), (long)uint.MaxValue, now));
+        Assert.False(IedBrowserGooseInspection.IsFrameCurrent(
+            now.AddMilliseconds(1), 20000, now));
+        Assert.False(IedBrowserGooseInspection.IsFrameCurrent(
+            now, -1, now));
+    }
+
+    [Fact]
+    public void BrowserRechecksGooseTtlOnUiTickWithoutReadingMms()
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory is not null &&
+            !File.Exists(Path.Combine(directory.FullName, "MainWindow.IedBrowser.cs")))
+            directory = directory.Parent;
+        Assert.NotNull(directory);
+        var source = File.ReadAllText(Path.Combine(directory!.FullName,
+            "MainWindow.IedBrowser.cs"));
+        Assert.Contains("IedBrowserGooseInspection.IsFrameCurrent(", source);
+        Assert.Contains("GOOSE frame expired · no current live value", source);
+        Assert.Contains("if (_iedBrowserRenderedPage?.Kind == \"GoCB\")", source);
+        Assert.Contains("UpdateIedBrowserGooseDetails();", source);
+    }
+
+
 }
