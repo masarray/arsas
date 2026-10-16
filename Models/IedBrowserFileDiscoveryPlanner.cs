@@ -58,6 +58,10 @@ public static class IedBrowserFileDiscoveryPlanner
                 Diagnostics = ["Untrusted FileDirectory record path rejected: " + ex.Message]
             };
         }
+        // Optional same-root RIO sidecars join ONLY engine-proven CFG/DAT
+        // records. This compatibility seam avoids changing the historical
+        // engine authority merely to transport an extra physical file.
+        rootCatalog = IedBrowserRioSidecarBridge.Attach(rootCatalog, root);
         var early = new IedBrowserFileCatalog(rootCatalog, root);
         if (root.Count > 0 && publishRoot is not null)
         {
@@ -103,7 +107,10 @@ public static class IedBrowserFileDiscoveryPlanner
             DirectoriesVisited = scanned.DirectoriesVisited,
             Diagnostics = scanned.Diagnostics
         };
-        return new Result(new IedBrowserFileCatalog(merged, root),
+        // A recursive scan can supersede the early root instance. Reattach
+        // only real root FileDirectory RIO paths to the chosen exact records.
+        return new Result(new IedBrowserFileCatalog(
+                IedBrowserRioSidecarBridge.Attach(merged, root), root),
             rootWarning, scanWarning, merged.Diagnostics);
     }
 }
