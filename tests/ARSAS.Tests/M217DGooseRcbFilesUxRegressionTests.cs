@@ -45,8 +45,10 @@ public sealed class M217DGooseRcbFilesUxRegressionTests
         Assert.Contains("Margin=\"10,0,5,0\"", xaml);
         Assert.Contains("IedBrowserGooseSubscribeButton", xaml);
         Assert.Contains("Click=\"IedBrowserGooseSubscribe_Click\"", xaml);
-        Assert.Contains("OpenIedGooseSubscriber(device);", source);
-        Assert.Contains("View GOOSE Capture", source);
+        // M2.17-F: Browser consumes the same subscriber in place.
+        Assert.Contains("StartGooseSubscriber_Click(sender, e);", source);
+        Assert.Contains("View live GOOSE", source);
+        Assert.DoesNotContain("OpenIedGooseSubscriber(device);", source);
         Assert.DoesNotContain("SubscribeAsync(", source);
     }
     [Fact]
