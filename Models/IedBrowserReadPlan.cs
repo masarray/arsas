@@ -236,7 +236,11 @@ public static class IedBrowserReadPlan
             .Select(group => group.First())
             .Where(attr => !ledger.TryGet(attr.MmsReference, "MX", out var observed) ||
                 observed.IsStale || observed.Association != association)
-            .OrderBy(attr => AnalogSeedRank(
+            // Fill a small coherent phasor group per owner rather than
+            // selecting only phase-A from dozens of unrelated MMXU nodes.
+            .OrderBy(attr => IedBrowserLiveValues.CanonicalReference(
+                attr.ObjectReference), StringComparer.Ordinal)
+            .ThenBy(attr => AnalogSeedRank(
                 IedBrowserLiveValues.CanonicalReference(attr.MmsReference)))
             .ThenBy(attr => attr.MmsReference, StringComparer.Ordinal)
             .Take(initialAnalogSeedLimit)
