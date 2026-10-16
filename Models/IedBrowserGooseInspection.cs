@@ -69,7 +69,7 @@ public static class IedBrowserGooseInspection
         // expose GO controls but not their DatSet attributes via MMS; a
         // received, exact GoCB can still be inspected in *unbound allData*
         // order. Never infer an FCDA reference from its position.
-        if (control.Length == 0 || !control.Contains('/', StringComparison.Ordinal))
+        if (control.Length == 0 || !control.Contains('/'))
             return null;
 
         // Two publishers with the same GoCb identity are ambiguous, never last-one-wins.

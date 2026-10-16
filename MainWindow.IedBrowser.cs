@@ -1041,7 +1041,34 @@ public partial class MainWindow
                 .Where(row => row.GooseSlot >= 0 && row.GooseReference.Length == 0)
                 .ToArray();
             var limit = Math.Min(frameView.Leaves.Count, 128);
-            if (ordered is null && wireSlots.Length != limit)
+            if (ordered is not null)
+            {
+                foreach (var slot in wireSlots)
+                    _iedBrowserDetails.Rows.Remove(slot);
+                // The model directory may have become available only after
+                // the wire datSet was observed. Attach the exact FCDA rows
+                // once without replacing the whole virtualized Browser view.
+                if (!_iedBrowserDetails.Rows.Any(row =>
+                        row.GooseSlot >= 0 && row.GooseReference.Length != 0) &&
+                    _iedBrowserGooseDirectory is { } directory &&
+                    SelectedDevice is { } owner)
+                {
+                    var descriptors = directory.Members.OrderBy(m => m.Index).ToArray();
+                    var sourceModel = owner.LiveDiscoveryModel ??
+                        owner.SclWorkspace?.DesignModel;
+                    for (var slot = 0; slot < descriptors.Length; slot++)
+                    {
+                        var member = descriptors[slot];
+                        _iedBrowserDetails.Rows.Add(
+                            IedBrowserStructuredDetails.Member(member, sourceModel) with
+                            {
+                                GooseSlot = slot, GooseReference = member.Reference,
+                                GooseFc = member.FunctionalConstraint
+                            });
+                    }
+                }
+            }
+            else if (wireSlots.Length != limit)
             {
                 foreach (var slot in wireSlots)
                     _iedBrowserDetails.Rows.Remove(slot);

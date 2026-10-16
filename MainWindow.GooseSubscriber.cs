@@ -417,6 +417,8 @@ public partial class MainWindow
         Dispatcher.BeginInvoke(new Action(() =>
         {
             IsGooseCapturing = status.IsRunning;
+            if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
+                RefreshIedBrowserReadButtons();
             GooseCapturedFrames = status.CapturedFrames;
             GooseFrames = status.GooseFrames;
             GooseOtherFrames = status.OtherFrames;
