@@ -87,6 +87,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public int ConsecutiveHealthProbeFailures { get; set; }
         public string HealthProbePointKey { get; set; } = string.Empty;
         public int ControlCommandActive;
+        // A timed-out/cancelled native Operate may still be in-flight on the
+        // association. Do not admit another control until a fresh session.
+        public int ControlFlightQuarantined;
         public HybridReportPhysicalValidationTracker HybridValidation { get; } = new();
         public StaticDataSetReportProjectionAccumulator StaticReportProjection { get; } = new();
         public bool StaticDataSetReportOnly { get; set; }
@@ -883,11 +886,15 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         if (!_activeControlTargets.TryAdd(targetKey, 0))
             throw new InvalidOperationException("A command is already running for this object.");
 
-        Interlocked.Increment(ref session.ControlCommandActive);
+        if (Volatile.Read(ref session.ControlFlightQuarantined) != 0 ||
+            Interlocked.CompareExchange(ref session.ControlCommandActive, 1, 0) != 0)
+        {
+            _activeControlTargets.TryRemove(targetKey, out _);
+            throw new InvalidOperationException(
+                "This IED already has an active or unresolved control flight. No ctlModel Write was sent.");
+        }
         try
         {
-            if (Volatile.Read(ref session.ControlCommandActive) != 1)
-                throw new InvalidOperationException("Another IED command is in progress. ctlModel configuration was not started.");
             Log("WARN", session.Device.Name,
                 $"OPERATOR_CTL_MODEL_CONFIGURATION: {signal.ObjectReference}; expected={expected}; requested={target}; " +
                 "explicit commissioning confirmed; one CF Write maximum, never Operate.");
@@ -901,7 +908,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         }
         finally
         {
-            Interlocked.Decrement(ref session.ControlCommandActive);
+            Interlocked.Exchange(ref session.ControlCommandActive, 0);
             _activeControlTargets.TryRemove(targetKey, out _);
         }
     }
@@ -917,6 +924,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         if (!_sessions.TryGetValue(deviceId, out var session) || !session.Client.IsConnected)
             throw new InvalidOperationException("The IED must be connected before a control object can be inspected.");
 
+        if (Volatile.Read(ref session.ControlCommandActive) != 0 ||
+            Volatile.Read(ref session.ControlFlightQuarantined) != 0)
+            throw new InvalidOperationException(
+                "Control inspection deferred: another command is in flight or the association requires recovery.");
         try
         {
             var capabilities = await session.Client.InspectControlAsync(signal, cancellationToken).ConfigureAwait(false);
@@ -931,6 +942,16 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             throw;
         }
     }
+
+    // Covers descriptor acquisition, feedback read, Operate and final feedback
+    // wait, including native semaphore acquisition. A stage-only timeout does
+    // not bound this whole command chain.
+    private static readonly TimeSpan ControlFlightDeadline = TimeSpan.FromSeconds(45);
+
+    public bool IsControlFlightUnavailable(string deviceId)
+        => _sessions.TryGetValue(deviceId, out var session) &&
+            (Volatile.Read(ref session.ControlCommandActive) != 0 ||
+             Volatile.Read(ref session.ControlFlightQuarantined) != 0);
 
     public async Task<Iec61850ControlCommandResult> ExecuteControlAsync(
         string deviceId,
@@ -953,20 +974,68 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             throw new InvalidOperationException("Command already in progress for this IEC 61850 control object. No new MMS Operate was sent.");
         }
 
-        Log("INFO", session.Device.Name,
-            $"Control execution requested: {request.Signal.ObjectReference} value={request.ValueText}; test={request.TestMode}; interlock={request.InterlockCheck}; synchro={request.SynchroCheck}; origin={request.OriginCategory}/{request.Originator}; IED acceptance is determined only from native MMS wire evidence.");
+        // Association-wide single-flight, not merely one lock per control
+        // object. Different CSWIs on the same MMS socket must never accumulate
+        // behind the native semaphore while the report loop is paused.
+        if (Volatile.Read(ref session.ControlFlightQuarantined) != 0 ||
+            Interlocked.CompareExchange(ref session.ControlCommandActive, 1, 0) != 0)
+        {
+            _activeControlTargets.TryRemove(targetKey, out _);
+            Log("WARN", session.Device.Name,
+                $"CONTROL_IED_SINGLE_FLIGHT: rejected {request.Signal.ObjectReference}; another control is active or its wire outcome is unresolved; Operate NOT SENT.");
+            throw new InvalidOperationException(
+                "Another command is active or its wire outcome is unresolved on this IED. No MMS Operate was sent. Reconnect and verify actual status before retrying.");
+        }
 
         var clientStopwatch = Stopwatch.StartNew();
-        Interlocked.Increment(ref session.ControlCommandActive);
+        var nativeCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        Task<Iec61850ControlCommandResult>? nativeFlight = null;
         Iec61850ControlCommandResult result;
         try
         {
-            result = await session.Client.ExecuteControlAsync(request, cancellationToken).ConfigureAwait(false);
+            Log("INFO", session.Device.Name,
+                $"Control execution requested: {request.Signal.ObjectReference} value={request.ValueText}; test={request.TestMode}; interlock={request.InterlockCheck}; synchro={request.SynchroCheck}; origin={request.OriginCategory}/{request.Originator}; IED acceptance is determined only from native MMS wire evidence.");
+            nativeFlight = session.Client.ExecuteControlAsync(request, nativeCancellation.Token);
+            result = await nativeFlight.WaitAsync(ControlFlightDeadline, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            Interlocked.Exchange(ref session.ControlFlightQuarantined, 1);
+            nativeCancellation.Cancel();
+            Log("ERROR", session.Device.Name,
+                $"CONTROL_OUTCOME_UNKNOWN_TIMEOUT: {request.Signal.ObjectReference}; deadline={ControlFlightDeadline.TotalSeconds:0}s; nativeCompleted={nativeFlight?.IsCompleted}; no further commands on this MMS association. Actual IED position must be checked before reconnect.");
+            throw new TimeoutException(
+                "Control exceeded the end-to-end deadline. The MMS wire outcome is UNKNOWN, not necessarily rejected. This association is quarantined; verify process state and reconnect before any further Operate.");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            if (nativeFlight is { IsCompleted: false })
+            {
+                Interlocked.Exchange(ref session.ControlFlightQuarantined, 1);
+                nativeCancellation.Cancel();
+                Log("WARN", session.Device.Name,
+                    $"CONTROL_CANCEL_OUTCOME_UNKNOWN: {request.Signal.ObjectReference}; native flight not completed; association quarantined.");
+            }
+            throw;
         }
         finally
         {
-            Interlocked.Decrement(ref session.ControlCommandActive);
-            _activeControlTargets.TryRemove(targetKey, out _);
+            if (nativeFlight is { IsCompleted: false })
+            {
+                // WaitAsync only cancels the WAIT. The native operation may
+                // still own a socket and may still apply Operate. Retain the
+                // per-IED gate until it ACTUALLY terminates. Never dispose its
+                // CTS or let another command use that association prematurely.
+                _ = ObserveLateControlFlightAsync(session, targetKey,
+                    request.Signal.ObjectReference, nativeFlight, nativeCancellation);
+            }
+            else
+            {
+                nativeCancellation.Dispose();
+                Interlocked.Exchange(ref session.ControlCommandActive, 0);
+                _activeControlTargets.TryRemove(targetKey, out _);
+            }
         }
         clientStopwatch.Stop();
 
@@ -1058,6 +1127,30 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         }
 
         return result;
+    }
+
+    private async Task ObserveLateControlFlightAsync(DeviceSession session,
+        string targetKey, string reference,
+        Task<Iec61850ControlCommandResult> nativeFlight,
+        CancellationTokenSource nativeCancellation)
+    {
+        try
+        {
+            var late = await nativeFlight.ConfigureAwait(false);
+            Log("WARN", session.Device.Name,
+                $"CONTROL_LATE_NATIVE_RESULT: {reference}; completed after caller timeout/cancellation; stage={late.Stage}; success={late.IsSuccess}; association remains quarantined pending verified recovery.");
+        }
+        catch (Exception ex)
+        {
+            Log("WARN", session.Device.Name,
+                $"CONTROL_LATE_NATIVE_FAILURE: {reference}; {ex.GetType().Name}: {ex.Message}; association remains quarantined.");
+        }
+        finally
+        {
+            nativeCancellation.Dispose();
+            Interlocked.Exchange(ref session.ControlCommandActive, 0);
+            _activeControlTargets.TryRemove(targetKey, out _);
+        }
     }
 
     public HybridReportPhysicalValidationSnapshot CaptureHybridReportPhysicalValidation(string deviceId)
