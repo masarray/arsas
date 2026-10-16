@@ -174,6 +174,47 @@ public sealed class M217DRcbAssociationAndAnalogFcParityTests
     }
 
     [Fact]
+    public void FcConflictsAreExplicitDiagnosticsButNotProcessEvidence()
+    {
+        var inconsistent = Model();
+        var failures = IedBrowserDataSetFcConflictDiagnostic.Evaluate(
+            inconsistent, maxSamples: 12);
+        Assert.Equal(2, failures.CheckedMembers);
+        var offending = Assert.Single(failures.Samples);
+        Assert.Equal(1, failures.TotalCount);
+        Assert.Equal(Owner + ".phsA.cVal.mag.f", offending.Reference);
+        Assert.Equal("ST", offending.FunctionalConstraint);
+        Assert.Equal(DataSet, offending.DataSet);
+        Assert.Empty(IedBrowserDataSetFcConflictDiagnostic.Evaluate(
+            Model(false)).Samples);
+        Assert.Empty(IedBrowserDataSetFcConflictDiagnostic.Evaluate(
+            inconsistent, maxSamples: 0).Samples);
+        Assert.Equal(1, IedBrowserDataSetFcConflictDiagnostic.Evaluate(
+            inconsistent, maxSamples: 0).TotalCount);
+        Assert.Equal(0, IedBrowserDataSetFcConflictDiagnostic.Evaluate(null).TotalCount);
+
+        var ledger = new IedBrowserLiveValues();
+        ledger.BeginAssociation();
+        Assert.False(ledger.TryGet(offending.Reference, "MX", out _));
+    }
+
+    [Fact]
+    public void CopyDiagnosticsNamesConflictingModelDeclarationsWithoutMmsIo()
+    {
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root != null &&
+               !File.Exists(Path.Combine(root.FullName, "Services",
+                   "DiagnosticReportBuilder.cs")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var report = File.ReadAllText(Path.Combine(root!.FullName,
+            "Services", "DiagnosticReportBuilder.cs"));
+        Assert.Contains("IedBrowserDataSetFcConflictDiagnostic.Evaluate(", report);
+        Assert.Contains("DataSet FC model conflicts:", report);
+        Assert.Contains("inconsistent FCD/FCDA coverage", report);
+    }
+
+    [Fact]
     public void BrowserCheckValidatesAssociationBothAtCompletionAndAtRefresh()
     {
         DirectoryInfo? root = new(AppContext.BaseDirectory);

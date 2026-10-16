@@ -209,6 +209,14 @@ internal static class DiagnosticReportBuilder
                     builder.AppendLine("DataSet inventory:");
                     foreach (var line in Iec61850DataSetCompletenessDiagnostic.FormatReportLines(completeness))
                         builder.AppendLine($"  {line}");
+                    // Exact FCD/FCDA conflict diagnostics from the already
+                    // attached model. This never opens an MMS association,
+                    // reads a value, or changes Report/Read ownership.
+                    var fcConflicts = IedBrowserDataSetFcConflictDiagnostic.Evaluate(
+                        dataSetModel, maxSamples: 12);
+                    builder.AppendLine($"DataSet FC model conflicts: {fcConflicts.TotalCount} across {fcConflicts.CheckedMembers} declared member(s)");
+                    foreach (var conflict in fcConflicts.Samples)
+                        builder.AppendLine($"  {conflict.DataSet} :: {conflict.Reference} [{conflict.FunctionalConstraint}] · inconsistent FCD/FCDA coverage");
                 }
                 else
                 {
