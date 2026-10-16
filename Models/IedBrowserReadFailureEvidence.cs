@@ -15,20 +15,28 @@ public sealed class IedBrowserReadFailureEvidence
     private readonly Iec61850MonitorDevice _owner;
     private readonly long _association;
     private readonly long _epoch;
+    private readonly bool _modelBound;
+    private readonly object? _model;
+    private readonly object _gate = new();
     private readonly Dictionary<string, string> _failed = new(StringComparer.Ordinal);
 
-    public IedBrowserReadFailureEvidence(Iec61850MonitorDevice owner)
+    public IedBrowserReadFailureEvidence(Iec61850MonitorDevice owner,
+        bool bindToLiveModel = false)
     {
         _owner = owner ?? throw new ArgumentNullException(nameof(owner));
         _association = owner.LiveValues.Association;
         _epoch = owner.BrowserProjectionEpoch;
+        _modelBound = bindToLiveModel;
+        _model = bindToLiveModel ? owner.LiveDiscoveryModel : null;
     }
 
     private bool IsCurrent(Iec61850MonitorDevice candidate)
         => ReferenceEquals(_owner, candidate) && candidate.IsConnected &&
            !candidate.LiveValues.IsOffline &&
            candidate.LiveValues.Association == _association &&
-           candidate.BrowserProjectionEpoch == _epoch;
+           (_modelBound
+               ? _model is not null && ReferenceEquals(_model, candidate.LiveDiscoveryModel)
+               : candidate.BrowserProjectionEpoch == _epoch);
 
     private static string Key(string? reference, string? fc)
         => IedBrowserLiveValues.CanonicalReference(reference) + "|" +
@@ -42,17 +50,22 @@ public sealed class IedBrowserReadFailureEvidence
             string.IsNullOrWhiteSpace(target.FunctionalConstraint))
             return;
         var key = Key(target.Reference, target.FunctionalConstraint);
-        if (_failed.Count >= MaxFailureEntries && !_failed.ContainsKey(key))
-            return;
         var text = reason.Trim();
-        _failed[key] = text.Length > 320 ? text[..320] + "…" : text;
+        lock (_gate)
+        {
+            if (_failed.Count >= MaxFailureEntries && !_failed.ContainsKey(key))
+                return;
+            if (IsCurrent(_owner))
+                _failed[key] = text.Length > 320 ? text[..320] + "…" : text;
+        }
     }
 
     public void ClearFailure(IedBrowserReadTarget target)
     {
         ArgumentNullException.ThrowIfNull(target);
         if (IsCurrent(_owner))
-            _failed.Remove(Key(target.Reference, target.FunctionalConstraint));
+            lock (_gate)
+                _failed.Remove(Key(target.Reference, target.FunctionalConstraint));
     }
 
     public bool TryGet(Iec61850MonitorDevice device,
@@ -63,10 +76,14 @@ public sealed class IedBrowserReadFailureEvidence
             return false;
         // A fallback is permitted only when structured projection declared it
         // on this exact UI row. No prefix/sibling/DO guessing.
-        if (!string.IsNullOrWhiteSpace(reference) &&
-            _failed.TryGetValue(Key(reference, fc), out reason))
-            return true;
-        return !string.IsNullOrWhiteSpace(fallbackReference) &&
-               _failed.TryGetValue(Key(fallbackReference, fc), out reason);
+        lock (_gate)
+        {
+            if (!IsCurrent(device)) return false;
+            if (!string.IsNullOrWhiteSpace(reference) &&
+                _failed.TryGetValue(Key(reference, fc), out reason))
+                return true;
+            return !string.IsNullOrWhiteSpace(fallbackReference) &&
+                   _failed.TryGetValue(Key(fallbackReference, fc), out reason);
+        }
     }
 }

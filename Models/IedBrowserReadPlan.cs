@@ -117,6 +117,91 @@ public static class IedBrowserReadPlan
             .ToArray();
     }
 
+    /// <summary>
+    /// Finite, evidence-first initial acquisition for a freshly discovered
+    /// LIVE MMS schema. This is not Browser Read All or a new polling plan:
+    /// only critical scalar status/nameplate/switch leaves are eligible.
+    /// Discovery/SCL declarations alone never supply a value.
+    /// </summary>
+    public static IReadOnlyList<IedBrowserReadTarget> BuildInitialPriority(
+        LiveIedModelDiscoveryDocument? verifiedLiveModel,
+        IedBrowserLiveValues ledger, int maxTargets)
+    {
+        ArgumentNullException.ThrowIfNull(ledger);
+        if (verifiedLiveModel is null || maxTargets <= 0 || ledger.IsOffline)
+            return Array.Empty<IedBrowserReadTarget>();
+        var schema = new IedBrowserSchemaIndex(verifiedLiveModel);
+        var association = ledger.Association;
+        var candidates = verifiedLiveModel.LogicalDevices
+            .SelectMany(ld => ld.LogicalNodes)
+            .SelectMany(ln => ln.DataObjects)
+            .SelectMany(obj => obj.Attributes.Select(attr => (obj, attr)))
+            .Select(entry =>
+            {
+                var reference = IedBrowserLiveValues.CanonicalReference(
+                    entry.attr.MmsReference);
+                var fc = (entry.attr.FunctionalConstraint ?? "").Trim().ToUpperInvariant();
+                return new
+                {
+                    entry.attr, Reference = reference, Fc = fc,
+                    Priority = InitialPriority(entry.obj, reference, fc, schema),
+                    Key = reference + "|" + fc
+                };
+            })
+            .Where(x => x.Priority >= 0 && x.Reference.Length > 0)
+            .GroupBy(x => x.Key, StringComparer.Ordinal)
+            // Conflicting / duplicate declarations are not authority for MMS.
+            .Where(g => g.Count() == 1)
+            .Select(g => g.First())
+            .Where(x => !ledger.TryGet(x.Reference, x.Fc, out var observed) ||
+                        observed.IsStale || observed.Association != association)
+            .OrderBy(x => x.Priority)
+            .ThenBy(x => x.Reference, StringComparer.Ordinal)
+            .Take(maxTargets)
+            .Select(x => new IedBrowserReadTarget(
+                x.attr.MmsReference, x.Fc,
+                string.IsNullOrWhiteSpace(x.attr.SclBType)
+                    ? x.attr.MmsType : x.attr.SclBType))
+            .ToArray();
+        return candidates;
+    }
+
+    private static int InitialPriority(
+        LiveIedDataObjectModel obj, string reference, string fc,
+        IedBrowserSchemaIndex schema)
+    {
+        var owner = IedBrowserLiveValues.CanonicalReference(obj.Reference);
+        if (owner.Length == 0 ||
+            !reference.StartsWith(owner + ".", StringComparison.Ordinal))
+            return -1;
+        var leaf = reference[(owner.Length + 1)..];
+        var slash = owner.LastIndexOf('/');
+        var dot = owner.LastIndexOf('.');
+        if (dot <= slash) return -1;
+        var ln = owner[(slash + 1)..dot];
+        var station = ln == "LLN0" || IsLnClass(ln, "LPHD");
+        var isStatus = fc == "ST" && leaf == "stVal" &&
+                       obj.Name is "Mod" or "Beh" or "Health";
+        if (station && isStatus) return 0;
+        var switching = IsLnClass(ln, "XCBR") ||
+                        IsLnClass(ln, "XSWI") || IsLnClass(ln, "CSWI");
+        var position = switching && obj.Name == "Pos" &&
+                       schema.IsDeclaredDoublePointValue(owner + ".stVal", "ST");
+        if (position && fc == "ST" && leaf == "stVal") return 1;
+        if (station && obj.Name == "NamPlt" && fc == "DC" &&
+            leaf.Length > 0 && !leaf.Contains('.')) return 2;
+        if (isStatus) return 3;
+        if (position && fc == "ST" && leaf is "q" or "t") return 4;
+        if (obj.Name == "NamPlt" && fc == "DC" &&
+            leaf.Length > 0 && !leaf.Contains('.')) return 5;
+        return -1;
+    }
+
+    private static bool IsLnClass(string ln, string standard)
+        => ln.StartsWith(standard, StringComparison.Ordinal) &&
+           (ln.Length == standard.Length ||
+            char.IsAsciiDigit(ln[standard.Length]));
+
     private static LiveIedDataSetModel? FindSet(LiveIedModelDiscoveryDocument model, string reference)
         => model.DataSets.FirstOrDefault(ds =>
             string.Equals(ds.Reference, reference, StringComparison.Ordinal));

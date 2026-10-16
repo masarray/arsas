@@ -57,6 +57,11 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     [JsonIgnore]
     public IedBrowserLiveValues LiveValues { get; } = new();
 
+    // Error-only evidence from the bounded initial MMS hydration. Value
+    // authority remains LiveValues; an unsuccessful Read is never a value.
+    [JsonIgnore]
+    public IedBrowserReadFailureEvidence? InitialHydrationFailures { get; internal set; }
+
     // Collection-change notifications (including same-count ReplaceAll/Reset)
     // and schema replacement invalidate captured reference/FC projection indexes.
     // One monotonic revision avoids scans or per-row event subscriptions on ingress.
@@ -351,6 +356,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
             {
                 // Retain prior values as stale/offline evidence; a new MMS
                 // association always starts an isolated revision/identity.
+                InitialHydrationFailures = null;
                 if (value) LiveValues.BeginAssociation();
                 else LiveValues.MarkOffline();
                 MarkSignalObservationLifecycle(value
