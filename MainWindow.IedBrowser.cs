@@ -970,8 +970,11 @@ public partial class MainWindow
                         "] · passive received " + received.CaptureTimestamp.ToString("O",
                             System.Globalization.CultureInfo.InvariantCulture);
                 }
-                else if (rawSlots is not null && row.GooseSlot < rawSlots.Count)
+                else if (rawSlots is not null && row.GooseSlot < rawSlots.Count &&
+                         row.Name.StartsWith("Wire entry #", StringComparison.Ordinal))
                 {
+                    // Never project a raw slot onto an unverified FCDA name
+                    // when the advertised directory contradicts received allData.
                     row.Value = rawSlots[row.GooseSlot].Value;
                     row.ObservationSource = "GOOSE frame · wire only";
                     row.ObservationTooltip = frameView.GoCbRef + " · allData #" +
