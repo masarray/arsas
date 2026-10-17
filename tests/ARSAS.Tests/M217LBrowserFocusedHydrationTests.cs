@@ -41,6 +41,86 @@ public sealed class M217LBrowserFocusedHydrationTests
         Assert.Contains("targets.Where(t => t.FunctionalConstraint is \"ST\" or \"MX\")", browser);
     }
 
+    [Fact]
+    public void ExactLiveMeasurementDatasetPlansOnlyDeclaredPairedCfUnits()
+    {
+        const string owner = "LD/MMXU1.A";
+        static LiveIedDataAttributeModel Attribute(string fc, string suffix) => new()
+        {
+            ObjectReference = owner,
+            AttributePath = "A." + suffix,
+            MmsReference = "LD/MMXU1$" + fc + "$A$" + suffix.Replace('.', '
+    {
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName,
+                   "engines", "ARIEC61850.lock.json")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        return File.ReadAllText(Path.Combine(root!.FullName,
+            path.Replace('/', Path.DirectorySeparatorChar)));
+    }
+}
+),
+            FunctionalConstraint = fc,
+            SclBType = "Enum"
+        };
+        var obj = new LiveIedDataObjectModel
+        {
+            Name = "A", Reference = owner, InferredCdc = "WYE",
+            Attributes =
+            [
+                Attribute("MX", "phsA.cVal.mag.f"),
+                Attribute("CF", "units.SIUnit"),
+                Attribute("CF", "units.multiplier")
+            ]
+        };
+        var set = new LiveIedDataSetModel
+        {
+            Name = "Measurements", Reference = "LD/LLN0.Measurements",
+            Domain = "LD", LogicalNode = "LLN0",
+            Members = [new LiveIedDataSetMemberModel
+            {
+                Reference = owner, FunctionalConstraint = "MX"
+            }]
+        };
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel
+            {
+                MmsDomain = "LD", LogicalNodes = [new LiveIedLogicalNodeModel
+                {
+                    Name = "MMXU1", DataObjects = [obj]
+                }]
+            }],
+            DataSets = [set]
+        };
+        var values = new IedBrowserLiveValues();
+        values.BeginAssociation();
+        var targets = IedBrowserReadPlan.BuildDataSetUnitRead(model, set, values);
+        Assert.Equal(2, targets.Count);
+        Assert.All(targets, target => Assert.Equal("CF", target.FunctionalConstraint));
+        Assert.Contains(targets, target => target.Reference.EndsWith("$units$SIUnit", StringComparison.Ordinal));
+        Assert.Contains(targets, target => target.Reference.EndsWith("$units$multiplier", StringComparison.Ordinal));
+        var association = values.Association;
+        Assert.True(values.PublishForAssociation(association,
+            owner + ".units.SIUnit", "CF", "5", "", "", "MMS Read"));
+        var missing = IedBrowserReadPlan.BuildDataSetUnitRead(model, set, values);
+        Assert.Single(missing);
+        Assert.EndsWith("$units$multiplier", missing[0].Reference);
+
+        // A mismatched object/FC is not authorized by the selected set.
+        var another = new LiveIedDataSetModel
+        {
+            Name = "Wrong", Reference = "LD/LLN0.Wrong",
+            Domain = "LD", LogicalNode = "LLN0",
+            Members = [new LiveIedDataSetMemberModel
+            {
+                Reference = owner, FunctionalConstraint = "ST"
+            }]
+        };
+        Assert.Empty(IedBrowserReadPlan.BuildDataSetUnitRead(model, another, values));
+    }
+
     private static string Read(string path)
     {
         DirectoryInfo? root = new(AppContext.BaseDirectory);
