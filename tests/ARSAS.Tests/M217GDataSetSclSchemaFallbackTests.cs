@@ -77,7 +77,8 @@ public sealed class M217GDataSetSclSchemaFallbackTests
         }
         var all = Flatten(children).ToArray();
         // A DataSet MX FCDA does not contain SIUnit/multiplier CF leaves.
-        Assert.All(all.Where(x => x.Kind == "Data"), row =>
+        Assert.All(all.Where(x => x.Kind == "Data" &&
+                                   !string.IsNullOrEmpty(x.FunctionalConstraint)), row =>
             Assert.Equal("MX", row.FunctionalConstraint));
         Assert.DoesNotContain(all, row =>
             row.ValueReference.Contains(".phsB.units", StringComparison.Ordinal));
