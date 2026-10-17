@@ -90,8 +90,8 @@ public sealed class P109QCommandDockCommissioningRegressionTests
         var xaml = Read("MainWindow.xaml");
         Assert.Contains("ExplorerCommandDockRow", xaml);
         Assert.Contains("CommandPanel_Collapsed", xaml);
-        Assert.DoesNotContain("MaxHeight=\\"260\\"", xaml);
-        Assert.Contains("Height=\\"*\\"/>", xaml);
+        Assert.DoesNotContain("MaxHeight=\"260\"", xaml);
+        Assert.Contains("Height=\"*\"/>", xaml);
         var main = Read("MainWindow.xaml.cs");
         Assert.Contains("new GridLength(1, GridUnitType.Star)", main);
         Assert.Contains("ExplorerCommandDockRow.Height = GridLength.Auto", main);
