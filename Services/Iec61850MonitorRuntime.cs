@@ -988,6 +988,17 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             nativeFlight = session.Client.ExecuteControlAsync(request, nativeCancellation.Token);
             result = await nativeFlight.WaitAsync(ControlFlightDeadline, cancellationToken)
                 .ConfigureAwait(false);
+            // A native Task can complete with an explicitly uncertain MMS
+            // result. Quarantine BEFORE finally releases the physical flight;
+            // otherwise a second Operate could enter on the same association.
+            if (Iec61850ControlWireOutcomePolicy.RequiresQuarantine(result.CompletionState))
+            {
+                session.ControlFlight.Quarantine();
+                Log("ERROR", session.Device.Name,
+                    $"CONTROL_OUTCOME_UNKNOWN_NATIVE_RESULT: {request.Signal.ObjectReference}; " +
+                    $"completion={result.CompletionState}; stage={result.Stage}; " +
+                    "further controls blocked until a new, verified association.");
+            }
         }
         catch (TimeoutException)
         {
