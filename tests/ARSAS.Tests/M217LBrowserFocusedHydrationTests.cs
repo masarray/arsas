@@ -14,6 +14,9 @@ public sealed class M217LBrowserFocusedHydrationTests
     {
         var source = ReadSource("MainWindow.IedBrowser.cs");
         Assert.Contains("QueueIedBrowserFocusedRead(row)", source);
+        Assert.Contains("QueueIedBrowserFocusedRead(_iedBrowserNavigation.Current,", source);
+        Assert.Contains("page.Key + \"|\" + (focusedObjectReference ?? \"\")", source);
+        Assert.Contains("_iedBrowserAutoReadPages.Count >= 128", source);
         Assert.Contains("Tag = \"FocusedAuto\"", source);
         Assert.Contains("const int maxFocusedTargets = 12", source);
         Assert.Contains("cts.CancelAfter(TimeSpan.FromSeconds(8))", source);
