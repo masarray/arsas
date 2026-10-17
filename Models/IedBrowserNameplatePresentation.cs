@@ -45,21 +45,18 @@ public static class IedBrowserNameplatePresentation
         ArgumentNullException.ThrowIfNull(ledger);
         ArgumentNullException.ThrowIfNull(engineering);
         projection = null!;
-        if (!row.IsDataObject || row.NameplateDcReferences.Count == 0 ||
-            ledger.IsOffline)
-        {
-            // Offline still projects a stale historical observation from the
-            // canonical ledger, but it must never look live.
-            if (!row.IsDataObject || row.NameplateDcReferences.Count == 0)
-                return false;
-        }
+        if (!row.IsDataObject || row.NameplateDcReferences.Count == 0)
+            return false;
 
         foreach (var reference in row.NameplateDcReferences)
         {
             // Same exact FC and association; never read sibling or guess vendor.
             if (ledger.TryGet(reference, "DC", out var observed))
             {
-                if (observed.Association != ledger.Association ||
+                // MarkOffline retires the association but preserves the
+                // last observation; render it visibly stale. A new connected
+                // association always starts with a cleared canonical ledger.
+                if (!observed.IsStale && observed.Association != ledger.Association ||
                     string.IsNullOrWhiteSpace(observed.Value))
                     continue;
                 projection = new Projection(

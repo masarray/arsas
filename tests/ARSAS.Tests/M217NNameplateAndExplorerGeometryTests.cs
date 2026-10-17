@@ -64,6 +64,11 @@ public sealed class M217NNameplateAndExplorerGeometryTests
         Assert.True(IedBrowserNameplatePresentation.TryProject(row, ledger, evidence,
             out var result));
         Assert.Equal("Measurement", result.Value);
+        ledger.MarkOffline();
+        Assert.True(IedBrowserNameplatePresentation.TryProject(
+            row, ledger, evidence, out var offline));
+        Assert.Equal("Offline · Measurement", offline.Value);
+        Assert.StartsWith("Stale ", offline.Source);
         ledger.BeginAssociation();
         Assert.False(IedBrowserNameplatePresentation.TryProject(row,
             ledger, evidence, out _));
