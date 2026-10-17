@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace ArIED61850Tester.Models;
 
 /// <summary>
-/// Failure-only evidence for one explicit Browser MMS Read sweep.
+/// Bounded absence-only evidence for one association-scoped Browser MMS Read sweep.
 /// This is NOT another values cache and cannot authorize a value, FC,
 /// conversion, retry or live state. Exact reference/FC, same IED object,
 /// association and projection epoch are required on every UI lookup.
@@ -12,6 +12,7 @@ namespace ArIED61850Tester.Models;
 public enum IedBrowserReadAbsenceKind
 {
     Failed,
+    Interrupted,
     Deferred
 }
 
@@ -65,6 +66,10 @@ public sealed class IedBrowserReadFailureEvidence
     public void RecordDeferred(IedBrowserReadTarget target, string reason)
         => RecordAbsence(target, reason, IedBrowserReadAbsenceKind.Deferred);
 
+    /// <summary>A Read was started, but its terminal wire result is unknown.</summary>
+    public void RecordInterrupted(IedBrowserReadTarget target, string reason)
+        => RecordAbsence(target, reason, IedBrowserReadAbsenceKind.Interrupted);
+
     private void RecordAbsence(IedBrowserReadTarget target, string reason,
         IedBrowserReadAbsenceKind kind)
     {
@@ -81,9 +86,11 @@ public sealed class IedBrowserReadFailureEvidence
                 return;
             if (!IsCurrent(_owner)) return;
             // A budget-deferred marker cannot erase an actual wire failure.
-            if (kind == IedBrowserReadAbsenceKind.Deferred &&
-                _failed.TryGetValue(key, out var previous) &&
-                previous.Kind == IedBrowserReadAbsenceKind.Failed)
+            if (_failed.TryGetValue(key, out var previous) &&
+                (kind == IedBrowserReadAbsenceKind.Deferred &&
+                    previous.Kind != IedBrowserReadAbsenceKind.Deferred ||
+                 kind == IedBrowserReadAbsenceKind.Interrupted &&
+                    previous.Kind == IedBrowserReadAbsenceKind.Failed))
                 return;
             _failed[key] = new IedBrowserReadAbsence(
                 text.Length > 320 ? text[..320] + "…" : text, kind);
