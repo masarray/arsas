@@ -312,6 +312,13 @@ public partial class MainWindow
             // not an all-IED sweep; existing Report/Read observations are reused.
             targets = targets.Where(t => !device.LiveValues.TryGet(
                     t.Reference, t.FunctionalConstraint, out _))
+                // On the SGCB page, the exact read-only SGCB control fields
+                // must not be starved by a large directory of SG settings.
+                .OrderBy(t => currentPage?.Kind == "SGCB" &&
+                    (t.Reference.EndsWith(".NumOfSG", StringComparison.Ordinal) ||
+                     t.Reference.EndsWith(".ActSG", StringComparison.Ordinal) ||
+                     t.Reference.EndsWith(".LActTm", StringComparison.Ordinal))
+                    ? 0 : 1)
                 .Take(24).ToArray();
         }
         if (targets.Count == 0)
@@ -1669,6 +1676,9 @@ public partial class MainWindow
     {
         if (SelectedDevice is not { IsConnected: true, IsDemo: false } device ||
             device.IsBusy || _iedBrowserReadOperation is not null ||
+            device.LiveDiscoveryModel is null ||
+            !ReferenceEquals(device.LiveDiscoveryModel,
+                device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel) ||
             row.Kind is not ("SGCB" or "LN") ||
             row.Kind == "LN" && !row.Key.StartsWith("model/ln/", StringComparison.Ordinal))
             return;
