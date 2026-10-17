@@ -1839,7 +1839,7 @@ public partial class MainWindow
         var selectedDo = row.Kind == "LN" ? selectedDoReference : null;
         var key = IedBrowserFocusedAdmission.PageKey(row.Key, selectedDo);
         var maxAttempts = row.Kind == "SGCB" ? 3 :
-            row.Kind is "LN" or "DO" ? 2 : 1;
+            row.Kind is "LN" or "DO" or "DataSet" ? 3 : 1;
         if (!_iedBrowserAutoReadAdmission.CanStart(
                 device.DeviceId, association, key, maxAttempts))
             return;

@@ -136,11 +136,23 @@ public static class IedBrowserReadPlan
         // The Data Model LN/DO read may independently hydrate verified CF.
         var candidates = Build(liveModel, page, readAll: false,
             page.Kind == "LN" ? selectedDoReference : null);
+        // Unit metadata belongs to the canonical Data Model [CF], not to the
+        // DataSet membership. Hydrate its exact source leaves before drawing
+        // process magnitudes in DataSet/Report views.
+        var metadata = page.Kind == "DataSet"
+            ? IedBrowserMeasurementMetadataReadPlan.BuildForPage(
+                liveModel, page, ledger, budget) : [];
         // Do not publish another reader's result as though this association
         // observed it. Existing Report/MMS Read evidence is always reused.
-        return candidates.Where(target =>
-                !ledger.TryGet(target.Reference, target.FunctionalConstraint, out _))
-            .OrderBy(target => FocusPriority(page.Kind, target))
+        return metadata.Concat(candidates)
+            .Where(target => !ledger.TryGet(target.Reference,
+                target.FunctionalConstraint, out _))
+            .DistinctBy(target =>
+                IedBrowserLiveValues.CanonicalReference(target.Reference) + "|" +
+                target.FunctionalConstraint, StringComparer.Ordinal)
+            .OrderBy(target => page.Kind == "DataSet" &&
+                target.FunctionalConstraint == "CF" ? -1 :
+                FocusPriority(page.Kind, target))
             .ThenBy(target => target.Reference, StringComparer.Ordinal)
             .Take(Math.Min(budget, page.Kind == "SGCB" ? 32 : 24))
             .ToArray();

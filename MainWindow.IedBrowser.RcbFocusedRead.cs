@@ -16,7 +16,11 @@ public partial class MainWindow
             device.LiveDiscoveryModel is null)
             return;
         var targets = IedBrowserRcbFocusedReadPlan.Build(device.LiveDiscoveryModel, rcb);
-        if (targets.Count == 0) return;
+        if (targets.Count == 0)
+        {
+            QueueIedBrowserReportUnitRead(row);
+            return;
+        }
         // Only the currently visible RCB and its three verified read-only
         // attribute names; never Read All or operate a device.
         var association = device.LiveValues.Association;
@@ -79,7 +83,37 @@ public partial class MainWindow
                     ReferenceEquals(_iedBrowserRenderedPage, row))
                     UpdateIedBrowserRcbReportDetails();
                 RefreshIedBrowserReadButtons();
+                if (lease.IsCurrent(device) &&
+                    ReferenceEquals(_iedBrowserRenderedPage, row))
+                    QueueIedBrowserReportUnitRead(row);
             }
+        }));
+    }
+
+    private void QueueIedBrowserReportUnitRead(IedBrowserTreeRow row)
+    {
+        if (row.Kind != "RCB" ||
+            SelectedDevice is not { IsConnected: true, IsDemo: false } device ||
+            device.LiveDiscoveryModel is null) return;
+        var association = device.LiveValues.Association;
+        var key = IedBrowserFocusedAdmission.PageKey(row.Key, "|unit-CF");
+        if (!_iedBrowserAutoReadAdmission.CanStart(
+                device.DeviceId, association, key, 3)) return;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            if (!ReferenceEquals(SelectedDevice, device) ||
+                device.LiveValues.Association != association ||
+                !ReferenceEquals(_iedBrowserNavigation.Current, row) ||
+                !ReferenceEquals(_iedBrowserRenderedPage, row) ||
+                device.IsBusy || _iedBrowserReadOperation is not null) return;
+            if (IedBrowserMeasurementMetadataReadPlan.BuildForPage(
+                    device.LiveDiscoveryModel, row, device.LiveValues).Count == 0)
+            {
+                _iedBrowserAutoReadAdmission.Complete(key);
+                return;
+            }
+            IedBrowserReadValues_Click(new Button { Tag = "ReportUnitAuto" },
+                new RoutedEventArgs());
         }));
     }
 }
