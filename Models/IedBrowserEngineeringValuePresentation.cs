@@ -71,8 +71,7 @@ public static class IedBrowserEngineeringValuePresentation
         // IEC 61850-7-3 Vector.ang: Unit.SIUnit='deg', no multiplier.
         // Exact cVal/instCVal paths only, never inferred for scalar MV.
         return canonical.EndsWith(".cVal.ang.f", StringComparison.Ordinal) ||
-               canonical.EndsWith(".instCVal.ang.f", StringComparison.Ordinal) ||
-               canonical.EndsWith(".ang.f", StringComparison.Ordinal)
+               canonical.EndsWith(".instCVal.ang.f", StringComparison.Ordinal)
             ? "°" : "";
     }
 
