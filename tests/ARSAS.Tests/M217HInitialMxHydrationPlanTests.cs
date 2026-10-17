@@ -18,7 +18,8 @@ public sealed class M217HInitialMxHydrationPlanTests
             MmsReference = "LD/MMXU1$" + fc + "$" + obj + "$" +
                 relative.Replace('.', '$'),
             FunctionalConstraint = fc,
-            SclBType = "FLOAT32"
+            SclBType = relative.EndsWith(".q", StringComparison.Ordinal) ? "Quality"
+                : relative.EndsWith(".t", StringComparison.Ordinal) ? "UtcTime" : "FLOAT32"
         };
 
     private static LiveIedModelDiscoveryDocument Model(
@@ -58,7 +59,7 @@ public sealed class M217HInitialMxHydrationPlanTests
             .ToArray();
 
     [Fact]
-    public void LiveFcdMxMagnitudesAreSeededInPhaseOrderWithoutAngleOrQualityGuesses()
+    public void LiveFcdMxMagnitudesAndDeclaredCompanionsAreSeededWithoutGuessedValues()
     {
         var attrs = new[]
         {
@@ -70,25 +71,93 @@ public sealed class M217HInitialMxHydrationPlanTests
         var ledger = new IedBrowserLiveValues();
         ledger.BeginAssociation();
         var plan = IedBrowserReadPlan.BuildInitialPriority(live, ledger, 32);
-        Assert.Equal(3, plan.Count);
+        Assert.Equal(6, plan.Count);
         Assert.Equal(new[]
         {
             "LD/MMXU1.PhV.phsA.cVal.mag.f",
             "LD/MMXU1.PhV.phsB.cVal.mag.f",
-            "LD/MMXU1.PhV.phsC.cVal.mag.f"
+            "LD/MMXU1.PhV.phsC.cVal.mag.f",
+            "LD/MMXU1.PhV.phsA.q",
+            "LD/MMXU1.PhV.phsA.t",
+            "LD/MMXU1.PhV.phsA.cVal.ang.f"
         }, Canonical(plan));
         Assert.All(plan, t => Assert.Equal("MX", t.FunctionalConstraint));
-        Assert.All(plan, t => Assert.Equal("FLOAT32", t.DataType));
+        Assert.Equal("Quality", plan[3].DataType);
+        Assert.Equal("UtcTime", plan[4].DataType);
+        Assert.Equal("FLOAT32", plan[5].DataType);
         Assert.Single(IedBrowserReadPlan.BuildInitialPriority(live, ledger, 1));
 
         var association = ledger.Association;
         Assert.True(ledger.PublishForAssociation(association,
             plan[0].Reference, "MX", "0", "", "", "Report"));
-        Assert.Equal(2, IedBrowserReadPlan.BuildInitialPriority(live, ledger, 32).Count);
+        var afterReport = IedBrowserReadPlan.BuildInitialPriority(live, ledger, 32);
+        Assert.Equal(5, afterReport.Count);
+        // Existing magnitude from actual Report does not disqualify its
+        // independent live-declared q/t and angle from bounded initial reads.
+        Assert.Contains(afterReport, t => IedBrowserLiveValues.CanonicalReference(t.Reference)
+            == "LD/MMXU1.PhV.phsA.q");
         ledger.BeginAssociation();
-        Assert.Equal(3, IedBrowserReadPlan.BuildInitialPriority(live, ledger, 32).Count);
+        Assert.Equal(6, IedBrowserReadPlan.BuildInitialPriority(live, ledger, 32).Count);
         ledger.MarkOffline();
         Assert.Empty(IedBrowserReadPlan.BuildInitialPriority(live, ledger, 32));
+    }
+
+    [Fact]
+    public void ThreePhaseMxReadsAreFiniteAndIndependentOfReceivedCompanionValues()
+    {
+        var attrs = new[] { "phsA", "phsB", "phsC" }.SelectMany(phase =>
+            new[] { Leaf("PhV", phase + ".cVal.mag.f"),
+                Leaf("PhV", phase + ".cVal.ang.f"),
+                Leaf("PhV", phase + ".q"),
+                Leaf("PhV", phase + ".t") }).ToArray();
+        var ledger = new IedBrowserLiveValues();
+        var association = ledger.BeginAssociation();
+        var live = Model(attrs);
+        var plan = IedBrowserReadPlan.BuildInitialPriority(live, ledger, 32);
+        Assert.Equal(12, plan.Count);
+        Assert.Equal(3, plan.Count(t =>
+            IedBrowserLiveValues.CanonicalReference(t.Reference).EndsWith(".cVal.mag.f", StringComparison.Ordinal)));
+        Assert.Equal(3, plan.Count(t =>
+            IedBrowserLiveValues.CanonicalReference(t.Reference).EndsWith(".cVal.ang.f", StringComparison.Ordinal)));
+        Assert.Equal(3, plan.Count(t =>
+            IedBrowserLiveValues.CanonicalReference(t.Reference).EndsWith(".q", StringComparison.Ordinal)));
+        Assert.Equal(3, plan.Count(t =>
+            IedBrowserLiveValues.CanonicalReference(t.Reference).EndsWith(".t", StringComparison.Ordinal)));
+        Assert.All(plan, t => Assert.Equal("MX", t.FunctionalConstraint));
+        Assert.Equal(4, IedBrowserReadPlan.BuildInitialPriority(live, ledger, 4).Count);
+
+        var quality = "LD/MMXU1.PhV.phsA.q";
+        Assert.True(ledger.PublishForAssociation(association, quality, "MX",
+            "0x0000", "", "", "Report"));
+        var remaining = IedBrowserReadPlan.BuildInitialPriority(live, ledger, 32);
+        Assert.Equal(11, remaining.Count);
+        Assert.DoesNotContain(remaining, t =>
+            IedBrowserLiveValues.CanonicalReference(t.Reference) == quality);
+    }
+
+    [Fact]
+    public void MxCompanionRequiresUnambiguousExactLiveFcdaAndIsNeverGuessed()
+    {
+        var live = Model(new[]
+        {
+            Leaf("PhV", "phsA.cVal.mag.f"),
+            Leaf("PhV", "phsA.q", "ST"), // wrong FC
+            Leaf("PhV", "phsA.t"), // right FC and exact member owner
+            Leaf("PhV", "phsA.cVal.ang.f"),
+            Leaf("PhV", "phsA.q2"), // vendor lookalike never eligible
+            Leaf("PhV", "phsB.q"), // other phase never eligible
+            Leaf("PhV", "phsA.t") // duplicate live declaration invalidates t
+        });
+        var ledger = new IedBrowserLiveValues();
+        ledger.BeginAssociation();
+        var plan = IedBrowserReadPlan.BuildInitialPriority(live, ledger, 32);
+        Assert.Equal(new[] { "LD/MMXU1.PhV.phsA.cVal.mag.f",
+            "LD/MMXU1.PhV.phsA.cVal.ang.f" }, Canonical(plan));
+
+        // FCDA coverage must be live, not SCL-only or same-domain inference.
+        var noDataset = Model(new[] { Leaf("PhV", "phsA.cVal.mag.f"),
+            Leaf("PhV", "phsA.q"), Leaf("PhV", "phsA.t") }, datasetFc: null);
+        Assert.Empty(IedBrowserReadPlan.BuildInitialPriority(noDataset, ledger, 32));
     }
 
     [Fact]

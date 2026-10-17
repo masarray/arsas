@@ -66,8 +66,10 @@ public static class IedBrowserStructuredDetails
         if (!scl.Owner.Attributes.Any(a =>
                 string.Equals(a.FunctionalConstraint, memberFc,
                     StringComparison.OrdinalIgnoreCase) &&
-                IedBrowserLiveValues.CanonicalReference(a.MmsReference)
-                    .StartsWith(memberReference + ".", StringComparison.Ordinal)))
+                (string.Equals(IedBrowserLiveValues.CanonicalReference(a.MmsReference),
+                    memberReference, StringComparison.Ordinal) ||
+                 IedBrowserLiveValues.CanonicalReference(a.MmsReference)
+                    .StartsWith(memberReference + ".", StringComparison.Ordinal))))
             return live.Owner;
         sclOnly = true;
         return scl.Owner;

@@ -584,17 +584,19 @@ public partial class MainWindow
     }
 
     private bool TryGetBrowserReadFailure(
-        Iec61850MonitorDevice device, IedBrowserDetailRow row, out string reason)
+        Iec61850MonitorDevice device, IedBrowserDetailRow row, out string reason,
+        out IedBrowserReadAbsenceKind kind)
     {
         if (_iedBrowserReadFailureEvidence?.TryGet(
                 device, row.ValueReference, row.FallbackValueReference,
-                row.FunctionalConstraint, out reason) == true)
+                row.FunctionalConstraint, out reason, out kind) == true)
             return true;
         if (device.InitialHydrationFailures?.TryGet(
                 device, row.ValueReference, row.FallbackValueReference,
-                row.FunctionalConstraint, out reason) == true)
+                row.FunctionalConstraint, out reason, out kind) == true)
             return true;
         reason = "";
+        kind = IedBrowserReadAbsenceKind.Failed;
         return false;
     }
 
@@ -681,10 +683,20 @@ public partial class MainWindow
                     row.ObservationSource = "Discovery snapshot";
                     row.ObservationTooltip = provenance;
                 }
-                else if (TryGetBrowserReadFailure(device, row, out var readFailure))
+                else if (TryGetBrowserReadFailure(device, row,
+                             out var readFailure, out var absenceKind))
                 {
-                    row.Value = "Unavailable";
-                    row.ObservationSource = "MMS Read failed";
+                    // No initial wire attempt is not an MMS rejection.
+                    // Keep the small table calm; explain the cause in the
+                    // existing per-row tooltip, without fake process values.
+                    var deferred = absenceKind == IedBrowserReadAbsenceKind.Deferred;
+                    row.Value = deferred ? "Not read" : "Unavailable";
+                    row.ObservationSource = absenceKind switch
+                    {
+                        IedBrowserReadAbsenceKind.Deferred => "Initial read deferred",
+                        IedBrowserReadAbsenceKind.Interrupted => "MMS Read interrupted",
+                        _ => "MMS Read failed"
+                    };
                     row.ObservationTooltip =
                         $"{row.ValueReference} [{row.FunctionalConstraint}] · {readFailure}";
                 }

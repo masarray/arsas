@@ -207,7 +207,7 @@ public static class IedBrowserReadPlan
         // Six values share the SAME existing 32-target/10-second envelope,
         // not an extra background poll or MMS association.
         const int initialAnalogSeedLimit = 6;
-        var analog = verifiedLiveModel.LogicalDevices
+        var analogSeeds = verifiedLiveModel.LogicalDevices
             .SelectMany(ld => ld.LogicalNodes)
             .SelectMany(ln => ln.DataObjects)
             .Where(obj =>
@@ -234,8 +234,6 @@ public static class IedBrowserReadPlan
                 + "|MX", StringComparer.Ordinal)
             .Where(group => group.Count() == 1)
             .Select(group => group.First())
-            .Where(attr => !ledger.TryGet(attr.MmsReference, "MX", out var observed) ||
-                observed.IsStale || observed.Association != association)
             // Fill a small coherent phasor group per owner rather than
             // selecting only phase-A from dozens of unrelated MMXU nodes.
             .OrderBy(attr => IedBrowserLiveValues.CanonicalReference(
@@ -244,9 +242,53 @@ public static class IedBrowserReadPlan
                 IedBrowserLiveValues.CanonicalReference(attr.MmsReference)))
             .ThenBy(attr => attr.MmsReference, StringComparer.Ordinal)
             .Take(initialAnalogSeedLimit)
+            .ToArray();
+        // Selecting the canonical six owners must not depend on whether a
+        // Report has already supplied a magnitude. A received magnitude may
+        // still need its independently declared q/t and angle Read evidence.
+        var analog = analogSeeds
+            .Where(attr => !ledger.TryGet(attr.MmsReference, "MX", out var observed) ||
+                           observed.IsStale || observed.Association != association)
             .Select(attr => new IedBrowserReadTarget(attr.MmsReference, "MX",
-                string.IsNullOrWhiteSpace(attr.SclBType) ?
-                    attr.MmsType : attr.SclBType))
+                string.IsNullOrWhiteSpace(attr.SclBType)
+                    ? attr.MmsType : attr.SclBType))
+            .ToArray();
+        // A bounded set of exact companions makes the phasor seed useful
+        // without presenting missing angle/quality/timestamp as "exposed"
+        // evidence. Unlike SCL presentation, these must be real live MMS
+        // attributes covered by the exact live DataSet and FC.
+        const int initialAnalogCompanionLimit = 9;
+        var companionOrder = analogSeeds
+            .SelectMany(seed => AnalogCompanionReferences(
+                IedBrowserLiveValues.CanonicalReference(seed.MmsReference)))
+            .Distinct(StringComparer.Ordinal)
+            .Select((reference, index) => (reference, index))
+            .ToDictionary(x => x.reference, x => x.index, StringComparer.Ordinal);
+        var companions = verifiedLiveModel.LogicalDevices
+            .SelectMany(ld => ld.LogicalNodes)
+            .SelectMany(ln => ln.DataObjects)
+            .SelectMany(obj => obj.Attributes)
+            .Where(attr => string.Equals(attr.FunctionalConstraint, "MX",
+                StringComparison.OrdinalIgnoreCase))
+            .Select(attr => new
+            {
+                Attr = attr,
+                Reference = IedBrowserLiveValues.CanonicalReference(attr.MmsReference)
+            })
+            .Where(item => companionOrder.ContainsKey(item.Reference) &&
+                verifiedLiveModel.DataSets.Any(set =>
+                    schema.ContainsDataSetMember(set.Reference, item.Reference, "MX")))
+            .GroupBy(item => item.Reference, StringComparer.Ordinal)
+            // Ambiguous duplicate live FC declarations cannot authorize a read.
+            .Where(group => group.Count() == 1)
+            .Select(group => group.Single())
+            .Where(item => !ledger.TryGet(item.Reference, "MX", out var observed) ||
+                           observed.IsStale || observed.Association != association)
+            .OrderBy(item => companionOrder[item.Reference])
+            .Take(initialAnalogCompanionLimit)
+            .Select(item => new IedBrowserReadTarget(item.Attr.MmsReference, "MX",
+                string.IsNullOrWhiteSpace(item.Attr.SclBType)
+                    ? item.Attr.MmsType : item.Attr.SclBType))
             .ToArray();
         // Critical station Mod/Beh/Health must never starve behind multiple
         // optional control blocks or slow LActTm reads on a 10s envelope.
@@ -262,11 +304,39 @@ public static class IedBrowserReadPlan
             target.Reference.EndsWith(".GoEna", StringComparison.Ordinal))
             .Take(2);
         return critical.Concat(fastSg.Take(4)).Concat(firstGo).Concat(analog)
-            .Concat(settings).Concat(goose).Concat(candidates)
+            .Concat(companions).Concat(settings).Concat(goose).Concat(candidates)
             .DistinctBy(target => IedBrowserLiveValues.CanonicalReference(target.Reference) +
                 "|" + target.FunctionalConstraint.Trim().ToUpperInvariant(),
                 StringComparer.Ordinal)
             .Take(maxTargets).ToArray();
+    }
+
+    private static IEnumerable<string> AnalogCompanionReferences(string magnitude)
+    {
+        // Only the exact IEC phasor/measurement owner of a selected live
+        // magnitude can authorize companions. Similar suffixes, other LNs,
+        // missing FC and SCL-only leaves are not candidates.
+        const string cValMagnitude = ".cVal.mag.f";
+        const string simpleMagnitude = ".mag.f";
+        string owner;
+        string angle;
+        if (magnitude.EndsWith(cValMagnitude, StringComparison.Ordinal))
+        {
+            owner = magnitude[..^cValMagnitude.Length];
+            angle = owner + ".cVal.ang.f";
+        }
+        else if (magnitude.EndsWith(simpleMagnitude, StringComparison.Ordinal))
+        {
+            owner = magnitude[..^simpleMagnitude.Length];
+            angle = owner + ".ang.f";
+        }
+        else
+            yield break;
+        // Observe raw IEC quality/time before optional angle, never infer
+        // these from a magnitude or another phase's Report.
+        yield return owner + ".q";
+        yield return owner + ".t";
+        yield return angle;
     }
 
     private static int AnalogSeedRank(string reference)

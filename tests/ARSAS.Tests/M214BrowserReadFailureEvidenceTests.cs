@@ -60,6 +60,69 @@ public sealed class M214BrowserReadFailureEvidenceTests
     }
 
     [Fact]
+    public void DeferredBudgetIsNotMisreportedAsMmsFailureAndCannotEraseWireFailure()
+    {
+        var device = Device();
+        var absences = new IedBrowserReadFailureEvidence(device);
+        var target = new IedBrowserReadTarget(
+            "LD/MMXU1$MX$PhV$phsA$q", "MX", "Quality");
+
+        absences.RecordDeferred(target, "Not attempted: initial 10-second budget exhausted");
+        Assert.True(absences.TryGet(device, "LD/MMXU1.PhV.phsA.q", "",
+            "MX", out var reason, out var kind));
+        Assert.Equal(IedBrowserReadAbsenceKind.Deferred, kind);
+        Assert.Contains("Not attempted", reason);
+        Assert.Equal(IedBrowserReadAbsenceKind.Deferred,
+            Assert.Single(absences.SnapshotCurrent(device)).Kind);
+
+        absences.RecordFailure(target, "IED data-access-error: object-non-existent");
+        absences.RecordDeferred(target, "Not attempted: later budget exhausted");
+        Assert.True(absences.TryGet(device, target.Reference, "",
+            "MX", out reason, out kind));
+        Assert.Equal(IedBrowserReadAbsenceKind.Failed, kind);
+        Assert.Contains("object-non-existent", reason);
+        Assert.False(absences.TryGet(device, target.Reference, "",
+            "ST", out _, out _));
+
+        absences.ClearFailure(target);
+        Assert.False(absences.TryGet(device, target.Reference, "",
+            "MX", out _, out _));
+        absences.RecordDeferred(target, "Not attempted: initial budget exhausted");
+        device.LiveValues.BeginAssociation();
+        Assert.False(absences.TryGet(device, target.Reference, "",
+            "MX", out _, out _));
+    }
+
+    [Fact]
+    public void InterruptedReadIsUncertainNotDeferredAndCannotBeDowngraded()
+    {
+        var device = Device();
+        var absences = new IedBrowserReadFailureEvidence(device);
+        var target = new IedBrowserReadTarget("LD/MMXU1.PhV.phsA.t", "MX", "UtcTime");
+        absences.RecordInterrupted(target,
+            "MMS Read started, but no terminal response was observed");
+        Assert.True(absences.TryGet(device, target.Reference, "",
+            "MX", out var reason, out var kind));
+        Assert.Equal(IedBrowserReadAbsenceKind.Interrupted, kind);
+        Assert.Contains("no terminal response", reason);
+
+        absences.RecordDeferred(target, "Not attempted: budget exhausted");
+        Assert.True(absences.TryGet(device, target.Reference, "",
+            "MX", out reason, out kind));
+        Assert.Equal(IedBrowserReadAbsenceKind.Interrupted, kind);
+        Assert.DoesNotContain("Not attempted", reason);
+
+        absences.RecordFailure(target, "IED explicitly rejected Read");
+        Assert.True(absences.TryGet(device, target.Reference, "",
+            "MX", out reason, out kind));
+        Assert.Equal(IedBrowserReadAbsenceKind.Failed, kind);
+        Assert.Contains("rejected", reason);
+        device.LiveValues.MarkOffline();
+        Assert.False(absences.TryGet(device, target.Reference, "",
+            "MX", out _, out _));
+    }
+
+    [Fact]
     public void MissingAndOversizedFailuresRemainBoundedAndNeverLookLikeValues()
     {
         var device = Device();

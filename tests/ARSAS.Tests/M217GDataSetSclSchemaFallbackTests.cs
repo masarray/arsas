@@ -126,6 +126,47 @@ public sealed class M217GDataSetSclSchemaFallbackTests
     }
 
     [Fact]
+    public void ExactLeafFcdaUsesOnlyMatchingSclLeafSchemaWithoutInventingValues()
+    {
+        // FCDA may reference a single DA, not only an FCD root with
+        // descendants. A matching leaf is a legitimate SCL *shape*.
+        var exact = Owner + ".phsA.q";
+        var scl = Model(Obj(Attr("MX", "phsA.q")));
+        var live = Model();
+        var member = Member(reference: exact);
+        var row = IedBrowserStructuredDetails.Member(member, live, sclModel: scl);
+        Assert.Contains("SCL structure only", row.Tooltip);
+        Assert.Equal(exact, row.ValueReference);
+        var children = IedBrowserStructuredDetails.DataSetMemberChildren(
+            member, live, 1, scl);
+        Assert.NotEmpty(children);
+        Assert.DoesNotContain(children, child => child.Kind == "Message");
+
+        var values = new IedBrowserLiveValues();
+        var association = values.BeginAssociation();
+        Assert.False(IedBrowserDetailEvidenceResolver.TryResolve(
+            values, row, null, monitoring: true, out _, out _));
+        // The legitimate observation must still come from this same exact
+        // reference/FC; the selected SCL cannot supply a scalar.
+        Assert.True(values.PublishForAssociation(association,
+            exact, "MX", "0x0000", "", "", "Report"));
+        Assert.True(IedBrowserDetailEvidenceResolver.TryResolve(
+            values, row, null, monitoring: true, out var observed, out var resolved));
+        Assert.Equal(exact, resolved);
+        Assert.Equal("0x0000", observed.Value);
+
+        var wrongFc = IedBrowserStructuredDetails.DataSetMemberChildren(
+            Member("ST", exact), live, 1, scl);
+        Assert.Contains(wrongFc, x => x.Kind == "Message");
+        var wrongLn = IedBrowserStructuredDetails.DataSetMemberChildren(
+            Member(reference: "LD/MMXU2.PhV.phsA.q"), live, 1, scl);
+        Assert.Contains(wrongLn, x => x.Kind == "Message");
+        var wrongDomain = IedBrowserStructuredDetails.DataSetMemberChildren(
+            Member(reference: "OTHER/MMXU1.PhV.phsA.q"), live, 1, scl);
+        Assert.Contains(wrongDomain, x => x.Kind == "Message");
+    }
+
+    [Fact]
     public void SclPresentationCannotAuthorizeMmsReadTargets()
     {
         var scl = Model(Obj(ThreePhase()));
