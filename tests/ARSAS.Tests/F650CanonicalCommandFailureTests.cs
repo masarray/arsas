@@ -110,8 +110,9 @@ public sealed class F650CanonicalCommandFailureTests
         Assert.Contains("DistinctSelected(Signals)", model, StringComparison.Ordinal);
         Assert.Contains("ControlSupportsOperate", model, StringComparison.Ordinal);
         var runtime = Read("Services/Iec61850MonitorRuntime.cs");
-        Assert.Contains("_activeControlTargets.TryAdd(targetKey, 0)", runtime, StringComparison.Ordinal);
-        Assert.Contains("_activeControlTargets.TryRemove(targetKey, out _)", runtime, StringComparison.Ordinal);
+        Assert.Contains("session.ControlFlight.TryEnter()", runtime, StringComparison.Ordinal);
+        Assert.Contains("session.ControlFlight.Release()", runtime, StringComparison.Ordinal);
+        Assert.DoesNotContain("_activeControlTargets", runtime, StringComparison.Ordinal);
         Assert.Contains("CONTROL_FAILURE_CLASSIFIED", runtime, StringComparison.Ordinal);
     }
 

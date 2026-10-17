@@ -990,7 +990,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             Log("INFO", session.Device.Name,
                 $"Control execution requested: {request.Signal.ObjectReference} value={request.ValueText}; test={request.TestMode}; interlock={request.InterlockCheck}; synchro={request.SynchroCheck}; origin={request.OriginCategory}/{request.Originator}; IED acceptance is determined only from native MMS wire evidence.");
             nativeCancellation.Token.ThrowIfCancellationRequested();
-            nativeFlight = session.Client.ExecuteControlAsync(request, nativeCancellation.Token);
+            nativeFlight = session.Client.ExecuteControlAsync(
+                Iec61850ControlRequestSnapshot.Create(request),
+                nativeCancellation.Token);
             result = await nativeFlight.WaitAsync(ControlFlightDeadline, cancellationToken)
                 .ConfigureAwait(false);
             // A native Task can complete with an explicitly uncertain MMS

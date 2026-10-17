@@ -184,4 +184,54 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
         Assert.Contains("CONTROL_STALE_RESULT_IGNORED", code);
     }
 
+
+    [Fact]
+    public void NativeFlightSnapshotNeverSharesMutableGuiSignal()
+    {
+        var shared = new SignalDefinition
+        {
+            Name = "CSWI6 Position",
+            ObjectReference = "BCU1CSWI6.Pos",
+            IsControlSignal = true,
+            ControlCdc = "DPC",
+            ControlStatusReference = "BCU1CSWI6.Pos.stVal",
+            ControlValueType = "Dbpos",
+            ControlModelText = "Direct normal",
+            ControlCurrentValue = "Open [01]",
+            ControlSemanticVerified = true
+        };
+        shared.AcceptVerifiedLiveControlCdc("DPC");
+        var original = new Iec61850ControlCommandRequest
+        {
+            Signal = shared,
+            ValueText = "Closed [10]",
+            InterlockCheck = false,
+            SynchroCheck = true,
+            TestMode = true,
+            Originator = "ARSAS test",
+            OriginCategory = "StationControl",
+            FeedbackTimeoutMs = 9000,
+            CommandTerminationTimeoutMs = 7000
+        };
+        var detached = Iec61850ControlRequestSnapshot.Create(original);
+        Assert.NotSame(shared, detached.Signal);
+        Assert.Equal(shared.ObjectReference, detached.Signal.ObjectReference);
+        Assert.Equal(shared.ControlStatusReference, detached.Signal.ControlStatusReference);
+        Assert.Equal("DPC", detached.Signal.VerifiedLiveControlCdc);
+        Assert.Equal(original.ValueText, detached.ValueText);
+        Assert.Equal(original.InterlockCheck, detached.InterlockCheck);
+        Assert.Equal(original.SynchroCheck, detached.SynchroCheck);
+        Assert.Equal(original.TestMode, detached.TestMode);
+        Assert.Equal(original.Originator, detached.Originator);
+        Assert.Equal(original.OriginCategory, detached.OriginCategory);
+        Assert.Equal(original.FeedbackTimeoutMs, detached.FeedbackTimeoutMs);
+        Assert.Equal(original.CommandTerminationTimeoutMs, detached.CommandTerminationTimeoutMs);
+
+        // Simulate a late native reply after the caller retired old MMS state.
+        detached.Signal.ControlCurrentValue = "Closed [10]";
+        detached.Signal.ControlSemanticVerified = false;
+        Assert.Equal("Open [01]", shared.ControlCurrentValue);
+        Assert.True(shared.ControlSemanticVerified);
+    }
+
 }
