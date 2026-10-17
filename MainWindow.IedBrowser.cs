@@ -675,6 +675,17 @@ public partial class MainWindow
         foreach (var row in _iedBrowserDetails.Rows)
         {
             if (string.IsNullOrWhiteSpace(row.ValueReference)) continue;
+            // An IEC NamPlt DO has DC children, not a fictional scalar under
+            // NamPlt [DC]. Show the exact vendor/d/swRev leaf already observed
+            // in the canonical association (or clearly labelled discovery).
+            if (IedBrowserNameplatePresentation.TryProject(row, device.LiveValues,
+                    cfEvidence, out var nameplate))
+            {
+                row.Value = nameplate.Value;
+                row.ObservationSource = nameplate.Source;
+                row.ObservationTooltip = nameplate.Provenance;
+                continue;
+            }
             if (cfEvidence.TryFormatUnitsParent(
                     row.ValueReference, row.FunctionalConstraint,
                     out var verifiedUnit, out var verifiedProvenance,

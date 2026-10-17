@@ -134,6 +134,10 @@ public partial class MainWindow
         // Remove before adding: WPF elements can have only one logical/visual parent.
         legacyExplorerLayout.Children.Remove(explorerPane);
         legacyCommandParent.Children.Remove(CommandPanelExpander);
+        // The legacy tab still has a named Grid.RowDefinition after the
+        // expander moves. Release any previous Star height immediately, even
+        // if the selected device has many controls.
+        ExplorerCommandDockRow.Height = GridLength.Auto;
         root.Children.Remove(MainTabs);
 
         // The old Explorer tab now owns only its right-hand data workspace.

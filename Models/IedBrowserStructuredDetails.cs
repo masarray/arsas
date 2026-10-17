@@ -111,6 +111,7 @@ public static class IedBrowserStructuredDetails
             IsDataObject = true,
             ReadObjectReference = obj.Reference,
             ScalarComponents = scalarComponents,
+            NameplateDcReferences = IedBrowserNameplatePresentation.BuildReferences(obj),
             PolarPlan = polarPlan,
             PhasePlans = phasePlans,
             ValueReference = hasLeaf ? processLeaf : obj.Reference,
