@@ -28,3 +28,64 @@ public static class Iec61850ControlFlightAdmission
     public static void Release(ref int active)
         => Interlocked.Exchange(ref active, 0);
 }
+
+
+/// <summary>
+/// One physical MMS association's command lifetime. Retirement atomically
+/// prevents admission and never equates WaitAsync cancellation with release
+/// of the underlying native operation.
+/// </summary>
+public sealed class Iec61850ControlSessionLease
+{
+    private readonly object _sync = new();
+    private TaskCompletionSource<bool>? _activeFlightReleased;
+    private int _active;
+    private int _quarantine;
+    private int _retired;
+
+    public bool IsActive => Volatile.Read(ref _active) != 0;
+    public bool IsRetired => Volatile.Read(ref _retired) != 0;
+    public bool IsUnavailable =>
+        IsRetired || Iec61850ControlFlightAdmission.IsUnavailable(ref _active, ref _quarantine);
+
+    public bool TryEnter()
+    {
+        lock (_sync)
+        {
+            if (_retired != 0 ||
+                !Iec61850ControlFlightAdmission.TryEnter(ref _active, ref _quarantine))
+                return false;
+            _activeFlightReleased = new TaskCompletionSource<bool>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            return true;
+        }
+    }
+
+    public void Quarantine()
+        => Iec61850ControlFlightAdmission.Quarantine(ref _quarantine);
+
+    public void Release()
+    {
+        lock (_sync)
+        {
+            Iec61850ControlFlightAdmission.Release(ref _active);
+            _activeFlightReleased?.TrySetResult(true);
+        }
+    }
+
+    /// <summary>
+    /// Prevent future commands and return a drain which finishes only when
+    /// the original admitted native operation has actually released its lease.
+    /// </summary>
+    public Task Retire()
+    {
+        lock (_sync)
+        {
+            Volatile.Write(ref _retired, 1);
+            Quarantine();
+            return _active != 0
+                ? _activeFlightReleased!.Task
+                : Task.CompletedTask;
+        }
+    }
+}
