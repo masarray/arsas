@@ -73,6 +73,11 @@ public sealed class P10MainlinePolicyExecutionTests
     [InlineData("p10-cyclic-fallback-denied", false)]
     [InlineData("p10-history-tampered-denied", false)]
     [InlineData("p10-dataset-lineage-tampered-denied", false)]
+    [InlineData("m217k-exact-sha-denied", false)]
+    [InlineData("m217k-engine-ci-denied", false)]
+    [InlineData("m217k-previous-pin-denied", false)]
+    [InlineData("m217k-physical-promote-denied", false)]
+    [InlineData("m217k-lineage-tampered-denied", false)]
     [InlineData("accepted-physical-baseline", true)]
     public void Exact_CI_Gate_Fails_Closed_Without_False_Physical_Promotion(
         string scenario, bool shouldPass)
@@ -107,6 +112,10 @@ public sealed class P10MainlinePolicyExecutionTests
             Directory.CreateDirectory(Path.Combine(folder, "scripts"));
             File.Copy(Path.Combine(root, "scripts", "test-p10-9f-core-routing-trial.ps1"),
                 Path.Combine(folder, "scripts", "test-p10-9f-core-routing-trial.ps1"));
+            // The actual workflow dot-sources both helpers. Sandbox tests
+            // must execute the same immutable-trial gate, not a missing script.
+            File.Copy(Path.Combine(root, "scripts", "test-m217k-typed-status-trial.ps1"),
+                Path.Combine(folder, "scripts", "test-m217k-typed-status-trial.ps1"));
             var lockDoc = JsonNode.Parse(File.ReadAllText(Path.Combine(root,
                 "engines", "ARIEC61850.lock.json")))!.AsObject();
 
@@ -115,6 +124,16 @@ public sealed class P10MainlinePolicyExecutionTests
             switch (scenario)
             {
                 case "p10-pr-main-denied": baseRef = "main"; break;
+                case "m217k-exact-sha-denied":
+                    lockDoc["m217KTypedStatusReportTrial"]!["exactCommit"] = new string('0', 40); break;
+                case "m217k-engine-ci-denied":
+                    lockDoc["m217KTypedStatusReportTrial"]!["engineCiRun"] = 0; break;
+                case "m217k-previous-pin-denied":
+                    lockDoc["m217KTypedStatusReportTrial"]!["previousConsumerPin"] = new string('0', 40); break;
+                case "m217k-physical-promote-denied":
+                    lockDoc["m217KTypedStatusReportTrial"]!["mainlinePromotionForbidden"] = false; break;
+                case "m217k-lineage-tampered-denied":
+                    lockDoc["p109VLiveBscAuthorityTrial"]!["baseEngineCommit"] = new string('0', 40); break;
                 case "core-trial-wrong-exact-sha-denied":
                     lockDoc["coreReportRoutingTrial"]!["exactCommit"] = new string('0', 40); break;
                 case "core-trial-wrong-base-denied":

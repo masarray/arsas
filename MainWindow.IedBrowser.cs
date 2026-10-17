@@ -33,6 +33,12 @@ public partial class MainWindow
     private LiveIedModelDiscoveryDocument? _iedBrowserCachedModel;
     private IedBrowserSchemaIndex? _iedBrowserValueSchemaIndex;
     private MmsRcbAvailabilityResult? _iedBrowserCachedSnapshot;
+    // Scoped opportunistic initial values: at most one bounded read per
+    // association and selected SGCB/LN. Never a hidden Read All or polling.
+    private Iec61850MonitorDevice? _iedBrowserAutoReadDevice;
+    private long _iedBrowserAutoReadAssociation = -1;
+    private readonly HashSet<string> _iedBrowserAutoReadVisited = new(StringComparer.Ordinal);
+
     private IReadOnlyList<RcbExportRow> _iedBrowserCachedRcbRows = Array.Empty<RcbExportRow>();
     private string _iedBrowserCachedSourcePath = string.Empty;
     private DateTime _iedBrowserCachedSourceStamp;
@@ -272,6 +278,7 @@ public partial class MainWindow
         // A dedicated read-only MMS association is used if monitoring is active.
         // Its bounded reads never interfere with the reporting session.
 
+        var automatic = sender is Button { Tag: "Auto" };
         var readAll = sender is Button { Tag: "All" };
         if (!readAll)
         {
@@ -299,6 +306,13 @@ public partial class MainWindow
                 ? _iedBrowserSelectedDoReference : null;
         var targets = IedBrowserReadPlan.Build(
             model, currentPage, readAll, selectedDo);
+        if (automatic)
+        {
+            // Exact selected LN or SGCB only. Priority is declared IEC order,
+            // not an all-IED sweep; existing Report/Read observations are reused.
+            targets = IedBrowserReadPlan.BuildFocused(
+                device.LiveDiscoveryModel, currentPage, device.LiveValues);
+        }
         if (targets.Count == 0)
         {
             IedBrowserSubtitle.Text = "No model-verified readable FC attributes in this selection.";
@@ -314,6 +328,7 @@ public partial class MainWindow
         // connection and reject a previously planned schema.
         IedBrowserReadBindingIndex? bindingIndex = null;
         var cts = CancellationTokenSource.CreateLinkedTokenSource(_applicationCancellation.Token);
+        if (automatic) cts.CancelAfter(TimeSpan.FromSeconds(15));
         // Read All may include thousands of attributes. It is cancellable by the
         // operator, never a new continuous acquisition/polling process.
         _iedBrowserReadOperation = cts;
@@ -383,7 +398,8 @@ public partial class MainWindow
                 RefreshIedBrowserVisibleValues();
             }
         }
-        device.ResetDiscoveryProgress("Preparing read-only MMS values…",
+        if (!automatic)
+            device.ResetDiscoveryProgress("Preparing read-only MMS values…",
             readAll ? "Reading all IED values" : selectedDo is not null
                 ? "Reading selected DO " + selectedDo : "Reading Browser values");
         device.IsBrowserReading = true; // Preserve the ongoing report monitor lifecycle.
@@ -431,8 +447,11 @@ public partial class MainWindow
                     "Browser catalog changed during Read; obsolete result rows were not admitted.");
             if (!cts.IsCancellationRequested && ReferenceEquals(SelectedDevice, sourceDevice))
             {
-                device.ApplyBrowserReadProgress(targets.Count, targets.Count);
-                device.CompleteDiscoveryProgressAnimation();
+                if (!automatic)
+                {
+                    device.ApplyBrowserReadProgress(targets.Count, targets.Count);
+                    device.CompleteDiscoveryProgressAnimation();
+                }
                 IedBrowserSubtitle.Text = $"Read complete · {successes:N0} verified scalar values / {targets.Count:N0} attributes · {failures:N0} unavailable";
                 IedBrowserSubtitle.ToolTip = failureExamples.Count == 0
                     ? null
@@ -1645,6 +1664,44 @@ public partial class MainWindow
         }));
     }
 
+    private void QueueIedBrowserFocusedRead(IedBrowserTreeRow row)
+    {
+        if (SelectedDevice is not { IsConnected: true, IsDemo: false } device ||
+            device.IsBusy || _iedBrowserReadOperation is not null ||
+            device.LiveDiscoveryModel is null ||
+            row.Kind is not ("SGCB" or "LN" or "DataSet") ||
+            row.Kind == "LN" && !row.Key.StartsWith("model/ln/", StringComparison.Ordinal))
+            return;
+        // Auto-hydrate only exact LIVE model declarations of the selected
+        // visible LN, SGCB or DataSet; no UI-triggered global Read All.
+        // A new association invalidates all prior attempt identities. Only
+        // the selected page is eligible, and only once per association.
+        var association = device.LiveValues.Association;
+        if (!ReferenceEquals(_iedBrowserAutoReadDevice, device) ||
+            _iedBrowserAutoReadAssociation != association)
+        {
+            _iedBrowserAutoReadDevice = device;
+            _iedBrowserAutoReadAssociation = association;
+            _iedBrowserAutoReadVisited.Clear();
+        }
+        if (!_iedBrowserAutoReadVisited.Add(row.Key))
+            return;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            if (!ReferenceEquals(SelectedDevice, device) ||
+                device.LiveValues.Association != association ||
+                !ReferenceEquals(_iedBrowserNavigation.Current, row) ||
+                !ReferenceEquals(_iedBrowserRenderedPage, row) ||
+                !device.IsConnected || device.IsBusy ||
+                _iedBrowserReadOperation is not null)
+                return;
+            // Reuse the exact same binding index, association fence and
+            // isolated monitoring read path as an operator's manual Read.
+            IedBrowserReadValues_Click(new Button { Tag = "Auto" },
+                new RoutedEventArgs());
+        }));
+    }
+
     private void RenderIedBrowserSelection(
         IedBrowserTreeRow? row, LiveIedModelDiscoveryDocument? model, bool connected)
     {
@@ -1692,6 +1749,7 @@ public partial class MainWindow
         _iedBrowserLastLiveVersion = -1;
         RefreshIedBrowserVisibleValues();
         RefreshIedBrowserReadButtons();
+        QueueIedBrowserFocusedRead(row);
         // Folder entry opens at its first child, regardless of the scroll
         // position in the previously inspected RCB, LN or DataSet.
         if (_iedBrowserDetails.Rows.Count > 0)

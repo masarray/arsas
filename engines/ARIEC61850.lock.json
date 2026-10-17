@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "036e2c00d83a0815b6160147b14ea05975057965",
-  "sourcePullRequest": 169,
-  "purpose": "P10.9V: exact typed live BSC authority over stale SPC static projection; preserves P10.9U CSWI Pos recovery. Engine CI green; ZIV bench acceptance pending.",
+  "commit": "51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
+  "sourcePullRequest": 173,
+  "purpose": "M2.17-K isolated C264 acceptance trial: ARIEC typed ST enumerated Mod/Beh/Health/PhyHealth Report FCD projection with exact ST/quality/timestamp checks, preserving P10.9V control and fail-closed unknowns. ARIEC #173 Windows engine CI passed; integrated consumer CI/physical C264 replay pending. Do not promote or merge into main without acceptance.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
@@ -239,6 +239,22 @@
     "physicalQualificationRequired": true,
     "mainlinePromotionForbidden": true,
     "fullDiscoveryFallbackForbidden": true,
+    "cyclicMmsProcessPollingForbidden": true
+  },
+  "m217KTypedStatusReportTrial": {
+    "status": "engine-ci-passed-consumer-ci-pending-not-physical",
+    "sourcePullRequest": 173,
+    "consumerPullRequest": 618,
+    "previousConsumerPin": "036e2c00d83a0815b6160147b14ea05975057965",
+    "exactCommit": "51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
+    "engineCiRun": 38997437784,
+    "physicalSource": "C264_LEGREK_SCC_CSWI3_RPTFIX.iid",
+    "typedStatusEnumProjection": true,
+    "strictFcAndTupleEvidenceRequired": true,
+    "noTextStructureParsing": true,
+    "noSyntheticReportValues": true,
+    "physicalQualificationRequired": true,
+    "mainlinePromotionForbidden": true,
     "cyclicMmsProcessPollingForbidden": true
   },
   "p109VLiveBscAuthorityTrial": {
