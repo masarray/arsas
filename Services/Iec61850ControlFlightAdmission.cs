@@ -83,15 +83,19 @@ public sealed class Iec61850ControlSessionLease
     /// </summary>
     public Task Retire()
     {
+        Task drain;
         lock (_sync)
         {
             Volatile.Write(ref _retired, 1);
             Quarantine();
-            _retirement.Cancel();
-            return _active != 0
+            drain = _active != 0
                 ? _activeFlightReleased!.Task
                 : Task.CompletedTask;
         }
+        // Never execute native cancellation callbacks under the admission lock.
+        // Retirement was already committed atomically before releasing it.
+        _retirement.Cancel();
+        return drain;
     }
 }
 
