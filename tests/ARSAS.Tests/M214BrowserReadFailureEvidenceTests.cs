@@ -94,6 +94,35 @@ public sealed class M214BrowserReadFailureEvidenceTests
     }
 
     [Fact]
+    public void InterruptedReadIsUncertainNotDeferredAndCannotBeDowngraded()
+    {
+        var device = Device();
+        var absences = new IedBrowserReadFailureEvidence(device);
+        var target = new IedBrowserReadTarget("LD/MMXU1.PhV.phsA.t", "MX", "UtcTime");
+        absences.RecordInterrupted(target,
+            "MMS Read started, but no terminal response was observed");
+        Assert.True(absences.TryGet(device, target.Reference, "",
+            "MX", out var reason, out var kind));
+        Assert.Equal(IedBrowserReadAbsenceKind.Interrupted, kind);
+        Assert.Contains("no terminal response", reason);
+
+        absences.RecordDeferred(target, "Not attempted: budget exhausted");
+        Assert.True(absences.TryGet(device, target.Reference, "",
+            "MX", out reason, out kind));
+        Assert.Equal(IedBrowserReadAbsenceKind.Interrupted, kind);
+        Assert.DoesNotContain("Not attempted", reason);
+
+        absences.RecordFailure(target, "IED explicitly rejected Read");
+        Assert.True(absences.TryGet(device, target.Reference, "",
+            "MX", out reason, out kind));
+        Assert.Equal(IedBrowserReadAbsenceKind.Failed, kind);
+        Assert.Contains("rejected", reason);
+        device.LiveValues.MarkOffline();
+        Assert.False(absences.TryGet(device, target.Reference, "",
+            "MX", out _, out _));
+    }
+
+    [Fact]
     public void MissingAndOversizedFailuresRemainBoundedAndNeverLookLikeValues()
     {
         var device = Device();
