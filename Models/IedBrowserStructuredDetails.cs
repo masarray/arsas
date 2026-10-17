@@ -256,10 +256,39 @@ public static class IedBrowserStructuredDetails
              IedBrowserLiveValues.CanonicalReference(attr.MmsReference)
                  .StartsWith(exactDescendantPrefix, StringComparison.Ordinal))).ToArray();
 
-        return candidateAttributes.Length == 0
-            ? [new("Message", "No exact attributes for the member functional constraint.", Depth: depth)]
-            : AttributeRows(candidateAttributes, parent.Name, depth,
-                !IedBrowserEngineeringComposite.IsScalarCdc(parent.InferredCdc));
+        if (candidateAttributes.Length == 0)
+            return [new("Message", "No exact attributes for the member functional constraint.", Depth: depth)];
+
+        var result = AttributeRows(candidateAttributes, parent.Name, depth,
+            !IedBrowserEngineeringComposite.IsScalarCdc(parent.InferredCdc)).ToList();
+
+        // A report DataSet contains process MX/ST, not necessarily the
+        // associated IEC 61850 CF engineering declaration. Surface only the
+        // EXACT selected member's model-declared units.SIUnit/multiplier as
+        // companion rows; their values remain unobserved until a real CF
+        // read or verified discovery instance provides evidence. Do not
+        // introduce an MX/CF alias or infer a multiplier from display text.
+        if (string.Equals(member.FunctionalConstraint, "MX",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            var unitPrefix = memberReference + ".units.";
+            var units = parent.Attributes.Where(attr =>
+                string.Equals(attr.FunctionalConstraint, "CF",
+                    StringComparison.OrdinalIgnoreCase) &&
+                (IedBrowserLiveValues.CanonicalReference(attr.MmsReference)
+                    == unitPrefix + "SIUnit" ||
+                 IedBrowserLiveValues.CanonicalReference(attr.MmsReference)
+                    == unitPrefix + "multiplier"))
+                .GroupBy(attr => IedBrowserLiveValues.CanonicalReference(attr.MmsReference),
+                    StringComparer.Ordinal)
+                .Where(group => group.Count() == 1)
+                .Select(group => group.Single())
+                .ToArray();
+            if (units.Length > 0)
+                result.AddRange(AttributeRows(units, parent.Name, depth,
+                    allowVector: false));
+        }
+        return result;
     }
 
     public static IReadOnlyList<IedBrowserDetailRow> AttributeRows(
