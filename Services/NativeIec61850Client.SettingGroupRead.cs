@@ -6,7 +6,7 @@ namespace ArIED61850Tester.Services;
 public sealed partial class NativeIec61850Client
 {
     /// <summary>
-    /// IEDScout-compatible wire shape: one read-only MMS Read of a verified
+    /// Captured MMS-compatible wire shape: one read-only MMS Read of a verified
     /// LN$SG variable (not repeated speculative LN$SG$DO$setVal reads).
     /// Wire GVA defines the actual ordered child names and types. A mismatched
     /// structure fails closed instead of assigning a neighbor's setting.
