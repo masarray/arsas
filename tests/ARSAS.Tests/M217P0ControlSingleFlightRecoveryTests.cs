@@ -111,7 +111,10 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
     {
         var oldAssociation = new Iec61850ControlSessionLease();
         Assert.True(oldAssociation.TryEnter());
+        var retirementToken = oldAssociation.RetirementToken;
+        Assert.False(retirementToken.IsCancellationRequested);
         var drain = oldAssociation.Retire();
+        Assert.True(retirementToken.IsCancellationRequested);
         Assert.False(drain.IsCompleted);
         Assert.True(oldAssociation.IsUnavailable);
         Assert.True(oldAssociation.IsActive);
