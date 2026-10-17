@@ -219,6 +219,7 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
             FeedbackTimeoutMs = 9000,
             CommandTerminationTimeoutMs = 7000
         };
+        var originalDisplay = shared.ControlCurrentValue;
         var detached = Iec61850ControlRequestSnapshot.Create(original);
         Assert.NotSame(shared, detached.Signal);
         Assert.Equal(shared.ObjectReference, detached.Signal.ObjectReference);
@@ -236,7 +237,7 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
         // Simulate a late native reply after the caller retired old MMS state.
         detached.Signal.ControlCurrentValue = "Closed [10]";
         detached.Signal.ControlSemanticVerified = false;
-        Assert.Equal("Open [01]", shared.ControlCurrentValue);
+        Assert.Equal(originalDisplay, shared.ControlCurrentValue);
         Assert.True(shared.ControlSemanticVerified);
     }
 
