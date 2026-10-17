@@ -135,7 +135,7 @@ public sealed class M217TDataSetReportCanonicalUnitHydrationTests
         {
             values.PublishForAssociation(association,
                 Owner + "." + phase + ".units.SIUnit",
-                "CF", "6", "", "", "MMS Read");
+                "CF", "V", "", "", "MMS Read");
             values.PublishForAssociation(association,
                 Owner + "." + phase + ".units.multiplier",
                 "CF", "3", "", "", "MMS Read");
