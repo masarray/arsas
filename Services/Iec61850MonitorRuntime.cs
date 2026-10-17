@@ -87,6 +87,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public int ConsecutiveHealthProbeFailures { get; set; }
         public string HealthProbePointKey { get; set; } = string.Empty;
         public Guid ControlSessionIdentity { get; } = Guid.NewGuid();
+        // Canceled immediately on registry removal: a late native control
+        // cannot remain authorized to publish into a replacement association.
+        public CancellationTokenSource ControlLifetimeCancellation { get; } = new();
         public int ControlCommandActive;
         // A timed-out/cancelled native Operate may still be in-flight on the
         // association. Do not admit another control until a fresh session.
@@ -898,7 +901,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             throw new InvalidOperationException(
                 "This IED already has an active or unresolved control flight. No ctlModel Write was sent.");
         }
-        var nativeCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var nativeCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken, session.ControlLifetimeCancellation.Token);
         Task<AR.Iec61850.Control.Iec61850ControlModelConfigurationResult>? nativeFlight = null;
         try
         {
@@ -909,7 +913,11 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 signal, expected, target, nativeCancellation.Token);
             var result = await nativeFlight.WaitAsync(ControlFlightDeadline, cancellationToken)
                 .ConfigureAwait(false);
-            Log(result.ReadbackVerified ? "INFO" : "WARN", session.Device.Name,
+            if (!_sessions.TryGetValue(deviceId, out var current) ||
+                !ReferenceEquals(current, session) ||
+                session.ControlLifetimeCancellation.IsCancellationRequested)
+                throw new OperationCanceledException("Control association was replaced during ctlModel Write.");
+            Log(result.ReadbackVerified ? "INFO", session.Device.Name,
                 $"CTL_MODEL_CONFIGURATION_RESULT: {signal.ObjectReference}; " +
                 $"writeAccepted={result.WriteAccepted}; readbackVerified={result.ReadbackVerified}; " +
                 $"before={result.BeforeModel}; after={result.AfterModel}; {result.Detail}");
@@ -1026,7 +1034,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         }
 
         var clientStopwatch = Stopwatch.StartNew();
-        var nativeCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var nativeCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken, session.ControlLifetimeCancellation.Token);
         Task<Iec61850ControlCommandResult>? nativeFlight = null;
         Iec61850ControlCommandResult result;
         try
@@ -1076,6 +1085,12 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             }
         }
         clientStopwatch.Stop();
+        // A completed old flight is not authorized to report success into a
+        // newer IED session, even if its native task returns after disconnect.
+        if (!_sessions.TryGetValue(deviceId, out var current) ||
+            !ReferenceEquals(current, session) ||
+            session.ControlLifetimeCancellation.IsCancellationRequested)
+            throw new OperationCanceledException("Control association was replaced before result publication.");
 
         if (result.ServiceAccepted || result.FeedbackConfirmed || result.IsSuccess)
             RecordSuccessfulIo(session);
@@ -1232,6 +1247,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     {
         if (!_sessions.TryRemove(deviceId, out var session))
             return;
+        // Revoke old command authority before any native or WPF teardown.
+        // Linked native flight tokens remain owned until those tasks settle.
+        session.ControlLifetimeCancellation.Cancel();
 
         // Stop MUST leave a reusable device after any teardown failure. The
         // session is already removed from the live registry, so never leave a
