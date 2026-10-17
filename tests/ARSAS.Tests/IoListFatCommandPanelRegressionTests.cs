@@ -84,12 +84,13 @@ public sealed class IoListFatCommandPanelRegressionTests
         Assert.Contains("ControlSupportsOperate", bridge, StringComparison.Ordinal);
         Assert.Contains("StatusOnly", bridge, StringComparison.Ordinal);
         Assert.Contains("device.CommandSignals", bridge, StringComparison.Ordinal);
-        // Selected control objects remain visible for diagnosis; operating safety
-        // is separately enforced by the per-object gate and FAT command dispatch.
-        Assert.Contains("DistinctSelected(Signals)", monitorModels, StringComparison.Ordinal);
-        Assert.Contains("ControlSupportsOperate", monitorModels, StringComparison.Ordinal);
-        // Legacy explicit-operability filter remains available for actual execution
-        // eligibility, never for removing the selected control row from the dock.
+        // Full selected control inventory remains in Signals; the FAT Dock
+        // shares only semantic-verified actionable controls and keeps the
+        // same execution gate as Engineering. Status-only items remain in
+        // Data Model and the selected inspection inventory.
+        Assert.Contains("DistinctOperable(Signals)", monitorModels, StringComparison.Ordinal);
+        Assert.Contains("ControlSupportsOperate", identity, StringComparison.Ordinal);
+        // A verified-only UI is not a replacement for runtime authorization.
         Assert.Contains("ControlModelResolved && s.ControlSupportsOperate", identity, StringComparison.Ordinal);
         Assert.Contains("!s.IsGenericControl", identity, StringComparison.Ordinal);
         Assert.Contains("Status-only controls remain read-only", panel, StringComparison.Ordinal);
