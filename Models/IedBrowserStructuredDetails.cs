@@ -271,14 +271,26 @@ public static class IedBrowserStructuredDetails
         if (string.Equals(member.FunctionalConstraint, "MX",
                 StringComparison.OrdinalIgnoreCase))
         {
-            var unitPrefix = memberReference + ".units.";
+            // The IEC MV/WYE measurement can place Unit on the owning DO
+            // (A.units) while the reported FCDA selects A.phsA. Permit only
+            // the exact member and its verified owning DO, never sibling
+            // phases, related LN names, or another functional constraint.
+            var unitPrefixes = new HashSet<string>(StringComparer.Ordinal)
+            {
+                memberReference + ".units."
+            };
+            var parentReference = IedBrowserLiveValues.CanonicalReference(parent.Reference);
+            if (memberReference == parentReference ||
+                memberReference.StartsWith(parentReference + ".", StringComparison.Ordinal))
+                unitPrefixes.Add(parentReference + ".units.");
             var units = parent.Attributes.Where(attr =>
                 string.Equals(attr.FunctionalConstraint, "CF",
                     StringComparison.OrdinalIgnoreCase) &&
-                (IedBrowserLiveValues.CanonicalReference(attr.MmsReference)
-                    == unitPrefix + "SIUnit" ||
-                 IedBrowserLiveValues.CanonicalReference(attr.MmsReference)
-                    == unitPrefix + "multiplier"))
+                unitPrefixes.Any(prefix =>
+                    IedBrowserLiveValues.CanonicalReference(attr.MmsReference)
+                        == prefix + "SIUnit" ||
+                    IedBrowserLiveValues.CanonicalReference(attr.MmsReference)
+                        == prefix + "multiplier"))
                 .GroupBy(attr => IedBrowserLiveValues.CanonicalReference(attr.MmsReference),
                     StringComparer.Ordinal)
                 .Where(group => group.Count() == 1)
