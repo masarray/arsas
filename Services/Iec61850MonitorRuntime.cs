@@ -733,6 +733,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
         if (!_sessions.TryGetValue(device.DeviceId, out var session) || !session.Client.IsConnected)
             throw new InvalidOperationException($"{device.Name} is not connected. Connect and discover this IED first.");
+        if (Iec61850ControlFlightAdmission.IsUnavailable(
+                ref session.ControlCommandActive, ref session.ControlFlightQuarantined))
+            throw new InvalidOperationException(
+                "Monitoring cannot start during an active or uncertain MMS control flight. Verify IED state and reconnect.");
 
         var staticDataSetReportOnly = Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device);
         var eligible = selectedSignals
@@ -894,23 +898,56 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             throw new InvalidOperationException(
                 "This IED already has an active or unresolved control flight. No ctlModel Write was sent.");
         }
+        var nativeCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        Task<AR.Iec61850.Control.Iec61850ControlModelConfigurationResult>? nativeFlight = null;
         try
         {
             Log("WARN", session.Device.Name,
                 $"OPERATOR_CTL_MODEL_CONFIGURATION: {signal.ObjectReference}; expected={expected}; requested={target}; " +
                 "explicit commissioning confirmed; one CF Write maximum, never Operate.");
-            var result = await session.Client.ConfigureControlModelAsync(
-                signal, expected, target, cancellationToken).ConfigureAwait(false);
+            nativeFlight = session.Client.ConfigureControlModelAsync(
+                signal, expected, target, nativeCancellation.Token);
+            var result = await nativeFlight.WaitAsync(ControlFlightDeadline, cancellationToken)
+                .ConfigureAwait(false);
             Log(result.ReadbackVerified ? "INFO" : "WARN", session.Device.Name,
                 $"CTL_MODEL_CONFIGURATION_RESULT: {signal.ObjectReference}; " +
                 $"writeAccepted={result.WriteAccepted}; readbackVerified={result.ReadbackVerified}; " +
                 $"before={result.BeforeModel}; after={result.AfterModel}; {result.Detail}");
             return result;
         }
+        catch (TimeoutException)
+        {
+            Iec61850ControlFlightAdmission.Quarantine(ref session.ControlFlightQuarantined);
+            nativeCancellation.Cancel();
+            Log("ERROR", session.Device.Name,
+                $"CTL_MODEL_OUTCOME_UNKNOWN_TIMEOUT: {signal.ObjectReference}; deadline={ControlFlightDeadline.TotalSeconds:0}s; nativeCompleted={nativeFlight?.IsCompleted}; no other MMS control/write on this association.");
+            throw new TimeoutException(
+                "ctlModel configuration exceeded the deadline. The MMS Write outcome is UNKNOWN. Verify the actual IED ctlModel and reconnect before any command.");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            if (nativeFlight is { IsCompleted: false })
+            {
+                Iec61850ControlFlightAdmission.Quarantine(ref session.ControlFlightQuarantined);
+                nativeCancellation.Cancel();
+                Log("WARN", session.Device.Name,
+                    $"CTL_MODEL_CANCEL_OUTCOME_UNKNOWN: {signal.ObjectReference}; native Write unresolved; association quarantined.");
+            }
+            throw;
+        }
         finally
         {
-            Iec61850ControlFlightAdmission.Release(ref session.ControlCommandActive);
-            _activeControlTargets.TryRemove(targetKey, out _);
+            if (nativeFlight is { IsCompleted: false })
+            {
+                _ = ObserveLateControlFlightAsync(session, targetKey,
+                    signal.ObjectReference, nativeFlight, nativeCancellation);
+            }
+            else
+            {
+                nativeCancellation.Dispose();
+                Iec61850ControlFlightAdmission.Release(ref session.ControlCommandActive);
+                _activeControlTargets.TryRemove(targetKey, out _);
+            }
         }
     }
 
@@ -1130,16 +1167,24 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         return result;
     }
 
-    private async Task ObserveLateControlFlightAsync(DeviceSession session,
+    private async Task ObserveLateControlFlightAsync<T>(DeviceSession session,
         string targetKey, string reference,
-        Task<Iec61850ControlCommandResult> nativeFlight,
+        Task<T> nativeFlight,
         CancellationTokenSource nativeCancellation)
     {
         try
         {
             var late = await nativeFlight.ConfigureAwait(false);
+            var detail = late switch
+            {
+                Iec61850ControlCommandResult command =>
+                    $"stage={command.Stage}; success={command.IsSuccess}",
+                AR.Iec61850.Control.Iec61850ControlModelConfigurationResult configuration =>
+                    $"writeAccepted={configuration.WriteAccepted}; readbackVerified={configuration.ReadbackVerified}",
+                _ => "native operation completed"
+            };
             Log("WARN", session.Device.Name,
-                $"CONTROL_LATE_NATIVE_RESULT: {reference}; completed after caller timeout/cancellation; stage={late.Stage}; success={late.IsSuccess}; association remains quarantined pending verified recovery.");
+                $"CONTROL_LATE_NATIVE_RESULT: {reference}; completed after caller timeout/cancellation; {detail}; association remains quarantined pending verified recovery.");
         }
         catch (Exception ex)
         {
@@ -1169,12 +1214,16 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
         await StopMonitoringSessionAsync(session, preservePointDefinitions: false).ConfigureAwait(false);
         session.Device.IsMonitoring = false;
-        session.Device.IsConnected = session.Client.IsConnected;
-        session.Device.Status = session.Client.IsConnected ? "Ready" : "Disconnected";
-        session.Device.AcquisitionMode = "Not started";
-        session.Device.Detail = session.Client.IsConnected
-            ? "Monitoring stopped. The MMS association remains available for a new signal selection."
-            : "Session stopped.";
+        var quarantined = Volatile.Read(ref session.ControlFlightQuarantined) != 0;
+        session.Device.IsConnected = session.Client.IsConnected && !quarantined;
+        session.Device.Status = quarantined ? "Control recovery required"
+            : session.Client.IsConnected ? "Ready" : "Disconnected";
+        session.Device.AcquisitionMode = quarantined ? "MMS control outcome unknown" : "Not started";
+        session.Device.Detail = quarantined
+            ? "Control/write outcome UNKNOWN. Verify IED state, then reconnect before resuming monitoring or issuing commands."
+            : session.Client.IsConnected
+                ? "Monitoring stopped. The MMS association remains available for a new signal selection."
+                : "Session stopped.";
         session.Device.RefreshComputed();
         Log("INFO", session.Device.Name, "Live monitoring stopped.");
     }
@@ -1394,6 +1443,21 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         {
             try
             {
+                // Do not silently spin forever while a native Operate/Write owns
+                // the MMS gate. Recovery requires an explicitly fresh association;
+                // the old monitor exits without publishing further observations.
+                if (Volatile.Read(ref session.ControlFlightQuarantined) != 0)
+                {
+                    session.Device.IsMonitoring = false;
+                    session.Device.Status = "Control recovery required";
+                    session.Device.AcquisitionMode = "MMS control outcome unknown";
+                    session.Device.Detail =
+                        "Monitoring stopped after an uncertain control/write outcome. Verify actual IED state, then Disconnect and Connect to create a fresh MMS association.";
+                    session.Device.RefreshComputed();
+                    Log("WARN", session.Device.Name,
+                        "CONTROL_MONITOR_QUARANTINE: monitor stopped; no further MMS Read/Report operations on the uncertain association.");
+                    break;
+                }
                 if (Volatile.Read(ref session.ControlCommandActive) > 0)
                 {
                     await Task.Delay(5, cancellationToken).ConfigureAwait(false);
@@ -2728,15 +2792,26 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             }
         }
 
-        try
+        // A control/write may still own the native MMS I/O gate after the
+        // caller has timed out. Never enqueue RCB teardown behind that flight.
+        if (Iec61850ControlFlightAdmission.IsUnavailable(
+                ref session.ControlCommandActive, ref session.ControlFlightQuarantined))
         {
-            var results = await session.Client.StopReportMonitorsAsync().ConfigureAwait(false);
-            foreach (var result in results)
-                Log(result.IsSuccess ? "INFO" : "WARN", session.Device.Name, result.Message);
+            Log("WARN", session.Device.Name,
+                "CONTROL_STOP_DEFERRED_NATIVE_RCB_CLEANUP: active/uncertain MMS operation; report cleanup is deferred to bounded client disposal.");
         }
-        catch (Exception ex)
+        else
         {
-            Log("WARN", session.Device.Name, $"Report monitor cleanup: {ex.Message}");
+            try
+            {
+                var results = await session.Client.StopReportMonitorsAsync().ConfigureAwait(false);
+                foreach (var result in results)
+                    Log(result.IsSuccess ? "INFO" : "WARN", session.Device.Name, result.Message);
+            }
+            catch (Exception ex)
+            {
+                Log("WARN", session.Device.Name, $"Report monitor cleanup: {ex.Message}");
+            }
         }
 
         session.MonitorTask = null;
