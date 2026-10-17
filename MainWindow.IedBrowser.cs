@@ -276,7 +276,8 @@ public partial class MainWindow
         // A dedicated read-only MMS association is used if monitoring is active.
         // Its bounded reads never interfere with the reporting session.
 
-        var automatic = sender is Button { Tag: "Auto" };
+        var configRequest = (sender as Button)?.Tag as IedBrowserVisibleConfigurationReadRequest;
+        var automatic = sender is Button { Tag: "Auto" } || configRequest is not null;
         var readAll = sender is Button { Tag: "All" };
         if (!readAll)
         {
@@ -306,11 +307,26 @@ public partial class MainWindow
             model, currentPage, readAll, selectedDo);
         if (automatic)
         {
-            // Exact selected LN or SGCB only. Priority is declared IEC order,
-            // not an all-IED sweep; existing Report/Read observations are reused.
-            targets = IedBrowserReadPlan.BuildFocused(
-                device.LiveDiscoveryModel, currentPage, device.LiveValues,
-                selectedDoReference: selectedDo);
+            if (configRequest is not null)
+            {
+                // Expanded phase/Nameplate metadata: exact missing CF/DC leaves
+                // of the current verified LN. A stale/collapsed row may not read.
+                if (!ReferenceEquals(_iedBrowserRenderedPage, currentPage) ||
+                    !_iedBrowserDetails.Rows.Any(x => x.IsExpanded &&
+                        string.Equals(x.ReadObjectReference,
+                            configRequest.Scope, StringComparison.Ordinal)))
+                    return;
+                targets = IedBrowserVisibleConfigurationReadRequest.Build(
+                    device.LiveDiscoveryModel, currentPage,
+                    configRequest.Scope, device.LiveValues);
+            }
+            else
+            {
+                // Existing bounded process-value hydration; no IED-wide scan.
+                targets = IedBrowserReadPlan.BuildFocused(
+                    device.LiveDiscoveryModel, currentPage, device.LiveValues,
+                    selectedDoReference: selectedDo);
+            }
         }
         if (targets.Count == 0)
         {
@@ -327,11 +343,13 @@ public partial class MainWindow
         // reaches the read handler. A queued Dispatcher callback is NOT a read.
         // Rejected/busy/cancelled preflight cannot poison a future visit.
         var automaticKey = automatic && currentPage is not null
-            ? IedBrowserFocusedAdmission.PageKey(currentPage.Key, selectedDo)
+            ? IedBrowserFocusedAdmission.PageKey(
+                currentPage.Key, configRequest?.Scope ?? selectedDo)
             : null;
         if (automaticKey is not null &&
             !_iedBrowserAutoReadAdmission.TryStart(device.DeviceId,
                 device.LiveValues.Association, automaticKey,
+                configRequest is not null ? 1 :
                 currentPage!.Kind == "SGCB" ? 3 :
                 currentPage.Kind is "LN" or "DO" ? 2 : 1))
             return;
@@ -514,6 +532,10 @@ public partial class MainWindow
                     _iedBrowserSelectedDoReference);
                 QueueIedBrowserRcbFocusedRead(currentFocus);
             }
+            if (ReferenceEquals(SelectedDevice, sourceDevice) &&
+                _iedBrowserNavigation.Current is { Kind: "LN" } &&
+                _iedBrowserReadOperation is null)
+                QueueFirstExpandedVisibleConfigurationRead();
         }
     }
 
@@ -1762,7 +1784,45 @@ public partial class MainWindow
             IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
             _iedBrowserLastLiveVersion = -1;
             RefreshIedBrowserVisibleValues();
+            if (row.IsExpanded)
+                QueueIedBrowserVisibleConfigurationRead(row);
         }));
+    }
+
+    // Read an expanded IEC CF/DC subtree through the existing scoped,
+    // association-fenced MMS Read pipeline; never shadow canonical values.
+    private void QueueIedBrowserVisibleConfigurationRead(IedBrowserDetailRow row)
+    {
+        if (row.ReadObjectReference.Length == 0 ||
+            SelectedDevice is not { IsConnected: true, IsDemo: false } device ||
+            _iedBrowserNavigation.Current is not { Kind: "LN" } current ||
+            !ReferenceEquals(_iedBrowserRenderedPage, current))
+            return;
+        var scope = row.ReadObjectReference;
+        var association = device.LiveValues.Association;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            if (!ReferenceEquals(SelectedDevice, device) ||
+                device.LiveValues.Association != association ||
+                !_iedBrowserDetails.Rows.Contains(row) || !row.IsExpanded ||
+                !ReferenceEquals(current, _iedBrowserRenderedPage) ||
+                device.IsBusy || _iedBrowserReadOperation is not null) return;
+            IedBrowserReadValues_Click(
+                new Button { Tag = new IedBrowserVisibleConfigurationReadRequest(scope) },
+                new RoutedEventArgs());
+        }));
+    }
+
+    private void QueueFirstExpandedVisibleConfigurationRead()
+    {
+        if (_iedBrowserDetails.Rows.FirstOrDefault(x =>
+            x.IsExpanded && x.ReadObjectReference.Length > 0 &&
+            _iedBrowserAutoReadAdmission.CanStart(
+                SelectedDevice!.DeviceId, SelectedDevice.LiveValues.Association,
+                IedBrowserFocusedAdmission.PageKey(
+                    _iedBrowserNavigation.Current!.Key, x.ReadObjectReference), 1))
+            is { } row)
+            QueueIedBrowserVisibleConfigurationRead(row);
     }
 
     private void QueueIedBrowserFocusedRead(IedBrowserTreeRow row,
