@@ -159,6 +159,38 @@ public sealed class M217TDataSetReportCanonicalUnitHydrationTests
     }
 
     [Fact]
+    public void ReportRcbSelectsSameCanonicalMetadataTargetsAsItsDataSet()
+    {
+        var model = Fixture();
+        var ledger = new IedBrowserLiveValues();
+        ledger.BeginAssociation();
+        var set = new IedBrowserTreeRow(
+            "datasets/set/" + SetRef, "LLN0.Analog", "DataSet", 3,
+            model.DataSets.Single());
+        var report = new IedBrowserTreeRow(
+            "reports/rcb/test", "URB_MX", "RCB", 3,
+            new RcbExportRow
+            {
+                Reference = "LD/LLN0.RP.URB_MX",
+                DataSetReference = SetRef
+            });
+        var setCf = IedBrowserMeasurementMetadataReadPlan.BuildForPage(
+            model, set, ledger);
+        var reportCf = IedBrowserMeasurementMetadataReadPlan.BuildForPage(
+            model, report, ledger);
+        Assert.Equal(setCf, reportCf);
+        Assert.Equal(6, reportCf.Count);
+        var unknown = new IedBrowserTreeRow(
+            "reports/rcb/unknown", "unknown", "RCB", 3,
+            new RcbExportRow
+            {
+                DataSetReference = "LD/LLN0.NotInLiveModel"
+            });
+        Assert.Empty(IedBrowserMeasurementMetadataReadPlan.BuildForPage(
+            model, unknown, ledger));
+    }
+
+    [Fact]
     public void ScalarMvMagnitudeHydratesExactTotvaUnitForReportWithoutTouchingSibling()
     {
         var target = "LD/MMXU1.TotVA";
