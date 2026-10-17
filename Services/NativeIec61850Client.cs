@@ -1251,6 +1251,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             signal.ControlModelText = "Auto-detect";
             await InvalidateCachedControlSessionAsync(signal.ObjectReference).ConfigureAwait(false);
             control = await GetOrOpenControlSessionAsync(signal, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
         }
         catch (InvalidOperationException discoveryError) when (_session.IsMmsInitiated)
         {
@@ -1260,6 +1261,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 () => new ArControl.Iec61850ControlService().ProbeControlModelAsync(
                     _session, signal.ObjectReference, cancellationToken),
                 cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             signal.ControlSemanticVerified = false;
             signal.ControlModelText = probe.Decoded
                 ? FriendlyControlModel(probe.ControlModel)
@@ -1297,6 +1299,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         var status = await RunMmsOperationAsync(
             () => control.ReadStatusAsync(cancellationToken),
             cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         var normalizedStatus = NormalizeControlFeedback(effectiveCdc, status.DisplayValue, status.State);
         var currentValue = status.IsSuccess ? normalizedStatus.Value : "-";
         var currentState = normalizedStatus.State.ToString();
@@ -1314,6 +1317,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 "ST",
                 string.IsNullOrWhiteSpace(signal.ControlValueType) ? "Unknown" : signal.ControlValueType,
                 cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             if (preferred != null)
             {
                 var normalizedPreferred = NormalizeControlFeedback(
