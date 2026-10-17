@@ -18,7 +18,7 @@ public sealed class P109LControlRecoveryTests
         };
 
     [Fact]
-    public void FiveZivControlsRemainVisibleBeforeInspection()
+    public void FiveZivControlsRemainInInventoryButDockWaitsForTypedInspection()
     {
         var device = new Iec61850MonitorDevice();
         foreach (var (reference, cdc) in new[] {
@@ -32,14 +32,17 @@ public sealed class P109LControlRecoveryTests
         device.RecountSelectedSignals();
 
         Assert.Equal(5, device.SelectedControlSignalCount);
-        Assert.Equal(5, device.CommandSignals.Count);
-        Assert.All(device.CommandSignals, signal =>
+        Assert.Empty(device.CommandSignals);
+        var inventory = Iec61850ControlIdentity.DistinctSelected(device.Signals);
+        Assert.Equal(5, inventory.Length);
+        Assert.Equal(5, Iec61850ControlIdentity.InspectionRepresentatives(device.Signals).Length);
+        Assert.All(inventory, signal =>
         {
             Assert.False(signal.ControlSupportsOperate);
             Assert.False(signal.ControlSemanticVerified);
         });
-        Assert.True(device.CommandSignals.Single(s => s.ControlCdc == "BSC").IsRaiseLowerControl);
-        Assert.All(device.CommandSignals.Where(s => s.ControlCdc == "DPC"),
+        Assert.True(inventory.Single(s => s.ControlCdc == "BSC").IsRaiseLowerControl);
+        Assert.All(inventory.Where(s => s.ControlCdc == "DPC"),
             s => Assert.True(s.IsPositionControl));
     }
 
@@ -54,8 +57,9 @@ public sealed class P109LControlRecoveryTests
         device.Signals.Add(readOnly);
         device.RecountSelectedSignals();
 
-        Assert.Equal(2, device.CommandSignals.Count);
-        Assert.All(device.CommandSignals, s => Assert.False(s.ControlSupportsOperate));
+        Assert.Empty(device.CommandSignals);
+        Assert.Equal(2, Iec61850ControlIdentity.DistinctSelected(device.Signals).Length);
+        Assert.All(device.Signals, s => Assert.False(s.ControlSupportsOperate));
         Assert.Single(Iec61850ControlIdentity.InspectionRepresentatives(device.Signals));
     }
 
