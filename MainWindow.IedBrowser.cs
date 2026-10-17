@@ -310,16 +310,8 @@ public partial class MainWindow
         {
             // Exact selected LN or SGCB only. Priority is declared IEC order,
             // not an all-IED sweep; existing Report/Read observations are reused.
-            targets = targets.Where(t => !device.LiveValues.TryGet(
-                    t.Reference, t.FunctionalConstraint, out _))
-                // On the SGCB page, the exact read-only SGCB control fields
-                // must not be starved by a large directory of SG settings.
-                .OrderBy(t => currentPage?.Kind == "SGCB" &&
-                    (t.Reference.EndsWith(".NumOfSG", StringComparison.Ordinal) ||
-                     t.Reference.EndsWith(".ActSG", StringComparison.Ordinal) ||
-                     t.Reference.EndsWith(".LActTm", StringComparison.Ordinal))
-                    ? 0 : 1)
-                .Take(24).ToArray();
+            targets = IedBrowserReadPlan.BuildFocused(
+                device.LiveDiscoveryModel, currentPage, device.LiveValues);
         }
         if (targets.Count == 0)
         {
@@ -1677,9 +1669,11 @@ public partial class MainWindow
         if (SelectedDevice is not { IsConnected: true, IsDemo: false } device ||
             device.IsBusy || _iedBrowserReadOperation is not null ||
             device.LiveDiscoveryModel is null ||
-            row.Kind is not ("SGCB" or "LN") ||
+            row.Kind is not ("SGCB" or "LN" or "DataSet") ||
             row.Kind == "LN" && !row.Key.StartsWith("model/ln/", StringComparison.Ordinal))
             return;
+        // Auto-hydrate only exact LIVE model declarations of the selected
+        // visible LN, SGCB or DataSet; no UI-triggered global Read All.
         // A new association invalidates all prior attempt identities. Only
         // the selected page is eligible, and only once per association.
         var association = device.LiveValues.Association;
