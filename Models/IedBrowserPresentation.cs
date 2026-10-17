@@ -469,7 +469,9 @@ public static class IedBrowserPresentation
 
         if (objects.Count == 0)
         {
-            rows.Add(new("Message", "No objects available in the current SCL/discovery model."));
+            rows.Add(new("Message", node.Key == "category/settings"
+                ? "No SGCB discovered in the current IED/SCL model. Setting Groups are unavailable until a real SGCB is verified; no groups or values are inferred."
+                : "No objects available in the current SCL/discovery model."));
             return true;
         }
         foreach (var child in objects)
