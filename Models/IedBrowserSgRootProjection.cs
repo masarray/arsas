@@ -16,7 +16,7 @@ public static class IedBrowserSgRootProjection
             return "";
         var wire = target.Reference;
         var cut = wire.IndexOf("$SG$", StringComparison.Ordinal);
-        if (cut > 0 && wire.Contains('/', StringComparison.Ordinal))
+        if (cut > 0 && wire.Contains('/'))
             return wire[..cut] + "$SG";
         // Canonical IEC dotted naming; FC comes ONLY from verified target.
         var canonical = IedBrowserLiveValues.CanonicalReference(wire);
