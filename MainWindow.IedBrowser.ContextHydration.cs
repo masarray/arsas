@@ -14,6 +14,7 @@ namespace ArIED61850Tester;
 public partial class MainWindow
 {
     private const int IedBrowserContextMaxTargets = 12;
+    private const int IedBrowserContextMaxPagesPerAssociation = 24;
     private static readonly TimeSpan IedBrowserContextDeadline =
         TimeSpan.FromSeconds(12);
     private CancellationTokenSource? _iedBrowserContextReadOperation;
@@ -70,8 +71,9 @@ public partial class MainWindow
         var focus = page.Payload is LiveIedLogicalNodeModel
             ? _iedBrowserSelectedDoReference : null;
         var key = page.Key + "|" + (focus ?? "");
-        if (_iedBrowserContextReadPages.Contains(key))
-            return;
+        if (_iedBrowserContextReadPages.Contains(key) ||
+            _iedBrowserContextReadPages.Count >= IedBrowserContextMaxPagesPerAssociation)
+            return; // cap extra associations and memory on enormous IED models
         var targets = IedBrowserContextHydrationPlan.Build(
             model, page, device.LiveValues, IedBrowserContextMaxTargets, focus);
         _iedBrowserContextReadPages.Add(key); // one automatic attempt per page/association
