@@ -170,7 +170,7 @@ jobs:
               throw 'Stacked trial identity or ancestor authority is inconsistent.'
             }
             if ($env:PR_BASE_REF -eq 'main' -or $env:SOURCE_REF_NAME -eq 'main') {
-              throw 'Unqualified trial cannot pass mainline readiness before fresh physical qualification.'
+              throw 'Unqualified P6.1/P6.2 trial cannot pass mainline readiness before fresh physical qualification.'
             }
             Write-Host "Stacked consumer trial accepted for CI against $($lock.commit); no mainline physical promotion."
           }
