@@ -224,8 +224,9 @@ public sealed class F650CommandShoutIntegrationTests
         var runtime = Read("Services/Iec61850MonitorRuntime.cs");
         Assert.Contains("Iec61850ControlIdentity.DistinctSelected(Signals)", model, StringComparison.Ordinal);
         Assert.Contains("ControlSupportsOperate", model, StringComparison.Ordinal);
-        Assert.Contains("_activeControlTargets.TryAdd(targetKey, 0)", runtime, StringComparison.Ordinal);
-        Assert.Contains("_activeControlTargets.TryRemove(targetKey, out _)", runtime, StringComparison.Ordinal);
+        Assert.Contains("session.ControlFlight.TryEnter()", runtime, StringComparison.Ordinal);
+        Assert.Contains("session.ControlFlight.Release()", runtime, StringComparison.Ordinal);
+        Assert.DoesNotContain("_activeControlTargets", runtime, StringComparison.Ordinal);
     }
 
     private static string Read(string path)
@@ -239,4 +240,15 @@ public sealed class F650CommandShoutIntegrationTests
         }
         throw new FileNotFoundException(path);
     }
+
+    [Fact]
+    public void UncertainWireOutcomeMustNeverBeLabelledCommandNotSent()
+    {
+        var notice = Iec61850ControlShout.FromUnknownWireOutcome();
+        Assert.Equal("Command outcome UNKNOWN", notice.Title);
+        Assert.Equal(Iec61850ControlNoticeTone.Warning, notice.Tone);
+        Assert.Contains("Verify actual IED state", notice.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("not sent", notice.Detail, StringComparison.OrdinalIgnoreCase);
+    }
+
 }

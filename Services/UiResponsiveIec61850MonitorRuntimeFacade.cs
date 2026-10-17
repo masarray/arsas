@@ -78,6 +78,17 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     public int ConnectedDeviceCount => _inner.ConnectedDeviceCount;
     public int MonitoringDeviceCount => _inner.MonitoringDeviceCount;
 
+    // Read-only association lifetime queries used by the Command Dock.
+    // The facade forwards authority; it never recreates a second flight gate.
+    public bool IsControlFlightUnavailable(string deviceId)
+        => _inner.IsControlFlightUnavailable(deviceId);
+
+    public Guid GetControlAssociationId(string deviceId)
+        => _inner.GetControlAssociationId(deviceId);
+
+    public bool IsControlAssociationCurrent(string deviceId, Guid associationId)
+        => _inner.IsControlAssociationCurrent(deviceId, associationId);
+
     public Task<int> ReadBrowserValuesAsync(
         Iec61850MonitorDevice device,
         IReadOnlyList<IedBrowserReadTarget> targets,

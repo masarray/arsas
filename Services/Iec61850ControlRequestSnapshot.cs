@@ -1,0 +1,55 @@
+using ArIED61850Tester.Models;
+
+namespace ArIED61850Tester.Services;
+
+/// <summary>
+/// Makes one disposable, command-only copy of the operator's selected signal.
+/// ARIEC may update the request's SignalDefinition after an asynchronous MMS
+/// reply; a retired association must never mutate a WPF-owned signal model.
+/// The copy carries no process-value authority or extra observation cache.
+/// </summary>
+public static class Iec61850ControlRequestSnapshot
+{
+    public static Iec61850ControlCommandRequest Create(Iec61850ControlCommandRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return new Iec61850ControlCommandRequest
+        {
+            Signal = CopySignal(request.Signal),
+            ValueText = request.ValueText,
+            InterlockCheck = request.InterlockCheck,
+            SynchroCheck = request.SynchroCheck,
+            TestMode = request.TestMode,
+            Originator = request.Originator,
+            OriginCategory = request.OriginCategory,
+            FeedbackTimeoutMs = request.FeedbackTimeoutMs,
+            CommandTerminationTimeoutMs = request.CommandTerminationTimeoutMs
+        };
+    }
+
+    private static SignalDefinition CopySignal(SignalDefinition signal)
+    {
+        ArgumentNullException.ThrowIfNull(signal);
+        var copy = new SignalDefinition
+        {
+            Name = signal.Name,
+            ObjectReference = signal.ObjectReference,
+            FunctionalConstraint = signal.FunctionalConstraint,
+            DataType = signal.DataType,
+            Category = signal.Category,
+            IsControlSignal = signal.IsControlSignal,
+            ControlCdc = signal.ControlCdc,
+            ControlStatusReference = signal.ControlStatusReference,
+            ControlValueType = signal.ControlValueType,
+            ControlModelReference = signal.ControlModelReference,
+            ControlModelText = signal.ControlModelText,
+            ControlCurrentValue = signal.ControlCurrentValue,
+            ControlSemanticVerified = signal.ControlSemanticVerified
+        };
+        // Preserve only the authority already verified by the current MMS
+        // association. Never promote DataSet/SCL advisory CDC to live proof.
+        if (!string.IsNullOrWhiteSpace(signal.VerifiedLiveControlCdc))
+            copy.AcceptVerifiedLiveControlCdc(signal.VerifiedLiveControlCdc);
+        return copy;
+    }
+}

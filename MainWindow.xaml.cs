@@ -1500,7 +1500,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // Reuse existing CommandSignals state instead of mirroring a new
         // runtime busy flag into the WPF view model.
         if (device is null ||
-            !device.CommandSignals.Any(active => active.ControlCommandBusy))
+            (!device.CommandSignals.Any(active => active.ControlCommandBusy) &&
+             !_runtime.IsControlFlightUnavailable(device.DeviceId)))
             return false;
         const string reason =
             "another IED command is still active or its wire outcome is unresolved";
@@ -1671,6 +1672,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         DismissControlShout();
         var clickStopwatch = Stopwatch.StartNew();
+        Guid dispatchedAssociation = Guid.Empty;
         signal.ControlLastResult = $"Dispatching {claim.RequestedValue}…";
         SetStatus($"{device.Name}: dispatching {signal.Name} = {claim.RequestedValue}…");
         AddLog("INFO", device.Name,
@@ -1700,6 +1702,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             AddLog("INFO", device.Name,
                 $"IEC 61850 control execution started: {signal.ObjectReference}; sequence={claim.Sequence}; value={claim.RequestedValue}; wire send is not assumed until native evidence is returned.");
+            dispatchedAssociation = _runtime.GetControlAssociationId(device.DeviceId);
             var result = await _runtime.ExecuteControlAsync(
                 device.DeviceId,
                 new Iec61850ControlCommandRequest
@@ -1716,6 +1719,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 },
                 _applicationCancellation.Token);
 
+            if (!_runtime.IsControlAssociationCurrent(device.DeviceId, dispatchedAssociation))
+            {
+                AddLog("WARN", device.Name,
+                    $"CONTROL_STALE_RESULT_IGNORED: {signal.ObjectReference}; " +
+                    "original association retired while native operation was pending.");
+                return;
+            }
+
+            if (Iec61850ControlWireOutcomePolicy.RequiresQuarantine(result.CompletionState))
+            {
+                signal.ControlLastResult =
+                    "Control outcome UNKNOWN — native MMS result is inconclusive. " +
+                    "Verify IED state and reconnect before another command.";
+                AddLog("ERROR", device.Name,
+                    $"CONTROL_UI_NATIVE_UNKNOWN: {signal.ObjectReference}; " +
+                    $"completion={result.CompletionState}; {result.Message}");
+                MarkDiagnosticAlert();
+                ShowControlShout(Iec61850ControlShout.FromUnknownWireOutcome());
+                return; // Do not publish ambiguous feedback as a process value.
+            }
             if (!string.IsNullOrWhiteSpace(result.ControlModelText))
                 signal.ControlModelText = result.ControlModelText;
             if (!string.IsNullOrWhiteSpace(result.FeedbackValue) && result.FeedbackValue != "-")
@@ -1738,6 +1761,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (OperationCanceledException)
         {
+            if (dispatchedAssociation != Guid.Empty &&
+                !_runtime.IsControlAssociationCurrent(device.DeviceId, dispatchedAssociation)) return;
             signal.ControlLastResult = "Command cancelled; if Operate was already dispatched, verify actual IED position.";
             SetStatus($"{device.Name}: {signal.Name} command cancelled; verify the final process state.");
         }
@@ -1746,6 +1771,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             (ex.Message.Contains("in progress", StringComparison.OrdinalIgnoreCase) ||
              ex.Message.Contains("unresolved", StringComparison.OrdinalIgnoreCase)))
         {
+            if (dispatchedAssociation != Guid.Empty &&
+                !_runtime.IsControlAssociationCurrent(device.DeviceId, dispatchedAssociation)) return;
             signal.ControlLastResult = "Command NOT SENT: " + ex.Message;
             AddLog("WARN", device.Name,
                 $"CONTROL_UI_LOCAL_GATE: {signal.ObjectReference}; {ex.Message}");
@@ -1756,6 +1783,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (TimeoutException ex)
         {
+            if (dispatchedAssociation != Guid.Empty &&
+                !_runtime.IsControlAssociationCurrent(device.DeviceId, dispatchedAssociation)) return;
             signal.ControlLastResult =
                 "Control outcome UNKNOWN — MMS flight exceeded deadline. " +
                 "Verify IED process state and reconnect before another command.";
@@ -1763,11 +1792,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"CONTROL_UI_TIMEOUT: {signal.ObjectReference}; {ex.Message}");
             SetStatus($"{device.Name}: {signal.Name} control outcome UNKNOWN; check Diagnostics.");
             MarkDiagnosticAlert();
-            ShowControlShout(Iec61850ControlShout.FromLocalRejection(
-                "Control timed out with UNKNOWN wire outcome. Verify the IED position and reconnect; do not blindly retry"));
+            ShowControlShout(Iec61850ControlShout.FromUnknownWireOutcome());
         }
         catch (Exception ex)
         {
+            if (dispatchedAssociation != Guid.Empty &&
+                !_runtime.IsControlAssociationCurrent(device.DeviceId, dispatchedAssociation)) return;
             signal.ControlLastResult = $"Command failed: {ex.Message}";
             AddLog("ERROR", device.Name, $"Quick control failed for {signal.ObjectReference}: {ex}");
             SetStatus($"{device.Name}: {signal.Name} command failed — {ex.Message}");
