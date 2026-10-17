@@ -239,4 +239,15 @@ public sealed class F650CommandShoutIntegrationTests
         }
         throw new FileNotFoundException(path);
     }
+
+    [Fact]
+    public void UncertainWireOutcomeMustNeverBeLabelledCommandNotSent()
+    {
+        var notice = Iec61850ControlShout.FromUnknownWireOutcome();
+        Assert.Equal("Command outcome UNKNOWN", notice.Title);
+        Assert.Equal(Iec61850ControlNoticeTone.Warning, notice.Tone);
+        Assert.Contains("Verify actual IED state", notice.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("not sent", notice.Detail, StringComparison.OrdinalIgnoreCase);
+    }
+
 }

@@ -118,6 +118,11 @@ internal static class Iec61850ControlShout
         Safe($"ARSAS blocked the request before dispatch: {reason}.", 175),
         Iec61850ControlNoticeTone.Warning);
 
+    internal static Notice FromUnknownWireOutcome() => new(
+        "Command outcome UNKNOWN",
+        "MMS wire result is inconclusive. Verify actual IED state and reconnect before any new Operate.",
+        Iec61850ControlNoticeTone.Warning);
+
     internal static Notice FromDemo(string feedback) => new(
         "Simulation updated",
         Safe($"Demo feedback: {feedback}. No command was sent to a physical IED.", 175),

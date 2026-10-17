@@ -1736,8 +1736,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     $"CONTROL_UI_NATIVE_UNKNOWN: {signal.ObjectReference}; " +
                     $"completion={result.CompletionState}; {result.Message}");
                 MarkDiagnosticAlert();
-                ShowControlShout(Iec61850ControlShout.FromLocalRejection(
-                    "MMS wire outcome UNKNOWN. Check IED state and reconnect; do not retry blindly"));
+                ShowControlShout(Iec61850ControlShout.FromUnknownWireOutcome());
                 return; // Do not publish ambiguous feedback as a process value.
             }
             if (!string.IsNullOrWhiteSpace(result.ControlModelText))
@@ -1793,8 +1792,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 $"CONTROL_UI_TIMEOUT: {signal.ObjectReference}; {ex.Message}");
             SetStatus($"{device.Name}: {signal.Name} control outcome UNKNOWN; check Diagnostics.");
             MarkDiagnosticAlert();
-            ShowControlShout(Iec61850ControlShout.FromLocalRejection(
-                "Control timed out with UNKNOWN wire outcome. Verify the IED position and reconnect; do not blindly retry"));
+            ShowControlShout(Iec61850ControlShout.FromUnknownWireOutcome());
         }
         catch (Exception ex)
         {
