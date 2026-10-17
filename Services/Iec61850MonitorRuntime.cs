@@ -884,13 +884,16 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         if (!session.ControlFlight.TryEnter())
             throw new InvalidOperationException(
                 "This IED already has an active, unresolved or retired control flight. No ctlModel Write was sent.");
+        using var modelCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken, session.ControlFlight.RetirementToken);
+        modelCancellation.Token.ThrowIfCancellationRequested();
         try
         {
             Log("WARN", session.Device.Name,
                 $"OPERATOR_CTL_MODEL_CONFIGURATION: {signal.ObjectReference}; expected={expected}; requested={target}; " +
                 "explicit commissioning confirmed; one CF Write maximum, never Operate.");
             var result = await session.Client.ConfigureControlModelAsync(
-                signal, expected, target, cancellationToken).ConfigureAwait(false);
+                signal, expected, target, modelCancellation.Token).ConfigureAwait(false);
             Log(result.ReadbackVerified ? "INFO" : "WARN", session.Device.Name,
                 $"CTL_MODEL_CONFIGURATION_RESULT: {signal.ObjectReference}; " +
                 $"writeAccepted={result.WriteAccepted}; readbackVerified={result.ReadbackVerified}; " +
@@ -978,13 +981,15 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         }
 
         var clientStopwatch = Stopwatch.StartNew();
-        var nativeCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var nativeCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken, session.ControlFlight.RetirementToken);
         Task<Iec61850ControlCommandResult>? nativeFlight = null;
         Iec61850ControlCommandResult result;
         try
         {
             Log("INFO", session.Device.Name,
                 $"Control execution requested: {request.Signal.ObjectReference} value={request.ValueText}; test={request.TestMode}; interlock={request.InterlockCheck}; synchro={request.SynchroCheck}; origin={request.OriginCategory}/{request.Originator}; IED acceptance is determined only from native MMS wire evidence.");
+            nativeCancellation.Token.ThrowIfCancellationRequested();
             nativeFlight = session.Client.ExecuteControlAsync(request, nativeCancellation.Token);
             result = await nativeFlight.WaitAsync(ControlFlightDeadline, cancellationToken)
                 .ConfigureAwait(false);
