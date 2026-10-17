@@ -31,41 +31,59 @@ public static class IedBrowserMeasurementConfiguration
                 !mx.Any(member => member == owner ||
                     member.StartsWith(owner + ".", StringComparison.Ordinal)))
                 continue;
-            var unitsReference = owner + ".units";
-            var leaves = obj.Attributes.Where(attr =>
-                string.Equals(attr.FunctionalConstraint, "CF", StringComparison.Ordinal) &&
-                (IedBrowserLiveValues.CanonicalReference(attr.MmsReference) ==
-                     unitsReference + ".SIUnit" ||
-                 IedBrowserLiveValues.CanonicalReference(attr.MmsReference) ==
-                     unitsReference + ".multiplier"))
-                .GroupBy(attr => IedBrowserLiveValues.CanonicalReference(attr.MmsReference),
-                    StringComparer.Ordinal)
-                // A conflicting declared instance is not safe presentation
-                // authority, even if one of the declarations has a value.
-                .Where(group => group.Count() == 1)
-                .Select(group => group.Single())
-                .OrderBy(attr => attr.MmsReference.EndsWith("$SIUnit",
-                    StringComparison.Ordinal) ? 0 : 1)
-                .ToArray();
-            if (leaves.Length == 0) continue;
-
-            var current = leaves;
-            result.Add(new IedBrowserDetailRow("Data",
-                owner + ".units [CF]", "Not read", 0,
-                "Exact IEC CF configuration · not a DataSet member or MX Report value")
+            // A vector may declare units on its phase (PhV.phsA.units)
+            // instead of on the containing DO (PhV.units). Walk ONLY the
+            // exact MX member's ancestors; never display phsB configuration
+            // beside a phsA-only DataSet member.
+            var contexts = new HashSet<string>(StringComparer.Ordinal) { owner };
+            foreach (var member in mx.Where(member =>
+                         member.StartsWith(owner + ".", StringComparison.Ordinal)))
             {
-                ValueReference = unitsReference,
-                FunctionalConstraint = "CF",
-                LoadChildren = () => current.Select(attr =>
-                    new IedBrowserDetailRow("Data",
-                        IedBrowserLiveValues.CanonicalReference(attr.MmsReference)[
-                            (unitsReference.Length + 1)..] + " [CF]",
-                        "Not read", 1, "Independent MMS CF attribute")
-                    {
-                        ValueReference = attr.MmsReference,
-                        FunctionalConstraint = "CF"
-                    }).ToArray()
-            });
+                for (var cursor = member; cursor.Length > owner.Length;)
+                {
+                    contexts.Add(cursor);
+                    var dot = cursor.LastIndexOf('.');
+                    if (dot <= owner.Length) break;
+                    cursor = cursor[..dot];
+                }
+            }
+            foreach (var context in contexts.OrderBy(x => x, StringComparer.Ordinal))
+            {
+                var unitsReference = context + ".units";
+                var leaves = obj.Attributes.Where(attr =>
+                    string.Equals(attr.FunctionalConstraint, "CF", StringComparison.Ordinal) &&
+                    (IedBrowserLiveValues.CanonicalReference(attr.MmsReference) ==
+                         unitsReference + ".SIUnit" ||
+                     IedBrowserLiveValues.CanonicalReference(attr.MmsReference) ==
+                         unitsReference + ".multiplier"))
+                    .GroupBy(attr => IedBrowserLiveValues.CanonicalReference(attr.MmsReference),
+                        StringComparer.Ordinal)
+                    // Conflicting declarations are not safe evidence.
+                    .Where(group => group.Count() == 1)
+                    .Select(group => group.Single())
+                    .OrderBy(attr => attr.MmsReference.EndsWith("$SIUnit",
+                        StringComparison.Ordinal) ? 0 : 1)
+                    .ToArray();
+                if (leaves.Length == 0) continue;
+                var current = leaves;
+                result.Add(new IedBrowserDetailRow("Data",
+                    unitsReference + " [CF]", "Not read", 0,
+                    "Exact IEC CF configuration · not a DataSet member or MX Report value")
+                {
+                    ValueReference = unitsReference,
+                    FunctionalConstraint = "CF",
+                    LoadChildren = () => current.Select(attr =>
+                        new IedBrowserDetailRow("Data",
+                            IedBrowserLiveValues.CanonicalReference(attr.MmsReference)[
+                                (unitsReference.Length + 1)..] + " [CF]",
+                            "Not read", 1, "Independent MMS CF attribute")
+                        {
+                            ValueReference = attr.MmsReference,
+                            FunctionalConstraint = "CF"
+                        }).ToArray()
+                });
+                if (result.Count >= 12) break;
+            }
             if (result.Count >= 12) break; // bounded contextual rows
         }
         return result;
