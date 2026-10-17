@@ -611,6 +611,19 @@ public static class IedBrowserPresentation
                 foreach (var member in set.Members)
                     rows.Add(IedBrowserStructuredDetails.Member(
                         member, model, sclModel: sclModel));
+                // CF engineering settings are NOT DataSet MX members or
+                // Report payload. The selected-IED exact DO/FC schema may
+                // expose contextual units with separately acquired MMS reads.
+                // Keep this section clearly outside the DataSet membership
+                // list, so no fabricated Report SIUnit/multiplier is implied.
+                var configuration = IedBrowserMeasurementConfiguration.ForDataSet(
+                    set, model);
+                if (configuration.Count > 0)
+                {
+                    Section("Engineering configuration · CF (not DataSet members)");
+                    rows.Add(new("DataHeader", "Name", "Live configuration · provenance"));
+                    rows.AddRange(configuration);
+                }
                 break;
             case LiveIedControlBlockModel block:
                 Section("Control Block attributes");
