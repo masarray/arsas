@@ -135,7 +135,7 @@ public sealed class M217TDataSetReportCanonicalUnitHydrationTests
         {
             values.PublishForAssociation(association,
                 Owner + "." + phase + ".units.SIUnit",
-                "CF", "V", "", "", "MMS Read");
+                "CF", "29", "", "", "MMS Read");
             values.PublishForAssociation(association,
                 Owner + "." + phase + ".units.multiplier",
                 "CF", "3", "", "", "MMS Read");
@@ -156,6 +156,70 @@ public sealed class M217TDataSetReportCanonicalUnitHydrationTests
             report.Text);
         Assert.Empty(IedBrowserMeasurementMetadataReadPlan.Build(
             model, SetRef, values));
+    }
+
+    [Fact]
+    public void ScalarMvMagnitudeHydratesExactTotvaUnitForReportWithoutTouchingSibling()
+    {
+        var target = "LD/MMXU1.TotVA";
+        var other = "LD/MMXU1.TotW";
+        var objects = new[] { target, other }.Select(owner =>
+        {
+            var name = owner[(owner.LastIndexOf('.') + 1)..];
+            return new LiveIedDataObjectModel
+            {
+                Name = name, Reference = owner, InferredCdc = "MV",
+                Attributes =
+                [
+                    Attribute(name, "MX", "mag.f"),
+                    Attribute(name, "CF", "units.SIUnit"),
+                    Attribute(name, "CF", "units.multiplier")
+                ]
+            };
+        }).ToArray();
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices =
+            [
+                new LiveIedLogicalDeviceModel
+                {
+                    MmsDomain = "LD",
+                    LogicalNodes =
+                    [
+                        new LiveIedLogicalNodeModel
+                        {
+                            Name = "MMXU1", DataObjects = objects
+                        }
+                    ]
+                }
+            ],
+            DataSets =
+            [
+                new LiveIedDataSetModel
+                {
+                    Domain = "LD", LogicalNode = "LLN0",
+                    Name = "Power", Reference = "LD/LLN0.Power",
+                    Members =
+                    [
+                        new LiveIedDataSetMemberModel
+                        {
+                            Reference = target, FunctionalConstraint = "MX"
+                        }
+                    ]
+                }
+            ]
+        };
+        var ledger = new IedBrowserLiveValues();
+        ledger.BeginAssociation();
+        var targets = IedBrowserMeasurementMetadataReadPlan.Build(
+            model, "LD/LLN0.Power", ledger);
+        Assert.Equal(2, targets.Count);
+        Assert.All(targets, attr =>
+            Assert.StartsWith(target + ".",
+                IedBrowserLiveValues.CanonicalReference(attr.Reference)));
+        Assert.DoesNotContain(targets, attr =>
+            IedBrowserLiveValues.CanonicalReference(attr.Reference)
+                .StartsWith(other + ".", StringComparison.Ordinal));
     }
 
     [Fact]

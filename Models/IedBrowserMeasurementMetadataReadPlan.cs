@@ -116,8 +116,15 @@ public static class IedBrowserMeasurementMetadataReadPlan
             if (!string.Equals(attr.FunctionalConstraint, "MX",
                 StringComparison.OrdinalIgnoreCase)) continue;
             var reference = IedBrowserLiveValues.CanonicalReference(attr.MmsReference);
-            const string suffix = ".cVal.mag.f";
-            if (!reference.EndsWith(suffix, StringComparison.Ordinal)) continue;
+            // IEC WYE/DEL vectors and ordinary MV measured scalars share
+            // the same CF Unit contract, but have different mag paths.
+            // Instantaneous variants never authorize another owner's unit.
+            var suffix = reference.EndsWith(".cVal.mag.f",
+                    StringComparison.Ordinal) ? ".cVal.mag.f" :
+                reference.EndsWith(".mag.f", StringComparison.Ordinal) &&
+                !reference.EndsWith(".instCVal.mag.f", StringComparison.Ordinal)
+                    ? ".mag.f" : "";
+            if (suffix.Length == 0) continue;
             var phase = reference[..^suffix.Length];
             // Member scope includes exact FCD and FCDA subobjects, but not
             // other logical nodes, siblings, or similarly prefixed objects.
