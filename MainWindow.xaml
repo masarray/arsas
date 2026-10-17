@@ -520,7 +520,7 @@
                         <Grid Visibility="{Binding SelectedExplorerVisibility}">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
-                                <RowDefinition Height="Auto"/>
+                                <RowDefinition x:Name="ExplorerCommandDockRow" Height="Auto" MinHeight="0"/>
                             </Grid.RowDefinitions>
 
                             <Border Grid.Row="0" Style="{StaticResource WorkspaceCard}" Padding="10">
@@ -676,7 +676,8 @@
                                 </Grid>
                             </Border>
 
-                            <Expander x:Name="CommandPanelExpander" Grid.Row="1" Margin="0,10,0,0" IsExpanded="False" Expanded="CommandPanel_Expanded">
+                            <Expander x:Name="CommandPanelExpander" Grid.Row="1" Margin="0,10,0,0" IsExpanded="False"
+                                      VerticalAlignment="Stretch" Expanded="CommandPanel_Expanded" Collapsed="CommandPanel_Collapsed">
                                 <Expander.Header>
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <Border Width="28" Height="28" CornerRadius="9" Background="#E7F0FF" BorderBrush="#C9DBF7" BorderThickness="1" Margin="0,0,9,0">
@@ -690,7 +691,7 @@
                                 <Border Style="{StaticResource WorkspaceCard}" Background="{StaticResource CommandPanelSurface}" Padding="6" BorderBrush="#BFD0E5">
                                     <Grid>
                                         <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
 
@@ -698,7 +699,7 @@
                                             <DataGrid ItemsSource="{Binding SelectedDevice.CommandSignals}" Loaded="CommandGrid_Loaded" IsReadOnly="False" CanUserAddRows="False" CanUserDeleteRows="False"
                                                       Style="{StaticResource CommandDataGrid}" RowStyle="{StaticResource CommandDataGridRow}"
                                                       CellStyle="{StaticResource CommandDataGridCell}" ColumnHeaderStyle="{StaticResource CommandDataGridHeader}"
-                                                      AutoGenerateColumns="False" MaxHeight="260" MinHeight="56" RowHeight="43" MinRowHeight="42" ColumnHeaderHeight="35" FrozenColumnCount="1"
+                                                      AutoGenerateColumns="False" MinHeight="56" RowHeight="43" MinRowHeight="42" ColumnHeaderHeight="35" FrozenColumnCount="1"
                                                       EnableRowVirtualization="True" EnableColumnVirtualization="True"
                                                       VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                                                       ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
