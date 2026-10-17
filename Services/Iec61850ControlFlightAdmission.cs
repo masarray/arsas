@@ -110,5 +110,7 @@ public static class Iec61850ControlWireOutcomePolicy
         !string.IsNullOrWhiteSpace(completionState) &&
         (completionState.Contains("Unknown", StringComparison.OrdinalIgnoreCase) ||
          completionState.Contains("TimedOut", StringComparison.OrdinalIgnoreCase) ||
-         completionState.Contains("Timeout", StringComparison.OrdinalIgnoreCase));
+         completionState.Contains("Timeout", StringComparison.OrdinalIgnoreCase) ||
+         completionState.Equals("AssociationLost", StringComparison.OrdinalIgnoreCase) ||
+         completionState.Equals("Cancelled", StringComparison.OrdinalIgnoreCase));
 }

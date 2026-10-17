@@ -980,6 +980,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 "Another command is active or its wire outcome is unresolved on this IED. No MMS Operate was sent. Reconnect and verify actual status before retrying.");
         }
 
+        var attemptId = Guid.NewGuid();
+        var admittedAtUtc = DateTimeOffset.UtcNow;
         var clientStopwatch = Stopwatch.StartNew();
         var nativeCancellation = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken, session.ControlFlight.RetirementToken);
@@ -988,11 +990,18 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         try
         {
             Log("INFO", session.Device.Name,
+                $"CONTROL_ATTEMPT_ADMITTED: attemptId={attemptId}; associationId={session.ControlAssociationId}; " +
+                $"reference={request.Signal.ObjectReference}; ctlModel={request.Signal.ControlModelText}; " +
+                $"admittedUtc={admittedAtUtc:O}; wireSent=UNKNOWN; no native invoke ID exposed.");
+            Log("INFO", session.Device.Name,
                 $"Control execution requested: {request.Signal.ObjectReference} value={request.ValueText}; test={request.TestMode}; interlock={request.InterlockCheck}; synchro={request.SynchroCheck}; origin={request.OriginCategory}/{request.Originator}; IED acceptance is determined only from native MMS wire evidence.");
             nativeCancellation.Token.ThrowIfCancellationRequested();
             nativeFlight = session.Client.ExecuteControlAsync(
                 Iec61850ControlRequestSnapshot.Create(request),
                 nativeCancellation.Token);
+            Log("INFO", session.Device.Name,
+                $"CONTROL_NATIVE_TASK_STARTED: attemptId={attemptId}; associationId={session.ControlAssociationId}; " +
+                "Task created does not prove Operate transmitted.");
             result = await nativeFlight.WaitAsync(ControlFlightDeadline, cancellationToken)
                 .ConfigureAwait(false);
             // A native Task can complete with an explicitly uncertain MMS
@@ -1002,7 +1011,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             {
                 session.ControlFlight.Quarantine();
                 Log("ERROR", session.Device.Name,
-                    $"CONTROL_OUTCOME_UNKNOWN_NATIVE_RESULT: {request.Signal.ObjectReference}; " +
+                    $"CONTROL_OUTCOME_UNKNOWN_NATIVE_RESULT: attemptId={attemptId}; associationId={session.ControlAssociationId}; {request.Signal.ObjectReference}; " +
                     $"completion={result.CompletionState}; stage={result.Stage}; " +
                     "further controls blocked until a new, verified association.");
             }
@@ -1012,7 +1021,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             session.ControlFlight.Quarantine();
             nativeCancellation.Cancel();
             Log("ERROR", session.Device.Name,
-                $"CONTROL_OUTCOME_UNKNOWN_TIMEOUT: {request.Signal.ObjectReference}; deadline={ControlFlightDeadline.TotalSeconds:0}s; nativeCompleted={nativeFlight?.IsCompleted}; no further commands on this MMS association. Actual IED position must be checked before reconnect.");
+                $"CONTROL_OUTCOME_UNKNOWN_TIMEOUT: attemptId={attemptId}; associationId={session.ControlAssociationId}; {request.Signal.ObjectReference}; deadline={ControlFlightDeadline.TotalSeconds:0}s; nativeCompleted={nativeFlight?.IsCompleted}; no further commands on this MMS association. Actual IED position must be checked before reconnect.");
             throw new TimeoutException(
                 "Control exceeded the end-to-end deadline. The MMS wire outcome is UNKNOWN, not necessarily rejected. This association is quarantined; verify process state and reconnect before any further Operate.");
         }
@@ -1023,7 +1032,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 session.ControlFlight.Quarantine();
                 nativeCancellation.Cancel();
                 Log("WARN", session.Device.Name,
-                    $"CONTROL_CANCEL_OUTCOME_UNKNOWN: {request.Signal.ObjectReference}; native flight not completed; association quarantined.");
+                    $"CONTROL_CANCEL_OUTCOME_UNKNOWN: attemptId={attemptId}; associationId={session.ControlAssociationId}; {request.Signal.ObjectReference}; native flight not completed; association quarantined.");
             }
             throw;
         }
@@ -1036,7 +1045,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 // per-IED gate until it ACTUALLY terminates. Never dispose its
                 // CTS or let another command use that association prematurely.
                 _ = ObserveLateControlFlightAsync(session,
-                    request.Signal.ObjectReference, nativeFlight, nativeCancellation);
+                    attemptId, request.Signal.ObjectReference, nativeFlight, nativeCancellation);
             }
             else
             {
@@ -1083,7 +1092,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         }.Where(text => !string.IsNullOrWhiteSpace(text)));
 
         Log(result.IsSuccess ? "INFO" : "ERROR", session.Device.Name,
-            $"Control {result.Stage}: {request.Signal.ObjectReference}; sequence={result.SequenceText}; requested={result.RequestedValue}; feedback={result.FeedbackValue}; {protocolEvidence}; {result.Message}");
+            $"CONTROL_ATTEMPT_RESULT: attemptId={attemptId}; associationId={session.ControlAssociationId}; Control {result.Stage}: {request.Signal.ObjectReference}; sequence={result.SequenceText}; requested={result.RequestedValue}; feedback={result.FeedbackValue}; {protocolEvidence}; {result.Message}");
 
         if (!result.IsSuccess)
         {
@@ -1137,7 +1146,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     }
 
     private async Task ObserveLateControlFlightAsync(DeviceSession session,
-        string reference,
+        Guid attemptId, string reference,
         Task<Iec61850ControlCommandResult> nativeFlight,
         CancellationTokenSource nativeCancellation)
     {
@@ -1145,12 +1154,12 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         {
             var late = await nativeFlight.ConfigureAwait(false);
             Log("WARN", session.Device.Name,
-                $"CONTROL_LATE_NATIVE_RESULT: {reference}; completed after caller timeout/cancellation; stage={late.Stage}; success={late.IsSuccess}; association remains quarantined pending verified recovery.");
+                $"CONTROL_LATE_NATIVE_RESULT: attemptId={attemptId}; associationId={session.ControlAssociationId}; {reference}; completed after caller timeout/cancellation; stage={late.Stage}; success={late.IsSuccess}; association remains quarantined pending verified recovery.");
         }
         catch (Exception ex)
         {
             Log("WARN", session.Device.Name,
-                $"CONTROL_LATE_NATIVE_FAILURE: {reference}; {ex.GetType().Name}: {ex.Message}; association remains quarantined.");
+                $"CONTROL_LATE_NATIVE_FAILURE: attemptId={attemptId}; associationId={session.ControlAssociationId}; {reference}; {ex.GetType().Name}: {ex.Message}; association remains quarantined.");
         }
         finally
         {

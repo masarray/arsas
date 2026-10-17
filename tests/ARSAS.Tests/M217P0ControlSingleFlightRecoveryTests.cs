@@ -86,6 +86,9 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
         Assert.Contains("session.ControlFlight.TryEnter()", code);
         Assert.Contains("session.ControlFlight.Retire()", code);
         Assert.Contains("CONTROL_OUTCOME_UNKNOWN_NATIVE_RESULT", code);
+        Assert.Contains("CONTROL_ATTEMPT_ADMITTED", code);
+        Assert.Contains("CONTROL_NATIVE_TASK_STARTED", code);
+        Assert.Contains("attemptId={attemptId}", code);
         Assert.Contains("DisposeDetachedSessionAfterDrainAsync(", code);
         Assert.Contains("if (!IsCurrentSession(session))", code);
         Assert.DoesNotContain("_activeControlTargets", code);
@@ -163,6 +166,8 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
     [InlineData("WireStateUnknown")]
     [InlineData("TimedOut")]
     [InlineData("MmsTimeout")]
+    [InlineData("AssociationLost")]
+    [InlineData("Cancelled")]
     public void NativeCompletedButUncertainOutcomeRequiresQuarantine(string state)
     {
         Assert.True(Iec61850ControlWireOutcomePolicy.RequiresQuarantine(state));
