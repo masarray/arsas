@@ -509,8 +509,11 @@ public partial class MainWindow
                  !ReferenceEquals(currentPage, currentFocus) ||
                  !string.Equals(selectedDo, _iedBrowserSelectedDoReference,
                      StringComparison.Ordinal)))
+            {
                 QueueIedBrowserFocusedRead(currentFocus,
                     _iedBrowserSelectedDoReference);
+                QueueIedBrowserRcbFocusedRead(currentFocus);
+            }
         }
     }
 
@@ -918,6 +921,30 @@ public partial class MainWindow
             row.Value = value;
             row.ObservationSource = authority;
             row.ObservationTooltip = name + " · " + authority;
+        }
+
+        // A focused read-only MMS RCB attribute is admitted to the SAME
+        // association-bound scalar ledger as Data Model / DataSets. Received
+        // reports do not prove the current RptEna or reservation state.
+        var focusedRcbTargets = IedBrowserRcbFocusedReadPlan.Build(
+            device.LiveDiscoveryModel, rcb);
+        foreach (var (name, field) in new[]
+        {
+            ("Enabled / RptEna", "RptEna"),
+            ("Reservation", "Resv"),
+            ("Reserve time (s)", "ResvTms")
+        })
+        {
+            var target = focusedRcbTargets.FirstOrDefault(t =>
+                t.Reference.EndsWith("." + field, StringComparison.Ordinal));
+            if (target is not null && device.IsConnected &&
+                !device.LiveValues.IsOffline &&
+                device.LiveValues.TryGet(target.Reference, target.FunctionalConstraint,
+                    out var actual, preferReport: false) &&
+                !actual.IsStale &&
+                actual.Association == device.LiveValues.Association &&
+                string.Equals(actual.Source, "MMS Read", StringComparison.Ordinal))
+                Put(name, actual.Value, "Verified MMS RCB field · current association");
         }
 
         // Association-scoped immutable metadata, never a synthetic report,
@@ -1809,6 +1836,7 @@ public partial class MainWindow
         RefreshIedBrowserVisibleValues();
         RefreshIedBrowserReadButtons();
         QueueIedBrowserFocusedRead(row);
+        QueueIedBrowserRcbFocusedRead(row);
         // Folder entry opens at its first child, regardless of the scroll
         // position in the previously inspected RCB, LN or DataSet.
         if (_iedBrowserDetails.Rows.Count > 0)
