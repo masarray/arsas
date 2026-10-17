@@ -45,10 +45,24 @@ public static class IedBrowserNameplatePresentation
         ArgumentNullException.ThrowIfNull(ledger);
         ArgumentNullException.ThrowIfNull(engineering);
         projection = null!;
-        if (!row.IsDataObject || row.NameplateDcReferences.Count == 0)
+        if (!row.IsDataObject)
             return false;
+        var references = row.NameplateDcReferences;
+        // Some GetNameList type trees expose the parent DO separately from
+        // its FC=DC child attributes. The parent can still show an actual
+        // observed exact child (never an SCL value or a speculative MMS Read).
+        // The fallback is ONLY for a canonical NamPlt parent and ONLY for
+        // exact FC=DC leaf observations in the current ledger.
+        if (references.Count == 0 &&
+            string.Equals(row.Name, "NamPlt", StringComparison.Ordinal) &&
+            row.ReadObjectReference.EndsWith(".NamPlt", StringComparison.Ordinal))
+        {
+            references = PreferredLeaves.Select(leaf =>
+                IedBrowserLiveValues.CanonicalReference(row.ReadObjectReference) +
+                "." + leaf).ToArray();
+        }
 
-        foreach (var reference in row.NameplateDcReferences)
+        foreach (var reference in references)
         {
             // Same exact FC and association; never read sibling or guess vendor.
             if (ledger.TryGet(reference, "DC", out var observed))
@@ -69,6 +83,9 @@ public static class IedBrowserNameplatePresentation
         }
         // A verified canonical discovery-instance value is an explicitly
         // HISTORICAL read, not a fresh MMS observation or an SCL declaration.
+        // Historical discovery projection still requires an exact model
+        // declaration. A fallback reference with no model leaf must not
+        // become a SCL-derived present-day or historical value.
         foreach (var reference in row.NameplateDcReferences)
         {
             if (!engineering.TryGet(reference, "DC", out var value,
