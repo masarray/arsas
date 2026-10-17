@@ -93,7 +93,8 @@ public partial class MainWindow
         long association, long epoch, IReadOnlyList<IedBrowserReadTarget> targets,
         CancellationTokenSource cts)
     {
-        var inbox = new IedBrowserReadResultInbox(() =>
+        IedBrowserReadResultInbox inbox = null!;
+        inbox = new IedBrowserReadResultInbox(() =>
             Dispatcher.BeginInvoke(DispatcherPriority.Background,
                 new Action(Drain)));
         bool IsCurrent() =>
@@ -109,9 +110,13 @@ public partial class MainWindow
             inbox.Drain(result =>
             {
                 if (!IsCurrent()) return;
+                // Initialize both outputs before short-circuit evaluation:
+                // a transport error never executes the scalar parser.
+                var safe = "";
+                var reason = "";
                 if (result.Error.Length != 0 ||
                     !IedBrowserReadValuePolicy.TryAcceptDisplay(
-                        result.Value, out var safe, out var reason))
+                        result.Value, out safe, out reason))
                 {
                     _iedBrowserContextReadFailures?.RecordFailure(
                         result.Target, result.Error.Length == 0 ? reason : result.Error);
