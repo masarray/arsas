@@ -44,9 +44,10 @@ public static class Iec61850ControlFlightAdmission
             cancelNative();
             throw;
         }
-        catch (OperationCanceledException) when (waitCancellation.IsCancellationRequested &&
-                                                  !nativeFlight.IsCompleted)
+        catch (OperationCanceledException)
         {
+            // Native cancellation may occur *after* a Write/Operate reached
+            // the wire. A completed canceled Task is not proof of NotSent.
             quarantine();
             cancelNative();
             throw;
