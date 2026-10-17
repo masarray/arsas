@@ -172,10 +172,11 @@ public sealed class P109QCommandDockCommissioningRegressionTests
         Assert.Contains("signal.ClearLiveControlAuthority();", client);
         Assert.Contains("signal.ControlModelText = \"Auto-detect\";", client);
         Assert.Contains("OPERATOR_CTL_MODEL_CONFIGURATION", runtime);
-        Assert.Contains("_activeControlTargets.TryAdd(targetKey, 0)", runtime);
-        // A single atomic IED-wide flight now protects ctlModel Write and
-        // ordinary Operate. Increment-and-reject was not a safe admission gate.
-        Assert.Contains("Iec61850ControlFlightAdmission.TryEnter(", runtime);
+        // A physical association-scoped lease covers both ctlModel Write and
+        // Operate. A detached old session must not unlock the new association.
+        Assert.Contains("session.ControlFlight.TryEnter()", runtime);
+        Assert.Contains("session.ControlFlight.Release()", runtime);
+        Assert.DoesNotContain("_activeControlTargets", runtime);
         Assert.Contains("CONTROL_OUTCOME_UNKNOWN_TIMEOUT", runtime);
     }
 }
