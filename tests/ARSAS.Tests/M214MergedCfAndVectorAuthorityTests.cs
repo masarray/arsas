@@ -54,7 +54,7 @@ public sealed class M214MergedCfAndVectorAuthorityTests
         var expanded = row with { IsDataObject = false };
         Assert.True(IedBrowserEngineeringComposite.TryCompose(
             expanded, ledger, new Dictionary<string, string?>(), true, out var all));
-        Assert.StartsWith("Independent", all.Source);
+        Assert.Equal("Report", all.Source);
         Assert.DoesNotContain("∠", all.Text);
         Assert.Contains("angle 30", all.Provenance);
         Assert.DoesNotContain("independent, not paired", all.Text);
