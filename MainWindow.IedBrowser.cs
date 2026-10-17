@@ -691,7 +691,12 @@ public partial class MainWindow
                     // existing per-row tooltip, without fake process values.
                     var deferred = absenceKind == IedBrowserReadAbsenceKind.Deferred;
                     row.Value = deferred ? "Not read" : "Unavailable";
-                    row.ObservationSource = deferred ? "Initial read deferred" : "MMS Read failed";
+                    row.ObservationSource = absenceKind switch
+                    {
+                        IedBrowserReadAbsenceKind.Deferred => "Initial read deferred",
+                        IedBrowserReadAbsenceKind.Interrupted => "MMS Read interrupted",
+                        _ => "MMS Read failed"
+                    };
                     row.ObservationTooltip =
                         $"{row.ValueReference} [{row.FunctionalConstraint}] · {readFailure}";
                 }
