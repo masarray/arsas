@@ -281,6 +281,10 @@ public partial class MainWindow
         // and DataSet only the declared CF SIUnit/multiplier pair.
         var key = device.LiveValues.Association + "|" + device.Name + "|" +
             page.Key + "|" + (focusedObjectReference ?? "");
+        // A very large IED may have thousands of LNs/DOs. Keep only a
+        // small admission history; it is not a process-value cache.
+        if (_iedBrowserAutoReadPages.Count >= 128)
+            _iedBrowserAutoReadPages.Clear();
         if (!_iedBrowserAutoReadPages.Add(key)) return;
         Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
         {
