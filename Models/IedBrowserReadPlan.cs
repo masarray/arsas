@@ -118,6 +118,56 @@ public static class IedBrowserReadPlan
     }
 
     /// <summary>
+    /// Small, deterministic on-demand hydration of the CURRENT visible LN,
+    /// DataSet or SGCB. Report ingress remains authoritative; no cyclic read,
+    /// unrelated LN or unverified SCL-only target enters this plan.
+    /// </summary>
+    public static IReadOnlyList<IedBrowserReadTarget> BuildFocused(
+        LiveIedModelDiscoveryDocument? liveModel, IedBrowserTreeRow? page,
+        IedBrowserLiveValues ledger, int budget = 24)
+    {
+        if (liveModel is null || page is null || ledger.IsOffline || budget <= 0)
+            return [];
+        if (page.Kind is not ("LN" or "SGCB" or "DataSet"))
+            return [];
+        var candidates = Build(liveModel, page, readAll: false);
+        // Do not publish another reader's result as though this association
+        // observed it. Existing Report/MMS Read evidence is always reused.
+        return candidates.Where(target =>
+                !ledger.TryGet(target.Reference, target.FunctionalConstraint, out _))
+            .OrderBy(target => FocusPriority(page.Kind, target))
+            .ThenBy(target => target.Reference, StringComparer.Ordinal)
+            .Take(Math.Min(budget, 24))
+            .ToArray();
+    }
+
+    private static int FocusPriority(string kind, IedBrowserReadTarget target)
+    {
+        var reference = IedBrowserLiveValues.CanonicalReference(target.Reference);
+        if (kind == "SGCB")
+            return reference.EndsWith(".NumOfSG", StringComparison.Ordinal) ||
+                   reference.EndsWith(".ActSG", StringComparison.Ordinal) ? 0 :
+                   reference.EndsWith(".LActTm", StringComparison.Ordinal) ? 2 : 3;
+        var fc = (target.FunctionalConstraint ?? "").ToUpperInvariant();
+        if (fc == "ST" &&
+            (reference.EndsWith(".stVal", StringComparison.Ordinal) ||
+             reference.EndsWith(".posVal", StringComparison.Ordinal)))
+            return 0;
+        if (fc == "MX" && (reference.EndsWith(".mag.f", StringComparison.Ordinal) ||
+                            reference.EndsWith(".instMag.f", StringComparison.Ordinal)))
+            return 1;
+        if (fc is "ST" or "MX" &&
+            (reference.EndsWith(".q", StringComparison.Ordinal) ||
+             reference.EndsWith(".t", StringComparison.Ordinal)))
+            return 2;
+        if (fc == "CF" &&
+            (reference.EndsWith(".units.SIUnit", StringComparison.Ordinal) ||
+             reference.EndsWith(".units.multiplier", StringComparison.Ordinal)))
+            return 3;
+        return fc is "CF" or "DC" or "SG" ? 5 : 4;
+    }
+
+    /// <summary>
     /// Finite, evidence-first initial acquisition for a freshly discovered
     /// LIVE MMS schema. This is not Browser Read All or a new polling plan:
     /// only critical scalar status/nameplate/switch leaves are eligible.
