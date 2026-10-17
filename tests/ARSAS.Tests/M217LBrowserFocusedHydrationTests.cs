@@ -19,6 +19,9 @@ public sealed class M217LBrowserFocusedHydrationTests
         Assert.Contains("device.LiveValues.Association", source);
         Assert.Contains("IedBrowserReadPlan.Build(", source);
         Assert.Contains("IedBrowserIsolatedReadService.ReadAsync(", source);
+        Assert.Contains("IedBrowserReadPlan.BuildDataSetUnitRead(", source);
+        Assert.Contains("currentPage?.Payload is LiveIedDataSetModel unitSet", source);
+        Assert.Contains("page?.Kind is not (\"SGCB\" or \"LN\" or \"DataSet\")", source);
         Assert.Contains("sourceDevice.LiveValues.PublishForAssociation(", source);
         Assert.DoesNotContain("Tag = \"All\" },", source);
     }
