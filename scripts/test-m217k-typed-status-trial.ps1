@@ -9,7 +9,19 @@ function Test-M217KTypedStatusTrial {
 
     $previous = '036e2c00d83a0815b6160147b14ea05975057965'
     $candidate = '51c2eefd61d6bcbe1116fda6b781b74bb9cf06da'
+
+    # Audit the COMPLETE previously accepted P10.9V code-only ancestry,
+    # including physical R10 history, routing, subscriber integrity, canonical
+    # ingress, ZIV BSC, commissioning and typed control gates. A new head
+    # cannot silently bypass any of the older negative regression fixtures.
+    . (Join-Path $PSScriptRoot 'test-p10-9f-core-routing-trial.ps1')
+    $historicalView = $Lock | Select-Object *
+    $historicalView.commit = $previous
+    $historicalView.sourcePullRequest = 169
+    $oldPinLineageStillValid = Test-P109FCoreRoutingTrial -Lock $historicalView
+
     return (
+        $oldPinLineageStillValid -and
         [string]$Lock.repository -ceq 'masarray/ARIEC61850' -and
         [string]$Lock.ref -ceq 'main' -and
         [string]$Lock.commit -ceq $candidate -and
