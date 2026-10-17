@@ -84,6 +84,7 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
         Assert.Contains("CONTROL_IED_SINGLE_FLIGHT", code);
         Assert.Contains("session.ControlFlight.TryEnter()", code);
         Assert.Contains("session.ControlFlight.Retire()", code);
+        Assert.Contains("CONTROL_OUTCOME_UNKNOWN_NATIVE_RESULT", code);
         Assert.Contains("DisposeDetachedSessionAfterDrainAsync(", code);
         Assert.Contains("if (!IsCurrentSession(session))", code);
         Assert.DoesNotContain("_activeControlTargets", code);
@@ -152,6 +153,18 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
         lease.Release();
         Assert.True(lease.IsUnavailable);
         Assert.False(lease.TryEnter());
+    }
+
+    [Theory]
+    [InlineData("WireStateUnknown")]
+    [InlineData("TimedOut")]
+    [InlineData("MmsTimeout")]
+    public void NativeCompletedButUncertainOutcomeRequiresQuarantine(string state)
+    {
+        Assert.True(Iec61850ControlWireOutcomePolicy.RequiresQuarantine(state));
+        Assert.False(Iec61850ControlWireOutcomePolicy.RequiresQuarantine("NotSent"));
+        Assert.False(Iec61850ControlWireOutcomePolicy.RequiresQuarantine("Rejected"));
+        Assert.False(Iec61850ControlWireOutcomePolicy.RequiresQuarantine("Completed"));
     }
 
     [Fact]
