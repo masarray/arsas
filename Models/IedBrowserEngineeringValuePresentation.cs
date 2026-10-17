@@ -64,14 +64,15 @@ public static class IedBrowserEngineeringValuePresentation
         if (!canonical.EndsWith(".ang.f", StringComparison.Ordinal) ||
             normalizedFc != "MX") return "";
         if (index.TryGetValue(canonical + "|" + normalizedFc, out var exact))
-            return exact ?? "";
+            return exact is "deg" or "degree" or "degrees" ? "°" : exact ?? "";
         var angleOwner = canonical[..^2];
         if (index.TryGetValue(angleOwner + "|" + normalizedFc, out var declared))
-            return declared ?? "";
+            return declared is "deg" or "degree" or "degrees" ? "°" : declared ?? "";
         // IEC 61850-7-3 Vector.ang: Unit.SIUnit='deg', no multiplier.
         // Exact cVal/instCVal paths only, never inferred for scalar MV.
         return canonical.EndsWith(".cVal.ang.f", StringComparison.Ordinal) ||
-               canonical.EndsWith(".instCVal.ang.f", StringComparison.Ordinal)
+               canonical.EndsWith(".instCVal.ang.f", StringComparison.Ordinal) ||
+               canonical.EndsWith(".ang.f", StringComparison.Ordinal)
             ? "°" : "";
     }
 

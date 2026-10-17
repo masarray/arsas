@@ -71,7 +71,7 @@ public static class IedBrowserObservedVectorPresentation
                     // Clean operator Value: when no coherent pair exists,
                     // show a magnitude alone (or just ° if only ang exists).
                     // Never append a pseudo phasor or "independent" jargon.
-                    if (!hasMag) text = rendered;
+                    text += (hasMag ? " · ang " : "") + rendered;
                     unpaired.Add(part.Label + ": " + (hasMag
                         ? "angle not paired with magnitude"
                         : "magnitude not observed") +

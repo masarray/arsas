@@ -181,10 +181,14 @@ public static class IedBrowserEngineeringComposite
                 // provenance tooltip, never discarded from the SSOT ledger.
                 var independentUnit = IedBrowserEngineeringValuePresentation.ResolveVectorAngleUnit(
                     unitIndex, plan.AngleReference, plan.FunctionalConstraint);
+                var angleText = IedBrowserEngineeringValuePresentation.Format(
+                    independentAngle.Value, independentUnit);
+                // This is a visible angle observation, NOT a paired phasor.
+                // Show it without inventing sample coherence. The leaf and
+                // provenance still preserve the original MMS source/time.
+                text += " · ang " + angleText;
                 references.Add(plan.AngleReference + "[separate " +
-                    plan.FunctionalConstraint + "]: " +
-                    IedBrowserEngineeringValuePresentation.Format(
-                        independentAngle.Value, independentUnit));
+                    plan.FunctionalConstraint + "]: " + angleText);
             }
             components.Add(plan.Phase.Length == 0 ? text : plan.Phase + ": " + text);
         }
