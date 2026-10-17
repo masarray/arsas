@@ -154,6 +154,12 @@ public static class IedBrowserReadPlan
                    reference.EndsWith(".ActSG", StringComparison.Ordinal) ? 0 :
                    reference.EndsWith(".LActTm", StringComparison.Ordinal) ? 2 : 3;
         var fc = (target.FunctionalConstraint ?? "").ToUpperInvariant();
+        if (fc == "DC" && reference.Contains(".NamPlt.", StringComparison.Ordinal) &&
+            (reference.EndsWith(".vendor", StringComparison.Ordinal) ||
+             reference.EndsWith(".d", StringComparison.Ordinal) ||
+             reference.EndsWith(".swRev", StringComparison.Ordinal) ||
+             reference.EndsWith(".configRev", StringComparison.Ordinal)))
+            return 0;
         if (fc == "ST" &&
             (reference.EndsWith(".stVal", StringComparison.Ordinal) ||
              reference.EndsWith(".posVal", StringComparison.Ordinal)))

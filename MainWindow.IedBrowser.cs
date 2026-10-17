@@ -845,6 +845,14 @@ public partial class MainWindow
                         row.EngineeringUnitReference.Length == 0
                             ? row.ValueReference : row.EngineeringUnitReference,
                         row.FunctionalConstraint));
+            // An expanded MX ang leaf is in degrees, not a fabricated pair.
+            // cVal parent handles coherent phasor composition separately.
+            else if (row.EvidenceField.Length == 0 &&
+                     observedReference.EndsWith(".ang.f", StringComparison.Ordinal) &&
+                     row.FunctionalConstraint == "MX")
+                display = IedBrowserEngineeringValuePresentation.Format(
+                    display, IedBrowserEngineeringValuePresentation.ResolveVectorAngleUnit(
+                        engineeringUnits, observedReference, "MX"));
             row.Value = live.IsStale ? "Offline · " + display : display;
         }
         UpdateIedBrowserGooseDetails();

@@ -223,6 +223,23 @@ public sealed class IedBrowserCfEvidencePresentation
                 index.Add(key, composed);
             else if (!string.Equals(previous, composed, StringComparison.Ordinal))
                 index[key] = fresh ? composed : null;
+
+            // A live IEC CF pair is more authoritative than generic
+            // SignalDefinition.Unit metadata on individual magnitude leaves.
+            // Do not apply a phase unit to a sibling, angle, quality or LN.
+            if (!fresh) continue;
+            index[key] = composed;
+            foreach (var leaf in new[]
+            {
+                ".cVal.mag.f", ".instCVal.mag.f", ".mag.f", ".instMag.f"
+            })
+            {
+                var exact = owner + leaf + "|MX";
+                // Only exact paths whose owners carry this verified CF pair.
+                // Avoid adding aliases when the live schema has no such leaf.
+                if (index.ContainsKey(exact))
+                    index[exact] = composed;
+            }
         }
         return index;
     }

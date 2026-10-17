@@ -337,6 +337,7 @@ public static class IedBrowserStructuredDetails
                 string.Join(", ", fcs))
             {
                 IsDataObject = true,
+                ReadObjectReference = qualified,
                 ValueReference = chosen,
                 FunctionalConstraint = fc,
                 EngineeringUnitReference = scalar ?? polar?.MagnitudeReference ?? "",

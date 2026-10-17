@@ -175,14 +175,16 @@ public static class IedBrowserEngineeringComposite
                     CultureInfo.InvariantCulture, out var independentNumber) &&
                 double.IsFinite(independentNumber))
             {
-                // Two real values can be displayed separately. Never add ∠
-                // unless the actual report/read evidence passed CanPair.
+                // Keep the operator's Value column clean: do not claim a
+                // phasor from mismatched timestamp/source observations.
+                // The real angle remains accessible at ang [MX] and in the
+                // provenance tooltip, never discarded from the SSOT ledger.
                 var independentUnit = IedBrowserEngineeringValuePresentation.ResolveVectorAngleUnit(
                     unitIndex, plan.AngleReference, plan.FunctionalConstraint);
-                text += "; ∠ (independent) " + IedBrowserEngineeringValuePresentation.Format(
-                    independentAngle.Value, independentUnit);
-                references.Add(plan.AngleReference + "[independent " +
-                    plan.FunctionalConstraint + "]");
+                references.Add(plan.AngleReference + "[separate " +
+                    plan.FunctionalConstraint + "]: " +
+                    IedBrowserEngineeringValuePresentation.Format(
+                        independentAngle.Value, independentUnit));
             }
             components.Add(plan.Phase.Length == 0 ? text : plan.Phase + ": " + text);
         }
@@ -210,7 +212,7 @@ public static class IedBrowserEngineeringComposite
                 out var independent))
             return false;
         result = new IedBrowserCompositeObservation(
-            independent.Value, "Independent " + independent.Source,
+            independent.Value, independent.Source,
             independent.Provenance, independent.IsStale);
         return true;
     }
