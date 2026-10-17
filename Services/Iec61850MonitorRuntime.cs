@@ -86,6 +86,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public DateTime NextHealthProbeUtc { get; set; } = DateTime.MinValue;
         public int ConsecutiveHealthProbeFailures { get; set; }
         public string HealthProbePointKey { get; set; } = string.Empty;
+        public Guid ControlSessionIdentity { get; } = Guid.NewGuid();
         public int ControlCommandActive;
         // A timed-out/cancelled native Operate may still be in-flight on the
         // association. Do not admit another control until a fresh session.
@@ -882,7 +883,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                            Iec61850ControlModelKind.SboEnhanced))
             throw new ArgumentException("A valid expected live ctlModel and target 1-4 are required.");
 
-        var targetKey = deviceId + "|" + Iec61850ControlIdentity.Normalize(signal.ObjectReference);
+        var targetKey = session.ControlSessionIdentity.ToString("N") + "|" + Iec61850ControlIdentity.Normalize(signal.ObjectReference);
         if (!_activeControlTargets.TryAdd(targetKey, 0))
             throw new InvalidOperationException("A command is already running for this object.");
 
@@ -966,7 +967,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
         // One physical control target per device, regardless of DataSet aliases.
         // Failed concurrent admission is local: no additional MMS Operate.
-        var targetKey = deviceId + "|" + Iec61850ControlIdentity.Normalize(request.Signal.ObjectReference);
+        var targetKey = session.ControlSessionIdentity.ToString("N") + "|" + Iec61850ControlIdentity.Normalize(request.Signal.ObjectReference);
         if (!_activeControlTargets.TryAdd(targetKey, 0))
         {
             Log("WARN", session.Device.Name,
@@ -1196,7 +1197,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         }
         try
         {
-            await session.Client.DisposeAsync().ConfigureAwait(false);
+            await DisposeClientForReconnectAsync(
+                session.Client, session.Device.Name,
+                SmartReconnectPolicy.ClientCleanupBudget,
+                CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
