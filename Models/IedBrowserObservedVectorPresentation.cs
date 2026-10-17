@@ -68,7 +68,7 @@ public static class IedBrowserObservedVectorPresentation
                     text += " ∠ " + rendered;
                 else
                 {
-                    // IEDScout-like clean Value: when no coherent pair exists,
+                    // Clean operator Value: when no coherent pair exists,
                     // show a magnitude alone (or just ° if only ang exists).
                     // Never append a pseudo phasor or "independent" jargon.
                     if (!hasMag) text = rendered;
