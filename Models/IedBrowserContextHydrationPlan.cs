@@ -29,6 +29,8 @@ public static class IedBrowserContextHydrationPlan
         IEnumerable<IedBrowserReadTarget> candidates;
         if (page.Kind == "SGCB" && page.Payload is LiveIedControlBlockModel sgcb)
         {
+            if (!model.SettingGroupControls.Any(item => ReferenceEquals(item, sgcb)))
+                return []; // SCL-only or replaced page cannot authorize MMS
             // The original planner independently authenticates live SGCB
             // inventory. Do not use SCL-only or guessed SGCB field references.
             var control = IedBrowserControlStateEvidence.ReadTargets(sgcb, "SGCB");
@@ -45,6 +47,9 @@ public static class IedBrowserContextHydrationPlan
         }
         else if (page.Payload is LiveIedLogicalNodeModel ln)
         {
+            if (!model.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
+                    .Any(item => ReferenceEquals(item, ln)))
+                return []; // only current LIVE LN instance authorizes targets
             candidates = ln.DataObjects
                 .Where(obj => focusedDo is null ||
                     string.Equals(obj.Reference, focusedDo, StringComparison.Ordinal))
@@ -54,6 +59,8 @@ public static class IedBrowserContextHydrationPlan
         }
         else if (page.Payload is LiveIedDataSetModel dataSet)
         {
+            if (!model.DataSets.Any(item => ReferenceEquals(item, dataSet)))
+                return []; // SCL-only or superseded DataSet cannot trigger reads
             // Include CF unit declarations only as separate exact measurement
             // configuration context; MX Report payload cannot supply CF.
             var members = dataSet.Members
