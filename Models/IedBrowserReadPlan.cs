@@ -131,6 +131,40 @@ public static class IedBrowserReadPlan
         if (page.Kind is not ("LN" or "SGCB" or "DataSet"))
             return [];
         var candidates = Build(liveModel, page, readAll: false);
+        if (page.Payload is LiveIedDataSetModel set)
+        {
+            // IEC units belong to CF, never MX. Only an EXACT model-declared
+            // companion of the currently selected MX DataSet member is safe
+            // for an isolated read. No SCL-only read or neighboring phase.
+            var allowed = set.Members
+                .Where(member => string.Equals(member.FunctionalConstraint, "MX",
+                    StringComparison.OrdinalIgnoreCase))
+                .Select(member => IedBrowserLiveValues.CanonicalReference(member.Reference))
+                .Where(reference => reference.Length > 0)
+                .ToHashSet(StringComparer.Ordinal);
+            var companions = liveModel.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
+                .SelectMany(ln => ln.DataObjects)
+                .SelectMany(obj => obj.Attributes)
+                .Where(attr => string.Equals(attr.FunctionalConstraint, "CF",
+                    StringComparison.OrdinalIgnoreCase))
+                .Where(attr =>
+                {
+                    var reference = IedBrowserLiveValues.CanonicalReference(attr.MmsReference);
+                    if (!reference.EndsWith(".units.SIUnit", StringComparison.Ordinal) &&
+                        !reference.EndsWith(".units.multiplier", StringComparison.Ordinal))
+                        return false;
+                    var owner = reference[..reference.LastIndexOf(".units.", StringComparison.Ordinal)];
+                    return allowed.Any(member => member == owner ||
+                        member.StartsWith(owner + ".", StringComparison.Ordinal) ||
+                        owner.StartsWith(member + ".", StringComparison.Ordinal));
+                })
+                .Select(attr => new IedBrowserReadTarget(attr.MmsReference, "CF",
+                    string.IsNullOrWhiteSpace(attr.SclBType) ? attr.MmsType : attr.SclBType));
+            candidates = candidates.Concat(companions)
+                .DistinctBy(target => IedBrowserLiveValues.CanonicalReference(target.Reference)
+                    + "|" + target.FunctionalConstraint, StringComparer.Ordinal)
+                .ToArray();
+        }
         // Do not publish another reader's result as though this association
         // observed it. Existing Report/MMS Read evidence is always reused.
         return candidates.Where(target =>
@@ -156,7 +190,7 @@ public static class IedBrowserReadPlan
         if (fc == "MX" && (reference.EndsWith(".mag.f", StringComparison.Ordinal) ||
                             reference.EndsWith(".instMag.f", StringComparison.Ordinal)))
             return 1;
-        if (fc is "ST" or "MX" &&
+        if ((fc is "ST" or "MX") &&
             (reference.EndsWith(".q", StringComparison.Ordinal) ||
              reference.EndsWith(".t", StringComparison.Ordinal)))
             return 2;
