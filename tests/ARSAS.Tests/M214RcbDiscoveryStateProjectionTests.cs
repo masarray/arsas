@@ -28,19 +28,18 @@ public sealed class M214RcbDiscoveryStateProjectionTests
             property => property.Property == field);
 
     [Fact]
-    public void DiscoveryValuesAppearAsHistorical_NotAsCurrentReadOnlyCheck()
+    public void DiscoveryOnlyValuesNeverMasqueradeAsCurrentRcbState()
     {
         var evidence = RcbInspectionEvidence.FromDiscovery(Discovery(), null);
-        foreach (var (name, value) in new[]
+        foreach (var name in new[]
         {
-            ("Enabled / RptEna", "true"),
-            ("Reservation", "false"),
-            ("Reserve time (s)", "0")
+            "Enabled / RptEna", "Reservation", "Reserve time (s)"
         })
         {
             var field = Property(evidence, true, name);
-            Assert.Equal(value, field.Value);
-            Assert.Contains("historical", field.Source, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("Not verified", field.Value);
+            Assert.Contains("exact read-only RCB check", field.Source,
+                StringComparison.OrdinalIgnoreCase);
         }
         Assert.Contains("no current MMS state check", evidence.Summary(true));
     }
@@ -54,8 +53,8 @@ public sealed class M214RcbDiscoveryStateProjectionTests
         Assert.Equal("—", Property(saved, false, "Reserve time (s)").Value);
 
         var fromScl = RcbInspectionEvidence.FromSource("Rpt01", null);
-        Assert.Equal("—", Property(fromScl, true, "Enabled / RptEna").Value);
-        Assert.Equal("—", Property(fromScl, true, "Reservation").Value);
+        Assert.Equal("Not verified", Property(fromScl, true, "Enabled / RptEna").Value);
+        Assert.Equal("Not verified", Property(fromScl, true, "Reservation").Value);
     }
 
     [Fact]
@@ -63,9 +62,26 @@ public sealed class M214RcbDiscoveryStateProjectionTests
     {
         var evidence = RcbInspectionEvidence.FromDiscovery(
             Discovery("Unknown", "Not read", "—"), null);
-        Assert.Equal("—", Property(evidence, true, "Enabled / RptEna").Value);
-        Assert.Equal("—", Property(evidence, true, "Reservation").Value);
-        Assert.Equal("—", Property(evidence, true, "Reserve time (s)").Value);
+        Assert.Equal("Not verified", Property(evidence, true, "Enabled / RptEna").Value);
+        Assert.Equal("Not verified", Property(evidence, true, "Reservation").Value);
+        Assert.Equal("Not verified", Property(evidence, true, "Reserve time (s)").Value);
+    }
+
+    [Fact]
+    public void PreActivationFalseCannotOverwriteRcbStateAfterSessionStarts()
+    {
+        var model = RcbInspectionEvidence.FromDiscovery(
+            Discovery("false", "false", "0"), null);
+        Assert.Equal("Not verified", Property(model, true, "Enabled / RptEna").Value);
+        // The actual RptEna might have been enabled by the monitor. Only a
+        // fresh exact read-only MMS inspection may make a true/false claim.
+        var checkedState = RcbInspectionEvidence.FromDiscovery(
+            Discovery("false", "false", "0"),
+            new MmsRcbAvailabilitySnapshot { EnabledState = "true" });
+        var field = Property(checkedState, true, "Enabled / RptEna");
+        Assert.Equal("true", field.Value);
+        Assert.Equal("Read-only MMS availability snapshot", field.Source);
+        Assert.Equal("—", Property(checkedState, false, "Enabled / RptEna").Value);
     }
 
     [Fact]
