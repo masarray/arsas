@@ -19,7 +19,7 @@ public sealed class M217PStructuredSgReadTests
     {
         var type = Type("", "structure",
             Type("InMagTyp", "structure", Type("setVal")),
-            Type("PIOCEna", "structure", Type("setVal")),
+            Type("PIOCEna", "structure", Type("setVal", "boolean")),
             Type("StrVal", "structure", Type("setMag")));
         var wire = MmsDataValue.Structure([
             MmsDataValue.Structure([MmsDataValue.Integer(2)]),
@@ -43,7 +43,7 @@ public sealed class M217PStructuredSgReadTests
     [Fact]
     public void StructureSchemaMismatchesAndAmbiguousDuplicatePathsFailClosed()
     {
-        var type = Type("", "structure", Type("PIOCEna", "structure", Type("setVal")));
+        var type = Type("", "structure", Type("PIOCEna", "structure", Type("setVal", "boolean")));
         var wire = MmsDataValue.Structure([MmsDataValue.Structure(
             [MmsDataValue.Boolean(true), MmsDataValue.Integer(0)])]);
         Assert.Empty(IedBrowserSgRootProjection.Project(
@@ -58,9 +58,20 @@ public sealed class M217PStructuredSgReadTests
     }
 
     [Fact]
+    public void MatchingPositionButWrongWireScalarTypeCannotPublish()
+    {
+        var schema = Type("", "structure",
+            Type("PIOCEna", "structure", Type("setVal", "integer")));
+        var wire = MmsDataValue.Structure([
+            MmsDataValue.Structure([MmsDataValue.Boolean(true)])]);
+        Assert.Empty(IedBrowserSgRootProjection.Project(
+            Root, schema, wire, [Target("PIOCEna.setVal")]));
+    }
+
+    [Fact]
     public void SgProjectionIsOnlyEphemeralReadResultAndAssociationFenceStillRequired()
     {
-        var type = Type("", "structure", Type("PIOCEna", "structure", Type("setVal")));
+        var type = Type("", "structure", Type("PIOCEna", "structure", Type("setVal", "boolean")));
         var wire = MmsDataValue.Structure([MmsDataValue.Structure([MmsDataValue.Boolean(true)])]);
         var result = Assert.Single(IedBrowserSgRootProjection.Project(
             Root, type, wire, [Target("PIOCEna.setVal")]));

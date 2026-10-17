@@ -71,7 +71,8 @@ public static class IedBrowserSgRootProjection
             // IEC SG array values need indexed schema identity and are not
             // flattened into imaginary scalar targets.
             if (value.Kind is MmsDataKind.Array or MmsDataKind.Unknown ||
-                schema.Children.Count != 0 || path.Length == 0)
+                schema.Children.Count != 0 || path.Length == 0 ||
+                !IsMatchingPrimitiveType(schema.MmsType, value.Kind))
                 return;
             var canonical = prefix + "." + path;
             var key = canonical + "|SG";
@@ -86,4 +87,20 @@ public static class IedBrowserSgRootProjection
         Walk(wireType, wireData, "", 0);
         return output;
     }
+
+    private static bool IsMatchingPrimitiveType(string mmsType, MmsDataKind kind)
+        => mmsType.Trim().ToLowerInvariant() switch
+        {
+            "boolean" => kind == MmsDataKind.Boolean,
+            "integer" => kind is MmsDataKind.Integer or MmsDataKind.Unsigned,
+            "unsigned" => kind is MmsDataKind.Unsigned or MmsDataKind.Integer,
+            "floating-point" => kind == MmsDataKind.FloatingPoint,
+            "visible-string" => kind is MmsDataKind.VisibleString or MmsDataKind.MmsString,
+            "mms-string" => kind is MmsDataKind.MmsString or MmsDataKind.VisibleString,
+            "bit-string" => kind == MmsDataKind.BitString,
+            "utc-time" => kind == MmsDataKind.UtcTime,
+            "octet-string" => kind == MmsDataKind.OctetString,
+            "binary-time" => kind == MmsDataKind.BinaryTime,
+            _ => false
+        };
 }
