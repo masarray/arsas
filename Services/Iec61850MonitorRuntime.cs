@@ -121,12 +121,24 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     /// association and a single sequential request lane. No report subscription,
     /// GI, DataSet modification, control write or background verification polling.
     /// </summary>
-    public async Task<int> ReadBrowserValuesAsync(
+    public Task<int> ReadBrowserValuesAsync(
         Iec61850MonitorDevice device,
         IReadOnlyList<IedBrowserReadTarget> targets,
         IProgress<IedBrowserReadResult> values,
         IProgress<IedBrowserReadProgress> progress,
         CancellationToken cancellationToken)
+        => ReadBrowserValuesAsync(device, targets, values, progress,
+            cancellationToken, onAttempt: null);
+
+    // One producer-side attempt callback is used only by finite initial
+    // hydration. No WPF scheduling, new transport, or extra Read call.
+    private async Task<int> ReadBrowserValuesAsync(
+        Iec61850MonitorDevice device,
+        IReadOnlyList<IedBrowserReadTarget> targets,
+        IProgress<IedBrowserReadResult> values,
+        IProgress<IedBrowserReadProgress> progress,
+        CancellationToken cancellationToken,
+        Action<IedBrowserReadTarget>? onAttempt)
     {
         ArgumentNullException.ThrowIfNull(device);
         if (!_sessions.TryGetValue(device.DeviceId, out var session) ||
@@ -141,6 +153,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         {
             cancellationToken.ThrowIfCancellationRequested();
             var target = targets[index];
+            onAttempt?.Invoke(target);
             try
             {
                 using var singleRead = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -201,6 +214,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         var plan = IedBrowserReadPlan.BuildInitialPriority(
             model, device.LiveValues, InitialHydrationMaxTargets);
         if (plan.Count == 0) return;
+        static string TargetKey(IedBrowserReadTarget target) =>
+            IedBrowserLiveValues.CanonicalReference(target.Reference) + "|" +
+            target.FunctionalConstraint.Trim().ToUpperInvariant();
+        var attemptedTargets = new HashSet<string>(StringComparer.Ordinal);
 
         // This existing failure-only type is bound to the accepted live model
         // instead of the mutable UI Signals collection, which is rebuilt after
@@ -215,7 +232,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         {
             await ReadBrowserValuesAsync(device, plan, inbox,
                 new Progress<IedBrowserReadProgress>(static _ => { }),
-                budget.Token).ConfigureAwait(false);
+                budget.Token,
+                target => attemptedTargets.Add(TargetKey(target))).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -229,9 +247,6 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         var published = 0;
         var failed = 0;
         var completedTargets = new HashSet<string>(StringComparer.Ordinal);
-        static string TargetKey(IedBrowserReadTarget target) =>
-            IedBrowserLiveValues.CanonicalReference(target.Reference) + "|" +
-            target.FunctionalConstraint.Trim().ToUpperInvariant();
         var completed = inbox.Drain(result =>
         {
             completedTargets.Add(TargetKey(result.Target));
@@ -262,17 +277,30 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         // receive even one wire attempt. Never mislabel those as a rejected
         // MMS service; retain only bounded, association-fenced absence evidence.
         var deferred = 0;
+        var interrupted = 0;
         foreach (var target in plan)
         {
-            if (completedTargets.Contains(TargetKey(target))) continue;
-            failures.RecordDeferred(target, exhausted
-                ? "Not attempted: initial 10-second MMS Read budget exhausted. Use Read DO/DataSet for an explicit follow-up."
-                : "Not attempted: initial MMS Read sequence ended before this target. Use Read DO/DataSet for an explicit follow-up.");
-            deferred++;
+            var key = TargetKey(target);
+            if (completedTargets.Contains(key)) continue;
+            if (attemptedTargets.Contains(key))
+            {
+                // The wire request may already exist. Cancellation is NOT
+                // proof of NotSent; do not claim this leaf was unattempted.
+                failures.RecordInterrupted(target,
+                    "MMS Read started without a terminal scalar result before cancellation/budget. Wire outcome unknown; verify the live IED and reconnect if needed.");
+                interrupted++;
+            }
+            else
+            {
+                failures.RecordDeferred(target, exhausted
+                    ? "Not attempted: initial 10-second MMS Read budget exhausted. Use Read DO/DataSet for an explicit follow-up."
+                    : "Not attempted: initial MMS Read sequence ended before this target. Use Read DO/DataSet for an explicit follow-up.");
+                deferred++;
+            }
         }
         Log("INFO", device.Name,
             $"Bounded priority initial MMS evidence: planned={plan.Count}, " +
-            $"completed={completed}, published={published}, failed={failed}, deferred={deferred}, " +
+            $"completed={completed}, published={published}, failed={failed}, interrupted={interrupted}, deferred={deferred}, " +
             $"budget={InitialHydrationTotalBudget.TotalSeconds:0}s, exhausted={exhausted}, " +
             $"association={association}; no implicit Read All or RCB/control activity.");
     }
