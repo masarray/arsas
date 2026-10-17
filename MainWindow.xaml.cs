@@ -1410,16 +1410,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void CommandPanel_Expanded(object sender, RoutedEventArgs e)
     {
-        // The command grid occupies a star-sized panel rather than retaining
-        // a fixed 260px five-row viewport when the operator opens the dock.
-        ExplorerCommandDockRow.Height = new GridLength(1, GridUnitType.Star);
+        // Compact for a handful of verified controls; grow with the window
+        // when there really are more than five actionable control objects.
+        ResizeCommandDockForVerifiedControls();
         if (SelectedDevice != null)
             await RefreshControlValuesAsync(SelectedDevice, force: true);
     }
 
     private void CommandPanel_Collapsed(object sender, RoutedEventArgs e)
+        => ResizeCommandDockForVerifiedControls();
+
+    private void ResizeCommandDockForVerifiedControls()
     {
-        ExplorerCommandDockRow.Height = GridLength.Auto;
+        if (ExplorerCommandDockRow is null) return;
+        ExplorerCommandDockRow.Height = CommandPanelExpander?.IsExpanded == true &&
+            (SelectedDevice?.CommandSignals.Count ?? 0) > 5
+            ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
     }
 
     private async void RefreshCommandValues_Click(object sender, RoutedEventArgs e)
@@ -1496,6 +1502,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         device.RefreshCommandSignalProjection();
         RebuildControlFeedbackIndex(device);
+        if (ReferenceEquals(SelectedDevice, device))
+            ResizeCommandDockForVerifiedControls();
         TryAutoExpandCommandPanelOnce(device);
         SetStatus($"{device.Name}: refreshed {candidates.Length} control value(s).");
     }
