@@ -815,9 +815,13 @@ public partial class MainWindow
             // operator formatter only when the current model declares DPC.
             // No name-only inference and no mutation of raw report evidence.
             if (row.EvidenceField.Length == 0)
+            {
                 display = IedBrowserDoublePointPresentation.Format(
                     display, observedReference, row.ValueReference,
                     row.FunctionalConstraint, _iedBrowserValueSchemaIndex);
+                display = IedBrowserStandardStatusPresentation.Format(
+                    observedReference, row.FunctionalConstraint, display);
+            }
             if (row.IsEngineeringValue && row.EvidenceField.Length == 0)
                 display = IedBrowserEngineeringValuePresentation.Format(
                     display, IedBrowserEngineeringValuePresentation.ResolveUnit(

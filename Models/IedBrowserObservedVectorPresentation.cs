@@ -70,7 +70,7 @@ public static class IedBrowserObservedVectorPresentation
                 {
                     // The field is independently observed, not a phasor angle
                     // pair. Keep the reason in provenance, not in Value cells.
-                    text += (text.Length == 0 ? "" : "; ") + "angle " + rendered;
+                    text += (text.Length == 0 ? "" : "; ") + "∠ (independent) " + rendered;
                     unpaired.Add(part.Label + ": " + (hasMag
                         ? "angle not paired with magnitude"
                         : "magnitude not observed"));
