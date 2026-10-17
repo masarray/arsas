@@ -93,4 +93,54 @@ public sealed class M217MFocusedAdmissionBehaviorTests
         ledger.BeginAssociation();
         Assert.False(ledger.TryGet(owner + ".units.SIUnit", "CF", out _));
     }
+    [Fact]
+    public void DataModelDoAndDaPagesCanAutoReadExactVerifiedLeafAndCf()
+    {
+        const string owner = "GE650/MMXU1.Hz";
+        LiveIedDataAttributeModel Attr(string relative, string fc) => new()
+        {
+            ObjectReference = owner, AttributePath = "Hz." + relative,
+            FunctionalConstraint = fc,
+            MmsReference = "GE650/MMXU1$" + fc + "$Hz$" +
+                relative.Replace('.', '$'),
+            SclBType = "Float32"
+        };
+        var magnitude = Attr("mag.f", "MX");
+        var si = Attr("units.SIUnit", "CF");
+        var obj = new LiveIedDataObjectModel
+        {
+            Name = "Hz", Reference = owner,
+            Attributes = [magnitude, si, Attr("units.multiplier", "CF")]
+        };
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel
+            {
+                MmsDomain = "GE650",
+                LogicalNodes = [new LiveIedLogicalNodeModel
+                {
+                    Name = "MMXU1", DataObjects = [obj]
+                }]
+            }]
+        };
+        var ledger = new IedBrowserLiveValues();
+        var association = ledger.BeginAssociation();
+        var doPage = new IedBrowserTreeRow("model/do/" + owner,
+            "Hz", "DO", 3, obj);
+        var all = IedBrowserReadPlan.BuildFocused(model, doPage, ledger);
+        Assert.Equal(3, all.Count);
+        Assert.Contains(all, t => t.FunctionalConstraint == "CF" &&
+            t.Reference.EndsWith("$units$multiplier", StringComparison.Ordinal));
+        var daPage = new IedBrowserTreeRow("model/da/" + si.MmsReference,
+            "SIUnit", "DA", 4, si);
+        var selected = IedBrowserReadPlan.BuildFocused(model, daPage, ledger);
+        Assert.Single(selected);
+        Assert.Equal(si.MmsReference, selected[0].Reference);
+        Assert.True(ledger.PublishForAssociation(association, si.MmsReference,
+            "CF", "33", "", "", "MMS Read"));
+        Assert.Empty(IedBrowserReadPlan.BuildFocused(model, daPage, ledger));
+        Assert.Equal(2, IedBrowserReadPlan.BuildFocused(
+            model, doPage, ledger).Count);
+    }
+
 }

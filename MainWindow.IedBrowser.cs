@@ -333,7 +333,7 @@ public partial class MainWindow
             !_iedBrowserAutoReadAdmission.TryStart(device.DeviceId,
                 device.LiveValues.Association, automaticKey,
                 currentPage!.Kind == "SGCB" ? 3 :
-                currentPage.Kind == "LN" ? 2 : 1))
+                currentPage.Kind is "LN" or "DO" ? 2 : 1))
             return;
 
         // A cached-model connection can replace the catalog. Bind only after
@@ -1603,6 +1603,15 @@ public partial class MainWindow
     {
         if (sender is not Button { Tag: IedBrowserDetailRow detail } || !detail.HasChildren)
             return;
+        // Expand-arrow navigation must acquire the same exact DO as row click.
+        if (!string.IsNullOrEmpty(detail.ReadObjectReference) &&
+            _iedBrowserNavigation.Current?.Payload is LiveIedLogicalNodeModel &&
+            _iedBrowserNavigation.Current is { } lnPage)
+        {
+            _iedBrowserSelectedDoReference = detail.ReadObjectReference;
+            RefreshIedBrowserReadButtons();
+            QueueIedBrowserFocusedRead(lnPage, detail.ReadObjectReference);
+        }
         ToggleIedBrowserDetails(detail);
         e.Handled = true;
     }
@@ -1697,13 +1706,14 @@ public partial class MainWindow
     {
         if (SelectedDevice is not { IsConnected: true, IsDemo: false } device ||
             device.LiveDiscoveryModel is null ||
-            row.Kind is not ("SGCB" or "LN" or "DataSet") ||
+            row.Kind is not ("SGCB" or "LN" or "DO" or "DA" or "DataSet") ||
             row.Kind == "LN" && !row.Key.StartsWith("model/ln/", StringComparison.Ordinal))
             return;
         var association = device.LiveValues.Association;
         var selectedDo = row.Kind == "LN" ? selectedDoReference : null;
         var key = IedBrowserFocusedAdmission.PageKey(row.Key, selectedDo);
-        var maxAttempts = row.Kind == "SGCB" ? 3 : row.Kind == "LN" ? 2 : 1;
+        var maxAttempts = row.Kind == "SGCB" ? 3 :
+            row.Kind is "LN" or "DO" ? 2 : 1;
         if (!_iedBrowserAutoReadAdmission.CanStart(
                 device.DeviceId, association, key, maxAttempts))
             return;

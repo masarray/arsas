@@ -129,7 +129,7 @@ public static class IedBrowserReadPlan
     {
         if (liveModel is null || page is null || ledger.IsOffline || budget <= 0)
             return [];
-        if (page.Kind is not ("LN" or "SGCB" or "DataSet"))
+        if (page.Kind is not ("LN" or "DO" or "DA" or "SGCB" or "DataSet"))
             return [];
         // A DataSet is exactly its declared FCDA inventory; CF engineering
         // metadata is a Data Model attribute, NOT an invented DataSet member.
