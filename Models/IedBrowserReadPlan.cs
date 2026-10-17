@@ -207,7 +207,7 @@ public static class IedBrowserReadPlan
         // Six values share the SAME existing 32-target/10-second envelope,
         // not an extra background poll or MMS association.
         const int initialAnalogSeedLimit = 6;
-        var analog = verifiedLiveModel.LogicalDevices
+        var analogSeeds = verifiedLiveModel.LogicalDevices
             .SelectMany(ld => ld.LogicalNodes)
             .SelectMany(ln => ln.DataObjects)
             .Where(obj =>
@@ -234,8 +234,6 @@ public static class IedBrowserReadPlan
                 + "|MX", StringComparer.Ordinal)
             .Where(group => group.Count() == 1)
             .Select(group => group.First())
-            .Where(attr => !ledger.TryGet(attr.MmsReference, "MX", out var observed) ||
-                observed.IsStale || observed.Association != association)
             // Fill a small coherent phasor group per owner rather than
             // selecting only phase-A from dozens of unrelated MMXU nodes.
             .OrderBy(attr => IedBrowserLiveValues.CanonicalReference(
@@ -244,18 +242,25 @@ public static class IedBrowserReadPlan
                 IedBrowserLiveValues.CanonicalReference(attr.MmsReference)))
             .ThenBy(attr => attr.MmsReference, StringComparer.Ordinal)
             .Take(initialAnalogSeedLimit)
+            .ToArray();
+        // Selecting the canonical six owners must not depend on whether a
+        // Report has already supplied a magnitude. A received magnitude may
+        // still need its independently declared q/t and angle Read evidence.
+        var analog = analogSeeds
+            .Where(attr => !ledger.TryGet(attr.MmsReference, "MX", out var observed) ||
+                           observed.IsStale || observed.Association != association)
             .Select(attr => new IedBrowserReadTarget(attr.MmsReference, "MX",
-                string.IsNullOrWhiteSpace(attr.SclBType) ?
-                    attr.MmsType : attr.SclBType))
+                string.IsNullOrWhiteSpace(attr.SclBType)
+                    ? attr.MmsType : attr.SclBType))
             .ToArray();
         // A bounded set of exact companions makes the phasor seed useful
         // without presenting missing angle/quality/timestamp as "exposed"
         // evidence. Unlike SCL presentation, these must be real live MMS
         // attributes covered by the exact live DataSet and FC.
         const int initialAnalogCompanionLimit = 9;
-        var companionOrder = analog
+        var companionOrder = analogSeeds
             .SelectMany(seed => AnalogCompanionReferences(
-                IedBrowserLiveValues.CanonicalReference(seed.Reference)))
+                IedBrowserLiveValues.CanonicalReference(seed.MmsReference)))
             .Distinct(StringComparer.Ordinal)
             .Select((reference, index) => (reference, index))
             .ToDictionary(x => x.reference, x => x.index, StringComparer.Ordinal);
