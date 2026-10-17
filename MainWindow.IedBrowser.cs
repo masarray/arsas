@@ -11,9 +11,10 @@ using ArIED61850Tester.Services;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Model-first, read-only IEC 61850 browser. Refreshing the browser is purely local.
-/// An explicit button is the only way to request a separate read-only MMS RCB check.
-/// No discovery, report activation, write, reservation, or reconnect on navigation.
+/// Model-first, read-only IEC 61850 browser. Refreshing is purely local.
+/// A focused live page may acquire one finite, 12-target MMS value snapshot;
+/// RCB inspection remains explicit. Navigation never writes, activates RCBs,
+/// starts GI, initiates discovery or silently performs a Read All.
 /// </summary>
 public partial class MainWindow
 {
@@ -215,7 +216,8 @@ public partial class MainWindow
     private async void IedBrowserReadRcb_Click(object sender, RoutedEventArgs e)
     {
         var device = SelectedDevice;
-        if (device == null || !device.IsConnected || device.IsBusy || _iedBrowserReadOperation != null)
+        if (device == null || !device.IsConnected || device.IsBusy ||
+            _iedBrowserReadOperation != null || _iedBrowserContextReadOperation != null)
             return;
 
         var sourceDevice = device;
@@ -267,7 +269,7 @@ public partial class MainWindow
     {
         var device = SelectedDevice;
         if (device is null || device.IsDemo || device.IsBusy ||
-            _iedBrowserReadOperation is not null)
+            _iedBrowserReadOperation is not null || _iedBrowserContextReadOperation is not null)
             return;
         // A dedicated read-only MMS association is used if monitoring is active.
         // Its bounded reads never interfere with the reporting session.
@@ -520,7 +522,8 @@ public partial class MainWindow
                        device?.SclWorkspace?.DesignModel != null;
         var canReachIED = connected || !string.IsNullOrWhiteSpace(device?.IpAddress);
         var ready = device is { IsBusy: false, IsDemo: false, IsBrowserReading: false } &&
-            hasModel && canReachIED && _iedBrowserReadOperation == null;
+            hasModel && canReachIED && _iedBrowserReadOperation == null &&
+            _iedBrowserContextReadOperation == null;
         // Opening a browsed SCL is always offline-safe. Explicit Read can then
         // open a cached-model MMS association; no background connect or polling.
         var selectedKind = IedBrowserReadPlan.SelectionKind(_iedBrowserNavigation.Current);
@@ -580,7 +583,9 @@ public partial class MainWindow
             IedBrowserReadPageButton.Content = "Read LN";
         IedBrowserReadPageButton.IsEnabled = ready;
         IedBrowserReadAllButton.IsEnabled = ready;
-        IedBrowserCancelReadButton.IsEnabled = _iedBrowserReadOperation != null;
+        IedBrowserReadRcbButton.IsEnabled = ready && connected;
+        IedBrowserCancelReadButton.IsEnabled =
+            _iedBrowserReadOperation != null || _iedBrowserContextReadOperation != null;
     }
 
     private bool TryGetBrowserReadFailure(
@@ -588,6 +593,10 @@ public partial class MainWindow
         out IedBrowserReadAbsenceKind kind)
     {
         if (_iedBrowserReadFailureEvidence?.TryGet(
+                device, row.ValueReference, row.FallbackValueReference,
+                row.FunctionalConstraint, out reason, out kind) == true)
+            return true;
+        if (_iedBrowserContextReadFailures?.TryGet(
                 device, row.ValueReference, row.FallbackValueReference,
                 row.FunctionalConstraint, out reason, out kind) == true)
             return true;
@@ -620,8 +629,9 @@ public partial class MainWindow
         }
         _iedBrowserLastLiveVersion = version;
         _iedBrowserLastCfCanonicalModel = device.LiveCanonicalModel;
-        // No MMS call occurs during navigation or refresh. Exact CF/DC
-        // instance evidence is a labelled discovery snapshot, not a Report.
+        // This repaint never sends MMS. A separate, finite context hydration
+        // task may publish exact MMS Read results into the same ledger.
+        // Exact CF/DC instance snapshots are labelled, never Report.
         var model = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
         var cfEvidence = new IedBrowserCfEvidencePresentation(device.LiveValues,
             model, device.LiveCanonicalModel);
@@ -820,8 +830,12 @@ public partial class MainWindow
             {
                 if (IedBrowserControlStateEvidence.TryReadFailure(
                         device, block, pageKind, field,
-                        _iedBrowserReadFailureEvidence, device.InitialHydrationFailures,
-                        out var failure, out var source, out var failedReference))
+                        _iedBrowserReadFailureEvidence, _iedBrowserContextReadFailures,
+                        out var failure, out var source, out var failedReference) ||
+                    IedBrowserControlStateEvidence.TryReadFailure(
+                        device, block, pageKind, field,
+                        null, device.InitialHydrationFailures,
+                        out failure, out source, out failedReference))
                 {
                     row.Value = "Unavailable";
                     row.ObservationSource = source;
@@ -1230,6 +1244,7 @@ public partial class MainWindow
     private void CancelIedBrowserRead()
     {
         _iedBrowserReadOperation?.Cancel();
+        CancelIedBrowserContextRead();
     }
 
     private void ObserveIedBrowserDevice(Iec61850MonitorDevice? device)
@@ -1289,7 +1304,13 @@ public partial class MainWindow
             _iedBrowserSnapshotLease = null;
         }
         if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
+        {
             RefreshIedBrowser();
+            // Full discovery may have finished while IsBusy was true. The
+            // selected page is already rendered; schedule its first finite
+            // read on the transition to a connected, idle live association.
+            ScheduleIedBrowserContextHydration();
+        }
     }
 
     private void RefreshIedBrowser()
@@ -1511,6 +1532,7 @@ public partial class MainWindow
         {
             _iedBrowserSelectedDoReference = detail.ReadObjectReference;
             RefreshIedBrowserReadButtons(); // expose separate Read DO and Read LN scope
+            ScheduleIedBrowserContextHydration(); // finite, exact DO-on-focus Read
         }
         if (!detail.HasChildren) return;
         ToggleIedBrowserDetails(detail);
@@ -1692,6 +1714,7 @@ public partial class MainWindow
         _iedBrowserLastLiveVersion = -1;
         RefreshIedBrowserVisibleValues();
         RefreshIedBrowserReadButtons();
+        ScheduleIedBrowserContextHydration();
         // Folder entry opens at its first child, regardless of the scroll
         // position in the previously inspected RCB, LN or DataSet.
         if (_iedBrowserDetails.Rows.Count > 0)
