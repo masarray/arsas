@@ -85,6 +85,24 @@ public sealed class M214RcbDiscoveryStateProjectionTests
     }
 
     [Fact]
+    public void AbsentSgcbExplainsUnavailableWithoutInventingActiveSettingGroup()
+    {
+        // C264 IID supplied in physical acceptance declares no SettingControl;
+        // the live ARIEC discovery likewise observed SGCB=0. Absence is
+        // not an empty table that pretends an MMS query was made.
+        var model = new LiveIedModelDiscoveryDocument();
+        var root = Assert.Single(IedBrowserPresentation.Roots(model,
+            Array.Empty<RcbExportRow>()),
+            x => x.Key == "category/settings");
+        var message = Assert.Single(
+            IedBrowserPresentation.Details(root, model, connected: true),
+            row => row.Kind == "Message");
+        Assert.Contains("No SGCB discovered", message.Name);
+        Assert.Contains("no groups or values are inferred", message.Name,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void ExplicitSnapshotWinsOverContradictoryDiscovery()
     {
         var snapshot = new MmsRcbAvailabilitySnapshot
