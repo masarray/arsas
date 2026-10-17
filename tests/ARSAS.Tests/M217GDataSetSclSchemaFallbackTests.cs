@@ -65,13 +65,26 @@ public sealed class M217GDataSetSclSchemaFallbackTests
             Attr("CF", "phsB.units.SIUnit")));
         var children = IedBrowserStructuredDetails.DataSetMemberChildren(
             Member(reference: Owner + ".phsA"), live, 1);
-        Assert.Contains(children, row =>
+        static IEnumerable<IedBrowserDetailRow> Flatten(
+            IEnumerable<IedBrowserDetailRow> rows)
+        {
+            foreach (var row in rows)
+            {
+                yield return row;
+                foreach (var child in Flatten(row.GetChildren()))
+                    yield return child;
+            }
+        }
+        var all = Flatten(children).ToArray();
+        Assert.Contains(all, row =>
             row.FunctionalConstraint == "CF" &&
-            row.ValueReference == Owner + ".phsA.units.SIUnit");
-        Assert.Contains(children, row =>
+            IedBrowserLiveValues.CanonicalReference(row.ValueReference) ==
+                Owner + ".phsA.units.SIUnit");
+        Assert.Contains(all, row =>
             row.FunctionalConstraint == "CF" &&
-            row.ValueReference == Owner + ".phsA.units.multiplier");
-        Assert.DoesNotContain(children, row =>
+            IedBrowserLiveValues.CanonicalReference(row.ValueReference) ==
+                Owner + ".phsA.units.multiplier");
+        Assert.DoesNotContain(all, row =>
             row.ValueReference.Contains(".phsB.units", StringComparison.Ordinal));
         // This only exposes exact IEC metadata. A declaration alone must not
         // fabricate a fresh value; only the association-bound ledger may do so.
