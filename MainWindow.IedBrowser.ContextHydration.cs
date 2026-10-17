@@ -83,6 +83,7 @@ public partial class MainWindow
             _applicationCancellation.Token);
         cts.CancelAfter(IedBrowserContextDeadline);
         _iedBrowserContextReadOperation = cts;
+        RefreshIedBrowserReadButtons(); // disable competing manual read; enable Cancel
         _ = RunIedBrowserContextHydrationAsync(device, model, association,
             epoch, targets, cts);
     }
