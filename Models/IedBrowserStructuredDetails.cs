@@ -111,6 +111,7 @@ public static class IedBrowserStructuredDetails
             IsDataObject = true,
             ReadObjectReference = obj.Reference,
             ScalarComponents = scalarComponents,
+            NameplateDcReferences = IedBrowserNameplatePresentation.BuildReferences(obj),
             PolarPlan = polarPlan,
             PhasePlans = phasePlans,
             ValueReference = hasLeaf ? processLeaf : obj.Reference,
@@ -262,44 +263,9 @@ public static class IedBrowserStructuredDetails
         var result = AttributeRows(candidateAttributes, parent.Name, depth,
             !IedBrowserEngineeringComposite.IsScalarCdc(parent.InferredCdc)).ToList();
 
-        // A report DataSet contains process MX/ST, not necessarily the
-        // associated IEC 61850 CF engineering declaration. Surface only the
-        // EXACT selected member's model-declared units.SIUnit/multiplier as
-        // companion rows; their values remain unobserved until a real CF
-        // read or verified discovery instance provides evidence. Do not
-        // introduce an MX/CF alias or infer a multiplier from display text.
-        if (string.Equals(member.FunctionalConstraint, "MX",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            // The IEC MV/WYE measurement can place Unit on the owning DO
-            // (A.units) while the reported FCDA selects A.phsA. Permit only
-            // the exact member and its verified owning DO, never sibling
-            // phases, related LN names, or another functional constraint.
-            var unitPrefixes = new HashSet<string>(StringComparer.Ordinal)
-            {
-                memberReference + ".units."
-            };
-            var parentReference = IedBrowserLiveValues.CanonicalReference(parent.Reference);
-            if (memberReference == parentReference ||
-                memberReference.StartsWith(parentReference + ".", StringComparison.Ordinal))
-                unitPrefixes.Add(parentReference + ".units.");
-            var units = parent.Attributes.Where(attr =>
-                string.Equals(attr.FunctionalConstraint, "CF",
-                    StringComparison.OrdinalIgnoreCase) &&
-                unitPrefixes.Any(prefix =>
-                    IedBrowserLiveValues.CanonicalReference(attr.MmsReference)
-                        == prefix + "SIUnit" ||
-                    IedBrowserLiveValues.CanonicalReference(attr.MmsReference)
-                        == prefix + "multiplier"))
-                .GroupBy(attr => IedBrowserLiveValues.CanonicalReference(attr.MmsReference),
-                    StringComparer.Ordinal)
-                .Where(group => group.Count() == 1)
-                .Select(group => group.Single())
-                .ToArray();
-            if (units.Length > 0)
-                result.AddRange(AttributeRows(units, parent.Name, depth,
-                    allowVector: false));
-        }
+        // Do not attach units.SIUnit/multiplier [CF] as children of a
+        // DataSet member [MX]. They belong to the canonical Data Model,
+        // and can only be observed there from a verified CF MMS Read.
         return result;
     }
 

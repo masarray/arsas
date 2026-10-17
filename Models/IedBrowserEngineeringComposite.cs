@@ -179,7 +179,7 @@ public static class IedBrowserEngineeringComposite
                 // unless the actual report/read evidence passed CanPair.
                 var independentUnit = IedBrowserEngineeringValuePresentation.ResolveVectorAngleUnit(
                     unitIndex, plan.AngleReference, plan.FunctionalConstraint);
-                text += "; angle " + IedBrowserEngineeringValuePresentation.Format(
+                text += "; ∠ (independent) " + IedBrowserEngineeringValuePresentation.Format(
                     independentAngle.Value, independentUnit);
                 references.Add(plan.AngleReference + "[independent " +
                     plan.FunctionalConstraint + "]");

@@ -149,6 +149,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         if (device.IsMonitoring)
             throw new InvalidOperationException("Live monitor is active. Browser values follow its report stream; stop monitoring for an explicit MMS Read.");
         var succeeded = 0;
+        var sgRootFlight = new IedBrowserSgRootReadFlight(session.Client, targets);
         for (var index = 0; index < targets.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -158,6 +159,15 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             {
                 using var singleRead = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 singleRead.CancelAfter(TimeSpan.FromSeconds(5));
+                var verifiedSg = await sgRootFlight.TryReadAsync(
+                    target, singleRead.Token).ConfigureAwait(false);
+                if (verifiedSg is not null)
+                {
+                    values.Report(verifiedSg);
+                    succeeded++;
+                    progress.Report(new IedBrowserReadProgress(index + 1, targets.Count));
+                    continue;
+                }
                 var raw = await session.Client.ReadValueAsync(
                     target.Reference, target.FunctionalConstraint, target.DataType,
                     singleRead.Token).ConfigureAwait(false);

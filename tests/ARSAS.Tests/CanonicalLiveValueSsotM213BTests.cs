@@ -115,4 +115,50 @@ public sealed class CanonicalLiveValueSsotM213BTests
         Assert.Contains("_canonicalSignalProjections.Remove(deviceId)",monitor);
         Assert.Contains("if (snapshot.IsReportTraffic &&",monitor);
     }
+    [Fact]
+    public void FocusedMmsReadDuringMonitoringFillsExplorerOnlyWhenReportAbsent()
+    {
+        var device = new Iec61850MonitorDevice
+        {
+            IsConnected = true, IsMonitoring = true
+        };
+        var signal = new SignalDefinition
+        {
+            ObjectReference = "GE650/MMXU1.Hz.mag.f",
+            FunctionalConstraint = "MX",
+            DataType = "FLOAT32", Unit = "Hz"
+        };
+        var point = new Iec61850MonitorPoint
+        {
+            DeviceId = device.DeviceId, IecReference = signal.ObjectReference,
+            FunctionalConstraint = "MX", IecDataType = "FLOAT32"
+        };
+        device.Signals.Add(signal);
+        device.Points.Add(point);
+        var index = new IedBrowserReadBindingIndex(device);
+        var association = device.LiveValues.Association;
+        var target = new IedBrowserReadTarget(signal.ObjectReference, "MX", "FLOAT32");
+        var callback = new IedBrowserReadResult(target, "999", "", "", "");
+        Assert.True(device.LiveValues.PublishForAssociation(association,
+            target.Reference, "MX", "49", "", "", "MMS Read"));
+        Assert.Equal(1, index.Apply(callback, device.LiveValues, association));
+        Assert.Equal("49", signal.Value);
+        Assert.Equal("-", point.Value); // no manufactured point event or SOE
+
+        Assert.True(device.LiveValues.PublishForAssociation(association,
+            target.Reference, "MX", "50", "Good", "", "Report"));
+        Assert.Equal(1, index.ProjectReportedSignals(device.LiveValues,
+            association, target.Reference, "MX"));
+        Assert.Equal("50 Hz", signal.Value);
+        Assert.True(device.LiveValues.PublishForAssociation(association,
+            target.Reference, "MX", "60", "", "", "MMS Read"));
+        Assert.Equal(0, index.Apply(callback, device.LiveValues, association));
+        Assert.Equal("50 Hz", signal.Value); // Report remains authoritative
+        Assert.True(device.LiveValues.TryGet(target.Reference, "MX", out var observed));
+        Assert.Equal("Report", observed.Source);
+        device.IsConnected = false;
+        device.IsConnected = true;
+        Assert.Equal(0, index.Apply(callback, device.LiveValues, association));
+    }
+
 }

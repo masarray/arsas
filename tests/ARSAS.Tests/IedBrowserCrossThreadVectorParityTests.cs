@@ -35,9 +35,9 @@ public sealed class IedBrowserCrossThreadVectorParityTests
             "33", "", "t2", "Report"));
         Assert.True(IedBrowserObservedVectorPresentation.TryFormat(
             values, [Component()], Units(), true, out var rendered));
-        Assert.Equal("phsC: 12 kV; angle 33°", rendered.Value);
+        Assert.Equal("phsC: 12 kV; ∠ (independent) 33°", rendered.Value);
         Assert.Contains("not paired with magnitude", rendered.Provenance);
-        Assert.DoesNotContain("∠", rendered.Value);
+        Assert.DoesNotContain(" kV ∠ ", rendered.Value);
         Assert.Contains(Mag, rendered.Provenance);
         Assert.Contains(Ang, rendered.Provenance);
     }
@@ -53,10 +53,10 @@ public sealed class IedBrowserCrossThreadVectorParityTests
             "40", "", "t1", "MMS Read");
         Assert.True(IedBrowserObservedVectorPresentation.TryFormat(
             values, [Component()], Units(), true, out var rendered));
-        Assert.Equal("phsC: 0 kV; angle 40°", rendered.Value);
+        Assert.Equal("phsC: 0 kV; ∠ (independent) 40°", rendered.Value);
         Assert.Contains("not paired with magnitude", rendered.Provenance);
         Assert.Equal("Report + MMS Read", rendered.Source);
-        Assert.DoesNotContain("∠", rendered.Value);
+        Assert.DoesNotContain(" kV ∠ ", rendered.Value);
     }
 
     [Fact]
@@ -81,9 +81,9 @@ public sealed class IedBrowserCrossThreadVectorParityTests
             "17", "", "", "Report");
         Assert.True(IedBrowserObservedVectorPresentation.TryFormat(
             values, [Component()], Units(), true, out var angleOnly));
-        Assert.Equal("phsC: angle 17°", angleOnly.Value);
+        Assert.Equal("phsC: ∠ (independent) 17°", angleOnly.Value);
         Assert.Contains("magnitude not observed", angleOnly.Provenance);
-        Assert.DoesNotContain("∠", angleOnly.Value);
+        Assert.DoesNotContain(" ∠ 17°", angleOnly.Value);
         values.PublishForAssociation(association, Mag, "MX",
             "NaN", "", "", "Report");
         Assert.True(IedBrowserObservedVectorPresentation.TryFormat(
@@ -113,7 +113,7 @@ public sealed class IedBrowserCrossThreadVectorParityTests
         Assert.Contains("phsA: 12 ∠ 17", result.Value);
         Assert.Contains("phsB: 12 ∠ 17", result.Value);
         Assert.Contains("phsC: 12 ∠ 17", result.Value);
-        Assert.Contains("neut: 12; angle 17", result.Value);
+        Assert.Contains("neut: 12; ∠ (independent) 17", result.Value);
         Assert.Contains("neut: angle not paired with magnitude", result.Provenance);
         Assert.DoesNotContain("neut: 12 ∠", result.Value);
         values.MarkOffline();

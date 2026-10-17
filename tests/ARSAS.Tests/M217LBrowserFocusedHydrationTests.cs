@@ -53,7 +53,7 @@ public sealed class M217LBrowserFocusedHydrationTests
     };
 
     [Fact]
-    public void ExactDataSetHydratesDeclaredParentUnitAndMultiplierNotNeighboringPhase()
+    public void DataSetDoesNotInventCfUnitMembersAndDataModelReadsExactCf()
     {
         var model = Model();
         var set = Assert.Single(model.DataSets);
@@ -63,21 +63,33 @@ public sealed class M217LBrowserFocusedHydrationTests
         var association = ledger.BeginAssociation();
 
         var planned = IedBrowserReadPlan.BuildFocused(model, row, ledger);
-        Assert.Contains(planned, x => x.Reference.EndsWith(
+        Assert.All(planned, x => Assert.Equal("MX", x.FunctionalConstraint));
+        var member = Assert.Single(set.Members);
+        var dataSetRows = IedBrowserStructuredDetails.DataSetMemberChildren(
+            member, model, depth: 0);
+        Assert.DoesNotContain(dataSetRows,
+            x => x.Name is "units" or "SIUnit" or "multiplier");
+
+        // Same exact live schema, but the Data Model owns the CF leaves.
+        var ln = Assert.Single(Assert.Single(model.LogicalDevices).LogicalNodes);
+        var lnPage = new IedBrowserTreeRow("model/ln/Application/MMXU1",
+            "MMXU1", "LN", 4, ln);
+        var focused = IedBrowserReadPlan.BuildFocused(
+            model, lnPage, ledger, selectedDoReference: Owner);
+        Assert.Contains(focused, x => x.Reference.EndsWith(
             "$CF$A$units$SIUnit", StringComparison.Ordinal));
-        Assert.Contains(planned, x => x.Reference.EndsWith(
+        Assert.Contains(focused, x => x.Reference.EndsWith(
             "$CF$A$units$multiplier", StringComparison.Ordinal));
-        Assert.DoesNotContain(planned, x => x.Reference.EndsWith(
-            "$CF$A$phsB$units$SIUnit", StringComparison.Ordinal));
-        Assert.False(ledger.TryGet(Owner + ".units.SIUnit", "CF", out _));
 
         Assert.True(ledger.PublishForAssociation(association, Owner + ".units.SIUnit",
             "CF", "3", "", "", "MMS Read"));
-        var afterRead = IedBrowserReadPlan.BuildFocused(model, row, ledger);
+        var afterRead = IedBrowserReadPlan.BuildFocused(
+            model, lnPage, ledger, selectedDoReference: Owner);
         Assert.DoesNotContain(afterRead, x => x.Reference.EndsWith(
             "$CF$A$units$SIUnit", StringComparison.Ordinal));
         ledger.BeginAssociation();
-        Assert.Contains(IedBrowserReadPlan.BuildFocused(model, row, ledger),
+        Assert.Contains(IedBrowserReadPlan.BuildFocused(
+            model, lnPage, ledger, selectedDoReference: Owner),
             x => x.Reference.EndsWith("$CF$A$units$SIUnit", StringComparison.Ordinal));
     }
 

@@ -223,6 +223,10 @@ public sealed record IedBrowserDetailRow(
     // These fields are independent, not a synthetic IEC scalar or phasor.
     public IReadOnlyList<IedBrowserScalarComponent> ScalarComponents { get; init; } =
         Array.Empty<IedBrowserScalarComponent>();
+    // Model-proven, immutable metadata ONLY: priority-ordered exact FC=DC
+    // leaves of this Nameplate object. No values are retained outside SSOT.
+    public IReadOnlyList<string> NameplateDcReferences { get; init; } =
+        Array.Empty<string>();
     // A typed child of a received q/t field; never treat the entire parent
     // value text as this individual Boolean/time-quality bit.
     public string EvidenceField { get; init; } = "";

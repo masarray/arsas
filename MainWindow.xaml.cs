@@ -1423,9 +1423,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void ResizeCommandDockForVerifiedControls()
     {
         if (ExplorerCommandDockRow is null) return;
-        ExplorerCommandDockRow.Height = CommandPanelExpander?.IsExpanded == true &&
-            (SelectedDevice?.CommandSignals.Count ?? 0) > 5
-            ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+        // The Command Dock is reparented into the shared shell by P0.
+        // Its previous Explorer tab row is now EMPTY. Giving that row Star
+        // height for >5 controls silently steals half the Live Values viewport.
+        ExplorerCommandDockRow.Height = ExplorerCommandDockLayoutPolicy.LegacyRowHeight(
+            dockReparented: _persistentWorkbench is not null,
+            commandExpanded: CommandPanelExpander?.IsExpanded == true,
+            controlCount: SelectedDevice?.CommandSignals.Count ?? 0);
     }
 
     private async void RefreshCommandValues_Click(object sender, RoutedEventArgs e)
