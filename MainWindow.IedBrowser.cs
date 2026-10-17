@@ -583,6 +583,7 @@ public partial class MainWindow
             IedBrowserReadPageButton.Content = "Read LN";
         IedBrowserReadPageButton.IsEnabled = ready;
         IedBrowserReadAllButton.IsEnabled = ready;
+        IedBrowserReadRcbButton.IsEnabled = ready && connected;
         IedBrowserCancelReadButton.IsEnabled =
             _iedBrowserReadOperation != null || _iedBrowserContextReadOperation != null;
     }
