@@ -941,6 +941,16 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             }
             throw;
         }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested &&
+                                                  !session.ControlLifetimeCancellation.IsCancellationRequested)
+        {
+            // Cancellation initiated inside the native operation is not
+            // positive NotSent evidence; the engine may have issued a Write.
+            Log("ERROR", session.Device.Name,
+                $"CTL_MODEL_NATIVE_CANCEL_OUTCOME_UNKNOWN: {signal.ObjectReference}; native task canceled without a terminal wire result; association quarantined.");
+            throw new TimeoutException(
+                "Native ctlModel Write canceled without a proven wire outcome. Verify actual IED state and reconnect.");
+        }
         finally
         {
             if (nativeFlight is { IsCompleted: false })
@@ -1061,6 +1071,16 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     $"CONTROL_CANCEL_OUTCOME_UNKNOWN: {request.Signal.ObjectReference}; native flight not completed; association quarantined.");
             }
             throw;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested &&
+                                                  !session.ControlLifetimeCancellation.IsCancellationRequested)
+        {
+            // Cancellation initiated inside the native operation is not
+            // positive NotSent evidence; the engine may have issued a Write.
+            Log("ERROR", session.Device.Name,
+                $"CONTROL_NATIVE_CANCEL_OUTCOME_UNKNOWN: {request.Signal.ObjectReference}; native task canceled without a terminal wire result; association quarantined.");
+            throw new TimeoutException(
+                "Native control canceled without a proven wire outcome. Verify actual IED state and reconnect.");
         }
         finally
         {
