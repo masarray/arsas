@@ -911,8 +911,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 "explicit commissioning confirmed; one CF Write maximum, never Operate.");
             nativeFlight = session.Client.ConfigureControlModelAsync(
                 signal, expected, target, nativeCancellation.Token);
-            var result = await nativeFlight.WaitAsync(ControlFlightDeadline, cancellationToken)
-                .ConfigureAwait(false);
+            var result = await Iec61850ControlFlightAdmission.WaitForNativeAsync(
+                nativeFlight, ControlFlightDeadline, cancellationToken,
+                () => Iec61850ControlFlightAdmission.Quarantine(ref session.ControlFlightQuarantined),
+                nativeCancellation.Cancel).ConfigureAwait(false);
             if (!_sessions.TryGetValue(deviceId, out var current) ||
                 !ReferenceEquals(current, session) ||
                 session.ControlLifetimeCancellation.IsCancellationRequested)
@@ -925,8 +927,6 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         }
         catch (TimeoutException)
         {
-            Iec61850ControlFlightAdmission.Quarantine(ref session.ControlFlightQuarantined);
-            nativeCancellation.Cancel();
             Log("ERROR", session.Device.Name,
                 $"CTL_MODEL_OUTCOME_UNKNOWN_TIMEOUT: {signal.ObjectReference}; deadline={ControlFlightDeadline.TotalSeconds:0}s; nativeCompleted={nativeFlight?.IsCompleted}; no other MMS control/write on this association.");
             throw new TimeoutException(
@@ -936,8 +936,6 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         {
             if (nativeFlight is { IsCompleted: false })
             {
-                Iec61850ControlFlightAdmission.Quarantine(ref session.ControlFlightQuarantined);
-                nativeCancellation.Cancel();
                 Log("WARN", session.Device.Name,
                     $"CTL_MODEL_CANCEL_OUTCOME_UNKNOWN: {signal.ObjectReference}; native Write unresolved; association quarantined.");
             }
@@ -1043,13 +1041,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             Log("INFO", session.Device.Name,
                 $"Control execution requested: {request.Signal.ObjectReference} value={request.ValueText}; test={request.TestMode}; interlock={request.InterlockCheck}; synchro={request.SynchroCheck}; origin={request.OriginCategory}/{request.Originator}; IED acceptance is determined only from native MMS wire evidence.");
             nativeFlight = session.Client.ExecuteControlAsync(request, nativeCancellation.Token);
-            result = await nativeFlight.WaitAsync(ControlFlightDeadline, cancellationToken)
-                .ConfigureAwait(false);
+            result = await Iec61850ControlFlightAdmission.WaitForNativeAsync(
+                nativeFlight, ControlFlightDeadline, cancellationToken,
+                () => Iec61850ControlFlightAdmission.Quarantine(ref session.ControlFlightQuarantined),
+                nativeCancellation.Cancel).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
-            Iec61850ControlFlightAdmission.Quarantine(ref session.ControlFlightQuarantined);
-            nativeCancellation.Cancel();
             Log("ERROR", session.Device.Name,
                 $"CONTROL_OUTCOME_UNKNOWN_TIMEOUT: {request.Signal.ObjectReference}; deadline={ControlFlightDeadline.TotalSeconds:0}s; nativeCompleted={nativeFlight?.IsCompleted}; no further commands on this MMS association. Actual IED position must be checked before reconnect.");
             throw new TimeoutException(
@@ -1059,8 +1057,6 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         {
             if (nativeFlight is { IsCompleted: false })
             {
-                Iec61850ControlFlightAdmission.Quarantine(ref session.ControlFlightQuarantined);
-                nativeCancellation.Cancel();
                 Log("WARN", session.Device.Name,
                     $"CONTROL_CANCEL_OUTCOME_UNKNOWN: {request.Signal.ObjectReference}; native flight not completed; association quarantined.");
             }
