@@ -57,6 +57,54 @@ public sealed class M217GDataSetSclSchemaFallbackTests
         => new() { Reference = reference, FunctionalConstraint = fc };
 
     [Fact]
+    public void MeasurementMemberShowsOnlyExactDeclaredCfUnitAndMultiplierCompanions()
+    {
+        var live = Model(Obj(Attr("MX", "phsA.cVal.mag.f"),
+            Attr("MX", "phsA.q"), Attr("CF", "phsA.units.SIUnit"),
+            Attr("CF", "phsA.units.multiplier"),
+            Attr("CF", "phsB.units.SIUnit")));
+        var children = IedBrowserStructuredDetails.DataSetMemberChildren(
+            Member(reference: Owner + ".phsA"), live, 1);
+        Assert.Contains(children, row =>
+            row.FunctionalConstraint == "CF" &&
+            row.ValueReference == Owner + ".phsA.units.SIUnit");
+        Assert.Contains(children, row =>
+            row.FunctionalConstraint == "CF" &&
+            row.ValueReference == Owner + ".phsA.units.multiplier");
+        Assert.DoesNotContain(children, row =>
+            row.ValueReference.Contains(".phsB.units", StringComparison.Ordinal));
+        // This only exposes exact IEC metadata. A declaration alone must not
+        // fabricate a fresh value; only the association-bound ledger may do so.
+        var ledger = new IedBrowserLiveValues();
+        Assert.False(ledger.TryGet(Owner + ".phsA.units.SIUnit", "CF", out _));
+        var association = ledger.BeginAssociation();
+        Assert.True(ledger.PublishForAssociation(association,
+            Owner + ".phsA.units.SIUnit", "CF", "3", "", "", "MMS Read"));
+        Assert.True(ledger.TryGet(Owner + ".phsA.units.SIUnit", "CF", out _));
+        Assert.False(ledger.TryGet(Owner + ".phsA.units.multiplier", "CF", out _));
+    }
+
+    [Fact]
+    public void BrowserFocusedHydrationIsBoundedAndReusesExistingReadSafetyPath()
+    {
+        DirectoryInfo? folder = new(AppContext.BaseDirectory);
+        while (folder is not null &&
+            !File.Exists(Path.Combine(folder.FullName, "MainWindow.IedBrowser.cs")))
+            folder = folder.Parent;
+        Assert.NotNull(folder);
+        var source = File.ReadAllText(Path.Combine(folder!.FullName,
+            "MainWindow.IedBrowser.cs"));
+        Assert.Contains("QueueIedBrowserFocusedRead(row)", source);
+        Assert.Contains("_iedBrowserAutoReadVisited.Add(row.Key)", source);
+        Assert.Contains("Take(24).ToArray()", source);
+        Assert.Contains("cts.CancelAfter(TimeSpan.FromSeconds(15))", source);
+        Assert.Contains("Tag = \"Auto\"", source);
+        Assert.Contains("IedBrowserIsolatedReadService.ReadAsync(", source);
+        Assert.Contains("new IedBrowserReadBindingIndex(sourceDevice)", source);
+        Assert.Contains("PublishForAssociation(", source);
+    }
+
+    [Fact]
     public void ExactSelectedIedSclMxSchemaRendersOnlyActuallyObservedValues()
     {
         var scl = Model(Obj(ThreePhase()));
