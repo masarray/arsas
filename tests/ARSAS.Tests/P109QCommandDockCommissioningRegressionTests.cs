@@ -173,6 +173,9 @@ public sealed class P109QCommandDockCommissioningRegressionTests
         Assert.Contains("signal.ControlModelText = \"Auto-detect\";", client);
         Assert.Contains("OPERATOR_CTL_MODEL_CONFIGURATION", runtime);
         Assert.Contains("_activeControlTargets.TryAdd(targetKey, 0)", runtime);
-        Assert.Contains("Interlocked.Increment(ref session.ControlCommandActive)", runtime);
+        // A single atomic IED-wide flight now protects ctlModel Write and
+        // ordinary Operate. Increment-and-reject was not a safe admission gate.
+        Assert.Contains("Iec61850ControlFlightAdmission.TryEnter(", runtime);
+        Assert.Contains("CONTROL_OUTCOME_UNKNOWN_TIMEOUT", runtime);
     }
 }

@@ -1161,12 +1161,14 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             try
             {
                 var service = new ArControl.Iec61850ControlService();
-                return await RunMmsOperationAsync(
+                var result = await RunMmsOperationAsync(
                     () => service.ConfigureControlModelAsync(_session, signal.ObjectReference,
                         (ArControl.Iec61850ControlModel)(int)expected,
                         (ArControl.Iec61850ControlModel)(int)target,
                         cancellationToken),
                     cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                return result;
             }
             finally
             {
@@ -1174,11 +1176,17 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 // A subsequent explicit read-only inspection must rebuild authority.
                 await InvalidateCachedControlSessionAsync(signal.ObjectReference)
                     .ConfigureAwait(false);
-                signal.ClearControlConfirmation();
-                signal.ClearLiveControlAuthority();
-                signal.ControlModelText = "Auto-detect";
-                signal.ControlInspectionEvidence =
-                    "ctlModel configuration attempted: fresh typed live inspection required.";
+                // On session teardown/timeout the runtime invalidates old
+                // authority. The stale native task must not reset a new
+                // association's SignalDefinition after it finishes late.
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    signal.ClearControlConfirmation();
+                    signal.ClearLiveControlAuthority();
+                    signal.ControlModelText = "Auto-detect";
+                    signal.ControlInspectionEvidence =
+                        "ctlModel configuration attempted: fresh typed live inspection required.";
+                }
             }
         }
         finally
@@ -1243,6 +1251,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             signal.ControlModelText = "Auto-detect";
             await InvalidateCachedControlSessionAsync(signal.ObjectReference).ConfigureAwait(false);
             control = await GetOrOpenControlSessionAsync(signal, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
         }
         catch (InvalidOperationException discoveryError) when (_session.IsMmsInitiated)
         {
@@ -1252,6 +1261,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 () => new ArControl.Iec61850ControlService().ProbeControlModelAsync(
                     _session, signal.ObjectReference, cancellationToken),
                 cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             signal.ControlSemanticVerified = false;
             signal.ControlModelText = probe.Decoded
                 ? FriendlyControlModel(probe.ControlModel)
@@ -1289,6 +1299,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         var status = await RunMmsOperationAsync(
             () => control.ReadStatusAsync(cancellationToken),
             cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         var normalizedStatus = NormalizeControlFeedback(effectiveCdc, status.DisplayValue, status.State);
         var currentValue = status.IsSuccess ? normalizedStatus.Value : "-";
         var currentState = normalizedStatus.State.ToString();
@@ -1306,6 +1317,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 "ST",
                 string.IsNullOrWhiteSpace(signal.ControlValueType) ? "Unknown" : signal.ControlValueType,
                 cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             if (preferred != null)
             {
                 var normalizedPreferred = NormalizeControlFeedback(
@@ -1393,6 +1405,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
 
         var totalStopwatch = Stopwatch.StartNew();
         var control = await GetOrOpenControlSessionAsync(request.Signal, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         var descriptor = control.Descriptor;
         var semantic = ArControl.Iec61850ControlSemanticResolver.Resolve(
             descriptor, request.Signal.ControlCdc, request.Signal.ControlStatusReference);
@@ -1433,6 +1446,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             request.Signal.ControlValueType,
             effectiveCdc,
             cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
 
         capabilities = BuildControlCapabilities(descriptor, request.Signal, initialFeedback.Value, effectiveCdc);
         request.Signal.ControlCdc = capabilities.ControlCdc;
@@ -1475,6 +1489,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             action = await RunMmsOperationAsync(
                 () => control.OperateAsync(nativeRequest, cancellationToken),
                 cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
         }
         catch (OperationCanceledException)
         {
@@ -1556,6 +1571,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             initialFeedback.Value,
             Math.Clamp(request.FeedbackTimeoutMs, 1000, 30000),
             cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         feedbackStopwatch.Stop();
         totalStopwatch.Stop();
 
