@@ -168,7 +168,7 @@ public static class IedBrowserEngineeringComposite
                 references.Add(plan.AngleReference + "[" + plan.FunctionalConstraint + "]");
                 anglePaired = true;
             }
-            if (!anglePaired && !compactDo && plan.AngleReference.Length > 0 &&
+            if (!anglePaired && plan.AngleReference.Length > 0 &&
                 ledger.TryGet(plan.AngleReference, plan.FunctionalConstraint,
                     out var independentAngle, preferReport: monitoring) &&
                 double.TryParse(independentAngle.Value, NumberStyles.Float,
