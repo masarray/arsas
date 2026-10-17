@@ -11,9 +11,10 @@ using ArIED61850Tester.Services;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Model-first, read-only IEC 61850 browser. Refreshing the browser is purely local.
-/// An explicit button is the only way to request a separate read-only MMS RCB check.
-/// No discovery, report activation, write, reservation, or reconnect on navigation.
+/// Model-first, read-only IEC 61850 browser. Refreshing is purely local.
+/// A focused live page may acquire one finite, 12-target MMS value snapshot;
+/// RCB inspection remains explicit. Navigation never writes, activates RCBs,
+/// starts GI, initiates discovery or silently performs a Read All.
 /// </summary>
 public partial class MainWindow
 {
@@ -828,8 +829,12 @@ public partial class MainWindow
             {
                 if (IedBrowserControlStateEvidence.TryReadFailure(
                         device, block, pageKind, field,
-                        _iedBrowserReadFailureEvidence, device.InitialHydrationFailures,
-                        out var failure, out var source, out var failedReference))
+                        _iedBrowserReadFailureEvidence, _iedBrowserContextReadFailures,
+                        out var failure, out var source, out var failedReference) ||
+                    IedBrowserControlStateEvidence.TryReadFailure(
+                        device, block, pageKind, field,
+                        null, device.InitialHydrationFailures,
+                        out failure, out source, out failedReference))
                 {
                     row.Value = "Unavailable";
                     row.ObservationSource = source;
@@ -1298,7 +1303,13 @@ public partial class MainWindow
             _iedBrowserSnapshotLease = null;
         }
         if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
+        {
             RefreshIedBrowser();
+            // Full discovery may have finished while IsBusy was true. The
+            // selected page is already rendered; schedule its first finite
+            // read on the transition to a connected, idle live association.
+            ScheduleIedBrowserContextHydration();
+        }
     }
 
     private void RefreshIedBrowser()
