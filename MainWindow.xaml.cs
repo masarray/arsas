@@ -1727,6 +1727,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 return;
             }
 
+            if (Iec61850ControlWireOutcomePolicy.RequiresQuarantine(result.CompletionState))
+            {
+                signal.ControlLastResult =
+                    "Control outcome UNKNOWN — native MMS result is inconclusive. " +
+                    "Verify IED state and reconnect before another command.";
+                AddLog("ERROR", device.Name,
+                    $"CONTROL_UI_NATIVE_UNKNOWN: {signal.ObjectReference}; " +
+                    $"completion={result.CompletionState}; {result.Message}");
+                MarkDiagnosticAlert();
+                ShowControlShout(Iec61850ControlShout.FromLocalRejection(
+                    "MMS wire outcome UNKNOWN. Check IED state and reconnect; do not retry blindly"));
+                return; // Do not publish ambiguous feedback as a process value.
+            }
             if (!string.IsNullOrWhiteSpace(result.ControlModelText))
                 signal.ControlModelText = result.ControlModelText;
             if (!string.IsNullOrWhiteSpace(result.FeedbackValue) && result.FeedbackValue != "-")
