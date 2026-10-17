@@ -518,7 +518,10 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.True(zivTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
         Assert.True(zivTrial.GetProperty("fullDiscoveryFallbackForbidden").GetBoolean());
         Assert.True(zivTrial.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
-        Assert.Equal(169, root.GetProperty("sourcePullRequest").GetInt32());
+        // The current C264 report trial is PR #173, while the previous
+        // P10.9V control authority remains the unchanged PR #169.
+        Assert.Equal(173, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(169, typedBscTrial.GetProperty("enginePullRequest").GetInt32());
         Assert.True(genericTrial.GetProperty("typedSemanticGateRequired").GetBoolean());
         Assert.True(genericTrial.GetProperty("associationScopedInventoryRequired").GetBoolean());
         Assert.True(genericTrial.GetProperty("vendorDispatchForbidden").GetBoolean());
