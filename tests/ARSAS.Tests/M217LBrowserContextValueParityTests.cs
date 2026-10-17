@@ -195,8 +195,9 @@ public sealed class M217LBrowserContextValueParityTests
             Kind = verified.Kind, Domain = verified.Domain, LogicalNode = verified.LogicalNode,
             Name = verified.Name, Reference = verified.Reference,
             FunctionalConstraint = verified.FunctionalConstraint,
+            DiscoveryStatus = "SclOnly",
             Attributes = ["NumOfSG", "ActSG"]
-            // Missing AttributeInventoryOnly -> no speculative SGCB MMS read.
+            // A literal non-live inventory cannot authorize SGCB MMS reads.
         };
         var offlinePage = new IedBrowserTreeRow("sg/offline",
             "SGCB", "SGCB", 3, unverified);
