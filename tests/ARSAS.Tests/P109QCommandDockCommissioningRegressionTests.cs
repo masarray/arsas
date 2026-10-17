@@ -94,7 +94,9 @@ public sealed class P109QCommandDockCommissioningRegressionTests
         Assert.Contains("Height=\"*\"/>", xaml);
         var main = Read("MainWindow.xaml.cs");
         Assert.Contains("new GridLength(1, GridUnitType.Star)", main);
-        Assert.Contains("ExplorerCommandDockRow.Height = GridLength.Auto", main);
+        Assert.Contains("ResizeCommandDockForVerifiedControls()", main);
+        Assert.Contains("(SelectedDevice?.CommandSignals.Count ?? 0) > 5", main);
+        Assert.Contains("? new GridLength(1, GridUnitType.Star) : GridLength.Auto", main);
         Assert.Contains("RowHeight=\"43\" MinRowHeight=\"42\"", xaml);
         Assert.Contains("Height=\"29\" MinHeight=\"29\"", xaml);
         var styles = Read("App.xaml");
