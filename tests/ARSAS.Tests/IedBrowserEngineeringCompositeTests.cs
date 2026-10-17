@@ -118,9 +118,9 @@ public sealed class IedBrowserEngineeringCompositeTests
             phase.AngleReference, "MX", "33", "", "timestamp2", "Report");
         Assert.True(IedBrowserEngineeringComposite.TryCompose(
             row, ledger, new Dictionary<string, string?>(), true, out var output));
-        Assert.Equal("12; ∠ (independent) 33°", output.Text);
-        Assert.DoesNotContain("12 ∠ 33°", output.Text); // never a falsely paired phasor
-        Assert.Contains("independent", output.Provenance);
+        Assert.Equal("12", output.Text); // angle remains accessible on its child
+        Assert.DoesNotContain("∠", output.Text); // never a falsely paired phasor
+        Assert.Contains("33°", output.Provenance);
     }
 
     [Fact]

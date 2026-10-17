@@ -29,7 +29,7 @@ public sealed record IedBrowserVisibleConfigurationReadRequest(string Scope)
                     IedBrowserLiveValues.CanonicalReference(obj.Reference) + ".",
                     StringComparison.Ordinal))
             .SelectMany(obj => obj.Attributes)
-            .Where(a => a.FunctionalConstraint is "CF" or "DC" &&
+            .Where(a => (a.FunctionalConstraint is "CF" or "DC") &&
                 IedBrowserLiveValues.CanonicalReference(a.MmsReference)
                     .StartsWith(prefix, StringComparison.Ordinal))
             .Where(a => !ledger.TryGet(a.MmsReference, a.FunctionalConstraint,

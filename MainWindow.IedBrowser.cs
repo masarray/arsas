@@ -532,7 +532,8 @@ public partial class MainWindow
                     _iedBrowserSelectedDoReference);
                 QueueIedBrowserRcbFocusedRead(currentFocus);
             }
-            if (ReferenceEquals(SelectedDevice, sourceDevice) &&
+            if (configRequest is null &&
+                ReferenceEquals(SelectedDevice, sourceDevice) &&
                 _iedBrowserNavigation.Current is { Kind: "LN" } &&
                 _iedBrowserReadOperation is null)
                 QueueFirstExpandedVisibleConfigurationRead();
@@ -1815,12 +1816,13 @@ public partial class MainWindow
 
     private void QueueFirstExpandedVisibleConfigurationRead()
     {
-        if (_iedBrowserDetails.Rows.FirstOrDefault(x =>
+        if (_iedBrowserDetails.Rows.Where(x =>
             x.IsExpanded && x.ReadObjectReference.Length > 0 &&
             _iedBrowserAutoReadAdmission.CanStart(
                 SelectedDevice!.DeviceId, SelectedDevice.LiveValues.Association,
                 IedBrowserFocusedAdmission.PageKey(
                     _iedBrowserNavigation.Current!.Key, x.ReadObjectReference), 1))
+            .OrderByDescending(x => x.Depth).FirstOrDefault()
             is { } row)
             QueueIedBrowserVisibleConfigurationRead(row);
     }
