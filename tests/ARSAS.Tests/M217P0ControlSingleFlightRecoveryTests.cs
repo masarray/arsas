@@ -192,10 +192,10 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
         var shared = new SignalDefinition
         {
             Name = "CSWI6 Position",
-            ObjectReference = "BCU1CSWI6.Pos",
+            ObjectReference = "BCUGE/CSWI6.Pos",
             IsControlSignal = true,
             ControlCdc = "DPC",
-            ControlStatusReference = "BCU1CSWI6.Pos.stVal",
+            ControlStatusReference = "BCUGE/CSWI6.Pos.stVal",
             ControlValueType = "Dbpos",
             ControlModelText = "Direct normal",
             ControlCurrentValue = "Open [01]",
