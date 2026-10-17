@@ -113,6 +113,24 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
     }
 
     [Fact]
+    public async Task AlreadyCanceledNativeTaskNeverProvesWriteWasNotSent()
+    {
+        var session = new SessionFence();
+        Assert.True(Iec61850ControlFlightAdmission.TryEnter(ref session.Active, ref session.Quarantine));
+        using var nativeCancellation = new CancellationTokenSource();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            Iec61850ControlFlightAdmission.WaitForNativeAsync(
+                Task.FromCanceled<int>(new CancellationToken(canceled: true)),
+                TimeSpan.FromSeconds(1), CancellationToken.None,
+                () => Iec61850ControlFlightAdmission.Quarantine(ref session.Quarantine),
+                nativeCancellation.Cancel));
+        Assert.True(nativeCancellation.IsCancellationRequested);
+        Iec61850ControlFlightAdmission.Release(ref session.Active);
+        Assert.Equal(1, session.Quarantine);
+        Assert.False(Iec61850ControlFlightAdmission.TryEnter(ref session.Active, ref session.Quarantine));
+    }
+
+    [Fact]
     public async Task CompletedNativeResponseKeepsAssociationAvailableAfterRelease()
     {
         var session = new SessionFence();
