@@ -248,6 +248,43 @@ public static class IedBrowserReadPlan
                 string.IsNullOrWhiteSpace(attr.SclBType) ?
                     attr.MmsType : attr.SclBType))
             .ToArray();
+        // A bounded set of exact companions makes the phasor seed useful
+        // without presenting missing angle/quality/timestamp as "exposed"
+        // evidence. Unlike SCL presentation, these must be real live MMS
+        // attributes covered by the exact live DataSet and FC.
+        const int initialAnalogCompanionLimit = 9;
+        var companionOrder = analog
+            .SelectMany(seed => AnalogCompanionReferences(
+                IedBrowserLiveValues.CanonicalReference(seed.Reference)))
+            .Distinct(StringComparer.Ordinal)
+            .Select((reference, index) => (reference, index))
+            .ToDictionary(x => x.reference, x => x.index, StringComparer.Ordinal);
+        var companions = verifiedLiveModel.LogicalDevices
+            .SelectMany(ld => ld.LogicalNodes)
+            .SelectMany(ln => ln.DataObjects)
+            .SelectMany(obj => obj.Attributes)
+            .Where(attr => string.Equals(attr.FunctionalConstraint, "MX",
+                StringComparison.OrdinalIgnoreCase))
+            .Select(attr => new
+            {
+                Attr = attr,
+                Reference = IedBrowserLiveValues.CanonicalReference(attr.MmsReference)
+            })
+            .Where(item => companionOrder.ContainsKey(item.Reference) &&
+                verifiedLiveModel.DataSets.Any(set =>
+                    schema.ContainsDataSetMember(set.Reference, item.Reference, "MX")))
+            .GroupBy(item => item.Reference, StringComparer.Ordinal)
+            // Ambiguous duplicate live FC declarations cannot authorize a read.
+            .Where(group => group.Count() == 1)
+            .Select(group => group.Single())
+            .Where(item => !ledger.TryGet(item.Reference, "MX", out var observed) ||
+                           observed.IsStale || observed.Association != association)
+            .OrderBy(item => companionOrder[item.Reference])
+            .Take(initialAnalogCompanionLimit)
+            .Select(item => new IedBrowserReadTarget(item.Attr.MmsReference, "MX",
+                string.IsNullOrWhiteSpace(item.Attr.SclBType)
+                    ? item.Attr.MmsType : item.Attr.SclBType))
+            .ToArray();
         // Critical station Mod/Beh/Health must never starve behind multiple
         // optional control blocks or slow LActTm reads on a 10s envelope.
         // The priority-sorted LN plan already puts these at priority zero.
@@ -262,11 +299,39 @@ public static class IedBrowserReadPlan
             target.Reference.EndsWith(".GoEna", StringComparison.Ordinal))
             .Take(2);
         return critical.Concat(fastSg.Take(4)).Concat(firstGo).Concat(analog)
-            .Concat(settings).Concat(goose).Concat(candidates)
+            .Concat(companions).Concat(settings).Concat(goose).Concat(candidates)
             .DistinctBy(target => IedBrowserLiveValues.CanonicalReference(target.Reference) +
                 "|" + target.FunctionalConstraint.Trim().ToUpperInvariant(),
                 StringComparer.Ordinal)
             .Take(maxTargets).ToArray();
+    }
+
+    private static IEnumerable<string> AnalogCompanionReferences(string magnitude)
+    {
+        // Only the exact IEC phasor/measurement owner of a selected live
+        // magnitude can authorize companions. Similar suffixes, other LNs,
+        // missing FC and SCL-only leaves are not candidates.
+        const string cValMagnitude = ".cVal.mag.f";
+        const string simpleMagnitude = ".mag.f";
+        string owner;
+        string angle;
+        if (magnitude.EndsWith(cValMagnitude, StringComparison.Ordinal))
+        {
+            owner = magnitude[..^cValMagnitude.Length];
+            angle = owner + ".cVal.ang.f";
+        }
+        else if (magnitude.EndsWith(simpleMagnitude, StringComparison.Ordinal))
+        {
+            owner = magnitude[..^simpleMagnitude.Length];
+            angle = owner + ".ang.f";
+        }
+        else
+            yield break;
+        // Observe raw IEC quality/time before optional angle, never infer
+        // these from a magnitude or another phase's Report.
+        yield return owner + ".q";
+        yield return owner + ".t";
+        yield return angle;
     }
 
     private static int AnalogSeedRank(string reference)
