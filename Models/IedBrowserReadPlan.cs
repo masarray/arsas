@@ -124,54 +124,25 @@ public static class IedBrowserReadPlan
     /// </summary>
     public static IReadOnlyList<IedBrowserReadTarget> BuildFocused(
         LiveIedModelDiscoveryDocument? liveModel, IedBrowserTreeRow? page,
-        IedBrowserLiveValues ledger, int budget = 24)
+        IedBrowserLiveValues ledger, int budget = 32,
+        string? selectedDoReference = null)
     {
         if (liveModel is null || page is null || ledger.IsOffline || budget <= 0)
             return [];
         if (page.Kind is not ("LN" or "SGCB" or "DataSet"))
             return [];
-        var candidates = Build(liveModel, page, readAll: false);
-        if (page.Payload is LiveIedDataSetModel set)
-        {
-            // IEC units belong to CF, never MX. Only an EXACT model-declared
-            // companion of the currently selected MX DataSet member is safe
-            // for an isolated read. No SCL-only read or neighboring phase.
-            var allowed = set.Members
-                .Where(member => string.Equals(member.FunctionalConstraint, "MX",
-                    StringComparison.OrdinalIgnoreCase))
-                .Select(member => IedBrowserLiveValues.CanonicalReference(member.Reference))
-                .Where(reference => reference.Length > 0)
-                .ToHashSet(StringComparer.Ordinal);
-            var companions = liveModel.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
-                .SelectMany(ln => ln.DataObjects)
-                .SelectMany(obj => obj.Attributes)
-                .Where(attr => string.Equals(attr.FunctionalConstraint, "CF",
-                    StringComparison.OrdinalIgnoreCase))
-                .Where(attr =>
-                {
-                    var reference = IedBrowserLiveValues.CanonicalReference(attr.MmsReference);
-                    if (!reference.EndsWith(".units.SIUnit", StringComparison.Ordinal) &&
-                        !reference.EndsWith(".units.multiplier", StringComparison.Ordinal))
-                        return false;
-                    var owner = reference[..reference.LastIndexOf(".units.", StringComparison.Ordinal)];
-                    return allowed.Any(member => member == owner ||
-                        member.StartsWith(owner + ".", StringComparison.Ordinal) ||
-                        owner.StartsWith(member + ".", StringComparison.Ordinal));
-                })
-                .Select(attr => new IedBrowserReadTarget(attr.MmsReference, "CF",
-                    string.IsNullOrWhiteSpace(attr.SclBType) ? attr.MmsType : attr.SclBType));
-            candidates = candidates.Concat(companions)
-                .DistinctBy(target => IedBrowserLiveValues.CanonicalReference(target.Reference)
-                    + "|" + target.FunctionalConstraint, StringComparer.Ordinal)
-                .ToArray();
-        }
+        // A DataSet is exactly its declared FCDA inventory; CF engineering
+        // metadata is a Data Model attribute, NOT an invented DataSet member.
+        // The Data Model LN/DO read may independently hydrate verified CF.
+        var candidates = Build(liveModel, page, readAll: false,
+            page.Kind == "LN" ? selectedDoReference : null);
         // Do not publish another reader's result as though this association
         // observed it. Existing Report/MMS Read evidence is always reused.
         return candidates.Where(target =>
                 !ledger.TryGet(target.Reference, target.FunctionalConstraint, out _))
             .OrderBy(target => FocusPriority(page.Kind, target))
             .ThenBy(target => target.Reference, StringComparer.Ordinal)
-            .Take(Math.Min(budget, 24))
+            .Take(Math.Min(budget, page.Kind == "SGCB" ? 32 : 24))
             .ToArray();
     }
 
