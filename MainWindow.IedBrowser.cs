@@ -1677,8 +1677,6 @@ public partial class MainWindow
         if (SelectedDevice is not { IsConnected: true, IsDemo: false } device ||
             device.IsBusy || _iedBrowserReadOperation is not null ||
             device.LiveDiscoveryModel is null ||
-            !ReferenceEquals(device.LiveDiscoveryModel,
-                device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel) ||
             row.Kind is not ("SGCB" or "LN") ||
             row.Kind == "LN" && !row.Key.StartsWith("model/ln/", StringComparison.Ordinal))
             return;
