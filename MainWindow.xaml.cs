@@ -1410,8 +1410,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void CommandPanel_Expanded(object sender, RoutedEventArgs e)
     {
+        // The command grid occupies a star-sized panel rather than retaining
+        // a fixed 260px five-row viewport when the operator opens the dock.
+        ExplorerCommandDockRow.Height = new GridLength(1, GridUnitType.Star);
         if (SelectedDevice != null)
             await RefreshControlValuesAsync(SelectedDevice, force: true);
+    }
+
+    private void CommandPanel_Collapsed(object sender, RoutedEventArgs e)
+    {
+        ExplorerCommandDockRow.Height = GridLength.Auto;
     }
 
     private async void RefreshCommandValues_Click(object sender, RoutedEventArgs e)
