@@ -9,8 +9,18 @@ namespace ArIED61850Tester.Models;
 /// conversion, retry or live state. Exact reference/FC, same IED object,
 /// association and projection epoch are required on every UI lookup.
 /// </summary>
+public enum IedBrowserReadAbsenceKind
+{
+    Failed,
+    Deferred
+}
+
 public sealed record IedBrowserReadFailureSample(
-    string Reference, string FunctionalConstraint, string Reason);
+    string Reference, string FunctionalConstraint, string Reason,
+    IedBrowserReadAbsenceKind Kind = IedBrowserReadAbsenceKind.Failed);
+
+internal sealed record IedBrowserReadAbsence(
+    string Reason, IedBrowserReadAbsenceKind Kind);
 
 public sealed class IedBrowserReadFailureEvidence
 {
@@ -21,7 +31,7 @@ public sealed class IedBrowserReadFailureEvidence
     private readonly bool _modelBound;
     private readonly object? _model;
     private readonly object _gate = new();
-    private readonly Dictionary<string, string> _failed = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, IedBrowserReadAbsence> _failed = new(StringComparer.Ordinal);
 
     public IedBrowserReadFailureEvidence(Iec61850MonitorDevice owner,
         bool bindToLiveModel = false)
@@ -46,6 +56,17 @@ public sealed class IedBrowserReadFailureEvidence
            (fc ?? "").Trim().ToUpperInvariant();
 
     public void RecordFailure(IedBrowserReadTarget target, string reason)
+        => RecordAbsence(target, reason, IedBrowserReadAbsenceKind.Failed);
+
+    /// <summary>
+    /// A selected bounded initial target that never reached an MMS Read is
+    /// deferred, not failed. It does not authorize a value or retry.
+    /// </summary>
+    public void RecordDeferred(IedBrowserReadTarget target, string reason)
+        => RecordAbsence(target, reason, IedBrowserReadAbsenceKind.Deferred);
+
+    private void RecordAbsence(IedBrowserReadTarget target, string reason,
+        IedBrowserReadAbsenceKind kind)
     {
         ArgumentNullException.ThrowIfNull(target);
         if (!IsCurrent(_owner) || string.IsNullOrWhiteSpace(reason) ||
@@ -58,8 +79,14 @@ public sealed class IedBrowserReadFailureEvidence
         {
             if (_failed.Count >= MaxFailureEntries && !_failed.ContainsKey(key))
                 return;
-            if (IsCurrent(_owner))
-                _failed[key] = text.Length > 320 ? text[..320] + "…" : text;
+            if (!IsCurrent(_owner)) return;
+            // A budget-deferred marker cannot erase an actual wire failure.
+            if (kind == IedBrowserReadAbsenceKind.Deferred &&
+                _failed.TryGetValue(key, out var previous) &&
+                previous.Kind == IedBrowserReadAbsenceKind.Failed)
+                return;
+            _failed[key] = new IedBrowserReadAbsence(
+                text.Length > 320 ? text[..320] + "…" : text, kind);
         }
     }
 
@@ -91,7 +118,7 @@ public sealed class IedBrowserReadFailureEvidence
                     var separator = item.Key.LastIndexOf('|');
                     return new IedBrowserReadFailureSample(
                         item.Key[..separator], item.Key[(separator + 1)..],
-                        item.Value);
+                        item.Value.Reason, item.Value.Kind);
                 })
                 .ToArray();
         }
@@ -99,8 +126,14 @@ public sealed class IedBrowserReadFailureEvidence
 
     public bool TryGet(Iec61850MonitorDevice device,
         string reference, string fallbackReference, string fc, out string reason)
+        => TryGet(device, reference, fallbackReference, fc, out reason, out _);
+
+    public bool TryGet(Iec61850MonitorDevice device,
+        string reference, string fallbackReference, string fc, out string reason,
+        out IedBrowserReadAbsenceKind kind)
     {
         reason = "";
+        kind = IedBrowserReadAbsenceKind.Failed;
         if (!IsCurrent(device) || string.IsNullOrWhiteSpace(fc))
             return false;
         // A fallback is permitted only when structured projection declared it
@@ -109,10 +142,18 @@ public sealed class IedBrowserReadFailureEvidence
         {
             if (!IsCurrent(device)) return false;
             if (!string.IsNullOrWhiteSpace(reference) &&
-                _failed.TryGetValue(Key(reference, fc), out reason))
+                _failed.TryGetValue(Key(reference, fc), out var exact))
+            {
+                reason = exact.Reason;
+                kind = exact.Kind;
                 return true;
-            return !string.IsNullOrWhiteSpace(fallbackReference) &&
-                   _failed.TryGetValue(Key(fallbackReference, fc), out reason);
+            }
+            if (string.IsNullOrWhiteSpace(fallbackReference) ||
+                !_failed.TryGetValue(Key(fallbackReference, fc), out var fallback))
+                return false;
+            reason = fallback.Reason;
+            kind = fallback.Kind;
+            return true;
         }
     }
 }
