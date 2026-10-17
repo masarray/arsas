@@ -713,6 +713,19 @@ public partial class MainWindow
                 row.ObservationTooltip = composite.Provenance;
                 continue;
             }
+            // A phase/intermediate DO may not have its own MMS scalar.
+            // Reuse ONLY the exact cVal child with already received MX leaves,
+            // so the parent no longer says Not read while its child is observed.
+            if (IedBrowserNestedObservedPresentation.TryCompose(
+                    row, device.LiveValues, engineeringUnits,
+                    device.IsMonitoring, out var nested))
+            {
+                row.Value = nested.IsStale ? "Offline · " + nested.Text : nested.Text;
+                row.ObservationSource = nested.IsStale
+                    ? "Stale derived " + nested.Source : "Derived " + nested.Source;
+                row.ObservationTooltip = nested.Provenance;
+                continue;
+            }
             // A model-proven compound ST DataSet member can contain two
             // independently received process leaves. Show both labels rather
             // than claiming the whole parent was unread or choosing one.
