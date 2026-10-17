@@ -88,8 +88,13 @@ public sealed class P109QCommandDockCommissioningRegressionTests
     public void CommandDockHasConstrainedResponsiveViewportAndInspector()
     {
         var xaml = Read("MainWindow.xaml");
-        Assert.DoesNotContain("ExplorerCommandRow", xaml);
-        Assert.DoesNotContain("CommandPanel_Collapsed", xaml);
+        Assert.Contains("ExplorerCommandDockRow", xaml);
+        Assert.Contains("CommandPanel_Collapsed", xaml);
+        Assert.DoesNotContain("MaxHeight=\\"260\\"", xaml);
+        Assert.Contains("Height=\\"*\\"/>", xaml);
+        var main = Read("MainWindow.xaml.cs");
+        Assert.Contains("new GridLength(1, GridUnitType.Star)", main);
+        Assert.Contains("ExplorerCommandDockRow.Height = GridLength.Auto", main);
         Assert.Contains("RowHeight=\"43\" MinRowHeight=\"42\"", xaml);
         Assert.Contains("Height=\"29\" MinHeight=\"29\"", xaml);
         var styles = Read("App.xaml");
