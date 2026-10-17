@@ -39,10 +39,14 @@ public sealed class Iec61850ControlSessionLease
 {
     private readonly object _sync = new();
     private TaskCompletionSource<bool>? _activeFlightReleased;
+    private readonly CancellationTokenSource _retirement = new();
     private int _active;
     private int _quarantine;
     private int _retired;
 
+    // Linked into native operations so Stop can cancel even the narrow window
+    // between successful admission and native task creation.
+    public CancellationToken RetirementToken => _retirement.Token;
     public bool IsActive => Volatile.Read(ref _active) != 0;
     public bool IsRetired => Volatile.Read(ref _retired) != 0;
     public bool IsUnavailable =>
@@ -83,6 +87,7 @@ public sealed class Iec61850ControlSessionLease
         {
             Volatile.Write(ref _retired, 1);
             Quarantine();
+            _retirement.Cancel();
             return _active != 0
                 ? _activeFlightReleased!.Task
                 : Task.CompletedTask;
