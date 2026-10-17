@@ -263,6 +263,35 @@ public partial class MainWindow
     private void IedBrowserCancelRead_Click(object sender, RoutedEventArgs e)
         => CancelIedBrowserRead();
 
+    // One finite read per selected live association/page. Report ingress remains
+    // authoritative; this set is only a bounded navigation admission ledger.
+    // No polling timer, process-value mirror or write service is introduced.
+    private readonly HashSet<string> _iedBrowserAutoReadPages = new(StringComparer.Ordinal);
+
+    private void QueueIedBrowserFocusedRead(IedBrowserTreeRow? page)
+    {
+        if (page?.Kind is not ("SGCB" or "LN") ||
+            SelectedDevice is not { IsConnected: true, IsDemo: false, IsBusy: false } device ||
+            _iedBrowserReadOperation is not null || device.IsBrowserReading ||
+            device.LiveDiscoveryModel is null || device.LiveValues.IsOffline)
+            return;
+        // RCB, DataSet and bulk inventory navigation stay entirely passive.
+        // A selected LN gets just a small exact ST/MX read image; SGCB also
+        // admits the verified read-only NumOfSG/ActSG/LastChange fields.
+        var key = device.LiveValues.Association + "|" + device.Name + "|" + page.Key;
+        if (!_iedBrowserAutoReadPages.Add(key)) return;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            if (!ReferenceEquals(SelectedDevice, device) ||
+                !ReferenceEquals(_iedBrowserNavigation.Current, page) ||
+                !device.IsConnected || device.IsBusy ||
+                _iedBrowserReadOperation is not null)
+                return;
+            IedBrowserReadValues_Click(new Button { Tag = "FocusedAuto" },
+                new RoutedEventArgs());
+        }));
+    }
+
     private async void IedBrowserReadValues_Click(object sender, RoutedEventArgs e)
     {
         var device = SelectedDevice;
@@ -273,6 +302,7 @@ public partial class MainWindow
         // Its bounded reads never interfere with the reporting session.
 
         var readAll = sender is Button { Tag: "All" };
+        var focusedAuto = sender is Button { Tag: "FocusedAuto" };
         if (!readAll)
         {
             switch (IedBrowserReadPlan.SelectionKind(_iedBrowserNavigation.Current))
@@ -299,6 +329,23 @@ public partial class MainWindow
                 ? _iedBrowserSelectedDoReference : null;
         var targets = IedBrowserReadPlan.Build(
             model, currentPage, readAll, selectedDo);
+        if (focusedAuto)
+        {
+            // Never start a large LN or SG Read All implicitly. Keep the
+            // same existing isolated MMS read service and result inbox.
+            // ST process leaves are preferred for the Data Model; SGCB control
+            // state gets priority before settings within the finite envelope.
+            const int maxFocusedTargets = 12;
+            targets = currentPage?.Kind == "SGCB"
+                ? targets.OrderBy(t => t.FunctionalConstraint == "SG" ? 1 : 0)
+                    .ThenBy(t => t.Reference, StringComparer.Ordinal)
+                    .Take(maxFocusedTargets).ToArray()
+                : targets.Where(t => t.FunctionalConstraint is "ST" or "MX")
+                    .OrderBy(t => t.Reference.Contains("$ST$", StringComparison.Ordinal) ? 0 : 1)
+                    .ThenBy(t => t.Reference.EndsWith("$stVal", StringComparison.Ordinal) ? 0 : 1)
+                    .ThenBy(t => t.Reference, StringComparer.Ordinal)
+                    .Take(maxFocusedTargets).ToArray();
+        }
         if (targets.Count == 0)
         {
             IedBrowserSubtitle.Text = "No model-verified readable FC attributes in this selection.";
@@ -314,6 +361,8 @@ public partial class MainWindow
         // connection and reject a previously planned schema.
         IedBrowserReadBindingIndex? bindingIndex = null;
         var cts = CancellationTokenSource.CreateLinkedTokenSource(_applicationCancellation.Token);
+        if (focusedAuto)
+            cts.CancelAfter(TimeSpan.FromSeconds(8));
         // Read All may include thousands of attributes. It is cancellable by the
         // operator, never a new continuous acquisition/polling process.
         _iedBrowserReadOperation = cts;
@@ -1692,6 +1741,7 @@ public partial class MainWindow
         _iedBrowserLastLiveVersion = -1;
         RefreshIedBrowserVisibleValues();
         RefreshIedBrowserReadButtons();
+        QueueIedBrowserFocusedRead(row);
         // Folder entry opens at its first child, regardless of the scroll
         // position in the previously inspected RCB, LN or DataSet.
         if (_iedBrowserDetails.Rows.Count > 0)
