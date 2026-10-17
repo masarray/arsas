@@ -228,8 +228,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
 
         var published = 0;
         var failed = 0;
+        var completedTargets = new HashSet<string>(StringComparer.Ordinal);
+        static string TargetKey(IedBrowserReadTarget target) =>
+            IedBrowserLiveValues.CanonicalReference(target.Reference) + "|" +
+            target.FunctionalConstraint.Trim().ToUpperInvariant();
         var completed = inbox.Drain(result =>
         {
+            completedTargets.Add(TargetKey(result.Target));
             // All read results are observationally tied to this exact
             // association, model object, runtime session and schema epoch.
             if (!_sessions.TryGetValue(device.DeviceId, out var current) ||
@@ -253,9 +258,21 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 failed++;
             }
         });
+        // The 10s envelope may end before later selected MX q/t leaves
+        // receive even one wire attempt. Never mislabel those as a rejected
+        // MMS service; retain only bounded, association-fenced absence evidence.
+        var deferred = 0;
+        foreach (var target in plan)
+        {
+            if (completedTargets.Contains(TargetKey(target))) continue;
+            failures.RecordDeferred(target, exhausted
+                ? "Not attempted: initial 10-second MMS Read budget exhausted. Use Read DO/DataSet for an explicit follow-up."
+                : "Not attempted: initial MMS Read sequence ended before this target. Use Read DO/DataSet for an explicit follow-up.");
+            deferred++;
+        }
         Log("INFO", device.Name,
             $"Bounded priority initial MMS evidence: planned={plan.Count}, " +
-            $"completed={completed}, published={published}, failed={failed}, " +
+            $"completed={completed}, published={published}, failed={failed}, deferred={deferred}, " +
             $"budget={InitialHydrationTotalBudget.TotalSeconds:0}s, exhausted={exhausted}, " +
             $"association={association}; no implicit Read All or RCB/control activity.");
     }
