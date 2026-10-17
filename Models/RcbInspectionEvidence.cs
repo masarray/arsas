@@ -121,7 +121,9 @@ public sealed class RcbInspectionEvidence
         // RptEna=false. That snapshot is NOT the current RCB state. Presenting
         // it as plain false after the monitor wrote RptEna=true is misleading.
         // Only an exact, read-only MMS check may populate operational fields.
-        return new(name, "Not verified", "Current MMS state requires an exact read-only RCB check");
+        return connected
+            ? new(name, "Not verified", "Current MMS state requires an exact read-only RCB check")
+            : new(name, "—", "Offline; no live MMS state");
     }
 
     private static bool UsableObservation(string? value)
