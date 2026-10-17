@@ -89,3 +89,17 @@ public sealed class Iec61850ControlSessionLease
         }
     }
 }
+
+
+/// <summary>
+/// A completed Task is not necessarily a definite wire result. Native services
+/// can return UNKNOWN/timeout completion without throwing an exception.
+/// </summary>
+public static class Iec61850ControlWireOutcomePolicy
+{
+    public static bool RequiresQuarantine(string? completionState) =>
+        !string.IsNullOrWhiteSpace(completionState) &&
+        (completionState.Contains("Unknown", StringComparison.OrdinalIgnoreCase) ||
+         completionState.Contains("TimedOut", StringComparison.OrdinalIgnoreCase) ||
+         completionState.Contains("Timeout", StringComparison.OrdinalIgnoreCase));
+}
