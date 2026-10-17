@@ -1,4 +1,5 @@
 using System.Threading;
+using ArIED61850Tester.Models;
 using ArIED61850Tester.Services;
 
 namespace ARSAS.Tests;
