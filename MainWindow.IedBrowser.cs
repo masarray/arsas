@@ -400,9 +400,10 @@ public partial class MainWindow
                 if (!accepted) return;
                 _iedBrowserReadFailureEvidence?.ClearFailure(result.Target);
                 successes++;
-                // Never overwrite a report-owned point during live acquisition.
-                if (!sourceDevice.IsMonitoring)
-                    bindingIndex.Apply(result, sourceDevice.LiveValues, readAssociation);
+                // All non-control Device Explorer signals can reflect the
+                // same ledger even during monitoring if Report has not arrived.
+                // Runtime/SOE point rows remain exclusively runtime-owned.
+                bindingIndex.Apply(result, sourceDevice.LiveValues, readAssociation);
                 changed = true;
             });
             if (changed && ReferenceEquals(SelectedDevice, sourceDevice))
