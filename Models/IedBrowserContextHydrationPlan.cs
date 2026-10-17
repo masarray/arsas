@@ -11,7 +11,7 @@ namespace ArIED61850Tester.Models;
 public static class IedBrowserContextHydrationPlan
 {
     private static readonly HashSet<string> SafeFc = new(
-        ["ST", "MX", "CF", "DC", "EX", "SG"], StringComparer.Ordinal);
+        ["ST", "MX", "CF", "DC", "EX", "SG", "SP"], StringComparer.Ordinal);
 
     public static IReadOnlyList<IedBrowserReadTarget> Build(
         LiveIedModelDiscoveryDocument model,
@@ -109,9 +109,10 @@ public static class IedBrowserContextHydrationPlan
         if (fc == "ST" && (reference.EndsWith(".q", StringComparison.Ordinal) ||
                             reference.EndsWith(".t", StringComparison.Ordinal)))
             return 1;
-        if (fc == "SG" || reference.EndsWith(".NumOfSG", StringComparison.Ordinal) ||
+        if (reference.EndsWith(".NumOfSG", StringComparison.Ordinal) ||
             reference.EndsWith(".ActSG", StringComparison.Ordinal))
-            return 2;
+            return 0;
+        if (fc == "SG") return 2;
         if (fc == "CF" && (reference.EndsWith(".units.SIUnit", StringComparison.Ordinal) ||
                             reference.EndsWith(".units.multiplier", StringComparison.Ordinal)))
             return 3;
