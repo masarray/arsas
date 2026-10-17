@@ -92,7 +92,7 @@ public sealed class M217LBrowserContextValueParityTests
     [Fact]
     public void ExactPhaseCfIsRenderedOutsideMxReportAndNeverBorrowedFromOtherPhase()
     {
-        var model = Model(Obj(Owner,
+        var live = Model(Obj(Owner,
             Attr(Owner, "MX", "phsA.cVal.mag.f"),
             Attr(Owner, "MX", "phsA.q"),
             Attr(Owner, "CF", "phsA.units.SIUnit"),
@@ -101,6 +101,11 @@ public sealed class M217LBrowserContextValueParityTests
             Attr(Owner, "CF", "phsB.units.multiplier"),
             Attr(Owner, "CO", "Oper.ctlVal")));
         var (ds, page) = SetPage(Owner + ".phsA");
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = live.LogicalDevices,
+            DataSets = [ds]
+        };
         var shown = IedBrowserMeasurementConfiguration.ForDataSet(ds, model);
         var config = Assert.Single(shown);
         Assert.Equal(Owner + ".phsA.units", config.ValueReference);
@@ -166,6 +171,11 @@ public sealed class M217LBrowserContextValueParityTests
         Assert.Empty(IedBrowserContextHydrationPlan.Build(model, page, ledger, 0));
         ledger.MarkOffline();
         Assert.Empty(IedBrowserContextHydrationPlan.Build(model, page, ledger, 12));
+        var staleModel = Model(one, two);
+        var stalePage = new IedBrowserTreeRow("model/ln/stale",
+            "MMXU1", "LN", 2, staleModel.LogicalDevices[0].LogicalNodes[0]);
+        ledger.BeginAssociation();
+        Assert.Empty(IedBrowserContextHydrationPlan.Build(model, stalePage, ledger, 12));
     }
 
     [Fact]
@@ -173,13 +183,18 @@ public sealed class M217LBrowserContextValueParityTests
     {
         var sg = Obj("LD/LTIM0.TmChgST", Attr("LD/LTIM0.TmChgST", "SG", "setVal"),
             Attr("LD/LTIM0.TmChgST", "SE", "setVal"));
-        var model = Model(sg);
+        var live = Model(sg);
         var verified = new LiveIedControlBlockModel
         {
             Kind = "SettingGroupControl", Domain = "LD", LogicalNode = "LLN0",
             Name = "SGCB", Reference = "LD/LLN0.SP.SGCB",
             FunctionalConstraint = "SP", DiscoveryStatus = "AttributeInventoryOnly",
             Attributes = ["NumOfSG", "ActSG", "LActTm"]
+        };
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = live.LogicalDevices,
+            SettingGroupControls = [verified]
         };
         var page = new IedBrowserTreeRow("sg/LD", "SGCB", "SGCB", 3, verified);
         var ledger = new IedBrowserLiveValues();
@@ -201,10 +216,19 @@ public sealed class M217LBrowserContextValueParityTests
         };
         var offlinePage = new IedBrowserTreeRow("sg/offline",
             "SGCB", "SGCB", 3, unverified);
-        var offlineTargets = IedBrowserContextHydrationPlan.Build(model, offlinePage,
-            ledger, 12);
+        var unverifiedLive = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = live.LogicalDevices,
+            SettingGroupControls = [unverified]
+        };
+        var offlineTargets = IedBrowserContextHydrationPlan.Build(
+            unverifiedLive, offlinePage, ledger, 12);
         Assert.DoesNotContain(offlineTargets, x =>
             x.Reference.StartsWith("LD/LLN0.SGCB", StringComparison.Ordinal));
+        // A stale/SCL-only row is not authorized by a different live model
+        // even if its string reference would pass inventory syntax checks.
+        Assert.Empty(IedBrowserContextHydrationPlan.Build(model, offlinePage,
+            ledger, 12));
     }
 
     [Fact]
