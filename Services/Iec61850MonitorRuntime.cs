@@ -984,7 +984,14 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 "Control inspection deferred: another command is in flight or the association requires recovery.");
         try
         {
-            var capabilities = await session.Client.InspectControlAsync(signal, cancellationToken).ConfigureAwait(false);
+            using var inspectionCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken, session.ControlLifetimeCancellation.Token);
+            var capabilities = await session.Client.InspectControlAsync(
+                signal, inspectionCancellation.Token).ConfigureAwait(false);
+            if (!_sessions.TryGetValue(deviceId, out var current) ||
+                !ReferenceEquals(current, session) ||
+                session.ControlLifetimeCancellation.IsCancellationRequested)
+                throw new OperationCanceledException("Control inspection association was replaced.");
             Log("INFO", session.Device.Name,
                 $"Control inspected: {signal.ObjectReference}; model={capabilities.ControlModelText}; CDC={capabilities.ControlCdc}; current={capabilities.CurrentValue}.");
             return capabilities;
