@@ -118,6 +118,65 @@ public static class IedBrowserReadPlan
     }
 
     /// <summary>
+    /// Strict, finite CF-unit evidence for the selected live MX DataSet.
+    /// The two standard leaves (SIUnit/multiplier) must belong to the EXACT
+    /// MX measurement object covered by this live DataSet. A nearby LN,
+    /// separate FC or SCL-only declaration is never authority to read.
+    /// This returns only a read plan, not a unit/value guess.
+    /// </summary>
+    public static IReadOnlyList<IedBrowserReadTarget> BuildDataSetUnitRead(
+        LiveIedModelDiscoveryDocument? verifiedLiveModel,
+        LiveIedDataSetModel? selectedSet,
+        IedBrowserLiveValues ledger, int maxTargets = 12)
+    {
+        if (verifiedLiveModel is null || selectedSet is null ||
+            maxTargets < 2 || ledger.IsOffline ||
+            !verifiedLiveModel.DataSets.Any(ds =>
+                ReferenceEquals(ds, selectedSet)))
+            return Array.Empty<IedBrowserReadTarget>();
+
+        var schema = new IedBrowserSchemaIndex(verifiedLiveModel);
+        var association = ledger.Association;
+        var found = new List<IedBrowserReadTarget>(maxTargets);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var obj in verifiedLiveModel.LogicalDevices.SelectMany(
+                     ld => ld.LogicalNodes).SelectMany(ln => ln.DataObjects))
+        {
+            if (found.Count + 2 > maxTargets) break;
+            var objectRef = IedBrowserLiveValues.CanonicalReference(obj.Reference);
+            var measurements = obj.Attributes.Where(attr =>
+                attr.FunctionalConstraint == "MX" &&
+                (IedBrowserLiveValues.CanonicalReference(attr.MmsReference)
+                    .EndsWith(".mag.f", StringComparison.Ordinal)));
+            if (!measurements.Any(attr => schema.ContainsDataSetMember(
+                    selectedSet.Reference,
+                    IedBrowserLiveValues.CanonicalReference(attr.MmsReference),
+                    "MX")))
+                continue;
+            var expectedSi = objectRef + ".units.SIUnit";
+            var expectedMul = objectRef + ".units.multiplier";
+            var cf = obj.Attributes.Where(a => a.FunctionalConstraint == "CF")
+                .GroupBy(a => IedBrowserLiveValues.CanonicalReference(a.MmsReference),
+                    StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.ToArray(), StringComparer.Ordinal);
+            if (!cf.TryGetValue(expectedSi, out var si) || si.Length != 1 ||
+                !cf.TryGetValue(expectedMul, out var mul) || mul.Length != 1)
+                continue;
+            foreach (var attr in new[] { si[0], mul[0] })
+            {
+                var key = IedBrowserLiveValues.CanonicalReference(attr.MmsReference) + "|CF";
+                if (!seen.Add(key)) continue;
+                if (ledger.TryGet(attr.MmsReference, "CF", out var observed) &&
+                    !observed.IsStale && observed.Association == association)
+                    continue;
+                found.Add(new IedBrowserReadTarget(attr.MmsReference, "CF",
+                    string.IsNullOrWhiteSpace(attr.SclBType) ? attr.MmsType : attr.SclBType));
+            }
+        }
+        return found;
+    }
+
+    /// <summary>
     /// Finite, evidence-first initial acquisition for a freshly discovered
     /// LIVE MMS schema. This is not Browser Read All or a new polling plan:
     /// only critical scalar status/nameplate/switch leaves are eligible.
