@@ -57,7 +57,7 @@ public sealed class M217GDataSetSclSchemaFallbackTests
         => new() { Reference = reference, FunctionalConstraint = fc };
 
     [Fact]
-    public void MeasurementMemberShowsOnlyExactDeclaredCfUnitAndMultiplierCompanions()
+    public void DataSetKeepsExactMxMembersWhileDataModelOwnsCfUnitAndMultiplier()
     {
         var live = Model(Obj(Attr("MX", "phsA.cVal.mag.f"),
             Attr("MX", "phsA.q"), Attr("CF", "phsA.units.SIUnit"),
@@ -76,19 +76,30 @@ public sealed class M217GDataSetSclSchemaFallbackTests
             }
         }
         var all = Flatten(children).ToArray();
-        Assert.Contains(all, row =>
-            row.FunctionalConstraint == "CF" &&
-            IedBrowserLiveValues.CanonicalReference(row.ValueReference) ==
-                Owner + ".phsA.units.SIUnit");
-        Assert.Contains(all, row =>
-            row.FunctionalConstraint == "CF" &&
-            IedBrowserLiveValues.CanonicalReference(row.ValueReference) ==
-                Owner + ".phsA.units.multiplier");
+        // A DataSet MX FCDA does not contain SIUnit/multiplier CF leaves.
+        Assert.All(all.Where(x => x.Kind == "Data"), row =>
+            Assert.Equal("MX", row.FunctionalConstraint));
         Assert.DoesNotContain(all, row =>
             row.ValueReference.Contains(".phsB.units", StringComparison.Ordinal));
-        // This only exposes exact IEC metadata. A declaration alone must not
-        // fabricate a fresh value; only the association-bound ledger may do so.
+        // The same verified live model exposes the CF leaves only through
+        // its Data Model DO/DA page. It is read-only, never an SCL value.
+        var objectModel = Assert.Single(
+            Assert.Single(Assert.Single(live.LogicalDevices).LogicalNodes).DataObjects);
+        var doPage = new IedBrowserTreeRow("model/do/" + Owner,
+            "PhV", "DO", 4, objectModel);
         var ledger = new IedBrowserLiveValues();
+        ledger.BeginAssociation();
+        var modelPlan = IedBrowserReadPlan.BuildFocused(live, doPage, ledger);
+        Assert.Contains(modelPlan, target =>
+            target.FunctionalConstraint == "CF" &&
+            IedBrowserLiveValues.CanonicalReference(target.Reference) ==
+                Owner + ".phsA.units.SIUnit");
+        Assert.Contains(modelPlan, target =>
+            target.FunctionalConstraint == "CF" &&
+            IedBrowserLiveValues.CanonicalReference(target.Reference) ==
+                Owner + ".phsA.units.multiplier");
+        // A declaration cannot fabricate a fresh value: only the SSOT wire
+        // channel may publish. Extra, partial configuration never becomes a unit.
         Assert.False(ledger.TryGet(Owner + ".phsA.units.SIUnit", "CF", out _));
         var association = ledger.BeginAssociation();
         Assert.True(ledger.PublishForAssociation(association,
@@ -108,11 +119,12 @@ public sealed class M217GDataSetSclSchemaFallbackTests
         var source = File.ReadAllText(Path.Combine(folder!.FullName,
             "MainWindow.IedBrowser.cs"));
         Assert.Contains("QueueIedBrowserFocusedRead(row)", source);
-        Assert.Contains("_iedBrowserAutoReadVisited.Add(row.Key)", source);
+        Assert.Contains("_iedBrowserAutoReadAdmission.TryStart(", source);
+        Assert.Contains("QueueIedBrowserFocusedRead(lnPage, detail.ReadObjectReference)", source);
         Assert.Contains("IedBrowserReadPlan.BuildFocused(", source);
         var planner = File.ReadAllText(Path.Combine(folder.FullName,
             "Models", "IedBrowserReadPlan.cs"));
-        Assert.Contains(".Take(Math.Min(budget, 24))", planner);
+        Assert.Contains(".Take(Math.Min(budget, page.Kind == \"SGCB\" ? 32 : 24))", planner);
         Assert.Contains("ledger.IsOffline", planner);
         Assert.Contains("FocusPriority(page.Kind, target)", planner);
         Assert.Contains("cts.CancelAfter(TimeSpan.FromSeconds(15))", source);
