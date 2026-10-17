@@ -40,6 +40,7 @@ public static class IedBrowserIsolatedReadService
             }
 
             var successful = 0;
+            var sgRootFlight = new IedBrowserSgRootReadFlight(client, targets);
             for (var i = 0; i < targets.Count; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -51,6 +52,15 @@ public static class IedBrowserIsolatedReadService
                 {
                     using var leafToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     leafToken.CancelAfter(TimeSpan.FromSeconds(5));
+                    var verifiedSg = await sgRootFlight.TryReadAsync(
+                        target, leafToken.Token).ConfigureAwait(false);
+                    if (verifiedSg is not null)
+                    {
+                        values.Report(verifiedSg);
+                        successful++;
+                        progress.Report(new IedBrowserReadProgress(i + 1, targets.Count));
+                        continue;
+                    }
                     var raw = await client.ReadValueAsync(target.Reference,
                         target.FunctionalConstraint, target.DataType, leafToken.Token)
                         .ConfigureAwait(false);
