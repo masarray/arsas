@@ -59,17 +59,39 @@ public static class IedBrowserContextHydrationPlan
             var members = dataSet.Members
                 .Where(m => string.Equals(m.FunctionalConstraint, "MX",
                     StringComparison.Ordinal)).Select(m =>
-                    IedBrowserLiveValues.CanonicalReference(m.Reference)).ToArray();
+                    IedBrowserLiveValues.CanonicalReference(m.Reference))
+                .Where(r => r.Length > 0).ToArray();
             candidates = model.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
-                .SelectMany(ln => ln.DataObjects)
+                .SelectMany(ln => IedBrowserEngineeringObjects.GroupExact(ln.DataObjects))
                 .Where(obj => members.Any(member =>
                     member == obj.Reference ||
                     member.StartsWith(obj.Reference + ".", StringComparison.Ordinal)))
-                .SelectMany(obj => obj.Attributes)
-                .Where(attr => string.Equals(attr.FunctionalConstraint, "CF",
-                    StringComparison.Ordinal) &&
-                    (attr.AttributePath.EndsWith(".units.SIUnit", StringComparison.Ordinal) ||
-                     attr.AttributePath.EndsWith(".units.multiplier", StringComparison.Ordinal)))
+                .SelectMany(obj =>
+                {
+                    // Exact MX member ancestors only. PhsA must never read
+                    // phsB.units simply because both share the same DO.
+                    var contexts = new HashSet<string>(StringComparer.Ordinal)
+                        { IedBrowserLiveValues.CanonicalReference(obj.Reference) };
+                    foreach (var member in members.Where(m =>
+                                 m.StartsWith(obj.Reference + ".", StringComparison.Ordinal)))
+                    {
+                        for (var cursor = member; cursor.Length > obj.Reference.Length;)
+                        {
+                            contexts.Add(cursor);
+                            var dot = cursor.LastIndexOf('.');
+                            if (dot <= obj.Reference.Length) break;
+                            cursor = cursor[..dot];
+                        }
+                    }
+                    return obj.Attributes.Where(attr =>
+                        string.Equals(attr.FunctionalConstraint, "CF",
+                            StringComparison.Ordinal) &&
+                        contexts.Any(owner =>
+                            IedBrowserLiveValues.CanonicalReference(attr.MmsReference) ==
+                                owner + ".units.SIUnit" ||
+                            IedBrowserLiveValues.CanonicalReference(attr.MmsReference) ==
+                                owner + ".units.multiplier"));
+                })
                 .Select(ToTarget);
         }
         else
