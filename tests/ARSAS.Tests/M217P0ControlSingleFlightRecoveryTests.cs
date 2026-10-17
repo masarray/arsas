@@ -66,6 +66,91 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
     }
 
     [Fact]
+    public async Task NativeDeadlineQuarantinesButNeverFakesTaskCompletion()
+    {
+        var session = new SessionFence();
+        Assert.True(Iec61850ControlFlightAdmission.TryEnter(ref session.Active, ref session.Quarantine));
+        var native = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var nativeCancellation = new CancellationTokenSource();
+
+        await Assert.ThrowsAsync<TimeoutException>(() =>
+            Iec61850ControlFlightAdmission.WaitForNativeAsync(
+                native.Task, TimeSpan.FromMilliseconds(40), CancellationToken.None,
+                () => Iec61850ControlFlightAdmission.Quarantine(ref session.Quarantine),
+                nativeCancellation.Cancel));
+
+        Assert.True(nativeCancellation.IsCancellationRequested);
+        Assert.False(native.Task.IsCompleted);
+        Assert.True(Iec61850ControlFlightAdmission.IsUnavailable(ref session.Active, ref session.Quarantine));
+        Assert.False(Iec61850ControlFlightAdmission.TryEnter(ref session.Active, ref session.Quarantine));
+
+        native.SetResult(42);
+        Assert.Equal(42, await native.Task);
+        Iec61850ControlFlightAdmission.Release(ref session.Active);
+        // The late native result is observed, not promoted to fresh authority.
+        Assert.Equal(1, session.Quarantine);
+        Assert.False(Iec61850ControlFlightAdmission.TryEnter(ref session.Active, ref session.Quarantine));
+    }
+
+    [Fact]
+    public async Task CallerCancellationQuarantinesAnUnresolvedNativeWrite()
+    {
+        var session = new SessionFence();
+        Assert.True(Iec61850ControlFlightAdmission.TryEnter(ref session.Active, ref session.Quarantine));
+        var native = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var waiterCancellation = new CancellationTokenSource();
+        using var nativeCancellation = new CancellationTokenSource();
+        var waiter = Iec61850ControlFlightAdmission.WaitForNativeAsync(
+            native.Task, TimeSpan.FromSeconds(10), waiterCancellation.Token,
+            () => Iec61850ControlFlightAdmission.Quarantine(ref session.Quarantine),
+            nativeCancellation.Cancel);
+
+        waiterCancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiter);
+        Assert.True(nativeCancellation.IsCancellationRequested);
+        Assert.False(native.Task.IsCompleted);
+        Assert.True(Iec61850ControlFlightAdmission.IsUnavailable(ref session.Active, ref session.Quarantine));
+    }
+
+    [Fact]
+    public async Task CompletedNativeResponseKeepsAssociationAvailableAfterRelease()
+    {
+        var session = new SessionFence();
+        Assert.True(Iec61850ControlFlightAdmission.TryEnter(ref session.Active, ref session.Quarantine));
+        var canceled = false;
+        var result = await Iec61850ControlFlightAdmission.WaitForNativeAsync(
+            Task.FromResult(17), TimeSpan.FromSeconds(1), CancellationToken.None,
+            () => Iec61850ControlFlightAdmission.Quarantine(ref session.Quarantine),
+            () => canceled = true);
+        Assert.Equal(17, result);
+        Assert.False(canceled);
+        Iec61850ControlFlightAdmission.Release(ref session.Active);
+        Assert.False(Iec61850ControlFlightAdmission.IsUnavailable(ref session.Active, ref session.Quarantine));
+    }
+
+    [Fact]
+    public void RuntimeControlRecoveryClosesAlternativeMmsLanesAndFencesDisconnect()
+    {
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root is not null &&
+            !File.Exists(Path.Combine(root.FullName, "Services", "Iec61850MonitorRuntime.cs")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var code = File.ReadAllText(Path.Combine(root!.FullName, "Services", "Iec61850MonitorRuntime.cs"));
+        Assert.Contains("CTL_MODEL_OUTCOME_UNKNOWN_TIMEOUT", code);
+        Assert.Contains("CONTROL_MONITOR_QUARANTINE", code);
+        Assert.Contains("CONTROL_STOP_DEFERRED_NATIVE_RCB_CLEANUP", code);
+        Assert.Contains("ControlLifetimeCancellation.Cancel()", code);
+        Assert.Contains("session.ControlLifetimeCancellation.Token", code);
+        Assert.Contains("Control association was replaced before result publication", code);
+        Assert.Contains("Monitoring cannot start during an active or uncertain MMS control flight", code);
+
+        var nativeCode = File.ReadAllText(Path.Combine(root.FullName, "Services", "NativeIec61850Client.cs"));
+        Assert.Contains("cancellationToken.ThrowIfCancellationRequested()", nativeCode);
+        Assert.Contains("if (!cancellationToken.IsCancellationRequested)", nativeCode);
+    }
+
+    [Fact]
     public void RuntimeDoesNotConfuseWaitTimeoutWithNativeOperationCompletion()
     {
         DirectoryInfo? root = new(AppContext.BaseDirectory);
@@ -77,7 +162,7 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
         var code = File.ReadAllText(Path.Combine(root!.FullName,
             "Services", "Iec61850MonitorRuntime.cs"));
         Assert.Contains("ControlFlightDeadline = TimeSpan.FromSeconds(45)", code);
-        Assert.Contains("nativeFlight.WaitAsync(ControlFlightDeadline", code);
+        Assert.Contains("Iec61850ControlFlightAdmission.WaitForNativeAsync(", code);
         Assert.Contains("nativeFlight is { IsCompleted: false }", code);
         Assert.Contains("ObserveLateControlFlightAsync(", code);
         Assert.Contains("CONTROL_OUTCOME_UNKNOWN_TIMEOUT", code);
