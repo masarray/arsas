@@ -82,7 +82,9 @@ jobs:
           }
 
           . .\ARSAS\scripts\test-p10-9f-core-routing-trial.ps1
+          . .\ARSAS\scripts\test-m217k-typed-status-trial.ps1
           $coreRoutingTrialValid = Test-P109FCoreRoutingTrial -Lock $lock
+          $m217KTrialValid = Test-M217KTypedStatusTrial -Lock $lock
           $trial = $lock.smartInteroperabilityCodeTrial
           if ($null -ne $trial -and $lock.commit -eq $trial.exactCommit) {
             if ([int]$lock.sourcePullRequest -ne 148 -or
@@ -147,6 +149,12 @@ jobs:
               throw 'P10 identity trial is not pinned to exact qualified DataSet-first ancestry.'
             }
             Write-Host 'P10 trusted-SCL identity trial accepted for code CI ONLY; R7/R10 physical gate unchanged.'
+          }
+          elseif ($m217KTrialValid) {
+            if ($env:GITHUB_BASE_REF -eq 'main' -or $env:GITHUB_REF_NAME -eq 'main') {
+              throw 'M2.17-K is not physically accepted and cannot run as a mainline promotion.'
+            }
+            Write-Host 'M2.17-K exact typed C264 engine trial accepted for CI ONLY; R7/R10 physical authority remains historical.'
           }
           elseif ($coreRoutingTrialValid) {
             Write-Host 'P10.9F routing core accepted for CodeVerified staging CI ONLY; R7/R10 physical authority unchanged.'
