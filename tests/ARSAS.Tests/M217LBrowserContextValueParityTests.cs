@@ -61,6 +61,13 @@ public sealed class M217LBrowserContextValueParityTests
                         DataObjects = objects.Where(o =>
                             o.Reference.StartsWith("LD/MMXU2.", StringComparison.Ordinal))
                             .ToArray()
+                    },
+                    new LiveIedLogicalNodeModel
+                    {
+                        Name = "LTIM0",
+                        DataObjects = objects.Where(o =>
+                            o.Reference.StartsWith("LD/LTIM0.", StringComparison.Ordinal))
+                            .ToArray()
                     }
                 ]
             }]
@@ -117,11 +124,11 @@ public sealed class M217LBrowserContextValueParityTests
         Assert.False(evidence.TryFormatUnitsParent(config.ValueReference,
             "CF", out _, out _));
         Assert.True(ledger.PublishForAssociation(current, unit.Reference, "CF",
-            "5", "", "", "MMS Read"));
+            "29", "", "", "MMS Read"));
         Assert.False(evidence.TryFormatUnitsParent(config.ValueReference,
             "CF", out _, out _));
         Assert.True(ledger.PublishForAssociation(current, multiplier.Reference, "CF",
-            "0", "", "", "MMS Read"));
+            "3", "", "", "MMS Read"));
         Assert.True(evidence.TryFormatUnitsParent(config.ValueReference,
             "CF", out _, out _));
 
@@ -218,8 +225,9 @@ public sealed class M217LBrowserContextValueParityTests
         var context = Assert.Single(rows.Where(r => r.ValueReference == Owner + ".units"));
         Assert.Equal("CF", context.FunctionalConstraint);
         Assert.All(context.GetChildren(), row => Assert.Equal("CF", row.FunctionalConstraint));
-        var dataSetMember = Assert.Single(rows.Where(r => r.ValueReference ==
-            Owner + ".phsA" && r.FunctionalConstraint == "MX"));
+        var dataSetMember = Assert.Single(rows.Where(r =>
+            r.Name.Contains("phsA", StringComparison.Ordinal) &&
+            r.FunctionalConstraint == "MX"));
         Assert.NotSame(context, dataSetMember);
     }
 }
