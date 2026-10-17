@@ -86,6 +86,45 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
     }
 
     [Fact]
+    public void ControlTargetClaimsAreScopedToSessionNotOnlyDeviceId()
+    {
+        // An unresolved old native flight must never block or remove a claim
+        // belonging to the newly established association for the same IED.
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root is not null &&
+            !File.Exists(Path.Combine(root.FullName, "Services",
+                "Iec61850MonitorRuntime.cs")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var code = File.ReadAllText(Path.Combine(root!.FullName,
+            "Services", "Iec61850MonitorRuntime.cs"));
+        Assert.Contains("ControlSessionIdentity { get; } = Guid.NewGuid()", code);
+        Assert.Contains("session.ControlSessionIdentity.ToString(\"N\") + \"|\" + Iec61850ControlIdentity.Normalize(signal.ObjectReference)", code);
+        Assert.Contains("session.ControlSessionIdentity.ToString(\"N\") + \"|\" + Iec61850ControlIdentity.Normalize(request.Signal.ObjectReference)", code);
+        Assert.DoesNotContain("var targetKey = deviceId +", code);
+    }
+
+    [Fact]
+    public void DisconnectCleanupUsesBoundedExistingClientDisposal()
+    {
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root is not null &&
+            !File.Exists(Path.Combine(root.FullName, "Services",
+                "Iec61850MonitorRuntime.cs")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var code = File.ReadAllText(Path.Combine(root!.FullName,
+            "Services", "Iec61850MonitorRuntime.cs"));
+        var stop = code.IndexOf("public async Task StopDeviceAsync(", StringComparison.Ordinal);
+        var next = code.IndexOf("private async Task StartReportPlansAsync(", stop, StringComparison.Ordinal);
+        Assert.True(stop >= 0 && next > stop);
+        var stopBody = code[stop..next];
+        Assert.Contains("DisposeClientForReconnectAsync(", stopBody);
+        Assert.Contains("SmartReconnectPolicy.ClientCleanupBudget", stopBody);
+        Assert.DoesNotContain("await session.Client.DisposeAsync()", stopBody);
+    }
+
+    [Fact]
     public void BrowserMustRejectNewConfirmationBeforeClaimingPhysicalCommand()
     {
         DirectoryInfo? root = new(AppContext.BaseDirectory);
