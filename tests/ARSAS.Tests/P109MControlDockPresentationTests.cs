@@ -41,6 +41,41 @@ public sealed class P109MControlDockPresentationTests
     }
 
     [Fact]
+    public void CommandDockNeverIncludesStatusOnlyUnknownOrUnverifiedControls()
+    {
+        var device = new Iec61850MonitorDevice();
+        var readOnly = Control("C264CONTROL/CSWI1.Mod", "ENC");
+        var unknown = Control("C264CONTROL/CSWI4.Pos", "DPC");
+        unknown.ControlModelText = "Auto-detect";
+        var unsafeSemantic = Control("C264CONTROL/CSWI6.Pos", "DPC");
+        unsafeSemantic.ControlModelText = "SBO • Enhanced security";
+        // ctlModel alone is NOT command authority: CDC/status semantic proof is required.
+        var verified = Control("C264CONTROL/CSWI1.Pos", "DPC");
+        verified.ControlModelText = "SBO • Enhanced security";
+        verified.ControlSemanticVerified = true;
+        Assert.True(verified.ControlSupportsOperate);
+        device.Signals.ReplaceAll([readOnly, unknown, unsafeSemantic, verified]);
+        device.RecountSelectedSignals();
+        Assert.Single(device.CommandSignals);
+        Assert.Same(verified, device.CommandSignals[0]);
+        Assert.Equal(4, Iec61850ControlIdentity.CountSelected(device.Signals));
+
+        // Connected inspection makes another Pos operable without a new
+        // selection wizard, cache or second command model.
+        unsafeSemantic.ControlSemanticVerified = true;
+        device.RefreshCommandSignalProjection();
+        Assert.Equal(2, device.CommandSignals.Count);
+        Assert.DoesNotContain(device.CommandSignals, x => x.Name == "Mod");
+        Assert.DoesNotContain(device.CommandSignals, x => x.ControlModelKind ==
+            Iec61850ControlModelKind.StatusOnly);
+        // Lost association revokes command authority in the same projection.
+        verified.ClearLiveControlAuthority();
+        unsafeSemantic.ClearLiveControlAuthority();
+        device.RefreshCommandSignalProjection();
+        Assert.Empty(device.CommandSignals);
+    }
+
+    [Fact]
     public void MismatchedCdc_RequiresExactStepStatus_NotTapChgNameHeuristics()
     {
         var control = Control("IED/ATCC1.TapChg", "SPC");

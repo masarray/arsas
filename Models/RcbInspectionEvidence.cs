@@ -117,16 +117,13 @@ public sealed class RcbInspectionEvidence
         if (UsableObservation(checkedValue))
             return new(name, checkedValue!.Trim(), liveSource);
 
-        // A successful connect/discovery may already have observed RptEna,
-        // Resv, and ResvTms. It is historical metadata, NOT the present
-        // RCB reservation/enable state and never proof of local ownership.
-        // Source-backed SCL declarations do not contain these observations.
-        if (connected && ModelSource == "Saved discovery model (not live state)" &&
-            UsableObservation(discoveryValue))
-            return new(name, discoveryValue!.Trim(),
-                "Discovery snapshot (historical; explicit MMS check for current state)");
-
-        return new(name, "—", "Current MMS state not verified");
+        // Discovery happened before report activation and may explicitly say
+        // RptEna=false. That snapshot is NOT the current RCB state. Presenting
+        // it as plain false after the monitor wrote RptEna=true is misleading.
+        // Only an exact, read-only MMS check may populate operational fields.
+        return connected
+            ? new(name, "Not verified", "Current MMS state requires an exact read-only RCB check")
+            : new(name, "—", "Offline; no live MMS state");
     }
 
     private static bool UsableObservation(string? value)

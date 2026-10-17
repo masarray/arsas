@@ -687,9 +687,10 @@ public sealed class Iec61850MonitorDevice : ObservableObject
 
     private void RefreshCommandSignals()
     {
-        // Show every selected valid control DataObject. Operate authorization remains
-        // independently gated by ControlSupportsOperate on each command action.
-        var selected = Iec61850ControlIdentity.DistinctSelected(Signals)
+        // Command Dock is an operator-action surface, not an inventory of
+        // selected CF/status-only objects. Keep those in Data Model/Signals.
+        // A typed live ctlModel and semantic CDC proof are mandatory here.
+        var selected = Iec61850ControlIdentity.DistinctOperable(Signals)
             .OrderBy(signal => signal.SortPriority)
             .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
             .ThenBy(signal => signal.Name, StringComparer.OrdinalIgnoreCase)
