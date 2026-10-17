@@ -919,7 +919,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 !ReferenceEquals(current, session) ||
                 session.ControlLifetimeCancellation.IsCancellationRequested)
                 throw new OperationCanceledException("Control association was replaced during ctlModel Write.");
-            Log(result.ReadbackVerified ? "INFO", session.Device.Name,
+            Log(result.ReadbackVerified ? "INFO" : "WARN", session.Device.Name,
                 $"CTL_MODEL_CONFIGURATION_RESULT: {signal.ObjectReference}; " +
                 $"writeAccepted={result.WriteAccepted}; readbackVerified={result.ReadbackVerified}; " +
                 $"before={result.BeforeModel}; after={result.AfterModel}; {result.Detail}");
