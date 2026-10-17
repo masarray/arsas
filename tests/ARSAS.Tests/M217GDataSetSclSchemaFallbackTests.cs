@@ -109,7 +109,12 @@ public sealed class M217GDataSetSclSchemaFallbackTests
             "MainWindow.IedBrowser.cs"));
         Assert.Contains("QueueIedBrowserFocusedRead(row)", source);
         Assert.Contains("_iedBrowserAutoReadVisited.Add(row.Key)", source);
-        Assert.Contains("Take(24).ToArray()", source);
+        Assert.Contains("IedBrowserReadPlan.BuildFocused(", source);
+        var planner = File.ReadAllText(Path.Combine(folder.FullName,
+            "Models", "IedBrowserReadPlan.cs"));
+        Assert.Contains(".Take(Math.Min(budget, 24))", planner);
+        Assert.Contains("ledger.IsOffline", planner);
+        Assert.Contains("FocusPriority(page.Kind, target)", planner);
         Assert.Contains("cts.CancelAfter(TimeSpan.FromSeconds(15))", source);
         Assert.Contains("Tag = \"Auto\"", source);
         Assert.Contains("IedBrowserIsolatedReadService.ReadAsync(", source);
