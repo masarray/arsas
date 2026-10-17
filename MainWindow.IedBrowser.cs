@@ -268,7 +268,8 @@ public partial class MainWindow
     // No polling timer, process-value mirror or write service is introduced.
     private readonly HashSet<string> _iedBrowserAutoReadPages = new(StringComparer.Ordinal);
 
-    private void QueueIedBrowserFocusedRead(IedBrowserTreeRow? page)
+    private void QueueIedBrowserFocusedRead(IedBrowserTreeRow? page,
+        string? focusedObjectReference = null)
     {
         if (page?.Kind is not ("SGCB" or "LN" or "DataSet") ||
             SelectedDevice is not { IsConnected: true, IsDemo: false, IsBusy: false } device ||
@@ -278,7 +279,8 @@ public partial class MainWindow
         // RCB and bulk inventory navigation stay entirely passive.
         // LN gets an exact ST/MX image, SGCB its verified control state,
         // and DataSet only the declared CF SIUnit/multiplier pair.
-        var key = device.LiveValues.Association + "|" + device.Name + "|" + page.Key;
+        var key = device.LiveValues.Association + "|" + device.Name + "|" +
+            page.Key + "|" + (focusedObjectReference ?? "");
         if (!_iedBrowserAutoReadPages.Add(key)) return;
         Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
         {
@@ -1564,6 +1566,11 @@ public partial class MainWindow
         {
             _iedBrowserSelectedDoReference = detail.ReadObjectReference;
             RefreshIedBrowserReadButtons(); // expose separate Read DO and Read LN scope
+            // The selected DO is independently eligible for a small exact
+            // read; do not leave an otherwise unobserved XCBR status at
+            // Not read merely because another DO used the LN's first budget.
+            QueueIedBrowserFocusedRead(_iedBrowserNavigation.Current,
+                detail.ReadObjectReference);
         }
         if (!detail.HasChildren) return;
         ToggleIedBrowserDetails(detail);
