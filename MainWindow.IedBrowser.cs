@@ -270,14 +270,14 @@ public partial class MainWindow
 
     private void QueueIedBrowserFocusedRead(IedBrowserTreeRow? page)
     {
-        if (page?.Kind is not ("SGCB" or "LN") ||
+        if (page?.Kind is not ("SGCB" or "LN" or "DataSet") ||
             SelectedDevice is not { IsConnected: true, IsDemo: false, IsBusy: false } device ||
             _iedBrowserReadOperation is not null || device.IsBrowserReading ||
             device.LiveDiscoveryModel is null || device.LiveValues.IsOffline)
             return;
-        // RCB, DataSet and bulk inventory navigation stay entirely passive.
-        // A selected LN gets just a small exact ST/MX read image; SGCB also
-        // admits the verified read-only NumOfSG/ActSG/LastChange fields.
+        // RCB and bulk inventory navigation stay entirely passive.
+        // LN gets an exact ST/MX image, SGCB its verified control state,
+        // and DataSet only the declared CF SIUnit/multiplier pair.
         var key = device.LiveValues.Association + "|" + device.Name + "|" + page.Key;
         if (!_iedBrowserAutoReadPages.Add(key)) return;
         Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
@@ -327,8 +327,10 @@ public partial class MainWindow
             ReferenceEquals(_iedBrowserRenderedPage, currentPage) &&
             currentPage?.Payload is LiveIedLogicalNodeModel
                 ? _iedBrowserSelectedDoReference : null;
-        var targets = IedBrowserReadPlan.Build(
-            model, currentPage, readAll, selectedDo);
+        var targets = focusedAuto && currentPage?.Payload is LiveIedDataSetModel unitSet
+            ? IedBrowserReadPlan.BuildDataSetUnitRead(
+                device.LiveDiscoveryModel, unitSet, device.LiveValues)
+            : IedBrowserReadPlan.Build(model, currentPage, readAll, selectedDo);
         if (focusedAuto)
         {
             // Never start a large LN or SG Read All implicitly. Keep the
@@ -336,11 +338,13 @@ public partial class MainWindow
             // ST process leaves are preferred for the Data Model; SGCB control
             // state gets priority before settings within the finite envelope.
             const int maxFocusedTargets = 12;
-            targets = currentPage?.Kind == "SGCB"
-                ? targets.OrderBy(t => t.FunctionalConstraint == "SG" ? 1 : 0)
-                    .ThenBy(t => t.Reference, StringComparer.Ordinal)
-                    .Take(maxFocusedTargets).ToArray()
-                : targets.Where(t => t.FunctionalConstraint is "ST" or "MX")
+            targets = currentPage?.Payload is LiveIedDataSetModel
+                ? targets.Take(maxFocusedTargets).ToArray()
+                : currentPage?.Kind == "SGCB"
+                    ? targets.OrderBy(t => t.FunctionalConstraint == "SG" ? 1 : 0)
+                        .ThenBy(t => t.Reference, StringComparer.Ordinal)
+                        .Take(maxFocusedTargets).ToArray()
+                    : targets.Where(t => t.FunctionalConstraint is "ST" or "MX")
                     .OrderBy(t => t.Reference.Contains("$ST$", StringComparison.Ordinal) ? 0 : 1)
                     .ThenBy(t => t.Reference.EndsWith("$stVal", StringComparison.Ordinal) ? 0 : 1)
                     .ThenBy(t => t.Reference, StringComparer.Ordinal)
