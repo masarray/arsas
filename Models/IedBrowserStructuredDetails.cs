@@ -407,8 +407,12 @@ public static class IedBrowserStructuredDetails
                     : scalarLeaf ?? (attr.ObjectReference + "." +
                         string.Join(".", groupArray[0].parts.Take(pathIndex + 1))),
                 FallbackValueReference = hasDirect ? scalarLeaf ?? "" : "",
-                EngineeringUnitReference = scalarLeaf ?? "",
-                IsEngineeringValue = scalarLeaf is not null && descendants.Length > 0,
+                EngineeringUnitReference = scalarLeaf ??
+                    (name == "setMag" ? fullPrefix : ""),
+                IsEngineeringValue = scalarLeaf is not null && descendants.Length > 0 ||
+                    name == "setMag" && hasDirect &&
+                    string.Equals(attr.FunctionalConstraint, "SG",
+                        StringComparison.OrdinalIgnoreCase),
                 PolarPlan = polar,
                 PhasePlans = phases,
                 VectorComponents = !allowVector || name is "q" or "t" ?

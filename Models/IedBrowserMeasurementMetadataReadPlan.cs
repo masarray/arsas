@@ -22,6 +22,64 @@ public static class IedBrowserMeasurementMetadataReadPlan
         return Build(model, reference, ledger, budget);
     }
 
+    /// <summary>
+    /// Same SSOT CF acquisition for active SG analogue magnitudes. Only
+    /// a live SGCB's exact MMS domain and IEC ASG setMag declarations qualify.
+    /// Ordinal setVal enums are never rewritten as physical magnitudes.
+    /// </summary>
+    public static IReadOnlyList<IedBrowserReadTarget> BuildForSettingGroup(
+        LiveIedModelDiscoveryDocument? model, IedBrowserTreeRow? page,
+        IedBrowserLiveValues ledger, int budget = 12)
+    {
+        if (model is null || ledger.IsOffline || budget <= 0 ||
+            page is not { Kind: "SGCB", Payload: LiveIedControlBlockModel block })
+            return [];
+
+        var attributes = model.LogicalDevices
+            .Where(ld => string.Equals(ld.MmsDomain, block.Domain,
+                StringComparison.Ordinal))
+            .SelectMany(ld => ld.LogicalNodes)
+            .SelectMany(ln => ln.DataObjects)
+            .SelectMany(obj => obj.Attributes)
+            .Where(a => !string.IsNullOrWhiteSpace(a.MmsReference))
+            .ToArray();
+        var unique = attributes.GroupBy(a =>
+                IedBrowserLiveValues.CanonicalReference(a.MmsReference) + "|" +
+                (a.FunctionalConstraint ?? "").Trim().ToUpperInvariant(),
+                StringComparer.Ordinal)
+            .Where(g => g.Count() == 1)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+        var owners = attributes.Where(a =>
+                string.Equals(a.FunctionalConstraint, "SG",
+                    StringComparison.OrdinalIgnoreCase))
+            .Select(a => IedBrowserLiveValues.CanonicalReference(a.MmsReference))
+            .Select(reference => reference.EndsWith(".setMag.f",
+                    StringComparison.Ordinal) ? reference[..^".setMag.f".Length] :
+                reference.EndsWith(".setMag", StringComparison.Ordinal)
+                    ? reference[..^".setMag".Length] : "")
+            .Where(x => x.Length > 0).Distinct(StringComparer.Ordinal)
+            .OrderBy(x => x, StringComparer.Ordinal);
+        var result = new List<IedBrowserReadTarget>();
+        foreach (var owner in owners)
+        {
+            if (!unique.TryGetValue(owner + ".units.SIUnit|CF", out var si) ||
+                !unique.TryGetValue(owner + ".units.multiplier|CF",
+                    out var multiplier)) continue;
+            foreach (var attr in new[] { si, multiplier })
+            {
+                if (ledger.TryGet(attr.MmsReference, "CF", out var observed) &&
+                    !observed.IsStale && observed.Association == ledger.Association)
+                    continue;
+                result.Add(new IedBrowserReadTarget(attr.MmsReference, "CF",
+                    string.IsNullOrWhiteSpace(attr.SclBType)
+                        ? attr.MmsType : attr.SclBType));
+                if (result.Count >= budget) return result;
+            }
+        }
+        return result;
+    }
+
     public static IReadOnlyList<IedBrowserReadTarget> Build(
         LiveIedModelDiscoveryDocument? model, string? dataSetReference,
         IedBrowserLiveValues ledger, int budget = 24)

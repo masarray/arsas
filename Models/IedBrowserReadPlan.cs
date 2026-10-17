@@ -141,7 +141,11 @@ public static class IedBrowserReadPlan
         // process magnitudes in DataSet/Report views.
         var metadata = page.Kind == "DataSet"
             ? IedBrowserMeasurementMetadataReadPlan.BuildForPage(
-                liveModel, page, ledger, budget) : [];
+                liveModel, page, ledger, budget)
+            : page.Kind == "SGCB"
+                ? IedBrowserMeasurementMetadataReadPlan.BuildForSettingGroup(
+                    liveModel, page, ledger, budget)
+                : [];
         // Do not publish another reader's result as though this association
         // observed it. Existing Report/MMS Read evidence is always reused.
         return metadata.Concat(candidates)
@@ -150,7 +154,7 @@ public static class IedBrowserReadPlan
             .DistinctBy(target =>
                 IedBrowserLiveValues.CanonicalReference(target.Reference) + "|" +
                 target.FunctionalConstraint, StringComparer.Ordinal)
-            .OrderBy(target => page.Kind == "DataSet" &&
+            .OrderBy(target => (page.Kind is "DataSet" or "SGCB") &&
                 target.FunctionalConstraint == "CF" ? -1 :
                 FocusPriority(page.Kind, target))
             .ThenBy(target => target.Reference, StringComparer.Ordinal)

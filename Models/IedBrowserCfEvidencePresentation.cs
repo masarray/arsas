@@ -16,13 +16,15 @@ public sealed class IedBrowserCfEvidencePresentation
     // Weak keys prevent retained IED schemas/snapshots after reload. These
     // indexes contain declarations and historical evidence only, never
     // mutable current Report/Read observations.
-    private sealed record SchemaIndex(HashSet<string> DeclaredCf, string[] UnitOwners);
+    private sealed record SchemaIndex(
+        HashSet<string> DeclaredCf, string[] UnitOwners, string[] SettingOwners);
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
         LiveIedModelDiscoveryDocument, SchemaIndex> SchemaCache = new();
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
         LiveIedCanonicalModel, Dictionary<string, string?>> SnapshotCache = new();
     private readonly LiveIedModelDiscoveryDocument? _model;
     private readonly string[] _unitOwners;
+    private readonly string[] _settingOwners;
     private readonly Dictionary<string, string?> _snapshot = new(StringComparer.Ordinal);
     private readonly HashSet<string> _declaredCf = new(StringComparer.Ordinal);
     public bool HasSnapshot { get; }
@@ -38,8 +40,13 @@ public sealed class IedBrowserCfEvidencePresentation
             var schema = SchemaCache.GetValue(currentModel, BuildSchema);
             _declaredCf = schema.DeclaredCf;
             _unitOwners = schema.UnitOwners;
+            _settingOwners = schema.SettingOwners;
         }
-        else _unitOwners = [];
+        else
+        {
+            _unitOwners = [];
+            _settingOwners = [];
+        }
         if (canonical is not null && currentModel is not null &&
             ReferenceEquals(currentModel, canonical.Discovery))
         {
@@ -52,6 +59,7 @@ public sealed class IedBrowserCfEvidencePresentation
     {
         var declared = new HashSet<string>(StringComparer.Ordinal);
         var owners = new HashSet<string>(StringComparer.Ordinal);
+        var settingOwners = new HashSet<string>(StringComparer.Ordinal);
         foreach (var a in model.LogicalDevices.SelectMany(d => d.LogicalNodes)
                      .SelectMany(n => n.DataObjects).SelectMany(o => o.Attributes))
         {
@@ -60,6 +68,19 @@ public sealed class IedBrowserCfEvidencePresentation
             if (string.Equals(a.FunctionalConstraint, "CF",
                     StringComparison.OrdinalIgnoreCase))
                 declared.Add(Key(reference, "CF"));
+            if (string.Equals(a.FunctionalConstraint, "SG",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                // IEC ASG analogue setMag shares the same observed CF unit
+                // owner. Do not treat enum setVal or a vendor string as a
+                // measurement and do not infer units from DO names.
+                var settingSuffix = reference.EndsWith(".setMag.f",
+                    StringComparison.Ordinal) ? ".setMag.f" :
+                    reference.EndsWith(".setMag", StringComparison.Ordinal)
+                        ? ".setMag" : "";
+                if (settingSuffix.Length > 0)
+                    settingOwners.Add(reference[..^settingSuffix.Length]);
+            }
             if (!string.Equals(a.FunctionalConstraint, "MX",
                     StringComparison.OrdinalIgnoreCase)) continue;
             var suffix = reference.EndsWith(".cVal.mag.f", StringComparison.Ordinal)
@@ -68,7 +89,7 @@ public sealed class IedBrowserCfEvidencePresentation
             if (suffix.Length != 0) owners.Add(reference[..^suffix.Length]);
         }
         return new SchemaIndex(declared, owners.OrderBy(s => s, StringComparer.Ordinal)
-            .ToArray());
+            .ToArray(), settingOwners.OrderBy(s => s, StringComparer.Ordinal).ToArray());
     }
 
     private static Dictionary<string, string?> BuildSnapshot(LiveIedCanonicalModel canonical)
@@ -240,6 +261,25 @@ public sealed class IedBrowserCfEvidencePresentation
                 if (index.ContainsKey(exact))
                     index[exact] = composed;
             }
+        }
+        // IEC ASG/SG setting magnitude: CF units belong to its exact DO,
+        // never to a neighboring setting or to ordinal enum setVal values.
+        foreach (var owner in _settingOwners)
+        {
+            if (!TryVerifyUnitPair(owner + ".units", out var composed,
+                    out _, out var fresh)) continue;
+            var key = Key(owner, "SG");
+            if (!index.TryGetValue(key, out var previous))
+                index.Add(key, composed);
+            else if (!string.Equals(previous, composed, StringComparison.Ordinal))
+                index[key] = fresh ? composed : null;
+            if (fresh) index[key] = composed;
+            if (fresh)
+                foreach (var leaf in new[] { ".setMag", ".setMag.f" })
+                {
+                    var exact = owner + leaf + "|SG";
+                    if (index.ContainsKey(exact)) index[exact] = composed;
+                }
         }
         return index;
     }
