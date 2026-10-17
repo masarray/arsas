@@ -22,6 +22,37 @@ public static class Iec61850ControlFlightAdmission
         return false;
     }
 
+    /// <summary>
+    /// Bounds only the caller's wait, never the actual native lifetime.
+    /// An unresolved native operation remains owned by its session until its
+    /// own Task finishes; the caller must retain admission until then.
+    /// </summary>
+    public static async Task<T> WaitForNativeAsync<T>(
+        Task<T> nativeFlight, TimeSpan deadline, CancellationToken waitCancellation,
+        Action quarantine, Action cancelNative)
+    {
+        ArgumentNullException.ThrowIfNull(nativeFlight);
+        ArgumentNullException.ThrowIfNull(quarantine);
+        ArgumentNullException.ThrowIfNull(cancelNative);
+        try
+        {
+            return await nativeFlight.WaitAsync(deadline, waitCancellation).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            quarantine();
+            cancelNative();
+            throw;
+        }
+        catch (OperationCanceledException) when (waitCancellation.IsCancellationRequested &&
+                                                  !nativeFlight.IsCompleted)
+        {
+            quarantine();
+            cancelNative();
+            throw;
+        }
+    }
+
     public static void Quarantine(ref int quarantine)
         => Interlocked.Exchange(ref quarantine, 1);
 
