@@ -13,10 +13,13 @@ internal sealed class IedBrowserSgRootReadFlight
     private readonly IReadOnlyList<IedBrowserReadTarget> _verifiedRootScope;
     private readonly HashSet<string> _scheduledKeys;
     private readonly HashSet<string> _drainedRootFanout = new(StringComparer.Ordinal);
-    private bool _groupedRootAttempted;
+    private readonly HashSet<string> _groupAttemptedRoots = new(StringComparer.Ordinal);
     private readonly Dictionary<string, IReadOnlyDictionary<string, IedBrowserReadResult>>
         _completed = new(StringComparer.Ordinal);
-    private const int MaxRootReadsPerPage = 8;
+    // Automatic focused slices retain the tight 8-root bound. An explicit
+    // operator Read of a large selected LN/SGCB can traverse further typed
+    // FC roots without degenerating into hundreds of leaf fallback reads.
+    private int MaxRootReadsPerPage => _targets.Count > 32 ? 128 : 8;
 
     internal IedBrowserSgRootReadFlight(NativeIec61850Client client,
         IReadOnlyList<IedBrowserReadTarget> targets,
@@ -46,17 +49,27 @@ internal sealed class IedBrowserSgRootReadFlight
             .Select(item => item.Value).ToArray();
     }
 
-    private async Task WarmupGroupedRootsAsync(CancellationToken cancellationToken)
+    private async Task WarmupGroupedRootsAsync(
+        IedBrowserReadTarget requested, CancellationToken cancellationToken)
     {
-        if (_groupedRootAttempted) return;
-        _groupedRootAttempted = true;
+        var requestedRoot = IedBrowserSgRootProjection.RootFor(requested);
+        if (requestedRoot.Length == 0 ||
+            _groupAttemptedRoots.Contains(requestedRoot))
+            return;
+        // Traverse successive groups of FIVE explicit, already-scheduled
+        // roots. Otherwise the old first-five-only warmup makes every later
+        // SGCB root fall back to slow, repeated leaf MMS Read requests.
+        var roots = new[] { requestedRoot }
+            .Concat(_targets.Select(IedBrowserSgRootProjection.RootFor))
+            .Where(root => root.Length != 0 &&
+                !_groupAttemptedRoots.Contains(root))
+            .Distinct(StringComparer.Ordinal)
+            .Take(5).ToArray();
+        foreach (var root in roots) _groupAttemptedRoots.Add(root);
 
         // Only roots already scheduled in this finite page may enter a group.
         // No speculative LN/FC enumeration, no SCL-only sibling admission.
-        var groups = _targets.Select(IedBrowserSgRootProjection.RootFor)
-            .Where(root => root.Length != 0)
-            .Distinct(StringComparer.Ordinal)
-            .Take(5)
+        var groups = roots.AsEnumerable()
             .Select(root =>
             {
                 var candidates = _verifiedRootScope.Where(t =>
@@ -106,7 +119,7 @@ internal sealed class IedBrowserSgRootReadFlight
             return null;
         var root = IedBrowserSgRootProjection.RootFor(target);
         if (root.Length == 0) return null;
-        await WarmupGroupedRootsAsync(cancellationToken).ConfigureAwait(false);
+        await WarmupGroupedRootsAsync(target, cancellationToken).ConfigureAwait(false);
         if (!_completed.TryGetValue(root, out var values))
         {
             if (_completed.Count >= MaxRootReadsPerPage)
