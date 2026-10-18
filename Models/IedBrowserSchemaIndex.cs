@@ -84,7 +84,13 @@ public sealed class IedBrowserSchemaIndex
                     // arbitrary INT32, a similarly named vendor object, or
                     // a guessed ordinal-to-symbol mapping.
                     (string.Equals(obj.InferredCdc, "ENG", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(obj.InferredCdc, "ENS", StringComparison.OrdinalIgnoreCase)) &&
+                     string.Equals(obj.InferredCdc, "ENS", StringComparison.OrdinalIgnoreCase) ||
+                     // MMS discovery may provide a proven enumerated ST
+                     // primitive without enough SCL CDC metadata to infer
+                     // ENG/ENS. The exact XCBR/CBOpCap/ST/typed-enum
+                     // identity still qualifies; arbitrary numeric DOs do not.
+                     string.IsNullOrWhiteSpace(obj.InferredCdc) ||
+                     string.Equals(obj.InferredCdc, "Unknown", StringComparison.OrdinalIgnoreCase)) &&
                     (string.Equals(attr.SclBType, "Enum", StringComparison.OrdinalIgnoreCase) ||
                      string.Equals(attr.MmsType, "enumerated", StringComparison.OrdinalIgnoreCase) ||
                      string.Equals(attr.MmsType, "enum", StringComparison.OrdinalIgnoreCase)))
