@@ -3,7 +3,7 @@ using ArIED61850Tester.Models;
 namespace ArIED61850Tester.Services;
 
 /// <summary>
-/// One in-flight read-plan local typed FC=SG root result projection.
+/// One in-flight read-plan local typed FC=SG/SP0 root result projection.
 /// This dictionary is discarded after a bounded Read; never a value cache.
 /// </summary>
 internal sealed class IedBrowserSgRootReadFlight
@@ -24,8 +24,7 @@ internal sealed class IedBrowserSgRootReadFlight
     internal async Task<IedBrowserReadResult?> TryReadAsync(
         IedBrowserReadTarget target, CancellationToken cancellationToken)
     {
-        if (_targets.Count > 32 || !string.Equals(target.FunctionalConstraint,
-                "SG", StringComparison.OrdinalIgnoreCase))
+        if (_targets.Count > 32 || target.FunctionalConstraint is not ("SG" or "SP"))
             return null;
         var root = IedBrowserSgRootProjection.RootFor(target);
         if (root.Length == 0) return null;
@@ -52,7 +51,7 @@ internal sealed class IedBrowserSgRootReadFlight
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // No speculative values from a malformed/unavailable FC root.
-                System.Diagnostics.Debug.WriteLine("SG root read unavailable: " + ex.Message);
+                System.Diagnostics.Debug.WriteLine("IEC setting FC root read unavailable: " + ex.Message);
             }
             values = read.GroupBy(v =>
                 IedBrowserLiveValues.CanonicalReference(v.Target.Reference) +
