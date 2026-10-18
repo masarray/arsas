@@ -895,29 +895,16 @@ public partial class MainWindow
                     observedReference, row.FunctionalConstraint, display,
                     _iedBrowserValueSchemaIndex);
             }
-            if (row.IsEngineeringValue && row.EvidenceField.Length == 0)
+            // One dimensionally typed projector across Data Model, DataSet,
+            // Report and Setting Group detail rows. DO parent and direct leaf
+            // reuse the SAME observed reference + owner CF unit decision.
+            if (row.EvidenceField.Length == 0)
                 display = IedBrowserEngineeringValuePresentation.Format(
-                    display, IedBrowserEngineeringValuePresentation.ResolveUnit(
-                        engineeringUnits,
+                    display, IedBrowserEngineeringValuePresentation.ResolveObservedUnit(
+                        engineeringUnits, cfEvidence, observedReference,
                         row.EngineeringUnitReference.Length == 0
                             ? row.ValueReference : row.EngineeringUnitReference,
-                        row.FunctionalConstraint));
-            // A typed integer ST counter can carry a model-verified CF
-            // engineering unit. All enum/DPC/boolean ST remain untouched.
-            else if (row.EvidenceField.Length == 0 &&
-                     cfEvidence.TryFormatVerifiedNumericStatusUnit(
-                         observedReference, row.FunctionalConstraint,
-                         out var statusUnit, out _))
-                display = IedBrowserEngineeringValuePresentation.Format(
-                    display, statusUnit);
-            // An expanded MX ang leaf is in degrees, not a fabricated pair.
-            // cVal parent handles coherent phasor composition separately.
-            else if (row.EvidenceField.Length == 0 &&
-                     observedReference.EndsWith(".ang.f", StringComparison.Ordinal) &&
-                     row.FunctionalConstraint == "MX")
-                display = IedBrowserEngineeringValuePresentation.Format(
-                    display, IedBrowserEngineeringValuePresentation.ResolveVectorAngleUnit(
-                        engineeringUnits, observedReference, "MX"));
+                        row.FunctionalConstraint, row.IsEngineeringValue));
             row.Value = live.IsStale ? "Offline · " + display : display;
         }
         UpdateIedBrowserGooseDetails();
