@@ -90,8 +90,9 @@ public static class IedBrowserIsolatedReadService
                     }
                     else
                         values.Report(new IedBrowserReadResult(target, "", "", "",
-                            raw is null && client.LastErrorMessage.Length > 0
-                                ? client.LastErrorMessage : reason));
+                            IedBrowserRejectedScalarEvidence.Explain(raw, reason,
+                                target.DataType, target.FunctionalConstraint,
+                                client.LastErrorMessage)));
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
