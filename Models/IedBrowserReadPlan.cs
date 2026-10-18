@@ -148,24 +148,67 @@ public static class IedBrowserReadPlan
                 : [];
         // Do not publish another reader's result as though this association
         // observed it. Existing Report/MMS Read evidence is always reused.
-        return metadata.Concat(candidates)
+        var ordered = metadata.Concat(candidates)
             .Where(target => !ledger.TryGet(target.Reference,
                 target.FunctionalConstraint, out _))
             .DistinctBy(target =>
                 IedBrowserLiveValues.CanonicalReference(target.Reference) + "|" +
                 target.FunctionalConstraint, StringComparer.Ordinal)
-            // Read the active SG values FIRST. Previously CF metadata
-            // was ahead of SG in the same 32-target / 15-second budget:
-            // slow/unavailable CF could exhaust the entire read before any
-            // setting arrived. Units remain a later bounded best-effort read.
             .OrderBy(target => page.Kind == "SGCB" &&
                 target.FunctionalConstraint == "SG" ? -2 :
                 page.Kind == "DataSet" &&
                 target.FunctionalConstraint == "CF" ? -1 :
                 FocusPriority(page.Kind, target))
             .ThenBy(target => target.Reference, StringComparer.Ordinal)
-            .Take(Math.Min(budget, page.Kind == "SGCB" ? 32 : 24))
             .ToArray();
+        var cap = Math.Min(budget, page.Kind == "SGCB" ? 32 : 24);
+        // An LN with dozens of ST status leaves previously exhausted the
+        // FIRST 24 slots, so verified SP/SG settings and CF unit companions
+        // were never attempted. Distribute the same finite budget across
+        // FC namespaces, retaining old single-DO/low-budget priority rules.
+        return page.Kind == "LN" && selectedDoReference is null && cap >= 8
+            ? FairLnTargets(ordered, cap)
+            : ordered.Take(cap).ToArray();
+    }
+
+    /// <summary>
+    /// Finite read-only LN sample. Exact FC/attribute references are already
+    /// proven by Build(); there is no sibling inference or new MMS polling.
+    /// A full explicit Read LN retains the independent operator-selected
+    /// sweep; this only prevents automatic focused-admission starvation.
+    /// </summary>
+    private static IReadOnlyList<IedBrowserReadTarget> FairLnTargets(
+        IReadOnlyList<IedBrowserReadTarget> ordered, int cap)
+    {
+        var output = new List<IedBrowserReadTarget>(cap);
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        static string Key(IedBrowserReadTarget t)
+            => IedBrowserLiveValues.CanonicalReference(t.Reference) + "|" +
+               t.FunctionalConstraint.ToUpperInvariant();
+        void TakeFc(int max, Func<IedBrowserReadTarget, bool> predicate)
+        {
+            var added = 0;
+            foreach (var target in ordered)
+            {
+                if (added >= max || output.Count >= cap) break;
+                if (!predicate(target) || !keys.Add(Key(target))) continue;
+                output.Add(target);
+                added++;
+            }
+        }
+        // Adequate headroom for the GE overcurrent LN's setting owners,
+        // while leaving process state, analog and CF provenance represented.
+        TakeFc(Math.Min(4, cap), t => t.FunctionalConstraint == "ST");
+        TakeFc(Math.Min(10, cap), t => t.FunctionalConstraint is "SP" or "SG");
+        TakeFc(Math.Min(4, cap), t => t.FunctionalConstraint == "MX");
+        TakeFc(Math.Min(4, cap), t => t.FunctionalConstraint == "CF");
+        TakeFc(Math.Min(2, cap), t => t.FunctionalConstraint is "DC" or "EX");
+        foreach (var target in ordered)
+        {
+            if (output.Count == cap) break;
+            if (keys.Add(Key(target))) output.Add(target);
+        }
+        return output;
     }
 
     private static int FocusPriority(string kind, IedBrowserReadTarget target)
