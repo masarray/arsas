@@ -77,7 +77,7 @@ public sealed class IedBrowserCfEvidencePresentation
             // Only a typed exact scalar DA can inherit the units of its
             // OWN IEC DO. XCBR accumulations use actVal[ST], while some
             // threshold/time settings expose setMag[SP] rather than stVal.
-            var suffix = fc == "ST" &&
+            var statusSuffix = fc == "ST" &&
                          reference.EndsWith(".stVal", StringComparison.Ordinal)
                 ? ".stVal" : fc == "ST" &&
                                reference.EndsWith(".actVal", StringComparison.Ordinal)
@@ -86,9 +86,9 @@ public sealed class IedBrowserCfEvidencePresentation
                         ? ".setMag.f" : fc == "SP" &&
                                        reference.EndsWith(".setMag", StringComparison.Ordinal)
                             ? ".setMag" : "";
-            if (suffix.Length > 0)
+            if (statusSuffix.Length > 0)
             {
-                var owner = reference[..^suffix.Length];
+                var owner = reference[..^statusSuffix.Length];
                 if (exactOwners.Contains(owner) &&
                     string.Equals(IedBrowserLiveValues.CanonicalReference(a.ObjectReference),
                         owner, StringComparison.Ordinal) &&
