@@ -873,7 +873,8 @@ public partial class MainWindow
                     display, observedReference, row.ValueReference,
                     row.FunctionalConstraint, _iedBrowserValueSchemaIndex);
                 display = IedBrowserStandardStatusPresentation.Format(
-                    observedReference, row.FunctionalConstraint, display);
+                    observedReference, row.FunctionalConstraint, display,
+                    _iedBrowserValueSchemaIndex);
             }
             if (row.IsEngineeringValue && row.EvidenceField.Length == 0)
                 display = IedBrowserEngineeringValuePresentation.Format(
