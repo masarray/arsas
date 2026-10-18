@@ -917,12 +917,15 @@ public partial class MainWindow
                     observedReference, row.FunctionalConstraint, display,
                     _iedBrowserValueSchemaIndex);
                 // The exact verified SCL EnumType is the only authority
-                // for vendor SG ordinal symbols. SSOT retains raw MMS '0'.
-                if (row.FunctionalConstraint == "SG" &&
-                    observedReference.EndsWith(".setVal", StringComparison.Ordinal))
+                // for vendor read-only SP/SG ordinal symbols (including
+                // PTOC setCharact curves). SSOT retains raw MMS evidence.
+                // Editing group FC=SE is NEVER projected as active setting.
+                if (row.FunctionalConstraint is "SG" or "SP" &&
+                    (observedReference.EndsWith(".setVal", StringComparison.Ordinal) ||
+                     observedReference.EndsWith(".setCharact", StringComparison.Ordinal)))
                 {
                     if (_iedBrowserSclEnumEvidence?.TryFormat(
-                        observedReference, "SG", display,
+                        observedReference, row.FunctionalConstraint, display,
                         out var symbol, out var enumProof) == true)
                     {
                         display = symbol;
@@ -931,7 +934,7 @@ public partial class MainWindow
                     else
                     {
                         row.ObservationTooltip +=
-                            " · SG enum remains raw: " +
+                            " · IEC setting enum remains raw: " +
                             (_iedBrowserSclEnumEvidence is null
                                 ? _iedBrowserSclEnumAbsenceReason.Length == 0
                                     ? "verified SCL EnumType is not loaded"
