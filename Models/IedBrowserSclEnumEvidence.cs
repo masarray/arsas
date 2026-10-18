@@ -9,7 +9,7 @@ namespace ArIED61850Tester.Models;
 /// <summary>
 /// Read-only SCL EnumType declaration authority. Symbols are accepted only from
 /// the original SHA-256-verified CID/SCL source, its exact selected IED's
-/// DataTypeTemplates binding and an exact online typed SG attribute identity.
+/// DataTypeTemplates binding and an exact online typed SG/SP attribute identity.
 /// No ordinal-to-symbol mappings are shared between unrelated enum types.
 /// This contains declarative metadata ONLY, never MMS observations.
 /// </summary>
@@ -47,7 +47,7 @@ public sealed class IedBrowserSclEnumEvidence
         if (ieds.Length != 1)
             return new IedBrowserSclEnumEvidence(source.Sha256, bound);
         // The SCL document can contain many IEDs. Only declared logical
-        // devices belonging to the exact selected IED may bind SG semantics.
+        // devices belonging to the exact selected IED may bind SG/SP semantics.
         var acceptedDomains = ieds[0].Descendants().Where(x => NameIs(x, "LDevice"))
             .Select(x => selectedIed.IedName + Attr(x, "inst"))
             .ToHashSet(StringComparer.Ordinal);
@@ -64,8 +64,7 @@ public sealed class IedBrowserSclEnumEvidence
             .SelectMany(d => d.LogicalNodes)
             .SelectMany(n => n.DataObjects)
             .SelectMany(o => o.Attributes)
-            .Where(a => string.Equals(a.FunctionalConstraint, "SG",
-                StringComparison.OrdinalIgnoreCase) &&
+            .Where(a => IsReadOnlySettingFc(a.FunctionalConstraint) &&
                 string.Equals(a.SclBType, "Enum",
                     StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(a.Source, "SCL.DataTypeTemplates",
@@ -78,8 +77,7 @@ public sealed class IedBrowserSclEnumEvidence
         // The selected IED's online type proof must be unique and enumerated.
         var live = onlineModel.LogicalDevices.SelectMany(d => d.LogicalNodes)
             .SelectMany(n => n.DataObjects).SelectMany(o => o.Attributes)
-            .Where(a => string.Equals(a.FunctionalConstraint, "SG",
-                StringComparison.OrdinalIgnoreCase))
+            .Where(a => IsReadOnlySettingFc(a.FunctionalConstraint))
             .GroupBy(a => Key(a.MmsReference, a.FunctionalConstraint),
                 StringComparer.Ordinal)
             .Where(g => g.Count() == 1 &&
@@ -114,8 +112,8 @@ public sealed class IedBrowserSclEnumEvidence
         out string display, out string evidence)
     {
         display = raw;
-        evidence = "No exact live SG EnumType declaration in the verified SCL source.";
-        if (!string.Equals(fc, "SG", StringComparison.OrdinalIgnoreCase) ||
+        evidence = "No exact live SG/SP EnumType declaration in the verified SCL source.";
+        if (!IsReadOnlySettingFc(fc) ||
             !_bindings.TryGetValue(Key(reference, fc), out var bound))
             return false;
         var ordinalText = (raw ?? "").Trim();
@@ -124,7 +122,7 @@ public sealed class IedBrowserSclEnumEvidence
         if (!long.TryParse(ordinalText, NumberStyles.Integer,
                 CultureInfo.InvariantCulture, out var ordinal))
         {
-            evidence = "SG enum has an unrecognized raw MMS ordinal.";
+            evidence = "IEC setting enum has an unrecognized raw MMS ordinal.";
             return false;
         }
         if (!bound.Symbols.TryGetValue(ordinal, out var symbol))
@@ -157,6 +155,10 @@ public sealed class IedBrowserSclEnumEvidence
         symbols = decoded;
         return true;
     }
+
+    private static bool IsReadOnlySettingFc(string? fc)
+        => string.Equals(fc, "SG", StringComparison.OrdinalIgnoreCase) ||
+           string.Equals(fc, "SP", StringComparison.OrdinalIgnoreCase);
 
     private static string Key(string reference, string fc)
         => IedBrowserLiveValues.CanonicalReference(reference) + "|" +
