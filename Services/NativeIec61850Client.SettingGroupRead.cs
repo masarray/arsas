@@ -21,7 +21,8 @@ public sealed partial class NativeIec61850Client
             return [];
         var slash = root.IndexOf('/');
         if (slash <= 0 || slash >= root.Length - 1 ||
-            !root.EndsWith("$SG", StringComparison.Ordinal))
+            !(root.EndsWith("$SG", StringComparison.Ordinal) ||
+              root.EndsWith("$SP0", StringComparison.Ordinal)))
             return [];
         var reference = new MmsObjectReference(
             root[..slash], root[(slash + 1)..], string.Empty);
@@ -32,7 +33,7 @@ public sealed partial class NativeIec61850Client
             cancellationToken).ConfigureAwait(false);
         if (!type.IsSuccess || type.TypeSpecification is null)
         {
-            LastErrorMessage = "SG structured read cannot verify wire type for " +
+            LastErrorMessage = "Typed FC root read cannot verify wire type for " +
                 root + ": " + type.Message;
             return [];
         }
@@ -41,14 +42,14 @@ public sealed partial class NativeIec61850Client
             cancellationToken).ConfigureAwait(false);
         if (!read.IsSuccess || read.Value is null)
         {
-            LastErrorMessage = "SG structured MMS Read failed for " + root +
+            LastErrorMessage = "Typed FC root MMS Read failed for " + root +
                 ": " + read.Message;
             return [];
         }
         var result = IedBrowserSgRootProjection.Project(
             root, type.TypeSpecification, read.Value, targets);
         if (result.Count == 0)
-            LastErrorMessage = "SG structure received but type/order did not prove " +
+            LastErrorMessage = "Typed FC root received but type/order did not prove " +
                 "any exact requested leaf in " + root + ". No value published.";
         return result;
     }
