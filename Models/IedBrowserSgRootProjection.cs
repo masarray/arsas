@@ -48,7 +48,9 @@ public static class IedBrowserSgRootProjection
         var slash = root.IndexOf('/');
         var constraint = root.EndsWith("$SP0", StringComparison.Ordinal)
             ? "SP" : root.EndsWith("$SG", StringComparison.Ordinal) ? "SG" : "";
-        var cut = root.LastIndexOf('
+        var cut = root.LastIndexOf('$');
+        if (slash < 1 || cut <= slash || constraint.Length == 0) return [];
+        var prefix = root[..cut];
         var output = new List<IedBrowserReadResult>();
         var paths = new HashSet<string>(StringComparer.Ordinal);
         void Walk(MmsTypeSpecificationNode schema, MmsDataValue value, string path, int depth)
@@ -98,68 +100,6 @@ public static class IedBrowserSgRootProjection
             "boolean" => kind == MmsDataKind.Boolean,
             "enumerated" => kind is MmsDataKind.Integer or MmsDataKind.Unsigned,
             "enum" => kind is MmsDataKind.Integer or MmsDataKind.Unsigned,
-            "integer" => kind is MmsDataKind.Integer or MmsDataKind.Unsigned,
-            "unsigned" => kind is MmsDataKind.Unsigned or MmsDataKind.Integer,
-            "floating-point" => kind == MmsDataKind.FloatingPoint,
-            "visible-string" => kind is MmsDataKind.VisibleString or MmsDataKind.MmsString,
-            "mms-string" => kind is MmsDataKind.MmsString or MmsDataKind.VisibleString,
-            "bit-string" => kind == MmsDataKind.BitString,
-            "utc-time" => kind == MmsDataKind.UtcTime,
-            "octet-string" => kind == MmsDataKind.OctetString,
-            "binary-time" => kind == MmsDataKind.BinaryTime,
-            _ => false
-        };
-}
-);
-        if (slash < 1 || cut <= slash || constraint.Length == 0) return [];
-        var prefix = root[..cut];
-        var output = new List<IedBrowserReadResult>();
-        var paths = new HashSet<string>(StringComparer.Ordinal);
-        void Walk(MmsTypeSpecificationNode schema, MmsDataValue value, string path, int depth)
-        {
-            if (depth > 12) return;
-            if (value.Kind == MmsDataKind.Structure)
-            {
-                // Ordered MMS type components are the sole path authority.
-                if (schema.Children.Count == 0 ||
-                    schema.Children.Count != value.Children.Count ||
-                    schema.Children.Any(node => string.IsNullOrWhiteSpace(node.Name)) ||
-                    schema.Children.Select(node => node.Name).Distinct(StringComparer.Ordinal)
-                        .Count() != schema.Children.Count)
-                    return;
-                for (var i = 0; i < schema.Children.Count; i++)
-                {
-                    var child = schema.Children[i];
-                    Walk(child, value.Children[i],
-                        path.Length == 0 ? child.Name : path + "." + child.Name,
-                        depth + 1);
-                }
-                return;
-            }
-            // IEC SG array values need indexed schema identity and are not
-            // flattened into imaginary scalar targets.
-            if (value.Kind is MmsDataKind.Array or MmsDataKind.Unknown ||
-                schema.Children.Count != 0 || path.Length == 0 ||
-                !IsMatchingPrimitiveType(schema.MmsType, value.Kind))
-                return;
-            var canonical = prefix + "." + path;
-            var key = canonical + "|SG";
-            if (!paths.Add(key) || !targetIndex.TryGetValue(key, out var target))
-                return;
-            var display = MmsDataValueRenderer.ToCompactString(value);
-            if (!IedBrowserReadValuePolicy.TryAcceptDisplay(
-                    display, out var accepted, out _))
-                return;
-            output.Add(new IedBrowserReadResult(target, accepted, "", "", ""));
-        }
-        Walk(wireType, wireData, "", 0);
-        return output;
-    }
-
-    private static bool IsMatchingPrimitiveType(string mmsType, MmsDataKind kind)
-        => mmsType.Trim().ToLowerInvariant() switch
-        {
-            "boolean" => kind == MmsDataKind.Boolean,
             "integer" => kind is MmsDataKind.Integer or MmsDataKind.Unsigned,
             "unsigned" => kind is MmsDataKind.Unsigned or MmsDataKind.Integer,
             "floating-point" => kind == MmsDataKind.FloatingPoint,
