@@ -319,6 +319,9 @@ public partial class MainWindow
                 ? _iedBrowserSelectedDoReference : null;
         var targets = IedBrowserReadPlan.Build(
             model, currentPage, readAll, selectedDo);
+        if (!automatic && !readAll && selectedDo is null &&
+            currentPage?.Kind == "LN")
+            targets = IedBrowserReadPlan.PrioritizeExplicitLn(targets);
         if (automatic)
         {
             if (reportUnitRequest)
