@@ -75,6 +75,16 @@ public sealed class P0XcbrNumericCounterUnitTests
             Assert.NotEmpty(proof);
             Assert.Equal(expected,
                 IedBrowserEngineeringValuePresentation.Format("0", unit));
+            var reference = "LD/XCBR1." + name + ".stVal";
+            var units = cf.BuildVerifiedUnits([], model);
+            // Same unit for a DO parent, scalar leaf, or a DataSet/Report
+            // row resolving that exact canonical ST stVal.
+            var parentUnit = IedBrowserEngineeringValuePresentation.ResolveObservedUnit(
+                units, cf, reference, reference, "ST", isEngineeringValue: true);
+            var leafUnit = IedBrowserEngineeringValuePresentation.ResolveObservedUnit(
+                units, cf, reference, reference, "ST", isEngineeringValue: false);
+            Assert.Equal(unit, parentUnit);
+            Assert.Equal(unit, leafUnit);
         }
         Assert.False(cf.TryFormatVerifiedNumericStatusUnit(
             "LD/XCBR1.SumSwARs.stVal", "MX", out _, out _));
