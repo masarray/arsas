@@ -272,6 +272,56 @@ public partial class MainWindow
         }
     }
 
+    private void IedBrowserExportReadEvidence_Click(object sender, RoutedEventArgs e)
+    {
+        var device = SelectedDevice;
+        var model = device?.LiveDiscoveryModel;
+        var page = _iedBrowserNavigation.Current;
+        if (device is null || model is null || page is null)
+        {
+            IedBrowserSubtitle.Text =
+                "Read evidence export requires an online-verified model and selected object.";
+            return;
+        }
+        IedBrowserReadFailureSample? ResolveAbsence(IedBrowserReadTarget target)
+        {
+            if (_iedBrowserReadFailureEvidence?.TryGet(device,
+                    target.Reference, "", target.FunctionalConstraint,
+                    out var reason, out var kind) == true)
+                return new IedBrowserReadFailureSample(
+                    target.Reference, target.FunctionalConstraint, reason, kind);
+            if (device.InitialHydrationFailures?.TryGet(device,
+                    target.Reference, "", target.FunctionalConstraint,
+                    out reason, out kind) == true)
+                return new IedBrowserReadFailureSample(
+                    target.Reference, target.FunctionalConstraint, reason, kind);
+            return null;
+        }
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            FileName = "ARSAS-IEC-read-evidence-" +
+                       DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + ".csv",
+            DefaultExt = ".csv",
+            AddExtension = true,
+            Filter = "Read-only IEC CSV evidence (*.csv)|*.csv"
+        };
+        if (dialog.ShowDialog(this) != true) return;
+        try
+        {
+            var csv = IedBrowserReadEvidenceCsv.Build(
+                model, page, device.LiveValues, ResolveAbsence);
+            System.IO.File.WriteAllText(dialog.FileName, csv,
+                new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+            IedBrowserSubtitle.Text =
+                "Read evidence exported · exact FC, ledger, failures and deferrals; " +
+                "GVA/invoke not instrumented (never inferred).";
+        }
+        catch (Exception ex)
+        {
+            IedBrowserSubtitle.Text = "Read evidence export failed: " + ex.Message;
+        }
+    }
+
     private void IedBrowserCancelRead_Click(object sender, RoutedEventArgs e)
         => CancelIedBrowserRead();
 
@@ -752,6 +802,10 @@ public partial class MainWindow
             IedBrowserReadPageButton.Content = "Read LN";
         IedBrowserReadPageButton.IsEnabled = ready;
         IedBrowserReadAllButton.IsEnabled = ready;
+        if (IedBrowserExportReadEvidenceButton is not null)
+            IedBrowserExportReadEvidenceButton.IsEnabled =
+                device?.LiveDiscoveryModel is not null &&
+                _iedBrowserNavigation.Current is not null;
         IedBrowserCancelReadButton.IsEnabled = _iedBrowserReadOperation != null;
     }
 
