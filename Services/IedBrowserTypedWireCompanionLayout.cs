@@ -39,7 +39,7 @@ public static class IedBrowserTypedWireCompanionLayout
             .ToArray();
         if (matches.Length == 0) return [];
 
-        var routes = new List<Route>();
+        var routes = new List<(Route Route, string CarrierOrder)>();
         // A duplicate exact leaf is ambiguous even when its order matches.
         foreach (var group in matches.GroupBy(x => x.Reference, StringComparer.Ordinal))
         {
@@ -71,15 +71,20 @@ public static class IedBrowserTypedWireCompanionLayout
                 continue;
             var indices = declaration.Skip(carrierDepth).Select(x =>
                 int.Parse(x, CultureInfo.InvariantCulture)).ToArray();
-            routes.Add(new Route(reference, isQuality ? "Quality" : "Timestamp",
-                indices));
+            routes.Add((new Route(reference, isQuality ? "Quality" : "Timestamp",
+                indices), string.Join(".", declaration.Take(carrierDepth))));
         }
+        // Conflicting FC/DO/container order is not one trustworthy typed
+        // layout, even when leaf-relative indices happen to be distinct.
+        if (routes.Select(x => x.CarrierOrder).Distinct(StringComparer.Ordinal)
+                .Take(2).Count() != 1)
+            return [];
         // Same wire child index cannot prove two different IEC members.
         // Reject every collision, not first-wins.
-        return routes.GroupBy(route => string.Join(".", route.ChildIndices),
+        return routes.GroupBy(x => string.Join(".", x.Route.ChildIndices),
                 StringComparer.Ordinal)
             .Where(group => group.Count() == 1)
-            .SelectMany(group => group)
+            .Select(group => group.Single().Route)
             .OrderBy(route => route.Reference, StringComparer.Ordinal)
             .ToArray();
     }
