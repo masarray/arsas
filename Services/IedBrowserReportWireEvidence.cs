@@ -1,4 +1,5 @@
 using AR.Iec61850.Mms;
+using AR.Iec61850.Discovery;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Protocol.Mms;
 
@@ -14,6 +15,16 @@ namespace ArIED61850Tester.Services;
 public static class IedBrowserReportWireEvidence
 {
     public static IReadOnlyList<NativeBrowserReportRawEvidence> Extract(MmsReportFrame frame)
+        => Extract(frame, null);
+
+    /// <summary>
+    /// When a current typed GVA model exists, nested report structures must
+    /// use exact ordered paths rather than a depth-one q/t heuristic.
+    /// Missing paths produce no synthetic proof; scoped on-expand MMS Read
+    /// remains the repair path. The receiving ledger checks DataSet and FC.
+    /// </summary>
+    public static IReadOnlyList<NativeBrowserReportRawEvidence> Extract(
+        MmsReportFrame frame, LiveIedModelDiscoveryDocument? typedModel)
     {
         ArgumentNullException.ThrowIfNull(frame);
         var result = new List<NativeBrowserReportRawEvidence>();
@@ -38,8 +49,33 @@ public static class IedBrowserReportWireEvidence
             else if (directTime)
                 time = DecodeTime(payload);
             else if (payload.Kind == MmsDataKind.Structure &&
+                     payload.Children.Count is > 0 and <= 64 && typedModel is not null)
+            {
+                var routes = IedBrowserTypedWireCompanionLayout.Resolve(
+                    typedModel, reference, fc);
+                foreach (var route in routes)
+                {
+                    if (!IedBrowserTypedWireCompanionLayout.TryLocate(
+                            payload, route.ChildIndices, out var typedLeaf))
+                        continue;
+                    // Each evidence carrier is the *actual* schema-declared
+                    // phase q/t leaf. Never publish one PPV-root bit to every
+                    // MMXU phase via an ancestor fallback.
+                    if (route.Kind == "Quality" &&
+                        DecodeQuality(typedLeaf) is { } nestedQuality)
+                        result.Add(new NativeBrowserReportRawEvidence(
+                            route.Reference, fc, nestedQuality, null));
+                    if (route.Kind == "Timestamp" &&
+                        DecodeTime(typedLeaf) is { } nestedTime)
+                        result.Add(new NativeBrowserReportRawEvidence(
+                            route.Reference, fc, null, nestedTime));
+                }
+                continue;
+            }
+            else if (payload.Kind == MmsDataKind.Structure &&
                      payload.Children.Count is > 0 and <= 64)
             {
+                // Legacy single-depth carrier only when no GVA layout exists.
                 // DO(FCD) payloads usually carry stVal, q and t as direct
                 // siblings. Ambiguous (multiple quality/timestamp siblings)
                 // fail closed rather than borrowing one child's evidence.
