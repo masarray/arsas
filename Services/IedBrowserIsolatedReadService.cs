@@ -12,7 +12,7 @@ public static class IedBrowserIsolatedReadService
     public static Task<int> ReadAsync(
         Iec61850MonitorDevice device, IReadOnlyList<IedBrowserReadTarget> targets,
         IProgress<IedBrowserReadResult> values, IProgress<IedBrowserReadProgress> progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool automatic = false)
     {
         // Capture before crossing the UI/thread boundary. The current
         // monitoring association owns this exact live discovery model;
@@ -51,9 +51,13 @@ public static class IedBrowserIsolatedReadService
                 try
                 {
                     using var leafToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                    leafToken.CancelAfter(TimeSpan.FromSeconds(5));
+                    // The root attempt has its OWN bounded per-root timeout
+                    // and negative-result cache. Do not pass a short leaf
+                    // timeout to it: otherwise each sibling retries the same
+                    // timed-out GVA root and starves all other settings.
+                    leafToken.CancelAfter(TimeSpan.FromSeconds(automatic ? 2 : 5));
                     var verifiedSg = await sgRootFlight.TryReadAsync(
-                        target, leafToken.Token).ConfigureAwait(false);
+                        target, cancellationToken).ConfigureAwait(false);
                     if (verifiedSg is not null)
                     {
                         values.Report(verifiedSg);
