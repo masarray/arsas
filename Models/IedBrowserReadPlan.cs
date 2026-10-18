@@ -184,7 +184,14 @@ public static class IedBrowserReadPlan
             return 0;
         if (fc == "ST" &&
             (reference.EndsWith(".stVal", StringComparison.Ordinal) ||
-             reference.EndsWith(".posVal", StringComparison.Ordinal)))
+             reference.EndsWith(".posVal", StringComparison.Ordinal) ||
+             // ACD/ACT protection process flags are genuine observed IEC
+             // statuses. Read them before CF/DC inventory so a focused LN
+             // budget does not leave Str, Op or Blk at Not read while
+             // their non-process description siblings occupy the budget.
+             reference.EndsWith(".general", StringComparison.Ordinal) ||
+             reference.EndsWith(".neut", StringComparison.Ordinal) ||
+             reference.EndsWith(".actVal", StringComparison.Ordinal)))
             return 0;
         if (fc == "MX" && (reference.EndsWith(".mag.f", StringComparison.Ordinal) ||
                             reference.EndsWith(".instMag.f", StringComparison.Ordinal)))
