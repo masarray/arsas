@@ -164,15 +164,17 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 singleRead.CancelAfter(TimeSpan.FromSeconds(5));
                 var verifiedSg = await sgRootFlight.TryReadAsync(
                     target, singleRead.Token).ConfigureAwait(false);
+                // Do not discard schema-verified siblings merely because
+                // this particular scheduled leaf was not in the wire root.
+                foreach (var extra in sgRootFlight.DrainUnscheduledSiblings(target))
+                {
+                    values.Report(extra);
+                    succeeded++;
+                }
                 if (verifiedSg is not null)
                 {
                     values.Report(verifiedSg);
                     succeeded++;
-                    foreach (var extra in sgRootFlight.DrainUnscheduledSiblings(target))
-                    {
-                        values.Report(extra);
-                        succeeded++;
-                    }
                     progress.Report(new IedBrowserReadProgress(index + 1, targets.Count));
                     continue;
                 }
