@@ -1815,7 +1815,8 @@ public partial class MainWindow
             IedBrowserClickOriginIsButton(e.OriginalSource,
                 (DependencyObject)sender))
             return;
-        if (!string.IsNullOrEmpty(detail.ReadObjectReference) &&
+        if (detail.IsDataObject &&
+            !string.IsNullOrEmpty(detail.ReadObjectReference) &&
             _iedBrowserNavigation.Current?.Payload is LiveIedLogicalNodeModel)
         {
             _iedBrowserSelectedDoReference = detail.ReadObjectReference;
@@ -1868,7 +1869,8 @@ public partial class MainWindow
         if (sender is not Button { Tag: IedBrowserDetailRow detail } || !detail.HasChildren)
             return;
         // Expand-arrow navigation must acquire the same exact DO as row click.
-        if (!string.IsNullOrEmpty(detail.ReadObjectReference) &&
+        if (detail.IsDataObject &&
+            !string.IsNullOrEmpty(detail.ReadObjectReference) &&
             _iedBrowserNavigation.Current?.Payload is LiveIedLogicalNodeModel &&
             _iedBrowserNavigation.Current is { } lnPage)
         {
