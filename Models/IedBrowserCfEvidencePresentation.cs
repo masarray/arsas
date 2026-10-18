@@ -17,7 +17,8 @@ public sealed class IedBrowserCfEvidencePresentation
     // indexes contain declarations and historical evidence only, never
     // mutable current Report/Read observations.
     private sealed record SchemaIndex(
-        HashSet<string> DeclaredCf, string[] UnitOwners, string[] SettingOwners);
+        HashSet<string> DeclaredCf, string[] UnitOwners, string[] SettingOwners,
+        HashSet<string> NumericStatusLeaves);
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
         LiveIedModelDiscoveryDocument, SchemaIndex> SchemaCache = new();
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
@@ -25,6 +26,7 @@ public sealed class IedBrowserCfEvidencePresentation
     private readonly LiveIedModelDiscoveryDocument? _model;
     private readonly string[] _unitOwners;
     private readonly string[] _settingOwners;
+    private readonly HashSet<string> _numericStatusLeaves = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string?> _snapshot = new(StringComparer.Ordinal);
     private readonly HashSet<string> _declaredCf = new(StringComparer.Ordinal);
     public bool HasSnapshot { get; }
@@ -41,6 +43,7 @@ public sealed class IedBrowserCfEvidencePresentation
             _declaredCf = schema.DeclaredCf;
             _unitOwners = schema.UnitOwners;
             _settingOwners = schema.SettingOwners;
+            _numericStatusLeaves = schema.NumericStatusLeaves;
         }
         else
         {
@@ -60,11 +63,31 @@ public sealed class IedBrowserCfEvidencePresentation
         var declared = new HashSet<string>(StringComparer.Ordinal);
         var owners = new HashSet<string>(StringComparer.Ordinal);
         var settingOwners = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var a in model.LogicalDevices.SelectMany(d => d.LogicalNodes)
-                     .SelectMany(n => n.DataObjects).SelectMany(o => o.Attributes))
+        var objects = model.LogicalDevices.SelectMany(d => d.LogicalNodes)
+            .SelectMany(n => n.DataObjects).ToArray();
+        var exactOwners = objects.Select(o =>
+            IedBrowserLiveValues.CanonicalReference(o.Reference))
+            .Where(o => o.Length > 0).ToHashSet(StringComparer.Ordinal);
+        var numericStatusCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var a in objects.SelectMany(o => o.Attributes))
         {
             var reference = IedBrowserLiveValues.CanonicalReference(a.MmsReference);
             if (reference.Length == 0) continue;
+            if (string.Equals(a.FunctionalConstraint, "ST",
+                    StringComparison.OrdinalIgnoreCase) &&
+                reference.EndsWith(".stVal", StringComparison.Ordinal))
+            {
+                var owner = reference[..^".stVal".Length];
+                if (exactOwners.Contains(owner) &&
+                    string.Equals(IedBrowserLiveValues.CanonicalReference(a.ObjectReference),
+                        owner, StringComparison.Ordinal) &&
+                    IsTypedIntegerStatus(a))
+                {
+                    var key = Key(reference, "ST");
+                    numericStatusCounts[key] =
+                        numericStatusCounts.GetValueOrDefault(key) + 1;
+                }
+            }
             if (string.Equals(a.FunctionalConstraint, "CF",
                     StringComparison.OrdinalIgnoreCase))
                 declared.Add(Key(reference, "CF"));
@@ -89,7 +112,9 @@ public sealed class IedBrowserCfEvidencePresentation
             if (suffix.Length != 0) owners.Add(reference[..^suffix.Length]);
         }
         return new SchemaIndex(declared, owners.OrderBy(s => s, StringComparer.Ordinal)
-            .ToArray(), settingOwners.OrderBy(s => s, StringComparer.Ordinal).ToArray());
+            .ToArray(), settingOwners.OrderBy(s => s, StringComparer.Ordinal).ToArray(),
+            numericStatusCounts.Where(x => x.Value == 1)
+                .Select(x => x.Key).ToHashSet(StringComparer.Ordinal));
     }
 
     private static Dictionary<string, string?> BuildSnapshot(LiveIedCanonicalModel canonical)
@@ -166,6 +191,18 @@ public sealed class IedBrowserCfEvidencePresentation
         return true;
     }
 
+    private static bool IsTypedIntegerStatus(LiveIedDataAttributeModel declaration)
+    {
+        // A typed status counter, not an arbitrary numeric enumeration.
+        var btype = (declaration.SclBType ?? "").Trim().ToUpperInvariant();
+        var mms = (declaration.MmsType ?? "").Trim().ToLowerInvariant();
+        var isInteger = btype is "INT8" or "INT16" or "INT32" or "INT64" or
+            "INT8U" or "INT16U" or "INT32U" or "INT64U" or "INT24U" ||
+            mms is "integer" or "unsigned";
+        return isInteger && btype is not ("ENUM" or "DBPOS" or "DPC") &&
+            mms is not ("bit-string" or "boolean" or "enumerated");
+    }
+
     private bool TryVerifyUnitPair(string owner, out string unit,
         out string provenance, out bool fresh)
     {
@@ -213,31 +250,7 @@ public sealed class IedBrowserCfEvidencePresentation
         var path = IedBrowserLiveValues.CanonicalReference(reference);
         if (!path.EndsWith(".stVal", StringComparison.Ordinal)) return false;
         var owner = path[..^".stVal".Length];
-        var matches = _model.LogicalDevices.SelectMany(d => d.LogicalNodes)
-            .SelectMany(n => n.DataObjects)
-            .Where(o => string.Equals(
-                IedBrowserLiveValues.CanonicalReference(o.Reference),
-                owner, StringComparison.Ordinal))
-            .Take(2).ToArray();
-        if (matches.Length != 1) return false;
-        var attributes = matches[0].Attributes.Where(a =>
-            string.Equals(IedBrowserLiveValues.CanonicalReference(a.MmsReference),
-                path, StringComparison.Ordinal) &&
-            string.Equals(a.FunctionalConstraint, "ST", StringComparison.OrdinalIgnoreCase))
-            .Take(2).ToArray();
-        if (attributes.Length != 1) return false;
-        var declaration = attributes[0];
-        // Only IEC integer primitives: DPC bitstrings, enumerations, quality
-        // bitstrings, and bools must never inherit a numeric counter unit.
-        var btype = (declaration.SclBType ?? "").Trim().ToUpperInvariant();
-        var mms = (declaration.MmsType ?? "").Trim().ToLowerInvariant();
-        var isInteger = btype is "INT8" or "INT16" or "INT32" or "INT64" or
-            "INT8U" or "INT16U" or "INT32U" or "INT64U" or "INT24U" ||
-            mms is "integer" or "unsigned";
-        if (!isInteger ||
-            btype is "ENUM" or "DBPOS" or "DPC" ||
-            mms is "bit-string" or "boolean" or "enumerated")
-            return false;
+        if (!_numericStatusLeaves.Contains(Key(path, "ST"))) return false;
         return TryVerifyUnitPair(owner + ".units", out unit,
             out provenance, out var fresh) && fresh;
     }
