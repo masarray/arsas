@@ -3,7 +3,7 @@ using ArIED61850Tester.Models;
 
 namespace ARSAS.Tests;
 
-/// <summary>BCUGE IEDScout PCAP: gndPTOC2$SP0 is a typed FC root, not a write.</summary>
+/// <summary>BCUGE captured MMS trace: gndPTOC2$SP0 is a typed FC root, not a write.</summary>
 public sealed class P0ProtectionSp0RootFieldEvidenceTests
 {
     private const string FcRoot = "BCUGEF650/gndPTOC2$SP0";
