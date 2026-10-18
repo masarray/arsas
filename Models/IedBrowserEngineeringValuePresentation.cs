@@ -134,9 +134,13 @@ public static class IedBrowserEngineeringValuePresentation
     }
 
     private static string AngleSymbol(string? unit)
-        // Vector.ang is defined as degrees by IEC 61850-7-3. An unrelated
-        // kV/kA SignalDefinition on the exact leaf is not an angle unit.
-        => string.Equals(unit, "rad", StringComparison.Ordinal) ? "rad" : "°";
+    {
+        // A null indexed unit is an explicit conflicting declaration: fail
+        // closed. An unrelated non-angle symbol is leakage, not a legitimate
+        // override of the IEC Vector.ang degree convention.
+        if (unit is null) return "";
+        return string.Equals(unit, "rad", StringComparison.Ordinal) ? "rad" : "°";
+    }
 
     public static string Format(string raw, string unit)
     {
