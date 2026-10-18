@@ -120,6 +120,7 @@ public sealed class P0IecFieldSemanticParityTests
     [Theory]
     [InlineData("ENG", "XCBR", "None")]
     [InlineData("ENS", "XCBR", "None")]
+    [InlineData("Unknown", "XCBR", "None")]
     [InlineData("INS", "XCBR", "value1")]
     [InlineData("ENS", "CSWI", "value1")]
     public void Xcbr01b_CbOpCapMustUseExactXcbrCdcAndTypedEnum(
