@@ -59,6 +59,25 @@ public sealed class P0ProtectionSpParentAndFocusedReadTests
     }
 
     [Fact]
+    public void SetCharactIsEnumNotASettingMagnitudeEvenWithAncestorUnits()
+    {
+        var units = new Dictionary<string, string?>(
+            StringComparer.Ordinal)
+        {
+            [Ln + ".TmACrv|SP"] = "s",
+            [Ln + ".TmACrv.setCharact|SP"] = null
+        };
+        Assert.Equal(IedBrowserEngineeringRole.StatusEnum,
+            IedBrowserEngineeringValuePresentation.Classify(
+                Ln + ".TmACrv.setCharact", "SP"));
+        Assert.Equal("", IedBrowserEngineeringValuePresentation.ResolveUnit(
+            units, Ln + ".TmACrv.setCharact", "SP"));
+        Assert.Equal(IedBrowserEngineeringRole.SettingMagnitude,
+            IedBrowserEngineeringValuePresentation.Classify(
+                Ln + ".TmMult.setMag", "SP"));
+    }
+
+    [Fact]
     public void UniqueSpSettingRefusesEditedOrCompetingCandidates()
     {
         Assert.False(IedBrowserSchemaIndex.TryGetUniqueProcessLeaf(
