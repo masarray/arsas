@@ -28,7 +28,7 @@ internal sealed class IedBrowserSgRootReadFlight
         // 32-total-target veto disabled typed SP0/SG0 reads exactly on those
         // dense protection LNs. Bound by page and group instead, not by the
         // number of unrelated, independently declared target attributes.
-        if (_targets.Count > 512 ||
+        if (_targets.Count > 4096 ||
             target.FunctionalConstraint is not ("SG" or "SP" or "CF" or "DC" or "EX"))
             return null;
         var root = IedBrowserSgRootProjection.RootFor(target);
@@ -46,7 +46,7 @@ internal sealed class IedBrowserSgRootReadFlight
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(
                     cancellationToken);
                 timeout.CancelAfter(TimeSpan.FromSeconds(5));
-                if (siblings.Length <= 128)
+                if (IedBrowserSgRootProjection.CanReadRoot(siblings.Length))
                     read = await _client.ReadVerifiedSgRootAsync(
                         root, siblings, timeout.Token).ConfigureAwait(false);
             }
