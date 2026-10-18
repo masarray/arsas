@@ -718,6 +718,23 @@ public partial class MainWindow
         if (MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
             SelectedDevice is not { } device)
             return;
+        // RCB start/stop does not increment the process LiveValues ledger
+        // version. Independently update just the already materialized RCB
+        // row glyphs from runtime activation authority on the UI flush tick,
+        // preserving the tree selection and every expanded LN/DO.
+        var usageChanges = ReferenceEquals(_iedBrowserCachedDevice, device)
+            ? IedBrowserRcbLiveOwnershipPresentation.Reconcile(
+                _iedBrowserCachedRcbRows,
+                _runtime.GetActiveBrowserRcbReferences(device.DeviceId),
+                device.IsConnected && device.IsMonitoring)
+            : 0;
+        if (usageChanges > 0)
+        {
+            foreach (var treeRow in _iedBrowserTree.Rows)
+                treeRow.RefreshRcbUsage();
+            foreach (var detailRow in _iedBrowserDetails.Rows)
+                detailRow.RefreshRcbUsage();
+        }
         var version = device.LiveValues.Version;
         if (_iedBrowserLastLiveVersion == version &&
             ReferenceEquals(_iedBrowserLastCfCanonicalModel, device.LiveCanonicalModel))
@@ -1700,19 +1717,12 @@ public partial class MainWindow
             var rcbs = BuildRcbExportRows(device, inventory, _iedBrowserSnapshot);
             if (rcbs.Count == 0 && model != null)
                 rcbs = BuildLiveModelRcbRows(model, _iedBrowserSnapshot);
-            // Only *successfully activated* runtime report plans prove caller
-            // ownership; a configured RCB name alone never does.
-            var callerOwned = _runtime.GetActiveBrowserRcbReferences(device.DeviceId)
-                .Select(NormalizeRcbReference)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            foreach (var report in rcbs)
-            {
-                if (!callerOwned.Contains(NormalizeRcbReference(report.Reference)))
-                    continue;
-                report.Availability = AR.Iec61850.Mms.MmsRcbOperationalAvailability.UsedByCaller;
-                report.StatusText = "ARSAS active";
-                report.Reason = "Successfully activated by the current ARSAS monitor association.";
-            }
+            // Initial RCB ownership is only a snapshot. The same projection
+            // also runs on the UI's live refresh tick: monitor activation can
+            // complete AFTER this lazy tree was built.
+            IedBrowserRcbLiveOwnershipPresentation.Reconcile(
+                rcbs, _runtime.GetActiveBrowserRcbReferences(device.DeviceId),
+                device.IsConnected && device.IsMonitoring);
             _iedBrowserCachedRcbRows = rcbs;
             _iedBrowserCachedDevice = device;
             _iedBrowserCachedModel = model;
