@@ -1957,7 +1957,9 @@ public partial class MainWindow
             return;
         if (detail.IsDataObject &&
             !string.IsNullOrEmpty(detail.ReadObjectReference) &&
-            _iedBrowserNavigation.Current?.Payload is LiveIedLogicalNodeModel)
+            _iedBrowserNavigation.Current?.Payload is LiveIedLogicalNodeModel selectedLn &&
+            IedBrowserExactDoFocus.IsDeclaredOwner(selectedLn,
+                detail.ReadObjectReference))
         {
             _iedBrowserSelectedDoReference = detail.ReadObjectReference;
             RefreshIedBrowserReadButtons(); // expose separate Read DO and Read LN scope
@@ -2011,7 +2013,9 @@ public partial class MainWindow
         // Expand-arrow navigation must acquire the same exact DO as row click.
         if (detail.IsDataObject &&
             !string.IsNullOrEmpty(detail.ReadObjectReference) &&
-            _iedBrowserNavigation.Current?.Payload is LiveIedLogicalNodeModel &&
+            _iedBrowserNavigation.Current?.Payload is LiveIedLogicalNodeModel selectedLn &&
+            IedBrowserExactDoFocus.IsDeclaredOwner(selectedLn,
+                detail.ReadObjectReference) &&
             _iedBrowserNavigation.Current is { } lnPage)
         {
             _iedBrowserSelectedDoReference = detail.ReadObjectReference;
