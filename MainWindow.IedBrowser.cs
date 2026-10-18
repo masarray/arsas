@@ -738,6 +738,20 @@ public partial class MainWindow
         var model = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
         var cfEvidence = new IedBrowserCfEvidencePresentation(device.LiveValues,
             model, device.LiveCanonicalModel);
+        // Read-only association-scoped acceptance counters are surfaced in
+        // the EXISTING subtitle tooltip, without resizing any live panel or
+        // adding another subscription. They do not claim consumer comparison
+        // until distinct consumer projections have actually been compared.
+        if (ReferenceEquals(model, device.LiveDiscoveryModel) && model is not null)
+        {
+            var failures = _iedBrowserReadFailureEvidence?.SnapshotCurrent(device, 32);
+            IedBrowserSubtitle.ToolTip = IedBrowserAcceptanceMetrics.Capture(
+                model, device.LiveValues, _iedBrowserSclEnumEvidence,
+                failures).Summary;
+        }
+        else
+            IedBrowserSubtitle.ToolTip =
+                "Offline/SCL declarations are not proof of fresh IEC MMS observations.";
         var engineeringUnits = cfEvidence.BuildVerifiedUnits(device.Signals, model);
         foreach (var row in _iedBrowserDetails.Rows)
         {
