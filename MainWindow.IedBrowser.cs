@@ -902,6 +902,14 @@ public partial class MainWindow
                         row.EngineeringUnitReference.Length == 0
                             ? row.ValueReference : row.EngineeringUnitReference,
                         row.FunctionalConstraint));
+            // A typed integer ST counter can carry a model-verified CF
+            // engineering unit. All enum/DPC/boolean ST remain untouched.
+            else if (row.EvidenceField.Length == 0 &&
+                     cfEvidence.TryFormatVerifiedNumericStatusUnit(
+                         observedReference, row.FunctionalConstraint,
+                         out var statusUnit, out _))
+                display = IedBrowserEngineeringValuePresentation.Format(
+                    display, statusUnit);
             // An expanded MX ang leaf is in degrees, not a fabricated pair.
             // cVal parent handles coherent phasor composition separately.
             else if (row.EvidenceField.Length == 0 &&
