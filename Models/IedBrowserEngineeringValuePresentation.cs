@@ -36,7 +36,7 @@ public static class IedBrowserEngineeringValuePresentation
             return IedBrowserEngineeringRole.UtcTime;
         if (constraint == "MX" && IsVectorAngle(path))
             return IedBrowserEngineeringRole.AngleDegrees;
-        if (constraint == "SG" &&
+        if (constraint is "SG" or "SP" &&
             (path.EndsWith(".setMag", StringComparison.Ordinal) ||
              path.EndsWith(".setMag.f", StringComparison.Ordinal)))
             return IedBrowserEngineeringRole.SettingMagnitude;
@@ -49,6 +49,7 @@ public static class IedBrowserEngineeringValuePresentation
             return IedBrowserEngineeringRole.Magnitude;
         if (path.EndsWith(".stVal", StringComparison.Ordinal) ||
             path.EndsWith(".setVal", StringComparison.Ordinal) ||
+            path.EndsWith(".setCharact", StringComparison.Ordinal) ||
             path.EndsWith(".ctlModel", StringComparison.Ordinal))
             return IedBrowserEngineeringRole.StatusEnum;
         if (constraint is "CF" or "DC")
