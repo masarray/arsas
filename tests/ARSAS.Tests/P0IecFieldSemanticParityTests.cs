@@ -1,5 +1,8 @@
 using AR.Iec61850.Discovery;
 using ArIED61850Tester.Models;
+using ArIED61850Tester.Protocol.Mms;
+using ArIED61850Tester.Services;
+using AR.Iec61850.Mms;
 
 namespace ARSAS.Tests;
 
@@ -112,4 +115,74 @@ public sealed class P0IecFieldSemanticParityTests
         Assert.Equal("value1", IedBrowserStandardStatusPresentation.Format(
             "LD/XCBR1.NotDeclared.stVal", "ST", "value1", schema));
     }
+    [Fact]
+    public void Qt01_OnExpandTargetsOnlyExactUnprovenPhaseQualityAndUsesTypedWire()
+    {
+        const string q = "LD/MMXU1.PPV.phsAB.q";
+        var ln = new LiveIedLogicalNodeModel
+        {
+            Name = "MMXU1", LnClass = "MMXU",
+            DataObjects = [new LiveIedDataObjectModel
+            {
+                Name = "PPV", Reference = "LD/MMXU1.PPV", InferredCdc = "WYE",
+                Attributes = [new LiveIedDataAttributeModel
+                {
+                    ObjectReference = "LD/MMXU1.PPV",
+                    AttributePath = "PPV.phsAB.q",
+                    MmsReference = "LD/MMXU1$MX$PPV$phsAB$q",
+                    FunctionalConstraint = "MX", SclBType = "Quality",
+                    MmsType = "bit-string"
+                }]
+            }]
+        };
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel
+            {
+                MmsDomain = "LD", LogicalNodes = [ln]
+            }]
+        };
+        var page = new IedBrowserTreeRow("model/ln/LD/MMXU1",
+            "MMXU1", "LN", 2, ln);
+        var ledger = new IedBrowserLiveValues();
+        var association = ledger.BeginAssociation();
+        ledger.PublishForAssociation(association, q, "MX", "good",
+            "", "", "Report quality");
+        Assert.Single(IedBrowserExactCompanionReadRequest.Build(
+            model, page, ledger, q, "MX", "Quality"));
+        Assert.Empty(IedBrowserExactCompanionReadRequest.Build(
+            model, page, ledger, q, "ST", "Quality"));
+        Assert.Empty(IedBrowserExactCompanionReadRequest.Build(
+            model, page, ledger, "LD/MMXU1.PPV.phsBC.q", "MX", "Quality"));
+        Assert.Empty(IedBrowserExactCompanionReadRequest.Build(
+            model, page, ledger, q, "CO", "Quality"));
+
+        // BitString is the typed MMS payload, not the textual "good" string.
+        var frame = new MmsReportFrame
+        {
+            Values = [new MmsReportValue
+            {
+                Member = new MmsDataSetDirectoryMember
+                {
+                    UserReference = q, FunctionalConstraint = "MX"
+                },
+                Value = MmsDataValue.BitString(3, [0, 0])
+            }]
+        };
+        var raw = Assert.Single(IedBrowserReportWireEvidence.Extract(frame));
+        Assert.Equal(q, raw.CarrierReference);
+        Assert.True(ledger.PublishForAssociation(association, q, "MX",
+            raw.QualityBits!.Summary, "", "", "MMS Read",
+            qualityEvidence: raw.QualityBits));
+        Assert.True(ledger.TryGet(q, "MX", out var typed,
+            requiredEvidence: "Quality"));
+        Assert.Equal("false", typed.QualityBits?.FormatField("Overflow"));
+        Assert.Empty(IedBrowserExactCompanionReadRequest.Build(
+            model, page, ledger, q, "MX", "Quality"));
+        ledger.BeginAssociation();
+        Assert.False(ledger.TryGet(q, "MX", out _));
+        Assert.Single(IedBrowserExactCompanionReadRequest.Build(
+            model, page, ledger, q, "MX", "Quality"));
+    }
+
 }
