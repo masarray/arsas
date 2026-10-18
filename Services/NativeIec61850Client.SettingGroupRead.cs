@@ -56,4 +56,81 @@ public sealed partial class NativeIec61850Client
                 "any exact requested leaf in " + root + ". No value published.";
         return result;
     }
+
+    /// <summary>
+    /// One read-only grouped FC-root MMS Read matching the ordered multi-root
+    /// wire shape. A successful typed GVA of EVERY admitted root must precede
+    /// its inclusion in the batch. Unproved roots remain on the existing
+    /// individual/leaf fallback path, never a positional or text-based guess.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, IReadOnlyList<IedBrowserReadResult>>>
+        ReadVerifiedSgRootsAsync(
+            IReadOnlyList<(string Root, IReadOnlyList<IedBrowserReadTarget> Targets)> groups,
+            CancellationToken cancellationToken)
+    {
+        var output = new Dictionary<string, IReadOnlyList<IedBrowserReadResult>>(
+            StringComparer.Ordinal);
+        if (!_session.IsMmsInitiated || groups.Count is < 2 or > 5 ||
+            groups.Select(g => g.Root).Distinct(StringComparer.Ordinal).Count() != groups.Count)
+            return output;
+
+        var admitted = new List<(string Root, MmsObjectReference Reference,
+            MmsTypeSpecificationNode Type, IReadOnlyList<IedBrowserReadTarget> Targets)>();
+        foreach (var group in groups)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!IedBrowserSgRootProjection.CanReadRoot(group.Targets.Count) ||
+                group.Targets.Any(t =>
+                    !string.Equals(IedBrowserSgRootProjection.RootFor(t),
+                        group.Root, StringComparison.Ordinal)))
+                continue;
+            var slash = group.Root.IndexOf('/');
+            if (slash < 1 || slash >= group.Root.Length - 1) continue;
+            var reference = new MmsObjectReference(
+                group.Root[..slash], group.Root[(slash + 1)..], string.Empty);
+            var type = await RunMmsOperationAsync(() =>
+                _session.GetVariableAccessAttributesAsync(reference, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+            if (!type.IsSuccess || type.TypeSpecification is null)
+            {
+                LastErrorMessage = "Typed FC root GVA unavailable for " +
+                    group.Root + ": " + type.Message;
+                continue;
+            }
+            admitted.Add((group.Root, reference,
+                type.TypeSpecification, group.Targets));
+        }
+        if (admitted.Count < 2) return output;
+        var wire = await RunMmsOperationAsync(() =>
+            _session.ReadVerifiedVariablesBatchAsync(
+                admitted.Select(x => x.Reference).ToArray(), cancellationToken),
+            cancellationToken).ConfigureAwait(false);
+        if (wire.ExtraAccessResultCount != 0 || wire.Results.Count != admitted.Count)
+        {
+            LastErrorMessage = "Grouped FC root MMS response cardinality mismatch; " +
+                "no positional scalar projection authorized.";
+            return output;
+        }
+        for (var i = 0; i < admitted.Count; i++)
+        {
+            var entry = admitted[i];
+            var access = wire.Results[i];
+            if (!access.IsSuccess || access.Value is null)
+            {
+                LastErrorMessage = "Grouped FC root Read unavailable for " +
+                    entry.Root + ": " + access.Message;
+                continue;
+            }
+            var values = IedBrowserSgRootProjection.Project(
+                entry.Root, entry.Type, access.Value, entry.Targets);
+            if (values.Count == 0)
+            {
+                LastErrorMessage = "Grouped FC root typed GVA/Read did not match " +
+                    "any exact model-declared scalar under " + entry.Root;
+                continue;
+            }
+            output[entry.Root] = values;
+        }
+        return output;
+    }
 }
