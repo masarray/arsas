@@ -101,10 +101,66 @@ public sealed partial class NativeIec61850Client
                 type.TypeSpecification, group.Targets));
         }
         if (admitted.Count < 2) return output;
-        var wire = await RunMmsOperationAsync(() =>
-            _session.ReadVerifiedVariablesBatchAsync(
-                admitted.Select(x => x.Reference).ToArray(), cancellationToken),
+        // Reuse the already pinned, CI-tested ARIEC multi-variable
+        // Confirmed-Read executor. Do not change the engine trial pin or
+        // relax its separate SCL/association compatibility guards.
+        var engineTargets = admitted.Select(entry => new InitialFcReadTarget
+        {
+            Domain = entry.Reference.Domain,
+            LogicalNode = entry.Reference.Item.Split('
+        if (wire.ExtraAccessResultCount != 0 || wire.Results.Count != admitted.Count)
+        {
+            LastErrorMessage = "Grouped FC root MMS response cardinality mismatch; " +
+                "no positional scalar projection authorized.";
+            return output;
+        }
+        for (var i = 0; i < admitted.Count; i++)
+        {
+            var entry = admitted[i];
+            var access = wire.Results[i];
+            if (!access.IsSuccess || access.Value is null)
+            {
+                LastErrorMessage = "Grouped FC root Read unavailable for " +
+                    entry.Root + ": " + access.Message;
+                continue;
+            }
+            var values = IedBrowserSgRootProjection.Project(
+                entry.Root, entry.Type, access.Value, entry.Targets);
+            if (values.Count == 0)
+            {
+                LastErrorMessage = "Grouped FC root typed GVA/Read did not match " +
+                    "any exact model-declared scalar under " + entry.Root;
+                continue;
+            }
+            output[entry.Root] = values;
+        }
+        return output;
+    }
+}
+)[0],
+            FunctionalConstraint = entry.Targets[0].FunctionalConstraint,
+            MmsItemName = entry.Reference.Item,
+            Source = "ExactLiveMmsGvaVerifiedBrowserRoot"
+            // Leave DataObjects empty: only the exact GVA tree below
+            // authorizes semantic child projection after ordered wire Read.
+        }).ToArray();
+        var plan = InitialFcReadPlanner.Build(engineTargets, engineTargets.Length);
+        if (!plan.IsValid || plan.Batches.Count != 1)
+        {
+            LastErrorMessage = "Grouped FC root read plan invalid: " + plan.Summary;
+            return output;
+        }
+        var executed = await RunMmsOperationAsync(() =>
+            _session.ExecuteInitialFcReadPlanAsync(
+                plan, TimeSpan.FromSeconds(5), cancellationToken),
             cancellationToken).ConfigureAwait(false);
+        if (executed.Batches.Count != 1)
+        {
+            LastErrorMessage = "Grouped FC root MMS execution unavailable: " +
+                executed.Message;
+            return output;
+        }
+        var wire = executed.Batches[0].Read;
         if (wire.ExtraAccessResultCount != 0 || wire.Results.Count != admitted.Count)
         {
             LastErrorMessage = "Grouped FC root MMS response cardinality mismatch; " +
