@@ -13,6 +13,7 @@ internal sealed class IedBrowserSgRootReadFlight
     private readonly IReadOnlyList<IedBrowserReadTarget> _verifiedRootScope;
     private readonly HashSet<string> _scheduledKeys;
     private readonly HashSet<string> _drainedRootFanout = new(StringComparer.Ordinal);
+    private bool _groupedRootAttempted;
     private readonly Dictionary<string, IReadOnlyDictionary<string, IedBrowserReadResult>>
         _completed = new(StringComparer.Ordinal);
     private const int MaxRootReadsPerPage = 8;
@@ -45,6 +46,54 @@ internal sealed class IedBrowserSgRootReadFlight
             .Select(item => item.Value).ToArray();
     }
 
+    private async Task WarmupGroupedRootsAsync(CancellationToken cancellationToken)
+    {
+        if (_groupedRootAttempted) return;
+        _groupedRootAttempted = true;
+
+        // Only roots already scheduled in this finite page may enter a group.
+        // No speculative LN/FC enumeration, no SCL-only sibling admission.
+        var groups = _targets.Select(IedBrowserSgRootProjection.RootFor)
+            .Where(root => root.Length != 0)
+            .Distinct(StringComparer.Ordinal)
+            .Take(5)
+            .Select(root =>
+            {
+                var candidates = _verifiedRootScope.Where(t =>
+                    string.Equals(IedBrowserSgRootProjection.RootFor(t),
+                        root, StringComparison.Ordinal)).ToArray();
+                return (Root: root,
+                    Targets: (IReadOnlyList<IedBrowserReadTarget>)candidates);
+            })
+            .Where(g => IedBrowserSgRootProjection.CanReadRoot(g.Targets.Count))
+            .ToArray();
+        if (groups.Length < 2) return;
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(8));
+        try
+        {
+            var read = await _client.ReadVerifiedSgRootsAsync(
+                groups, timeout.Token).ConfigureAwait(false);
+            foreach (var (root, projected) in read)
+            {
+                _completed[root] = projected.GroupBy(Key, StringComparer.Ordinal)
+                    .Where(g => g.Count() == 1)
+                    .ToDictionary(g => g.Key, g => g.Single(), StringComparer.Ordinal);
+            }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Continue with existing exact single-root/leaf fallback.
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                "IEC grouped FC root MMS read unavailable: " + ex.Message);
+        }
+    }
+
     internal async Task<IedBrowserReadResult?> TryReadAsync(
         IedBrowserReadTarget target, CancellationToken cancellationToken)
     {
@@ -57,6 +106,7 @@ internal sealed class IedBrowserSgRootReadFlight
             return null;
         var root = IedBrowserSgRootProjection.RootFor(target);
         if (root.Length == 0) return null;
+        await WarmupGroupedRootsAsync(cancellationToken).ConfigureAwait(false);
         if (!_completed.TryGetValue(root, out var values))
         {
             if (_completed.Count >= MaxRootReadsPerPage)
