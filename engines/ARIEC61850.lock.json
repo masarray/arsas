@@ -2,9 +2,14 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
-  "sourcePullRequest": 173,
-  "purpose": "M2.17-K isolated C264 acceptance trial: ARIEC typed ST enumerated Mod/Beh/Health/PhyHealth Report FCD projection with exact ST/quality/timestamp checks, preserving P10.9V control and fail-closed unknowns. ARIEC #173 Windows engine CI passed; integrated consumer CI/physical C264 replay pending. Do not promote or merge into main without acceptance.",
+  "commit": "249a703b53619d1e58653f2efab4d34b327e76eb",
+  "sourcePullRequest": 174,
+  "purpose": "P0 isolated read-only grouped typed FC-root trial: ARIEC #174 supplies an ordered 1..10-variable MMS Confirmed-Read API with exact invoke/result matching, duplicate/association guards, and no control, RCB, DataSet write, or cyclic process polling. Prior #173 typed status projection remains inherited. Engine/consumer CI and physical BCUGE read acceptance are separate gates; no mainline promotion without field proof.",
+  "previousP0ConsumerPin": {
+    "commit": "51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
+    "sourcePullRequest": 173,
+    "status": "prior exact pinned trial before grouped read API"
+  },
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
