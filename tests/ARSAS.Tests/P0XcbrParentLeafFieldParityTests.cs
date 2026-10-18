@@ -116,6 +116,36 @@ public sealed class P0XcbrParentLeafFieldParityTests
         Assert.True(cf.TryFormatVerifiedNumericStatusUnit(
             Prefix + "SumSwARs.actVal", "ST", out var a, out _));
         Assert.Equal("kA²t", a);
+        // The SCL canonical projection uses the exact DA as
+        // ObjectReference; GVA can use the DO owner. Both are exact
+        // declarations of the SAME uniquely indexed scalar, not siblings.
+        var selfReferenced = Object("SumSwARs", ("actVal", "ST", "INT32U"),
+            ("units.SIUnit", "CF", "Enum"), ("units.multiplier", "CF", "Enum"));
+        var attrs = selfReferenced.Attributes.Select(x => new LiveIedDataAttributeModel
+        {
+            ObjectReference = x.MmsReference, MmsReference = x.MmsReference,
+            AttributePath = x.AttributePath,
+            FunctionalConstraint = x.FunctionalConstraint, SclBType = x.SclBType
+        }).ToArray();
+        var selfModel = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel
+            {
+                LogicalNodes = [new LiveIedLogicalNodeModel
+                {
+                    Name = "XCBR1", LnClass = "XCBR",
+                    DataObjects = [new LiveIedDataObjectModel
+                    {
+                        Name = "SumSwARs", Reference = Prefix + "SumSwARs",
+                        Attributes = attrs
+                    }]
+                }]
+            }]
+        };
+        var selfCf = new IedBrowserCfEvidencePresentation(values, selfModel, null);
+        Assert.True(selfCf.TryFormatVerifiedNumericStatusUnit(
+            Prefix + "SumSwARs.actVal", "ST", out var selfUnit, out _));
+        Assert.Equal("kA²t", selfUnit);
         Assert.True(cf.TryFormatVerifiedNumericStatusUnit(
             Prefix + "SumSwATmms.setMag", "SP", out var s, out _));
         Assert.Equal("s", s);
