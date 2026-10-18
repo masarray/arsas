@@ -23,6 +23,8 @@ public sealed class P0IecFieldSemanticParityTests
         {
             [owner + "|MX"] = owner.Contains(".A.", StringComparison.Ordinal) ? "kA" : "kV"
         };
+        // Even a contaminated exact child cannot turn degrees into kV/kA.
+        unitIndex[path + "|MX"] = "kV";
         var role = IedBrowserEngineeringValuePresentation.ResolveUnit(unitIndex, path, "MX");
         Assert.Equal("°", role);
         Assert.Equal("0°", IedBrowserEngineeringValuePresentation.Format("0", role));
