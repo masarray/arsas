@@ -60,17 +60,17 @@ public static class IedBrowserIsolatedReadService
                     leafToken.CancelAfter(TimeSpan.FromSeconds(automatic ? 2 : 5));
                     var verifiedSg = await sgRootFlight.TryReadAsync(
                         target, cancellationToken).ConfigureAwait(false);
+                    // A typed root may prove OTHER exact children even when
+                    // the queued target itself was absent or refused.
+                    foreach (var extra in sgRootFlight.DrainUnscheduledSiblings(target))
+                    {
+                        values.Report(extra);
+                        successful++;
+                    }
                     if (verifiedSg is not null)
                     {
                         values.Report(verifiedSg);
                         successful++;
-                        // The same wire GVA+Read may prove other selected-page
-                        // children outside the finite 32-target work queue.
-                        foreach (var extra in sgRootFlight.DrainUnscheduledSiblings(target))
-                        {
-                            values.Report(extra);
-                            successful++;
-                        }
                         progress.Report(new IedBrowserReadProgress(i + 1, targets.Count));
                         continue;
                     }
