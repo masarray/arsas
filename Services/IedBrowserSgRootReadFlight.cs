@@ -92,7 +92,8 @@ internal sealed class IedBrowserSgRootReadFlight
                 groups, timeout.Token).ConfigureAwait(false);
             foreach (var (root, projected) in read)
             {
-                _completed[root] = projected.GroupBy(Key, StringComparer.Ordinal)
+                _completed[root] = projected.GroupBy(result => Key(result.Target),
+                    StringComparer.Ordinal)
                     .Where(g => g.Count() == 1)
                     .ToDictionary(g => g.Key, g => g.Single(), StringComparer.Ordinal);
             }
