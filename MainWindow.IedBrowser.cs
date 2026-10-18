@@ -32,6 +32,14 @@ public partial class MainWindow
     private Iec61850MonitorDevice? _iedBrowserCachedDevice;
     private LiveIedModelDiscoveryDocument? _iedBrowserCachedModel;
     private IedBrowserSchemaIndex? _iedBrowserValueSchemaIndex;
+    // Immutable EnumType declarations, never a second live-value store.
+    // A SHA-verified SCL source and exact online SG MMS type are both required.
+    private IedBrowserSclEnumEvidence? _iedBrowserSclEnumEvidence;
+    private Iec61850MonitorDevice? _iedBrowserSclEnumDevice;
+    private LiveIedModelDiscoveryDocument? _iedBrowserSclEnumLiveModel;
+    private string _iedBrowserSclEnumSourceSha = "";
+    private int _iedBrowserSclEnumLoadTicket;
+    private string _iedBrowserSclEnumAbsenceReason = "";
     private MmsRcbAvailabilityResult? _iedBrowserCachedSnapshot;
     // Metadata-only finite admission: attempts never cache an observed value.
     // The device.LiveValues ledger remains the sole MMS Report/Read authority.
@@ -894,6 +902,29 @@ public partial class MainWindow
                 display = IedBrowserStandardStatusPresentation.Format(
                     observedReference, row.FunctionalConstraint, display,
                     _iedBrowserValueSchemaIndex);
+                // The exact verified SCL EnumType is the only authority
+                // for vendor SG ordinal symbols. SSOT retains raw MMS '0'.
+                if (row.FunctionalConstraint == "SG" &&
+                    observedReference.EndsWith(".setVal", StringComparison.Ordinal))
+                {
+                    if (_iedBrowserSclEnumEvidence?.TryFormat(
+                        observedReference, "SG", display,
+                        out var symbol, out var enumProof) == true)
+                    {
+                        display = symbol;
+                        row.ObservationTooltip += " · " + enumProof;
+                    }
+                    else
+                    {
+                        row.ObservationTooltip +=
+                            " · SG enum remains raw: " +
+                            (_iedBrowserSclEnumEvidence is null
+                                ? _iedBrowserSclEnumAbsenceReason.Length == 0
+                                    ? "verified SCL EnumType is not loaded"
+                                    : _iedBrowserSclEnumAbsenceReason
+                                : "no exact matched verified EnumType or ordinal");
+                    }
+                }
             }
             // One dimensionally typed projector across Data Model, DataSet,
             // Report and Setting Group detail rows. DO parent and direct leaf
@@ -1453,6 +1484,90 @@ public partial class MainWindow
             RefreshIedBrowser();
     }
 
+    /// <summary>
+    /// Metadata-only, one-shot asynchronous EnumType source verification.
+    /// This never reads process values, changes the SG, or creates a second
+    /// mutable observation cache. Stale device/model/source flights are fenced.
+    /// </summary>
+    private void QueueIedBrowserVerifiedSclEnums(Iec61850MonitorDevice device)
+    {
+        var design = device.SclWorkspace;
+        var model = device.LiveDiscoveryModel;
+        var sourcePath = device.SclSourcePath;
+        var sourceSha = device.SclSourceSha256;
+        if (design is null || model is null || !device.IsConnected ||
+            string.IsNullOrWhiteSpace(sourcePath) ||
+            string.IsNullOrWhiteSpace(sourceSha))
+        {
+            if (!ReferenceEquals(_iedBrowserSclEnumDevice, device) ||
+                !ReferenceEquals(_iedBrowserSclEnumLiveModel, model))
+            {
+                _iedBrowserSclEnumLoadTicket++;
+                _iedBrowserSclEnumEvidence = null;
+                _iedBrowserSclEnumDevice = device;
+                _iedBrowserSclEnumLiveModel = model;
+                _iedBrowserSclEnumSourceSha = "";
+                _iedBrowserSclEnumAbsenceReason =
+                    "No matching verified SCL source and online SG type.";
+            }
+            return;
+        }
+
+        var signature = sourcePath + "|" + sourceSha;
+        if (ReferenceEquals(_iedBrowserSclEnumDevice, device) &&
+            ReferenceEquals(_iedBrowserSclEnumLiveModel, model) &&
+            string.Equals(_iedBrowserSclEnumSourceSha, signature,
+                StringComparison.Ordinal))
+            return;
+        _iedBrowserSclEnumEvidence = null;
+        _iedBrowserSclEnumDevice = device;
+        _iedBrowserSclEnumLiveModel = model;
+        _iedBrowserSclEnumSourceSha = signature;
+        _iedBrowserSclEnumAbsenceReason = "Verifying the matching SCL EnumType.";
+        var ticket = ++_iedBrowserSclEnumLoadTicket;
+        _ = LoadIedBrowserVerifiedSclEnumsAsync(
+            device, model, design, sourcePath, sourceSha, signature, ticket);
+    }
+
+    private async Task LoadIedBrowserVerifiedSclEnumsAsync(
+        Iec61850MonitorDevice device,
+        LiveIedModelDiscoveryDocument liveModel,
+        AR.Iec61850.Scl.Workspace.SclIedWorkspace design,
+        string sourcePath, string sourceSha, string signature, int ticket)
+    {
+        try
+        {
+            var verified = await VerifiedSclSourceLoader.LoadAsync(
+                sourcePath, sourceSha, _applicationCancellation.Token);
+            var enums = await Task.Run(() =>
+                IedBrowserSclEnumEvidence.Build(verified, design, liveModel),
+                _applicationCancellation.Token);
+            if (ticket != _iedBrowserSclEnumLoadTicket ||
+                !ReferenceEquals(SelectedDevice, device) ||
+                !ReferenceEquals(device.LiveDiscoveryModel, liveModel) ||
+                !ReferenceEquals(device.SclWorkspace, design) ||
+                !string.Equals(_iedBrowserSclEnumSourceSha, signature,
+                    StringComparison.Ordinal) || !device.IsConnected)
+                return;
+            _iedBrowserSclEnumEvidence = enums;
+            _iedBrowserSclEnumAbsenceReason = enums.BoundAttributeCount > 0
+                ? "" : "SCL has no exact online-verified SG EnumType bindings.";
+            _iedBrowserLastLiveVersion = -1;
+            RefreshIedBrowserVisibleValues();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            if (ticket != _iedBrowserSclEnumLoadTicket ||
+                !ReferenceEquals(SelectedDevice, device))
+                return;
+            _iedBrowserSclEnumEvidence = null;
+            _iedBrowserSclEnumAbsenceReason =
+                "Trusted SCL enum source rejected: " + ex.Message;
+            _iedBrowserLastLiveVersion = -1;
+            RefreshIedBrowserVisibleValues();
+        }
+    }
+
     private void RefreshIedBrowser()
     {
         if (IedBrowserTab == null || MainTabs.SelectedIndex != IedBrowserWorkspaceIndex)
@@ -1495,6 +1610,8 @@ public partial class MainWindow
             (device.IsConnected ? "Connected" : "Offline model") +
             $" · {model?.LogicalDevices.Count ?? 0} LD / {model?.DataSets.Count ?? 0} DataSets / " +
             $"{model?.ReportControls.Count ?? 0} RCB";
+
+        QueueIedBrowserVerifiedSclEnums(device);
 
         // Source SCL parsing and hierarchical projection are performed only when
         // device/model/check/source really changes, not on every IsBusy/connection notification.
