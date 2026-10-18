@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using AR.Iec61850.Discovery;
 using AR.Iec61850.Mms;
 
@@ -15,16 +17,31 @@ public static class IedBrowserTypedWireCompanionLayout
     public sealed record Route(
         string Reference, string Kind, IReadOnlyList<int> ChildIndices);
 
+    // Cache only the model's immutable declaration routes, NEVER Report/Read
+    // evidence. Weak ownership evicts layouts when the IED model is replaced.
+    private static readonly ConditionalWeakTable<LiveIedModelDiscoveryDocument,
+        ConcurrentDictionary<string, IReadOnlyList<Route>>> RouteCache = new();
+
     public static IReadOnlyList<Route> Resolve(
         LiveIedModelDiscoveryDocument? model, string carrier, string fc)
     {
         if (model is null || string.IsNullOrWhiteSpace(fc)) return [];
         var root = ArIED61850Tester.Models.IedBrowserLiveValues.CanonicalReference(carrier);
+        var normalizedFc = fc.Trim().ToUpperInvariant();
+        var cache = RouteCache.GetValue(model, _ =>
+            new ConcurrentDictionary<string, IReadOnlyList<Route>>(StringComparer.Ordinal));
+        return cache.GetOrAdd(root + "|" + normalizedFc,
+            _ => BuildVerifiedRoutes(model, root, normalizedFc));
+    }
+
+    private static IReadOnlyList<Route> BuildVerifiedRoutes(
+        LiveIedModelDiscoveryDocument model, string root, string fc)
+    {
         var slash = root.IndexOf('/');
         if (slash <= 0 || root.Length <= slash + 1) return [];
         var carrierDepth = root[(slash + 1)..].Split('.').Length;
         if (carrierDepth < 2 || carrierDepth > 12) return [];
-        var selectedFc = fc.Trim().ToUpperInvariant();
+        var selectedFc = fc;
         var matches = model.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
             .SelectMany(ln => ln.DataObjects).SelectMany(obj => obj.Attributes)
             .Where(attr => string.Equals(attr.FunctionalConstraint,
