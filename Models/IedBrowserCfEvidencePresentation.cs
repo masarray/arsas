@@ -195,6 +195,53 @@ public sealed class IedBrowserCfEvidencePresentation
         return true;
     }
 
+    /// <summary>
+    /// IEC numeric ST (e.g. a switching accumulation counter) is not an
+    /// enumeration. Permit its engineering unit only when the exact model
+    /// declares a scalar integer stVal and fresh SIUnit+multiplier under
+    /// that SAME DO/FC=CF. No DO-name heuristics, ancestor/sibling borrowing,
+    /// historical-only snapshot, or setting-group conversion.
+    /// </summary>
+    public bool TryFormatVerifiedNumericStatusUnit(
+        string reference, string fc, out string unit, out string provenance)
+    {
+        unit = "";
+        provenance = "";
+        if (_model is null ||
+            !string.Equals(fc, "ST", StringComparison.OrdinalIgnoreCase))
+            return false;
+        var path = IedBrowserLiveValues.CanonicalReference(reference);
+        if (!path.EndsWith(".stVal", StringComparison.Ordinal)) return false;
+        var owner = path[..^".stVal".Length];
+        var matches = _model.LogicalDevices.SelectMany(d => d.LogicalNodes)
+            .SelectMany(n => n.DataObjects)
+            .Where(o => string.Equals(
+                IedBrowserLiveValues.CanonicalReference(o.Reference),
+                owner, StringComparison.Ordinal))
+            .Take(2).ToArray();
+        if (matches.Length != 1) return false;
+        var attributes = matches[0].Attributes.Where(a =>
+            string.Equals(IedBrowserLiveValues.CanonicalReference(a.MmsReference),
+                path, StringComparison.Ordinal) &&
+            string.Equals(a.FunctionalConstraint, "ST", StringComparison.OrdinalIgnoreCase))
+            .Take(2).ToArray();
+        if (attributes.Length != 1) return false;
+        var declaration = attributes[0];
+        // Only IEC integer primitives: DPC bitstrings, enumerations, quality
+        // bitstrings, and bools must never inherit a numeric counter unit.
+        var btype = (declaration.SclBType ?? "").Trim().ToUpperInvariant();
+        var mms = (declaration.MmsType ?? "").Trim().ToLowerInvariant();
+        var isInteger = btype is "INT8" or "INT16" or "INT32" or "INT64" or
+            "INT8U" or "INT16U" or "INT32U" or "INT64U" or "INT24U" ||
+            mms is "integer" or "unsigned";
+        if (!isInteger ||
+            btype is "ENUM" or "DBPOS" or "DPC" ||
+            mms is "bit-string" or "boolean" or "enumerated")
+            return false;
+        return TryVerifyUnitPair(owner + ".units", out unit,
+            out provenance, out var fresh) && fresh;
+    }
+
     /// <summary>Exact standard enum registry, never infer units from DO names.</summary>
     public static string RenderCfValue(string reference, string fc, string raw)
     {
