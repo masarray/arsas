@@ -1796,11 +1796,11 @@
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <Border Background="#F2F5F8" BorderBrush="#E3E8EF" BorderThickness="0,0,1,1" Padding="7,3">
-                                <TextBlock Text="{Binding Name}" ToolTip="{Binding Tooltip}" FontSize="11.2"
+                                <TextBlock Text="{Binding Name}" FontSize="11.2"
                                            Foreground="#48586B" TextTrimming="CharacterEllipsis"/>
                             </Border>
                             <Border Grid.Column="1" BorderBrush="#E3E8EF" BorderThickness="0,0,0,1" Padding="7,3">
-                                <TextBlock Text="{Binding Value}" ToolTip="{Binding ObservationTooltip}" FontSize="11.2"
+                                <TextBlock Text="{Binding Value}" FontSize="11.2"
                                            Foreground="#24364B" TextTrimming="CharacterEllipsis"/>
                             </Border>
                         </Grid>
@@ -1834,7 +1834,7 @@
                                     <TextBlock Text="{Binding Glyph}" FontSize="9.5"
                                                Foreground="#2875B9" Margin="1,0,6,0"
                                                VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding Name}" ToolTip="{Binding Tooltip}" FontSize="11.2"
+                                    <TextBlock Text="{Binding Name}" FontSize="11.2"
                                                TextTrimming="CharacterEllipsis" Foreground="#283F58"
                                                VerticalAlignment="Center"/>
                                 </StackPanel>
@@ -1845,7 +1845,7 @@
                                          observation; engineering schema alone cannot color
                                          an unevaluated signal as measured/healthy. -->
                                     <TextBlock DockPanel.Dock="Right" Text="{Binding ObservationSource}"
-                                               ToolTip="{Binding ObservationTooltip}" FontSize="9.8"
+                                               FontSize="9.8"
                                                Foreground="#4B6B94" Margin="10,0,0,0"
                                                VerticalAlignment="Center">
                                         <TextBlock.Style>
@@ -1859,7 +1859,7 @@
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
-                                    <TextBlock Text="{Binding Value}" ToolTip="{Binding ObservationTooltip}"
+                                    <TextBlock Text="{Binding Value}"
                                                FontSize="11.2" Foreground="#344860"
                                                TextTrimming="CharacterEllipsis"/>
                                 </DockPanel>
@@ -1874,7 +1874,7 @@
                     </DataTemplate>
                     <DataTemplate x:Key="BrowserFlagGroupRow">
                         <Border Padding="7,5" BorderBrush="#DCE4EF" BorderThickness="0,0,0,1">
-                            <ItemsControl ItemsSource="{Binding Flags}" ToolTip="{Binding Tooltip}">
+                            <ItemsControl ItemsSource="{Binding Flags}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
@@ -1907,7 +1907,7 @@
                                                VerticalAlignment="Center"/>
                                 </Border>
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Name}" ToolTip="{Binding Tooltip}"
+                                    <TextBlock Text="{Binding Name}"
                                                FontSize="11.2" Foreground="#273C55"
                                                TextTrimming="CharacterEllipsis"/>
                                     <TextBlock Text="{Binding SecondaryText}" FontSize="10"
@@ -2046,8 +2046,33 @@
                                             <EventSetter Event="PreviewMouseLeftButtonUp"
                                                          Handler="IedBrowserTreeRow_MouseUp"/>
                                             <Setter Property="Cursor" Value="Hand"/>
+                                            <!-- Keep the browsing location visible even when
+                                                 keyboard focus moves into the detail panel. -->
+                                            <Setter Property="BorderBrush" Value="Transparent"/>
+                                            <Setter Property="BorderThickness" Value="3,0,0,0"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter Property="Background" Value="#C7E1FF"/>
+                                                    <Setter Property="BorderBrush" Value="#2563EB"/>
+                                                    <Setter Property="Foreground" Value="#17365B"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                </Trigger>
+                                            </Style.Triggers>
                                         </Style>
                                     </DataGrid.RowStyle>
+                                    <DataGrid.CellStyle>
+                                        <Style TargetType="{x:Type DataGridCell}">
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Setter Property="BorderThickness" Value="0"/>
+                                            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type DataGridRow}}}" Value="True">
+                                                    <Setter Property="Background" Value="#C7E1FF"/>
+                                                    <Setter Property="Foreground" Value="#17365B"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGrid.CellStyle>
                                     <DataGrid.Columns>
                                         <DataGridTemplateColumn Header="Objects" Width="*">
                                             <DataGridTemplateColumn.CellTemplate>
@@ -2074,7 +2099,7 @@
                                                                        FontSize="9" FontWeight="SemiBold"
                                                                        TextAlignment="Center" VerticalAlignment="Center"/>
                                                         </Border>
-                                                        <TextBlock Grid.Column="3" Text="{Binding Title}" ToolTip="{Binding Key}"
+                                                        <TextBlock Grid.Column="3" Text="{Binding Title}"
                                                                    TextTrimming="CharacterEllipsis"
                                                                    Foreground="#243B54" VerticalAlignment="Center"/>
                                                         <TextBlock Grid.Column="4" Text="{Binding RcbUsageGlyph}"
