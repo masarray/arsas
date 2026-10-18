@@ -5,7 +5,7 @@ namespace ARSAS.Tests;
 
 public sealed class M217PStructuredSgReadTests
 {
-    const string Root = "BCUGEF650/SGgndPIOC1$SG";
+    const string Root = "BCUGEF650/SGgndPIOC1$SG0";
     static IedBrowserReadTarget Target(string leaf, string fc = "SG")
         => new("BCUGEF650/SGgndPIOC1$" + fc + "$" +
             leaf.Replace('.', '$'), fc, "Int32");
