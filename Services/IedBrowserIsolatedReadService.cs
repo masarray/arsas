@@ -12,7 +12,8 @@ public static class IedBrowserIsolatedReadService
     public static Task<int> ReadAsync(
         Iec61850MonitorDevice device, IReadOnlyList<IedBrowserReadTarget> targets,
         IProgress<IedBrowserReadResult> values, IProgress<IedBrowserReadProgress> progress,
-        CancellationToken cancellationToken, bool automatic = false)
+        CancellationToken cancellationToken, bool automatic = false,
+        IReadOnlyList<IedBrowserReadTarget>? verifiedRootScope = null)
     {
         // Capture before crossing the UI/thread boundary. The current
         // monitoring association owns this exact live discovery model;
@@ -40,7 +41,8 @@ public static class IedBrowserIsolatedReadService
             }
 
             var successful = 0;
-            var sgRootFlight = new IedBrowserSgRootReadFlight(client, targets);
+            var sgRootFlight = new IedBrowserSgRootReadFlight(
+                client, targets, verifiedRootScope);
             for (var i = 0; i < targets.Count; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -62,6 +64,13 @@ public static class IedBrowserIsolatedReadService
                     {
                         values.Report(verifiedSg);
                         successful++;
+                        // The same wire GVA+Read may prove other selected-page
+                        // children outside the finite 32-target work queue.
+                        foreach (var extra in sgRootFlight.DrainUnscheduledSiblings(target))
+                        {
+                            values.Report(extra);
+                            successful++;
+                        }
                         progress.Report(new IedBrowserReadProgress(i + 1, targets.Count));
                         continue;
                     }
