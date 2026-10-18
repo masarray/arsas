@@ -96,6 +96,35 @@ public sealed class P0ProtectionSpParentAndFocusedReadTests
     }
 
     [Fact]
+    public void OneShotFocusedPTOCReadPrefersStrGeneralBeforeUnrelatedCf()
+    {
+        var obj = Obj("Str", ("general", "ST", "BOOLEAN"),
+            ("neut", "ST", "BOOLEAN"), ("dirGeneral", "ST", "Enum"),
+            ("q", "ST", "Quality"), ("t", "ST", "Timestamp"),
+            ("units.SIUnit", "CF", "Enum"),
+            ("units.multiplier", "CF", "Enum"), ("d", "DC", "VisString255"));
+        var ln = new LiveIedLogicalNodeModel
+        {
+            Name = "gndPTOC2", LnClass = "PTOC", DataObjects = [obj]
+        };
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel
+            { MmsDomain = "BCUGEF650", LogicalNodes = [ln] }]
+        };
+        var page = new IedBrowserTreeRow(
+            "model/ln/BCUGEF650/gndPTOC2", "gndPTOC2", "LN", 2, ln);
+        var ledger = new IedBrowserLiveValues();
+        ledger.BeginAssociation();
+        var planned = IedBrowserReadPlan.BuildFocused(
+            model, page, ledger, budget: 1, selectedDoReference: obj.Reference);
+        Assert.Single(planned);
+        Assert.Equal("ST", planned[0].FunctionalConstraint);
+        Assert.Equal(Ln + ".Str.general",
+            IedBrowserLiveValues.CanonicalReference(planned[0].Reference));
+    }
+
+    [Fact]
     public void OneShotFocusedPTOCReadAdmitsScalarBeforeHeavyCfAndDc()
     {
         var obj = Obj("StrVal", ("setMag", "SP", "FLOAT32"),
