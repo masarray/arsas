@@ -9,6 +9,13 @@ namespace ArIED61850Tester.Models;
 /// </summary>
 public static class IedBrowserSgRootProjection
 {
+    // A dense SGCB may declare hundreds of siblings under a single verified
+    // typed FC root. The former 128-target veto forced hundreds of individual
+    // leaf attempts even when one typed root Read could prove exact children.
+    // This is a per-root bound, never permission to scan other LNs or FCs.
+    public static bool CanReadRoot(int siblingCount)
+        => siblingCount is > 0 and <= 512;
+
     public static string RootFor(IedBrowserReadTarget target)
     {
         var fc = (target.FunctionalConstraint ?? "").Trim().ToUpperInvariant();
