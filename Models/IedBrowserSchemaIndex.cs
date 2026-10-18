@@ -27,7 +27,9 @@ public sealed class IedBrowserSchemaIndex
         new(StringComparer.Ordinal);
 
     private static readonly HashSet<string> ProcessLeaves =
-        new(["stVal", "posVal", "valWTr", "general", "mag.f", "instMag.f", "cVal.mag.f", "instCVal.mag.f"],
+        new(["stVal", "actVal", "posVal", "valWTr", "general",
+            "mag.f", "instMag.f", "cVal.mag.f", "instCVal.mag.f",
+            "setMag", "setMag.f"],
             StringComparer.Ordinal);
 
     public LiveIedModelDiscoveryDocument SourceModel { get; }
@@ -143,7 +145,22 @@ public sealed class IedBrowserSchemaIndex
             .Distinct()
             .Take(3)
             .ToArray();
-        if (candidates.Length == 0 || candidates.Select(x => x.Fc).Distinct().Count() != 1)
+        // IEC APC/ASG-like setting magnitude is a scalar value *only*
+        // when this DO declares no ST/MX process scalar. Read-only SP must
+        // never override a live ST counter nor borrow another DO's value.
+        if (candidates.Length == 0)
+        {
+            var setting = obj.Attributes
+                .Where(a => NormalizeFc(a.FunctionalConstraint) == "SP")
+                .Select(a => IedBrowserLiveValues.CanonicalReference(a.MmsReference))
+                .Where(p => p == owner + ".setMag" || p == owner + ".setMag.f")
+                .Distinct(StringComparer.Ordinal).Take(2).ToArray();
+            if (setting.Length != 1) return false;
+            leaf = setting[0];
+            fc = "SP";
+            return true;
+        }
+        if (candidates.Select(x => x.Fc).Distinct().Count() != 1)
             return false;
         if (!TrySelectDisplayLeaf(owner, candidates.Select(x => x.Reference),
             out leaf))
