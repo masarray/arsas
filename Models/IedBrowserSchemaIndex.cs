@@ -158,14 +158,26 @@ public sealed class IedBrowserSchemaIndex
         // never override a live ST counter nor borrow another DO's value.
         if (candidates.Length == 0)
         {
-            var setting = obj.Attributes
-                .Where(a => NormalizeFc(a.FunctionalConstraint) == "SP")
-                .Select(a => IedBrowserLiveValues.CanonicalReference(a.MmsReference))
-                .Where(p => p == owner + ".setMag" || p == owner + ".setMag.f")
-                .Distinct(StringComparer.Ordinal).Take(2).ToArray();
-            if (setting.Length != 1) return false;
-            leaf = setting[0];
-            fc = "SP";
+            // An IEC setting DO has no ST/MX process value, but its
+            // *observed* active SG scalar is still a legitimate parent.
+            // Admit exactly one declared SG setVal/setMag or SP setMag.
+            // Never fall through to SE (edit group), CF, DC or a sibling.
+            // Two FC declarations or competing setting scalars fail closed.
+            var settings = obj.Attributes
+                .Select(a => (
+                    Reference: IedBrowserLiveValues.CanonicalReference(a.MmsReference),
+                    Fc: NormalizeFc(a.FunctionalConstraint)))
+                .Where(x => x.Fc == "SG" &&
+                    (x.Reference == owner + ".setVal" ||
+                     x.Reference == owner + ".setMag" ||
+                     x.Reference == owner + ".setMag.f") ||
+                    x.Fc == "SP" &&
+                    (x.Reference == owner + ".setMag" ||
+                     x.Reference == owner + ".setMag.f"))
+                .Distinct().Take(2).ToArray();
+            if (settings.Length != 1) return false;
+            leaf = settings[0].Reference;
+            fc = settings[0].Fc;
             return true;
         }
         if (candidates.Select(x => x.Fc).Distinct().Count() != 1)
