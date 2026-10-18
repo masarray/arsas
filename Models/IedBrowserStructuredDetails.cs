@@ -399,6 +399,14 @@ public static class IedBrowserStructuredDetails
                 IedBrowserReadPlan.UnobservedValue(attr.FunctionalConstraint), depth,
                 $"IEC declaration · {attr.MmsReference} · {attr.TypeSource}")
             {
+                // Expanding an IEC units [CF] parent may request ONLY
+                // its two declared child leaves through the existing
+                // association-fenced, bounded configuration Read. This is
+                // a read scope, never a synthetic parent observation.
+                ReadObjectReference = name == "units" &&
+                    string.Equals(group.Key.Fc, "CF", StringComparison.Ordinal)
+                    ? ExactUnitPairScope(groupArray.Select(x => x.attr))
+                    : "",
                 // A structured intermediate row may have its own observed
                 // report value even when no scalar attribute is declared at
                 // that exact depth. Keep the verified parent reference/FC.
@@ -432,6 +440,31 @@ public static class IedBrowserStructuredDetails
         return result;
     }
 
+
+    /// <summary>
+    /// Only the same modeled IEC CF Unit substructure containing a unique
+    /// SIUnit and multiplier can authorize a focused on-expand metadata read.
+    /// Exact MMS references rather than ObjectReference are authoritative:
+    /// GVA and SCL disagree on whether the latter denotes the DO or DA.
+    /// </summary>
+    private static string ExactUnitPairScope(
+        IEnumerable<LiveIedDataAttributeModel> attributes)
+    {
+        var refs = attributes
+            .Where(a => string.Equals(a.FunctionalConstraint, "CF",
+                StringComparison.OrdinalIgnoreCase))
+            .Select(a => IedBrowserLiveValues.CanonicalReference(a.MmsReference))
+            .ToArray();
+        var si = refs.Where(r => r.EndsWith(".units.SIUnit",
+            StringComparison.Ordinal)).Distinct(StringComparer.Ordinal).ToArray();
+        var multiplier = refs.Where(r => r.EndsWith(".units.multiplier",
+            StringComparison.Ordinal)).Distinct(StringComparer.Ordinal).ToArray();
+        if (si.Length != 1 || multiplier.Length != 1)
+            return "";
+        var owner = si[0][..^".SIUnit".Length];
+        return string.Equals(multiplier[0], owner + ".multiplier",
+            StringComparison.Ordinal) ? owner : "";
+    }
 
     /// <summary>
     /// Vector eligibility is schema-only: a matching normal cVal/mag+ang pair
