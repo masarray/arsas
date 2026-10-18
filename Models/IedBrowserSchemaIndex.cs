@@ -59,8 +59,10 @@ public sealed class IedBrowserSchemaIndex
             }
         }
 
-        foreach (var obj in model.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
-                     .SelectMany(ln => ln.DataObjects))
+        foreach (var (obj, lnClass) in model.LogicalDevices
+                     .SelectMany(ld => ld.LogicalNodes)
+                     .SelectMany(ln => ln.DataObjects.Select(obj =>
+                         (obj, ln.LnClass))))
         {
             var owner = IedBrowserLiveValues.CanonicalReference(obj.Reference);
             if (owner.Length == 0) continue;
@@ -75,8 +77,14 @@ public sealed class IedBrowserSchemaIndex
                     continue;
                 var relative = reference[(owner.Length + 1)..];
                 if (fc == "ST" && relative == "stVal" &&
+                    string.Equals(lnClass, "XCBR", StringComparison.Ordinal) &&
                     string.Equals(obj.Name, "CBOpCap", StringComparison.Ordinal) &&
-                    string.Equals(obj.InferredCdc, "ENG", StringComparison.OrdinalIgnoreCase) &&
+                    // Different editions expose XCBR capability as ENG or
+                    // ENS. It is still a typed enumerated status, never an
+                    // arbitrary INT32, a similarly named vendor object, or
+                    // a guessed ordinal-to-symbol mapping.
+                    (string.Equals(obj.InferredCdc, "ENG", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(obj.InferredCdc, "ENS", StringComparison.OrdinalIgnoreCase)) &&
                     (string.Equals(attr.SclBType, "Enum", StringComparison.OrdinalIgnoreCase) ||
                      string.Equals(attr.MmsType, "enumerated", StringComparison.OrdinalIgnoreCase) ||
                      string.Equals(attr.MmsType, "enum", StringComparison.OrdinalIgnoreCase)))
