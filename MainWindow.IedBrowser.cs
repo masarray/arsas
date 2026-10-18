@@ -362,9 +362,20 @@ public partial class MainWindow
             else
             {
                 // Existing bounded process-value hydration; no IED-wide scan.
+                // During SGCB continuation, failures from the PREVIOUS bounded
+                // chunk cannot be mistaken for unattempted leaves. Their exact
+                // association-bound absence evidence is reused, but a manual
+                // Read always permits an explicit retry.
+                Func<IedBrowserReadTarget, bool>? skipFailed = null;
+                if (currentPage?.Kind == "SGCB" &&
+                    _iedBrowserReadFailureEvidence is { } previousFailures &&
+                    previousFailures.IsCurrentFor(device))
+                    skipFailed = target => previousFailures.TryGet(
+                        device, target.Reference, "", target.FunctionalConstraint,
+                        out _, out var kind) && kind != IedBrowserReadAbsenceKind.Deferred;
                 targets = IedBrowserReadPlan.BuildFocused(
                     device.LiveDiscoveryModel, currentPage, device.LiveValues,
-                    selectedDoReference: selectedDo);
+                    selectedDoReference: selectedDo, skipPreviouslyFailed: skipFailed);
             }
         }
         if (targets.Count == 0)
@@ -406,7 +417,10 @@ public partial class MainWindow
         // Read All may include thousands of attributes. It is cancellable by the
         // operator, never a new continuous acquisition/polling process.
         _iedBrowserReadOperation = cts;
-        _iedBrowserReadFailureEvidence = null; // new sweep supersedes old failures
+        // Only successive auto SGCB chunks may reuse exact negative evidence.
+        // All explicit Reads and other selections start a fresh failure sweep.
+        if (!automatic || currentPage?.Kind != "SGCB")
+            _iedBrowserReadFailureEvidence = null;
         var sourceDevice = device;
         var successes = 0;
         var failures = 0;
@@ -500,7 +514,8 @@ public partial class MainWindow
                     "Browser model changed during connection; select the current model and retry Read.");
             readAssociation = sourceDevice.LiveValues.Association;
             bindingIndex = new IedBrowserReadBindingIndex(sourceDevice);
-            _iedBrowserReadFailureEvidence = new IedBrowserReadFailureEvidence(sourceDevice);
+            if (_iedBrowserReadFailureEvidence?.IsCurrentFor(sourceDevice) != true)
+                _iedBrowserReadFailureEvidence = new IedBrowserReadFailureEvidence(sourceDevice);
             var readProgress = new Progress<IedBrowserReadProgress>(p =>
             {
                 if (ReferenceEquals(_iedBrowserReadOperation, cts) &&
@@ -529,13 +544,53 @@ public partial class MainWindow
                     device.ApplyBrowserReadProgress(targets.Count, targets.Count);
                     device.CompleteDiscoveryProgressAnimation();
                 }
-                IedBrowserSubtitle.Text = $"Read complete · {successes:N0} verified scalar values / {targets.Count:N0} attributes · {failures:N0} unavailable";
+                if (!readAll && currentPage?.Kind == "SGCB")
+                {
+                    // The completed 32-target focused chunk is NOT the total
+                    // model inventory. Expose the accounted deferred remainder,
+                    // including leaves never scheduled for MMS on this selection.
+                    var declared = IedBrowserReadPlan.Build(model, currentPage, readAll: false);
+                    var observed = 0;
+                    var unavailable = 0;
+                    foreach (var target in declared)
+                    {
+                        if (sourceDevice.LiveValues.TryGet(target.Reference,
+                                target.FunctionalConstraint, out var present) &&
+                            !present.IsStale && present.Association == readAssociation)
+                        {
+                            observed++;
+                            continue;
+                        }
+                        if (_iedBrowserReadFailureEvidence?.TryGet(
+                                sourceDevice, target.Reference, "",
+                                target.FunctionalConstraint, out _, out var kind) == true &&
+                            kind != IedBrowserReadAbsenceKind.Deferred)
+                        {
+                            unavailable++;
+                            continue;
+                        }
+                        _iedBrowserReadFailureEvidence?.RecordDeferred(target,
+                            "Not yet scheduled within the bounded selected SGCB read; " +
+                            "use explicit Read to request all verified SG leaves.");
+                    }
+                    var deferred = Math.Max(0, declared.Count - observed - unavailable);
+                    IedBrowserSubtitle.Text =
+                        $"SGCB focused batch · {successes:N0}/{targets.Count:N0} received · " +
+                        $"{observed:N0}/{declared.Count:N0} observed · " +
+                        $"{unavailable:N0} unavailable · {deferred:N0} deferred";
+                }
+                else
+                    IedBrowserSubtitle.Text = $"Read complete · {successes:N0} verified scalar values / {targets.Count:N0} attributes · {failures:N0} unavailable";
                 IedBrowserSubtitle.ToolTip = failureExamples.Count == 0
                     ? null
                     : "First unavailable attributes (no scalar was published):\n" +
                       string.Join("\n", failureExamples);
                 RefreshIedBrowserVisibleValues();
-                autoContinue = automatic && failures == 0 && successes > 0;
+                // A few permanently refused SG leaves must not block the next
+                // finite SGCB chunk. Per-page auto admission still caps attempts
+                // to three; this never becomes Read All or cyclic polling.
+                autoContinue = automatic && successes > 0 &&
+                    (failures == 0 || currentPage?.Kind == "SGCB");
             }
         }
         catch (OperationCanceledException)
