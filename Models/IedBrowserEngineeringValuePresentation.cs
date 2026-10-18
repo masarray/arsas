@@ -142,6 +142,30 @@ public static class IedBrowserEngineeringValuePresentation
         return string.Equals(unit, "rad", StringComparison.Ordinal) ? "rad" : "°";
     }
 
+    /// <summary>
+    /// One pure semantic unit decision for all Browser pages. The container
+    /// and its observed leaf must yield the same engineering unit. Exact
+    /// typed integer ST is allowed ONLY by live paired owner CF evidence;
+    /// status enums, q/t, and unverified counter metadata remain unitless.
+    /// </summary>
+    public static string ResolveObservedUnit(
+        IReadOnlyDictionary<string, string?> units,
+        IedBrowserCfEvidencePresentation cfEvidence,
+        string observedReference, string engineeringReference,
+        string fc, bool isEngineeringValue)
+    {
+        var unit = isEngineeringValue ? ResolveUnit(units, engineeringReference, fc) : "";
+        var observed = IedBrowserLiveValues.CanonicalReference(observedReference);
+        if (unit.Length == 0 && string.Equals(fc, "ST", StringComparison.OrdinalIgnoreCase) &&
+            observed.EndsWith(".stVal", StringComparison.Ordinal) &&
+            cfEvidence.TryFormatVerifiedNumericStatusUnit(observed, fc, out var numeric, out _))
+            unit = numeric;
+        if (unit.Length == 0 && string.Equals(fc, "MX", StringComparison.OrdinalIgnoreCase) &&
+            observed.EndsWith(".ang.f", StringComparison.Ordinal))
+            unit = ResolveVectorAngleUnit(units, observed, fc);
+        return unit;
+    }
+
     public static string Format(string raw, string unit)
     {
         if (string.IsNullOrWhiteSpace(unit) || string.IsNullOrWhiteSpace(raw))
