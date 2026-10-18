@@ -46,6 +46,13 @@ public sealed class IedBrowserSclEnumEvidence
                 StringComparison.Ordinal)).Take(2).ToArray();
         if (ieds.Length != 1)
             return new IedBrowserSclEnumEvidence(source.Sha256, bound);
+        // The SCL document can contain many IEDs. Only declared logical
+        // devices belonging to the exact selected IED may bind SG semantics.
+        var acceptedDomains = ieds[0].Descendants().Where(x => NameIs(x, "LDevice"))
+            .Select(x => selectedIed.IedName + Attr(x, "inst"))
+            .ToHashSet(StringComparer.Ordinal);
+        if (acceptedDomains.Count == 0)
+            return new IedBrowserSclEnumEvidence(source.Sha256, bound);
 
         // Exact ID, no first-wins on duplicate conflicting definitions.
         var enumGroups = root.Descendants().Where(x => NameIs(x, "EnumType"))
@@ -53,6 +60,7 @@ public sealed class IedBrowserSclEnumEvidence
             .Where(g => !string.IsNullOrWhiteSpace(g.Key) && g.Count() == 1)
             .ToDictionary(g => g.Key, g => g.Single(), StringComparer.Ordinal);
         var declarations = selectedIed.DesignModel.LogicalDevices
+            .Where(d => acceptedDomains.Contains(d.MmsDomain))
             .SelectMany(d => d.LogicalNodes)
             .SelectMany(n => n.DataObjects)
             .SelectMany(o => o.Attributes)
