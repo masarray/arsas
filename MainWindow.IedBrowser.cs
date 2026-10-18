@@ -277,9 +277,14 @@ public partial class MainWindow
         // Its bounded reads never interfere with the reporting session.
 
         var configRequest = (sender as Button)?.Tag as IedBrowserVisibleConfigurationReadRequest;
-        var automatic = sender is Button { Tag: "Auto" } || configRequest is not null;
+        // A selected Report's CF unit hydration is a READ OF THE REFERENCED
+        // DATASET METADATA, not an RCB Inspect action. It must enter the
+        // ordinary typed Read → association-fenced LiveValues pipeline.
+        var reportUnitRequest = sender is Button { Tag: "ReportUnitAuto" };
+        var automatic = sender is Button { Tag: "Auto" } ||
+            configRequest is not null || reportUnitRequest;
         var readAll = sender is Button { Tag: "All" };
-        if (!readAll)
+        if (!readAll && !reportUnitRequest)
         {
             switch (IedBrowserReadPlan.SelectionKind(_iedBrowserNavigation.Current))
             {
@@ -307,7 +312,14 @@ public partial class MainWindow
             model, currentPage, readAll, selectedDo);
         if (automatic)
         {
-            if (configRequest is not null)
+            if (reportUnitRequest)
+            {
+                if (currentPage is not { Kind: "RCB", Payload: RcbExportRow })
+                    return;
+                targets = IedBrowserMeasurementMetadataReadPlan.BuildForPage(
+                    device.LiveDiscoveryModel, currentPage, device.LiveValues);
+            }
+            else if (configRequest is not null)
             {
                 // Expanded phase/Nameplate metadata: exact missing CF/DC leaves
                 // of the current verified LN. A stale/collapsed row may not read.
@@ -344,12 +356,14 @@ public partial class MainWindow
         // Rejected/busy/cancelled preflight cannot poison a future visit.
         var automaticKey = automatic && currentPage is not null
             ? IedBrowserFocusedAdmission.PageKey(
-                currentPage.Key, configRequest?.Scope ?? selectedDo)
+                currentPage.Key, reportUnitRequest ? "|unit-CF" :
+                    configRequest?.Scope ?? selectedDo)
             : null;
         if (automaticKey is not null &&
             !_iedBrowserAutoReadAdmission.TryStart(device.DeviceId,
                 device.LiveValues.Association, automaticKey,
                 configRequest is not null ? 1 :
+                reportUnitRequest ? 3 :
                 currentPage!.Kind == "SGCB" ? 3 :
                 currentPage.Kind is "LN" or "DO" ? 2 : 1))
             return;
@@ -532,7 +546,7 @@ public partial class MainWindow
                     _iedBrowserSelectedDoReference);
                 QueueIedBrowserRcbFocusedRead(currentFocus);
             }
-            if (configRequest is null &&
+            if (configRequest is null && !reportUnitRequest &&
                 ReferenceEquals(SelectedDevice, sourceDevice) &&
                 _iedBrowserNavigation.Current is { Kind: "LN" } &&
                 _iedBrowserReadOperation is null)

@@ -101,4 +101,21 @@ public sealed class M217USgAnalogueSettingUnitParityTests
         Assert.Equal(1, IedBrowserMeasurementMetadataReadPlan.BuildForSettingGroup(
             model, page, values, budget: 1).Count);
     }
+    [Fact]
+    public void AutoSettingReadMustReadSgBeforeSlowCfMetadata()
+    {
+        var (model, page) = ModelAndPage();
+        var ledger = new IedBrowserLiveValues();
+        ledger.BeginAssociation();
+        var plan = IedBrowserReadPlan.BuildFocused(model, page, ledger, budget: 12);
+        Assert.NotEmpty(plan);
+        Assert.Equal("SG", plan[0].FunctionalConstraint);
+        Assert.EndsWith(".setMag.f",
+            IedBrowserLiveValues.CanonicalReference(plan[0].Reference));
+        Assert.Contains(plan, t => t.FunctionalConstraint == "CF");
+        Assert.DoesNotContain(plan, t => t.FunctionalConstraint == "SE");
+        Assert.All(plan, t => Assert.StartsWith("LD/",
+            IedBrowserLiveValues.CanonicalReference(t.Reference)));
+    }
+
 }

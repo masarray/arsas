@@ -46,7 +46,7 @@ public sealed class M214MergedCfAndVectorAuthorityTests
         Assert.Contains("phsA: 10", unpaired.Text);
         Assert.DoesNotContain("angle 30", unpaired.Text);
         Assert.DoesNotContain("neut: 3", unpaired.Text);
-        Assert.DoesNotContain("∠ 30", unpaired.Text);
+        Assert.Contains("∠ 30", unpaired.Text);
         Assert.Contains("other model-proven components on expansion",
             unpaired.Provenance);
         // The complete independently observed vector remains accessible
@@ -55,7 +55,7 @@ public sealed class M214MergedCfAndVectorAuthorityTests
         Assert.True(IedBrowserEngineeringComposite.TryCompose(
             expanded, ledger, new Dictionary<string, string?>(), true, out var all));
         Assert.Equal("Report", all.Source);
-        Assert.DoesNotContain("∠", all.Text);
+        Assert.Contains("∠", all.Text);
         Assert.Contains("angle 30", all.Provenance);
         Assert.DoesNotContain("independent, not paired", all.Text);
         Assert.Contains("not paired with magnitude", all.Provenance);

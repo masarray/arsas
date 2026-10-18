@@ -71,7 +71,10 @@ public static class IedBrowserObservedVectorPresentation
                     // Clean operator Value: when no coherent pair exists,
                     // show a magnitude alone (or just ° if only ang exists).
                     // Never append a pseudo phasor or "independent" jargon.
-                    text += (hasMag ? " · ang " : "") + rendered;
+                    // The glyph is the IEC engineering angle notation,
+                    // NOT evidence that two independent updates share a
+                    // timestamp. That distinction remains in provenance.
+                    text += (hasMag ? " ∠ " : "") + rendered;
                     unpaired.Add(part.Label + ": " + (hasMag
                         ? "angle not paired with magnitude"
                         : "magnitude not observed") +

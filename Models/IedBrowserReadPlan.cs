@@ -154,7 +154,13 @@ public static class IedBrowserReadPlan
             .DistinctBy(target =>
                 IedBrowserLiveValues.CanonicalReference(target.Reference) + "|" +
                 target.FunctionalConstraint, StringComparer.Ordinal)
-            .OrderBy(target => (page.Kind is "DataSet" or "SGCB") &&
+            // Read the active SG values FIRST. Previously CF metadata
+            // was ahead of SG in the same 32-target / 15-second budget:
+            // slow/unavailable CF could exhaust the entire read before any
+            // setting arrived. Units remain a later bounded best-effort read.
+            .OrderBy(target => page.Kind == "SGCB" &&
+                target.FunctionalConstraint == "SG" ? -2 :
+                page.Kind == "DataSet" &&
                 target.FunctionalConstraint == "CF" ? -1 :
                 FocusPriority(page.Kind, target))
             .ThenBy(target => target.Reference, StringComparer.Ordinal)

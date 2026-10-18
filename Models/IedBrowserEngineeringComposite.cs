@@ -186,7 +186,7 @@ public static class IedBrowserEngineeringComposite
                 // This is a visible angle observation, NOT a paired phasor.
                 // Show it without inventing sample coherence. The leaf and
                 // provenance still preserve the original MMS source/time.
-                text += " · ang " + angleText;
+                text += " ∠ " + angleText;
                 references.Add(plan.AngleReference + "[separate " +
                     plan.FunctionalConstraint + "]: " + angleText);
             }
