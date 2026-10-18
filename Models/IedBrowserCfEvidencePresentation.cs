@@ -90,8 +90,10 @@ public sealed class IedBrowserCfEvidencePresentation
             {
                 var owner = reference[..^statusSuffix.Length];
                 if (exactOwners.Contains(owner) &&
-                    string.Equals(IedBrowserLiveValues.CanonicalReference(a.ObjectReference),
-                        owner, StringComparison.Ordinal) &&
+                    (string.Equals(IedBrowserLiveValues.CanonicalReference(a.ObjectReference),
+                        owner, StringComparison.Ordinal) ||
+                     string.Equals(IedBrowserLiveValues.CanonicalReference(a.ObjectReference),
+                        reference, StringComparison.Ordinal)) &&
                     IsTypedNumericScalar(a, fc))
                 {
                     var key = Key(reference, fc);
