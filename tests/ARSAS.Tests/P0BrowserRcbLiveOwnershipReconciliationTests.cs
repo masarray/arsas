@@ -55,7 +55,7 @@ public sealed class P0BrowserRcbLiveOwnershipReconciliationTests
         Assert.Equal(1, IedBrowserRcbLiveOwnershipPresentation.Reconcile(
             [row], owned, connected: true));
         Assert.Equal(1, IedBrowserRcbLiveOwnershipPresentation.Reconcile(
-            [row], [], connected: true));
+            [row], new HashSet<string>(), connected: true));
         Assert.Equal(MmsRcbOperationalAvailability.Unknown, row.Availability);
     }
 
@@ -66,7 +66,7 @@ public sealed class P0BrowserRcbLiveOwnershipReconciliationTests
         external.Availability = MmsRcbOperationalAvailability.InUse;
         external.Reason = "Verified read-only third-party reservation";
         Assert.Equal(0, IedBrowserRcbLiveOwnershipPresentation.Reconcile(
-            [external], [], connected: true));
+            [external], new HashSet<string>(), connected: true));
         Assert.Equal(MmsRcbOperationalAvailability.InUse, external.Availability);
         Assert.Equal("Verified read-only third-party reservation", external.Reason);
     }
