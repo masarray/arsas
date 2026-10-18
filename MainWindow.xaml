@@ -2016,6 +2016,9 @@
                                 <Button x:Name="IedBrowserReadRcbButton" Content="Check live RCB" Style="{StaticResource SoftButton}"
                                         Margin="0,0,6,0" Click="IedBrowserReadRcb_Click"
                                         ToolTip="Explicit read-only availability check; does not enable reporting"/>
+                                <Button x:Name="IedBrowserExportReadEvidenceButton" Content="Read evidence…" Style="{StaticResource SoftButton}"
+                                        Margin="0,0,6,0" Click="IedBrowserExportReadEvidence_Click"
+                                        ToolTip="Save exact IEC reference/FC, canonical observations, failures and deferred coverage as CSV; no MMS operation"/>
                                 <Button x:Name="IedBrowserExportRcbButton" Content="Export RCB…" Style="{StaticResource SoftButton}"
                                         Click="IedBrowserExportRcb_Click" ToolTip="Open the existing RCB export workflow"/>
                             </StackPanel>
