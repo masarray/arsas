@@ -85,9 +85,16 @@ public sealed class IedBrowserSclEnumEvidence
             .Where(g => g.Count() == 1 &&
                 g.Single().TypeDiscoveryStatus.Equals("Exact",
                     StringComparison.OrdinalIgnoreCase) &&
+                g.Single().TypeSource.StartsWith(
+                    "GetVariableAccessAttributes", StringComparison.Ordinal) &&
+                // When MMS wire typing explicitly disagrees with SCL enum,
+                // fail CLOSED. SclBType is only a fallback when the trusted
+                // exact GVA result leaves its MMS primitive unspecified.
                 (g.Single().MmsType.Equals("enumerated", StringComparison.OrdinalIgnoreCase) ||
                  g.Single().MmsType.Equals("enum", StringComparison.OrdinalIgnoreCase) ||
-                 g.Single().SclBType.Equals("Enum", StringComparison.OrdinalIgnoreCase)))
+                 string.IsNullOrWhiteSpace(g.Single().MmsType) &&
+                    g.Single().SclBType.Equals("Enum",
+                        StringComparison.OrdinalIgnoreCase)))
             .ToDictionary(g => g.Key, g => g.Single(), StringComparer.Ordinal);
 
         foreach (var attr in declarations)
