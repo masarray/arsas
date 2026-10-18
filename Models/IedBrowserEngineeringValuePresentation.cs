@@ -134,8 +134,9 @@ public static class IedBrowserEngineeringValuePresentation
     }
 
     private static string AngleSymbol(string? unit)
-        => unit is "deg" or "degree" or "degrees" or "°" ? "°"
-            : unit == "rad" ? "rad" : "";
+        // Vector.ang is defined as degrees by IEC 61850-7-3. An unrelated
+        // kV/kA SignalDefinition on the exact leaf is not an angle unit.
+        => string.Equals(unit, "rad", StringComparison.Ordinal) ? "rad" : "°";
 
     public static string Format(string raw, string unit)
     {
