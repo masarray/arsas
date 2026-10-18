@@ -76,7 +76,10 @@ public sealed class P0ProtectionSp0RootFieldEvidenceTests
                     "SG", "Enum")));
         Assert.Equal("", IedBrowserSgRootProjection.RootFor(
             T("InMagTyp.setVal", "SE")));
-        Assert.Equal("", IedBrowserSgRootProjection.RootFor(
-            T("InMagTyp.setVal", "CF")));
+        // CF0 is now a separately typed configuration root. Its
+        // projection still cannot publish a member in the SP/SG namespace.
+        Assert.Equal("BCUGEF650/gndPTOC2$CF0",
+            IedBrowserSgRootProjection.RootFor(
+                T("InMagTyp.setVal", "CF")));
     }
 }
