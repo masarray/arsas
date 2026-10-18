@@ -277,14 +277,15 @@ public partial class MainWindow
         // Its bounded reads never interfere with the reporting session.
 
         var configRequest = (sender as Button)?.Tag as IedBrowserVisibleConfigurationReadRequest;
+        var companionRequest = (sender as Button)?.Tag as IedBrowserExactCompanionReadRequest;
         // A selected Report's CF unit hydration is a READ OF THE REFERENCED
         // DATASET METADATA, not an RCB Inspect action. It must enter the
         // ordinary typed Read → association-fenced LiveValues pipeline.
         var reportUnitRequest = sender is Button { Tag: "ReportUnitAuto" };
         var automatic = sender is Button { Tag: "Auto" } ||
-            configRequest is not null || reportUnitRequest;
+            configRequest is not null || companionRequest is not null || reportUnitRequest;
         var readAll = sender is Button { Tag: "All" };
-        if (!readAll && !reportUnitRequest)
+        if (!readAll && !reportUnitRequest && companionRequest is null)
         {
             switch (IedBrowserReadPlan.SelectionKind(_iedBrowserNavigation.Current))
             {
@@ -318,6 +319,21 @@ public partial class MainWindow
                     return;
                 targets = IedBrowserMeasurementMetadataReadPlan.BuildForPage(
                     device.LiveDiscoveryModel, currentPage, device.LiveValues);
+            }
+            else if (companionRequest is not null)
+            {
+                if (!ReferenceEquals(_iedBrowserRenderedPage, currentPage) ||
+                    !_iedBrowserDetails.Rows.Any(x => x.IsExpanded &&
+                        x.EvidenceKind == companionRequest.Kind &&
+                        string.Equals(IedBrowserLiveValues.CanonicalReference(x.ValueReference),
+                            IedBrowserLiveValues.CanonicalReference(companionRequest.Reference),
+                            StringComparison.Ordinal) &&
+                        string.Equals(x.FunctionalConstraint, companionRequest.Fc,
+                            StringComparison.OrdinalIgnoreCase)))
+                    return;
+                targets = IedBrowserExactCompanionReadRequest.Build(
+                    device.LiveDiscoveryModel, currentPage, device.LiveValues,
+                    companionRequest.Reference, companionRequest.Fc, companionRequest.Kind);
             }
             else if (configRequest is not null)
             {
@@ -357,12 +373,15 @@ public partial class MainWindow
         var automaticKey = automatic && currentPage is not null
             ? IedBrowserFocusedAdmission.PageKey(
                 currentPage.Key, reportUnitRequest ? "|unit-CF" :
-                    configRequest?.Scope ?? selectedDo)
+                    companionRequest is not null
+                        ? "|raw-" + companionRequest.Reference + "-" + companionRequest.Fc
+                        : configRequest?.Scope ?? selectedDo)
             : null;
         if (automaticKey is not null &&
             !_iedBrowserAutoReadAdmission.TryStart(device.DeviceId,
                 device.LiveValues.Association, automaticKey,
                 configRequest is not null ? 1 :
+                companionRequest is not null ? 2 :
                 reportUnitRequest ? 3 :
                 currentPage!.Kind == "SGCB" ? 3 :
                 currentPage.Kind is "LN" or "DO" ? 2 : 1))
@@ -1801,7 +1820,10 @@ public partial class MainWindow
             _iedBrowserLastLiveVersion = -1;
             RefreshIedBrowserVisibleValues();
             if (row.IsExpanded)
+            {
                 QueueIedBrowserVisibleConfigurationRead(row);
+                QueueIedBrowserExactCompanionRead(row);
+            }
         }));
     }
 
@@ -1825,6 +1847,35 @@ public partial class MainWindow
                 device.IsBusy || _iedBrowserReadOperation is not null) return;
             IedBrowserReadValues_Click(
                 new Button { Tag = new IedBrowserVisibleConfigurationReadRequest(scope) },
+                new RoutedEventArgs());
+        }));
+    }
+
+    /// <summary>
+    /// On expansion, request only one exact q/t leaf if the canonical ledger
+    /// has no raw typed evidence. A summary such as "good" or an ISO timestamp
+    /// does not satisfy IEC bit-level details.
+    /// </summary>
+    private void QueueIedBrowserExactCompanionRead(IedBrowserDetailRow row)
+    {
+        if (row.EvidenceKind is not ("Quality" or "Timestamp") ||
+            string.IsNullOrWhiteSpace(row.ValueReference) ||
+            SelectedDevice is not { IsConnected: true, IsDemo: false } device ||
+            _iedBrowserNavigation.Current is not { Kind: "LN" } current ||
+            !ReferenceEquals(_iedBrowserRenderedPage, current))
+            return;
+        var association = device.LiveValues.Association;
+        var request = new IedBrowserExactCompanionReadRequest(
+            row.ValueReference, row.FunctionalConstraint, row.EvidenceKind);
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            if (!ReferenceEquals(SelectedDevice, device) ||
+                device.LiveValues.Association != association ||
+                !ReferenceEquals(current, _iedBrowserRenderedPage) ||
+                !_iedBrowserDetails.Rows.Contains(row) || !row.IsExpanded ||
+                device.IsBusy || _iedBrowserReadOperation is not null)
+                return;
+            IedBrowserReadValues_Click(new Button { Tag = request },
                 new RoutedEventArgs());
         }));
     }
