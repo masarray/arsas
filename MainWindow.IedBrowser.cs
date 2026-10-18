@@ -1513,7 +1513,17 @@ public partial class MainWindow
             return;
         }
 
-        var signature = sourcePath + "|" + sourceSha;
+        // An on-disk edit invalidates previously verified declaration
+        // symbols even if the device and imported source SHA did not change.
+        // The async source loader then rejects any content/SHA mismatch.
+        long sourceStamp;
+        try { sourceStamp = System.IO.File.GetLastWriteTimeUtc(sourcePath).Ticks; }
+        catch (Exception ex) when (ex is System.IO.IOException or
+                                   UnauthorizedAccessException)
+        {
+            sourceStamp = -1;
+        }
+        var signature = sourcePath + "|" + sourceSha + "|" + sourceStamp;
         if (ReferenceEquals(_iedBrowserSclEnumDevice, device) &&
             ReferenceEquals(_iedBrowserSclEnumLiveModel, model) &&
             string.Equals(_iedBrowserSclEnumSourceSha, signature,
