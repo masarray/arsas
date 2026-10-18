@@ -194,8 +194,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 }
                 else
                     values.Report(new IedBrowserReadResult(target, "", "", "",
-                        raw is null && session.Client.LastErrorMessage.Length > 0
-                            ? session.Client.LastErrorMessage : reason));
+                        IedBrowserRejectedScalarEvidence.Explain(raw, reason,
+                            target.DataType, target.FunctionalConstraint,
+                            session.Client.LastErrorMessage)));
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
