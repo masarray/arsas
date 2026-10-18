@@ -64,7 +64,8 @@ internal sealed class IedBrowserSgRootReadFlight
             .Where(root => root.Length != 0 &&
                 !_groupAttemptedRoots.Contains(root))
             .Distinct(StringComparer.Ordinal)
-            .Take(5).ToArray();
+            .Take(Math.Max(0, Math.Min(5,
+                MaxRootReadsPerPage - _completed.Count))).ToArray();
         foreach (var root in roots) _groupAttemptedRoots.Add(root);
 
         // Only roots already scheduled in this finite page may enter a group.
