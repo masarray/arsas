@@ -52,6 +52,11 @@ public sealed class IedBrowserReadFailureEvidence
                ? _model is not null && ReferenceEquals(_model, candidate.LiveDiscoveryModel)
                : candidate.BrowserProjectionEpoch == _epoch);
 
+    // Association/epoch guard for reusing absence-only evidence across
+    // consecutive bounded focused read chunks. Never carries observed values.
+    public bool IsCurrentFor(Iec61850MonitorDevice candidate)
+        => IsCurrent(candidate);
+
     private static string Key(string? reference, string? fc)
         => IedBrowserLiveValues.CanonicalReference(reference) + "|" +
            (fc ?? "").Trim().ToUpperInvariant();
