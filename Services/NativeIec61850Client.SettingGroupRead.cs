@@ -21,8 +21,11 @@ public sealed partial class NativeIec61850Client
             return [];
         var slash = root.IndexOf('/');
         if (slash <= 0 || slash >= root.Length - 1 ||
-            !(root.EndsWith("$SG", StringComparison.Ordinal) ||
-              root.EndsWith("$SP0", StringComparison.Ordinal)))
+            !(root.EndsWith("$SG0", StringComparison.Ordinal) ||
+              root.EndsWith("$SP0", StringComparison.Ordinal) ||
+              root.EndsWith("$CF0", StringComparison.Ordinal) ||
+              root.EndsWith("$DC0", StringComparison.Ordinal) ||
+              root.EndsWith("$EX0", StringComparison.Ordinal)))
             return [];
         var reference = new MmsObjectReference(
             root[..slash], root[(slash + 1)..], string.Empty);
