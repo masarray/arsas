@@ -258,7 +258,10 @@ public sealed class M2IedBrowserTimeAndReferenceTests
         var xaml = File.ReadAllText(Find("MainWindow.xaml"));
         var code = File.ReadAllText(Find("MainWindow.IedBrowser.cs"));
         Assert.Contains("Text=\"{Binding ObservationSource}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("ToolTip=\"{Binding ObservationTooltip}\"", xaml, StringComparison.Ordinal);
+        // Screenshot P0: do not auto-open giant provenance hover strips
+        // across the active Browser detail grid. Evidence remains in
+        // ObservationTooltip on the row for explicit future inspection.
+        Assert.DoesNotContain("ToolTip=\"{Binding ObservationTooltip}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("row.ObservationSource = \"\";", code, StringComparison.Ordinal);
         Assert.Contains("row.ObservationSource = live.IsStale", code, StringComparison.Ordinal);
         Assert.Contains("IedBrowserUtcTimeQualityPresentation.FormatField(", code,
