@@ -42,14 +42,21 @@ enable RCBs, issue an Operate, fabricate absent q/t, or start cyclic polling.
 A root with more than 512 siblings is not silently truncated into a false
 partial success.
 
-## Remaining interoperability gap
+## Grouped Read integration and remaining field gate
 
-The capture batches several FC-root variables in one Confirmed-Read.
-The consumer's current root reader still issues typed GVA and root Read
-individually. The engine already implements bounded batch Read codec;
-a dedicated, physically validated grouped-root execution API is the next
-engine slice. The current consumer fanout fix does not claim transport
-batching parity.
+The consumer now calls the ALREADY-PINNED engine's
+`InitialFcReadPlanner.Build` + `ExecuteInitialFcReadPlanAsync` to issue a
+single bounded ordered multi-root Read **after** verifying each root's GVA.
+It projects each returned access result only through that root's own typed
+schema into the same association-scoped SSOT. Per-root/leaf fallback remains
+when any GVA/Read or type match is rejected. The engine commit is unchanged.
+An additional engine API trial was rejected as unnecessary; it was not
+merged, and the original locked compatibility guards remain in force.
+
+The capture shows a five-variable root Read, but the consumer still requires
+a new live BCUGE test to confirm matching wire behavior, exact children
+mapped, and no new timeout. Neither a green CI run nor a synthetic fixture
+is a substitute for live GVA/Read acceptance.
 
 Field gate: compare the exact FC, GVA tree order, MMS result type, and
 source/association for `PIOCEna`, `InMagTyp`, `StrVal`, `RsMod`,
