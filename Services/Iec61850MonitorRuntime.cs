@@ -126,9 +126,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         IReadOnlyList<IedBrowserReadTarget> targets,
         IProgress<IedBrowserReadResult> values,
         IProgress<IedBrowserReadProgress> progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<IedBrowserReadTarget>? verifiedRootScope = null)
         => ReadBrowserValuesAsync(device, targets, values, progress,
-            cancellationToken, onAttempt: null);
+            cancellationToken, onAttempt: null, verifiedRootScope: verifiedRootScope);
 
     // One producer-side attempt callback is used only by finite initial
     // hydration. No WPF scheduling, new transport, or extra Read call.
@@ -138,7 +139,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         IProgress<IedBrowserReadResult> values,
         IProgress<IedBrowserReadProgress> progress,
         CancellationToken cancellationToken,
-        Action<IedBrowserReadTarget>? onAttempt)
+        Action<IedBrowserReadTarget>? onAttempt,
+        IReadOnlyList<IedBrowserReadTarget>? verifiedRootScope = null)
     {
         ArgumentNullException.ThrowIfNull(device);
         if (!_sessions.TryGetValue(device.DeviceId, out var session) ||
@@ -149,7 +151,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         if (device.IsMonitoring)
             throw new InvalidOperationException("Live monitor is active. Browser values follow its report stream; stop monitoring for an explicit MMS Read.");
         var succeeded = 0;
-        var sgRootFlight = new IedBrowserSgRootReadFlight(session.Client, targets);
+        var sgRootFlight = new IedBrowserSgRootReadFlight(
+            session.Client, targets, verifiedRootScope);
         for (var index = 0; index < targets.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -165,6 +168,11 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 {
                     values.Report(verifiedSg);
                     succeeded++;
+                    foreach (var extra in sgRootFlight.DrainUnscheduledSiblings(target))
+                    {
+                        values.Report(extra);
+                        succeeded++;
+                    }
                     progress.Report(new IedBrowserReadProgress(index + 1, targets.Count));
                     continue;
                 }
