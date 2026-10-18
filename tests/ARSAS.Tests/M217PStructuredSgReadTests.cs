@@ -37,7 +37,10 @@ public sealed class M217PStructuredSgReadTests
             "$PIOCEna$setVal", StringComparison.Ordinal) && v.Value == "false");
         Assert.DoesNotContain(results, v => v.Target.Reference.StartsWith("OTHER/", StringComparison.Ordinal));
         Assert.Equal(Root, IedBrowserSgRootProjection.RootFor(Target("PIOCEna.setVal")));
-        Assert.Equal("", IedBrowserSgRootProjection.RootFor(Target("PIOCEna.setVal", "SP")));
+        // SP0 is now a separately wire-verified active single-setting root.
+        // Its targets still cannot pass the SG root projection above.
+        Assert.Equal("BCUGEF650/SGgndPIOC1$SP0",
+            IedBrowserSgRootProjection.RootFor(Target("PIOCEna.setVal", "SP")));
     }
 
     [Fact]
