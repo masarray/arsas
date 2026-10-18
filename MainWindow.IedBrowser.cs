@@ -1514,7 +1514,9 @@ public partial class MainWindow
             string.IsNullOrWhiteSpace(sourceSha))
         {
             if (!ReferenceEquals(_iedBrowserSclEnumDevice, device) ||
-                !ReferenceEquals(_iedBrowserSclEnumLiveModel, model))
+                !ReferenceEquals(_iedBrowserSclEnumLiveModel, model) ||
+                _iedBrowserSclEnumEvidence is not null ||
+                _iedBrowserSclEnumSourceSha.Length != 0)
             {
                 _iedBrowserSclEnumLoadTicket++;
                 _iedBrowserSclEnumEvidence = null;
@@ -1537,7 +1539,9 @@ public partial class MainWindow
         {
             sourceStamp = -1;
         }
-        var signature = sourcePath + "|" + sourceSha + "|" + sourceStamp;
+        var association = device.LiveValues.Association;
+        var signature = sourcePath + "|" + sourceSha + "|" + sourceStamp +
+            "|" + association;
         if (ReferenceEquals(_iedBrowserSclEnumDevice, device) &&
             ReferenceEquals(_iedBrowserSclEnumLiveModel, model) &&
             string.Equals(_iedBrowserSclEnumSourceSha, signature,
@@ -1550,14 +1554,16 @@ public partial class MainWindow
         _iedBrowserSclEnumAbsenceReason = "Verifying the matching SCL EnumType.";
         var ticket = ++_iedBrowserSclEnumLoadTicket;
         _ = LoadIedBrowserVerifiedSclEnumsAsync(
-            device, model, design, sourcePath, sourceSha, signature, ticket);
+            device, model, design, sourcePath, sourceSha, signature,
+            association, ticket);
     }
 
     private async Task LoadIedBrowserVerifiedSclEnumsAsync(
         Iec61850MonitorDevice device,
         LiveIedModelDiscoveryDocument liveModel,
         AR.Iec61850.Scl.Workspace.SclIedWorkspace design,
-        string sourcePath, string sourceSha, string signature, int ticket)
+        string sourcePath, string sourceSha, string signature,
+        long association, int ticket)
     {
         try
         {
@@ -1569,6 +1575,7 @@ public partial class MainWindow
             if (ticket != _iedBrowserSclEnumLoadTicket ||
                 !ReferenceEquals(SelectedDevice, device) ||
                 !ReferenceEquals(device.LiveDiscoveryModel, liveModel) ||
+                device.LiveValues.Association != association ||
                 !ReferenceEquals(device.SclWorkspace, design) ||
                 !string.Equals(_iedBrowserSclEnumSourceSha, signature,
                     StringComparison.Ordinal) || !device.IsConnected)
