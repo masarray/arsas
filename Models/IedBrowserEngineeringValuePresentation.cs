@@ -154,12 +154,21 @@ public static class IedBrowserEngineeringValuePresentation
         string observedReference, string engineeringReference,
         string fc, bool isEngineeringValue)
     {
-        var unit = isEngineeringValue ? ResolveUnit(units, engineeringReference, fc) : "";
         var observed = IedBrowserLiveValues.CanonicalReference(observedReference);
-        if (unit.Length == 0 && string.Equals(fc, "ST", StringComparison.OrdinalIgnoreCase) &&
-            observed.EndsWith(".stVal", StringComparison.Ordinal) &&
-            cfEvidence.TryFormatVerifiedNumericStatusUnit(observed, fc, out var numeric, out _))
-            unit = numeric;
+        var normalizedFc = (fc ?? "").Trim().ToUpperInvariant();
+        // IEC XCBR typed numeric status/setting: do NOT promote an
+        // unverified SignalDefinition unit. Only live paired CF of the exact
+        // owning DO may qualify an integer actVal or SP setMag.
+        var numericCandidate = normalizedFc == "ST" &&
+            (observed.EndsWith(".stVal", StringComparison.Ordinal) ||
+             observed.EndsWith(".actVal", StringComparison.Ordinal)) ||
+            normalizedFc == "SP" &&
+            (observed.EndsWith(".setMag", StringComparison.Ordinal) ||
+             observed.EndsWith(".setMag.f", StringComparison.Ordinal));
+        if (numericCandidate)
+            return cfEvidence.TryFormatVerifiedNumericStatusUnit(
+                observed, normalizedFc, out var proven, out _) ? proven : "";
+        var unit = isEngineeringValue ? ResolveUnit(units, engineeringReference, fc) : "";
         if (unit.Length == 0 && string.Equals(fc, "MX", StringComparison.OrdinalIgnoreCase) &&
             observed.EndsWith(".ang.f", StringComparison.Ordinal))
             unit = ResolveVectorAngleUnit(units, observed, fc);
