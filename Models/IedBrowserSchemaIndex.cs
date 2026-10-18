@@ -164,21 +164,20 @@ public sealed class IedBrowserSchemaIndex
         // never override a live ST counter nor borrow another DO's value.
         if (candidates.Length == 0)
         {
-            // An IEC setting DO has no ST/MX process value, but its
-            // *observed* active SG scalar is still a legitimate parent.
-            // Admit exactly one declared SG setVal/setMag or SP setMag.
-            // Never fall through to SE (edit group), CF, DC or a sibling.
-            // Two FC declarations or competing setting scalars fail closed.
+            // IEC protection settings carry process-readable scalars under
+            // SP as well as active SG. BCUGE PTOC exposes PTOCEna/RsMod/
+            // InMagTyp as SP setVal and TmACrv as SP setCharact; without
+            // these the parent says Not read despite a received MMS child.
+            // Accept ONLY exact schema-declared scalar names and FC, never
+            // SE (editable group), CF/DC, neighboring DOs or first child.
             var settings = obj.Attributes
                 .Select(a => (
                     Reference: IedBrowserLiveValues.CanonicalReference(a.MmsReference),
                     Fc: NormalizeFc(a.FunctionalConstraint)))
-                .Where(x => x.Fc == "SG" &&
+                .Where(x => x.Fc is "SG" or "SP" &&
                     (x.Reference == owner + ".setVal" ||
+                     x.Reference == owner + ".setCharact" ||
                      x.Reference == owner + ".setMag" ||
-                     x.Reference == owner + ".setMag.f") ||
-                    x.Fc == "SP" &&
-                    (x.Reference == owner + ".setMag" ||
                      x.Reference == owner + ".setMag.f"))
                 .Distinct().Take(2).ToArray();
             if (settings.Length != 1) return false;
