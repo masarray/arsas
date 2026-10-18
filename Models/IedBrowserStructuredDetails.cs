@@ -531,7 +531,7 @@ public static class IedBrowserStructuredDetails
         IEnumerable<(string Reference, string Relative)> rows)
     {
         var candidates = rows.Where(x => !string.IsNullOrWhiteSpace(x.Reference) &&
-                x.Relative is "f" or "stVal" or "posVal" or "general" or
+                x.Relative is "f" or "i" or "stVal" or "posVal" or "general" or
                     "valWTr" or "mag.f" or "instMag.f" or "cVal.mag.f" or
                     "instCVal.mag.f" or "ang.f" or "cVal.ang.f")
             .DistinctBy(x => x.Reference, StringComparer.Ordinal)
