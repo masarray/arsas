@@ -73,17 +73,28 @@ public sealed class IedBrowserCfEvidencePresentation
         {
             var reference = IedBrowserLiveValues.CanonicalReference(a.MmsReference);
             if (reference.Length == 0) continue;
-            if (string.Equals(a.FunctionalConstraint, "ST",
-                    StringComparison.OrdinalIgnoreCase) &&
-                reference.EndsWith(".stVal", StringComparison.Ordinal))
+            var fc = (a.FunctionalConstraint ?? "").Trim().ToUpperInvariant();
+            // Only a typed exact scalar DA can inherit the units of its
+            // OWN IEC DO. XCBR accumulations use actVal[ST], while some
+            // threshold/time settings expose setMag[SP] rather than stVal.
+            var suffix = fc == "ST" &&
+                         reference.EndsWith(".stVal", StringComparison.Ordinal)
+                ? ".stVal" : fc == "ST" &&
+                               reference.EndsWith(".actVal", StringComparison.Ordinal)
+                    ? ".actVal" : fc == "SP" &&
+                                   reference.EndsWith(".setMag.f", StringComparison.Ordinal)
+                        ? ".setMag.f" : fc == "SP" &&
+                                       reference.EndsWith(".setMag", StringComparison.Ordinal)
+                            ? ".setMag" : "";
+            if (suffix.Length > 0)
             {
-                var owner = reference[..^".stVal".Length];
+                var owner = reference[..^suffix.Length];
                 if (exactOwners.Contains(owner) &&
                     string.Equals(IedBrowserLiveValues.CanonicalReference(a.ObjectReference),
                         owner, StringComparison.Ordinal) &&
-                    IsTypedIntegerStatus(a))
+                    IsTypedNumericScalar(a, fc))
                 {
-                    var key = Key(reference, "ST");
+                    var key = Key(reference, fc);
                     numericStatusCounts[key] =
                         numericStatusCounts.GetValueOrDefault(key) + 1;
                 }
@@ -203,6 +214,19 @@ public sealed class IedBrowserCfEvidencePresentation
             mms is not ("bit-string" or "boolean" or "enumerated");
     }
 
+    private static bool IsTypedNumericScalar(
+        LiveIedDataAttributeModel attribute, string fc)
+    {
+        if (fc == "ST") return IsTypedIntegerStatus(attribute);
+        if (fc != "SP") return false;
+        var btype = (attribute.SclBType ?? "").Trim().ToUpperInvariant();
+        var mms = (attribute.MmsType ?? "").Trim().ToLowerInvariant();
+        return btype is "FLOAT32" or "FLOAT64" or "INT8" or "INT16" or
+            "INT32" or "INT64" or "INT8U" or "INT16U" or "INT32U" or
+            "INT64U" || (btype.Length == 0 &&
+                mms is "floating-point" or "integer" or "unsigned");
+    }
+
     private bool TryVerifyUnitPair(string owner, out string unit,
         out string provenance, out bool fresh)
     {
@@ -244,15 +268,22 @@ public sealed class IedBrowserCfEvidencePresentation
     {
         unit = "";
         provenance = "";
-        if (_model is null ||
-            !string.Equals(fc, "ST", StringComparison.OrdinalIgnoreCase))
-            return false;
+        if (_model is null) return false;
+        var constraint = (fc ?? "").Trim().ToUpperInvariant();
         var path = IedBrowserLiveValues.CanonicalReference(reference);
-        if (!path.EndsWith(".stVal", StringComparison.Ordinal)) return false;
-        var owner = path[..^".stVal".Length];
-        if (!_numericStatusLeaves.Contains(Key(path, "ST"))) return false;
-        return TryVerifyUnitPair(owner + ".units", out unit,
-            out provenance, out var fresh) && fresh;
+        var suffix = constraint == "ST" &&
+                     path.EndsWith(".stVal", StringComparison.Ordinal)
+            ? ".stVal" : constraint == "ST" &&
+                           path.EndsWith(".actVal", StringComparison.Ordinal)
+                ? ".actVal" : constraint == "SP" &&
+                               path.EndsWith(".setMag.f", StringComparison.Ordinal)
+                    ? ".setMag.f" : constraint == "SP" &&
+                                   path.EndsWith(".setMag", StringComparison.Ordinal)
+                        ? ".setMag" : "";
+        if (suffix.Length == 0 ||
+            !_numericStatusLeaves.Contains(Key(path, constraint))) return false;
+        return TryVerifyUnitPair(path[..^suffix.Length] + ".units",
+            out unit, out provenance, out var fresh) && fresh;
     }
 
     /// <summary>Exact standard enum registry, never infer units from DO names.</summary>
