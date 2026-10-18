@@ -10,6 +10,35 @@ namespace ArIED61850Tester.Models;
 /// </summary>
 public static class IedBrowserStandardStatusPresentation
 {
+    /// <summary>
+    /// Exact schema + declared enumerated CDC before the normative IEC
+    /// CBOpCap lookup. Unknown ordinals and untyped/vendor objects remain raw.
+    /// No field-name-only "value1" translation is permitted.
+    /// </summary>
+    public static string Format(string reference, string fc, string raw,
+        IedBrowserSchemaIndex? schema)
+    {
+        if (schema is not null &&
+            string.Equals(fc, "ST", StringComparison.OrdinalIgnoreCase) &&
+            schema.TryGetVerifiedStandardEnumObject(reference, fc, out var objectName) &&
+            Iec61850StandardEnumRegistry.TryResolve(
+                "XCBR", objectName, "ENG", "stVal", out var definition))
+        {
+            var input = (raw ?? "").Trim();
+            if (input.StartsWith("value", StringComparison.OrdinalIgnoreCase))
+                input = input["value".Length..];
+            if (long.TryParse(input, NumberStyles.Integer,
+                    CultureInfo.InvariantCulture, out var ordinal))
+            {
+                var match = definition.Values.FirstOrDefault(v => v.Ord == ordinal);
+                if (match is not null)
+                    return match.Symbol == "none" ? "None" : match.Symbol;
+            }
+            return raw;
+        }
+        return Format(reference, fc, raw);
+    }
+
     public static string Format(string reference, string fc, string raw)
     {
         if (!string.Equals(fc, "ST", StringComparison.OrdinalIgnoreCase) ||
