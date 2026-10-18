@@ -18,6 +18,9 @@ public sealed class IedBrowserSchemaIndex
     // Schema-only DPC stVal/DO identities, computed once on model replacement.
     // Never classify arbitrary numeric enums or a name-only Pos as Dbpos.
     private readonly HashSet<string> _declaredDoublePointValues = new(StringComparer.Ordinal);
+    // Exact, immutable model-verified status enum declarations. No runtime values.
+    private readonly Dictionary<string, string> _standardEnumObjects =
+        new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _qualityLeaves =
         new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _timestampLeaves =
@@ -69,6 +72,14 @@ public sealed class IedBrowserSchemaIndex
                     !reference.StartsWith(owner + ".", StringComparison.Ordinal))
                     continue;
                 var relative = reference[(owner.Length + 1)..];
+                if (fc == "ST" && relative == "stVal" &&
+                    string.Equals(obj.Name, "CBOpCap", StringComparison.Ordinal) &&
+                    string.Equals(obj.InferredCdc, "ENG", StringComparison.OrdinalIgnoreCase) &&
+                    (string.Equals(attr.SclBType, "Enum", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(attr.MmsType, "enumerated", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(attr.MmsType, "enum", StringComparison.OrdinalIgnoreCase)))
+                    _standardEnumObjects[Key(reference, fc)] = obj.Name;
+
                 // IEC DPC declarations and exact Dbpos BTypes are the only
                 // authority for double-point display. Both the precise
                 // process leaf and its own DO row may use this presentation.
@@ -177,6 +188,11 @@ public sealed class IedBrowserSchemaIndex
         }
         return false;
     }
+
+    public bool TryGetVerifiedStandardEnumObject(
+        string reference, string fc, out string objectName)
+        => _standardEnumObjects.TryGetValue(
+            Key(IedBrowserLiveValues.CanonicalReference(reference), fc), out objectName!);
 
     private static string NormalizeFc(string? fc)
         => (fc ?? "").Trim().ToUpperInvariant();
