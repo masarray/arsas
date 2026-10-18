@@ -12,12 +12,13 @@ public static class IedBrowserSgRootProjection
     public static string RootFor(IedBrowserReadTarget target)
     {
         var fc = (target.FunctionalConstraint ?? "").Trim().ToUpperInvariant();
-        if (fc is not ("SG" or "SP")) return "";
+        if (fc is not ("SG" or "SP" or "CF" or "DC" or "EX")) return "";
         var marker = "$" + fc + "$";
-        // BCUGE wire capture proves LN$SP0 as the named FC variable, not
-        // LN$SP. GVA still MUST verify the actual ordered structure before
-        // any value is accepted; other devices safely fall back to leaf Read.
-        var suffix = fc == "SP" ? "$SP0" : "$SG";
+        // BCUGE's named-variable inventory exposes FC group variables
+        // LN$SP0, LN$SG0, LN$CF0, LN$DC0 and LN$EX0. The name is a
+        // CANDIDATE only: an exact GVA typed structure and successful
+        // read must precede every scalar's ledger publication.
+        var suffix = "$" + fc + "0";
         var wire = target.Reference;
         var cut = wire.IndexOf(marker, StringComparison.Ordinal);
         if (cut > 0 && wire.Contains('/'))
@@ -46,8 +47,11 @@ public static class IedBrowserSgRootProjection
             .Where(group => group.Count() == 1)
             .ToDictionary(group => group.Key, group => group.Single(), StringComparer.Ordinal);
         var slash = root.IndexOf('/');
-        var constraint = root.EndsWith("$SP0", StringComparison.Ordinal)
-            ? "SP" : root.EndsWith("$SG", StringComparison.Ordinal) ? "SG" : "";
+        var constraint = root.EndsWith("$SP0", StringComparison.Ordinal) ? "SP"
+            : root.EndsWith("$SG0", StringComparison.Ordinal) ? "SG"
+            : root.EndsWith("$CF0", StringComparison.Ordinal) ? "CF"
+            : root.EndsWith("$DC0", StringComparison.Ordinal) ? "DC"
+            : root.EndsWith("$EX0", StringComparison.Ordinal) ? "EX" : "";
         var cut = root.LastIndexOf('$');
         if (slash < 1 || cut <= slash || constraint.Length == 0) return [];
         var prefix = root[..cut];
