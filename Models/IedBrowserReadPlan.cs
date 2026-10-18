@@ -125,7 +125,8 @@ public static class IedBrowserReadPlan
     public static IReadOnlyList<IedBrowserReadTarget> BuildFocused(
         LiveIedModelDiscoveryDocument? liveModel, IedBrowserTreeRow? page,
         IedBrowserLiveValues ledger, int budget = 32,
-        string? selectedDoReference = null)
+        string? selectedDoReference = null,
+        Func<IedBrowserReadTarget, bool>? skipPreviouslyFailed = null)
     {
         if (liveModel is null || page is null || ledger.IsOffline || budget <= 0)
             return [];
@@ -151,6 +152,10 @@ public static class IedBrowserReadPlan
         var ordered = metadata.Concat(candidates)
             .Where(target => !ledger.TryGet(target.Reference,
                 target.FunctionalConstraint, out _))
+            // Failed targets must not monopolize a subsequent bounded SGCB
+            // continuation. Only the caller's association-scoped absence
+            // evidence may exclude them; manual Read passes no exclusion.
+            .Where(target => skipPreviouslyFailed?.Invoke(target) != true)
             .DistinctBy(target =>
                 IedBrowserLiveValues.CanonicalReference(target.Reference) + "|" +
                 target.FunctionalConstraint, StringComparer.Ordinal)
