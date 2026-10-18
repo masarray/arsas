@@ -508,7 +508,8 @@ public partial class MainWindow
             });
             if (device.IsMonitoring)
                 await ArIED61850Tester.Services.IedBrowserIsolatedReadService.ReadAsync(
-                    device, targets, readValues, readProgress, cts.Token);
+                    device, targets, readValues, readProgress, cts.Token,
+                    automatic: automatic);
             else
                 await _runtime.ReadBrowserValuesAsync(device, targets,
                     readValues, readProgress, cts.Token);
