@@ -71,6 +71,26 @@ public sealed class P0ProtectionFocusedCoverageAndFcRootTests
         Assert.DoesNotContain(plan, p => p.FunctionalConstraint is "CO" or "SE");
     }
 
+    [Fact]
+    public void ExplicitReadLnKeepsAllVerifiedTargetsButMovesSettingsToFront()
+    {
+        var (model, page) = Model();
+        var all = IedBrowserReadPlan.Build(model, page, readAll: false);
+        Assert.True(all.Count > 32);
+        var ordered = IedBrowserReadPlan.PrioritizeExplicitLn(all);
+        Assert.Equal(all.Count, ordered.Count);
+        Assert.Equal(all.Select(t => t.Reference + "|" + t.FunctionalConstraint)
+            .OrderBy(x => x), ordered.Select(t => t.Reference + "|" +
+            t.FunctionalConstraint).OrderBy(x => x));
+        Assert.Equal("SP", ordered[0].FunctionalConstraint);
+        var first = ordered.Take(24).ToArray();
+        foreach (var name in new[] { "InMagTyp", "StrVal", "RsMod",
+            "StrMult", "ExNumTr" })
+            Assert.Contains(first, t => t.FunctionalConstraint == "SP" &&
+                IedBrowserLiveValues.CanonicalReference(t.Reference)
+                    .StartsWith(Ln + "." + name + ".", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData("SP", "SP0")]
     [InlineData("SG", "SG0")]
