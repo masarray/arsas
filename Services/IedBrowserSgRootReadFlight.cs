@@ -24,7 +24,12 @@ internal sealed class IedBrowserSgRootReadFlight
     internal async Task<IedBrowserReadResult?> TryReadAsync(
         IedBrowserReadTarget target, CancellationToken cancellationToken)
     {
-        if (_targets.Count > 32 || target.FunctionalConstraint is not ("SG" or "SP"))
+        // A manual LN Read contains hundreds of CF/DC/ST leaves. The former
+        // 32-total-target veto disabled typed SP0/SG0 reads exactly on those
+        // dense protection LNs. Bound by page and group instead, not by the
+        // number of unrelated, independently declared target attributes.
+        if (_targets.Count > 512 ||
+            target.FunctionalConstraint is not ("SG" or "SP" or "CF" or "DC" or "EX"))
             return null;
         var root = IedBrowserSgRootProjection.RootFor(target);
         if (root.Length == 0) return null;
@@ -41,8 +46,9 @@ internal sealed class IedBrowserSgRootReadFlight
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(
                     cancellationToken);
                 timeout.CancelAfter(TimeSpan.FromSeconds(5));
-                read = await _client.ReadVerifiedSgRootAsync(
-                    root, siblings, timeout.Token).ConfigureAwait(false);
+                if (siblings.Length <= 128)
+                    read = await _client.ReadVerifiedSgRootAsync(
+                        root, siblings, timeout.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
