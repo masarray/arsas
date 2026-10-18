@@ -145,6 +145,32 @@ public sealed class P0VerifiedSgEnumTypeTests
     }
 
     [Fact]
+    public void SpP0_ExactPTOCReadOnlySpEnumUsesItsOwnSclTypeNotSgOrEditSe()
+    {
+        // BCUGE PTOC uses SP rather than SG for active single-set values.
+        // The SHA-verified SCL selection, exact online typed FC and ordinal
+        // must all agree; neither SG nor SE may borrow these SP symbols.
+        var spScl = Scl.Replace("fc=\"SG\"", "fc=\"SP\"", StringComparison.Ordinal);
+        var types = Resolve(spScl, online: Online(fc: "SP"));
+        Assert.Equal(2, types.BoundAttributeCount);
+        Assert.True(types.TryFormat(Raw, "SP", "0",
+            out var phasor, out var proof));
+        Assert.Equal("phasor", phasor);
+        Assert.Contains("BCUGEInMagKind", proof);
+        Assert.True(types.TryFormat("BCUGELD0/SGgndPIOC1.AnotherSetting.setVal",
+            "SP", "0", out var different, out _));
+        Assert.Equal("not-phasor", different);
+        Assert.False(types.TryFormat(Raw, "SG", "0", out var raw, out _));
+        Assert.Equal("0", raw);
+        Assert.False(types.TryFormat(Raw, "SE", "0", out raw, out _));
+        Assert.Equal("0", raw);
+        Assert.Equal(0, Resolve(spScl, online: Online(fc: "SG"))
+            .BoundAttributeCount);
+        Assert.Equal(0, Resolve(spScl, online: Online(
+            fc: "SP", type: "integer")).BoundAttributeCount);
+    }
+
+    [Fact]
     public void Sg04_LiveOrdinalRemainsUntouchedInAssociationBoundCanonicalLedger()
     {
         var ledger = new IedBrowserLiveValues();
