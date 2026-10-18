@@ -69,7 +69,7 @@ public sealed class P0ProtectionSp0RootFieldEvidenceTests
     [Fact]
     public void ActiveSGAndEditableSEMustNotBeAliasedToSpRoot()
     {
-        Assert.Equal("BCUGEF650/SGgndPIOC1$SG",
+        Assert.Equal("BCUGEF650/SGgndPIOC1$SG0",
             IedBrowserSgRootProjection.RootFor(
                 new IedBrowserReadTarget(
                     "BCUGEF650/SGgndPIOC1$SG$InMagTyp$setVal",
