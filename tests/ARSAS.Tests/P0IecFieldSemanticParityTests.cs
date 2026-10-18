@@ -117,6 +117,39 @@ public sealed class P0IecFieldSemanticParityTests
         Assert.Equal("value1", IedBrowserStandardStatusPresentation.Format(
             "LD/XCBR1.NotDeclared.stVal", "ST", "value1", schema));
     }
+    [Theory]
+    [InlineData("ENG", "XCBR", "None")]
+    [InlineData("ENS", "XCBR", "None")]
+    [InlineData("INS", "XCBR", "value1")]
+    [InlineData("ENS", "CSWI", "value1")]
+    public void Xcbr01b_CbOpCapMustUseExactXcbrCdcAndTypedEnum(
+        string cdc, string lnClass, string expected)
+    {
+        const string owner = "LD/XCBR1.CBOpCap";
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel
+            {
+                LogicalNodes = [new LiveIedLogicalNodeModel
+                {
+                    Name = "XCBR1", LnClass = lnClass,
+                    DataObjects = [new LiveIedDataObjectModel
+                    {
+                        Reference = owner, Name = "CBOpCap", InferredCdc = cdc,
+                        Attributes = [new LiveIedDataAttributeModel
+                        {
+                            ObjectReference = owner, FunctionalConstraint = "ST",
+                            AttributePath = "CBOpCap.stVal",
+                            MmsReference = owner + ".stVal", MmsType = "enumerated"
+                        }]
+                    }]
+                }]
+            }]
+        };
+        Assert.Equal(expected, IedBrowserStandardStatusPresentation.Format(
+            owner + ".stVal", "ST", "value1", new IedBrowserSchemaIndex(model)));
+    }
+
     [Fact]
     public void Qt01_OnExpandTargetsOnlyExactUnprovenPhaseQualityAndUsesTypedWire()
     {
