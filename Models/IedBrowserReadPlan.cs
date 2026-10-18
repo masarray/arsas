@@ -172,6 +172,29 @@ public static class IedBrowserReadPlan
     }
 
     /// <summary>
+    /// Explicit Read LN still reads the ENTIRE verified LN selection. Schedule
+    /// its first targets by FC so slow ST/DC leaves do not postpone every
+    /// protection SP setting or CF engineering unit until the end of a large
+    /// manually requested sweep. No membership or read count changes.
+    /// </summary>
+    public static IReadOnlyList<IedBrowserReadTarget> PrioritizeExplicitLn(
+        IReadOnlyList<IedBrowserReadTarget> targets)
+    {
+        ArgumentNullException.ThrowIfNull(targets);
+        if (targets.Count < 8) return targets;
+        var ordered = targets.OrderBy(t => FocusPriority("LN", t))
+            .ThenBy(t => t.Reference, StringComparer.Ordinal).ToArray();
+        var head = FairLnTargets(ordered, Math.Min(24, ordered.Length));
+        var frontKeys = head.Select(t =>
+            IedBrowserLiveValues.CanonicalReference(t.Reference) + "|" +
+            t.FunctionalConstraint.ToUpperInvariant())
+            .ToHashSet(StringComparer.Ordinal);
+        return head.Concat(ordered.Where(t => !frontKeys.Contains(
+            IedBrowserLiveValues.CanonicalReference(t.Reference) + "|" +
+            t.FunctionalConstraint.ToUpperInvariant()))).ToArray();
+    }
+
+    /// <summary>
     /// Finite read-only LN sample. Exact FC/attribute references are already
     /// proven by Build(); there is no sibling inference or new MMS polling.
     /// A full explicit Read LN retains the independent operator-selected
