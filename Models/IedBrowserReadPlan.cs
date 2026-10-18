@@ -189,6 +189,18 @@ public static class IedBrowserReadPlan
         if (fc == "MX" && (reference.EndsWith(".mag.f", StringComparison.Ordinal) ||
                             reference.EndsWith(".instMag.f", StringComparison.Ordinal)))
             return 1;
+        // Operators browse the exact protection setting value, not its DC
+        // description or min/max tables. A bounded 24-target focused read
+        // used to spend its budget on CF before reaching SP setVal, leaving
+        // PTOCEna, InMagTyp, RsMod and TmACrv falsely looking unread.
+        // Only verified read-only SG/SP scalar identities are promoted;
+        // SE editing state and controls are never included here.
+        if ((fc is "SG" or "SP") &&
+            (reference.EndsWith(".setVal", StringComparison.Ordinal) ||
+             reference.EndsWith(".setCharact", StringComparison.Ordinal) ||
+             reference.EndsWith(".setMag", StringComparison.Ordinal) ||
+             reference.EndsWith(".setMag.f", StringComparison.Ordinal)))
+            return 1;
         if ((fc is "ST" or "MX") &&
             (reference.EndsWith(".q", StringComparison.Ordinal) ||
              reference.EndsWith(".t", StringComparison.Ordinal)))
