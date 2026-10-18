@@ -125,7 +125,8 @@ public sealed class M217GDataSetSclSchemaFallbackTests
         Assert.Contains("IedBrowserReadPlan.BuildFocused(", source);
         var planner = File.ReadAllText(Path.Combine(folder.FullName,
             "Models", "IedBrowserReadPlan.cs"));
-        Assert.Contains(".Take(Math.Min(budget, page.Kind == \"SGCB\" ? 32 : 24))", planner);
+        Assert.Contains("var cap = Math.Min(budget, page.Kind == \"SGCB\" ? 32 : 24)", planner);
+        Assert.Contains("FairLnTargets(ordered, cap)", planner);
         Assert.Contains("ledger.IsOffline", planner);
         Assert.Contains("FocusPriority(page.Kind, target)", planner);
         Assert.Contains("cts.CancelAfter(TimeSpan.FromSeconds(15))", source);
