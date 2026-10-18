@@ -198,10 +198,13 @@ public static class IedBrowserReadPlan
         }
         // Adequate headroom for the GE overcurrent LN's setting owners,
         // while leaving process state, analog and CF provenance represented.
-        TakeFc(Math.Min(4, cap), t => t.FunctionalConstraint == "ST");
+        // Structured SP/SG and CF FC roots can hydrate many exact attributes
+        // with one typed MMS Read. Attempt them before individual ST leaves
+        // consume the auto-read wall clock.
         TakeFc(Math.Min(10, cap), t => t.FunctionalConstraint is "SP" or "SG");
-        TakeFc(Math.Min(4, cap), t => t.FunctionalConstraint == "MX");
         TakeFc(Math.Min(4, cap), t => t.FunctionalConstraint == "CF");
+        TakeFc(Math.Min(4, cap), t => t.FunctionalConstraint == "ST");
+        TakeFc(Math.Min(4, cap), t => t.FunctionalConstraint == "MX");
         TakeFc(Math.Min(2, cap), t => t.FunctionalConstraint is "DC" or "EX");
         foreach (var target in ordered)
         {
