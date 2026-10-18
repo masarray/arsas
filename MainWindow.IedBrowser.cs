@@ -428,6 +428,20 @@ public partial class MainWindow
                     selectedDoReference: selectedDo, skipPreviouslyFailed: skipFailed);
             }
         }
+        // A finite focused queue may contain only 32 targets, while ONE
+        // verified LN$FC0 wire result contains many more exact children.
+        // Admit those siblings only from the CURRENT live MMS model and only
+        // beneath FC roots already selected by this same page's queue.
+        // Configuration/companion probes cannot widen their explicit scope.
+        IReadOnlyList<IedBrowserReadTarget>? verifiedRootScope = null;
+        if (sender is Button { Tag: "Auto" } &&
+            currentPage?.Kind is "SGCB" or "LN" or "DO" &&
+            ReferenceEquals(model, device.LiveDiscoveryModel))
+        {
+            var fullPage = IedBrowserReadPlan.Build(model, currentPage,
+                readAll: false, selectedDoReference: selectedDo);
+            verifiedRootScope = IedBrowserTypedRootScope.Build(targets, fullPage);
+        }
         if (targets.Count == 0)
         {
             IedBrowserSubtitle.Text = "No model-verified readable FC attributes in this selection.";
@@ -577,10 +591,10 @@ public partial class MainWindow
             if (device.IsMonitoring)
                 await ArIED61850Tester.Services.IedBrowserIsolatedReadService.ReadAsync(
                     device, targets, readValues, readProgress, cts.Token,
-                    automatic: automatic);
+                    automatic: automatic, verifiedRootScope: verifiedRootScope);
             else
                 await _runtime.ReadBrowserValuesAsync(device, targets,
-                    readValues, readProgress, cts.Token);
+                    readValues, readProgress, cts.Token, verifiedRootScope);
             // All producers have returned: consume the final queued results
             // synchronously before calculating counts and closing this flight.
             DrainReadResults();
