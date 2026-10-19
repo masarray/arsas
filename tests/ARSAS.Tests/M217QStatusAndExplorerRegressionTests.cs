@@ -29,7 +29,9 @@ public sealed class M217QStatusAndExplorerRegressionTests
         var root = FindRoot();
         var shell = File.ReadAllText(Path.Combine(root, "MainWindow.PersistentWorkbench.cs"));
         var xaml = File.ReadAllText(Path.Combine(root, "MainWindow.xaml"));
-        Assert.Contains("legacyExplorerLayout.MinHeight = viewport;", shell);
+        Assert.Contains("legacyExplorerLayout.MinHeight = 0;", shell);
+        Assert.Contains("MainTabs.MinHeight = 0;", shell);
+        Assert.DoesNotContain("legacyExplorerLayout.MinHeight = viewport;", shell);
         Assert.Contains("MainTabs.VerticalContentAlignment = VerticalAlignment.Stretch;", shell);
         Assert.Contains("ExplorerCommandDockRow", xaml);
         Assert.Contains("Grid.Row=\"2\" ItemsSource=\"{Binding SelectedDevice.Points}\"", xaml);
