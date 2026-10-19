@@ -153,20 +153,15 @@ public partial class MainWindow
         shell.Children.Add(explorerPane);
 
         MainTabs.Margin = new Thickness(0);
-        // The tab's hidden ContentPresenter otherwise can measure the selected
-        // Explorer grid at its short intrinsic height and leave an unallocated
-        // blue gap above the bottom Command Dock. Tie the content minimum to
-        // the actual star-row height, never to the number of displayed signals.
+        // TabControl's header consumes part of the shell star row. Forcing the
+        // tab CONTENT MinHeight to the full shell-row height clipped its lower
+        // Live Signal Values under the Command Dock, especially at 100–150% DPI.
+        // Keep the content stretchable and let WPF measure the actual tab viewport.
         MainTabs.VerticalAlignment = VerticalAlignment.Stretch;
         MainTabs.VerticalContentAlignment = VerticalAlignment.Stretch;
+        MainTabs.MinHeight = 0;
         legacyExplorerLayout.VerticalAlignment = VerticalAlignment.Stretch;
-        shell.SizeChanged += (_, _) =>
-        {
-            var viewport = shell.RowDefinitions[0].ActualHeight;
-            if (double.IsFinite(viewport) && viewport > 0 &&
-                Math.Abs(legacyExplorerLayout.MinHeight - viewport) > 0.5)
-                legacyExplorerLayout.MinHeight = viewport;
-        };
+        legacyExplorerLayout.MinHeight = 0;
         Grid.SetColumn(MainTabs, 2);
         Grid.SetRow(MainTabs, 0);
         Grid.SetRowSpan(MainTabs, 1);
