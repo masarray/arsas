@@ -9,6 +9,26 @@ namespace ArIED61850Tester.Models;
 /// </summary>
 public static class IedBrowserReadValuePolicy
 {
+    /// <summary>
+    /// An empty OCTET STRING is a legitimate MMS scalar only when the actual
+    /// successfully decoded wire kind is OctetString and the selected live
+    /// attribute declares an OCTET data type. Empty rendered text alone is
+    /// never sufficient to claim a successful read.
+    /// </summary>
+    public static bool TryFormatVerifiedEmptyOctet(
+        AR.Iec61850.Mms.MmsDataValue? wire, string? modelType,
+        out string display)
+    {
+        display = "";
+        if (wire is not { Kind: AR.Iec61850.Mms.MmsDataKind.OctetString } ||
+            wire.RawValue.Count != 0 ||
+            !((modelType ?? "").StartsWith("Octet", StringComparison.OrdinalIgnoreCase) ||
+              string.Equals(modelType, "OCTET STRING", StringComparison.OrdinalIgnoreCase)))
+            return false;
+        display = "Empty OCTET STRING (0 bytes)";
+        return true;
+    }
+
     public static bool TryAcceptDisplay(
         string? candidate, out string display, out string rejection)
     {
