@@ -33,8 +33,7 @@ public static class Iec61850DeviceIdentityResolver
         var host = liveModel?.Host ?? string.Empty;
         var engineIdentity = Iec61850IdentityResolver.ResolveFromDomains(
             normalizedDomains,
-            host,
-            explicitIedName: null);
+            host);
 
         return new Iec61850DeviceIdentity
         {
