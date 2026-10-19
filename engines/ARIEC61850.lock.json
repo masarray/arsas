@@ -6,9 +6,9 @@
   "sourcePullRequest": 177,
   "purpose": "P0-A trial of generic exact-prefix identity, provisional MMS-only confidence, case-sensitive LD domains and endpoint/AP-bound trusted SCL reconciliation. Engine exact-SHA CI passed; consumer exact-SHA Windows CI and physical qualification required; no mainline promotion.",
   "previousTrialPin": {
-    "commit": "51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
-    "sourcePullRequest": 173,
-    "purpose": "M2.17-K typed ST report baseline preserved as direct ancestor of P0-A identity trial."
+    "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
+    "sourcePullRequest": 134,
+    "purpose": "Historical P0-5b/P0-5c field-capture engine baseline required by immutable golden evidence and smart-discovery capture gates."
   },
   "priorGoldenWirePin": {
     "commit": "0023ef9a4373855497464ed3979e359c4041c95d",
@@ -270,5 +270,19 @@
     "physicalQualificationRequired": true,
     "mainlinePromotionForbidden": true,
     "cyclicMmsProcessPollingForbidden": true
+  },
+  "p0AIdentityTrial": {
+    "status": "code-verified-engine-consumer-trial-not-physical",
+    "enginePullRequest": 177,
+    "consumerPullRequest": 625,
+    "baseEngineCommit": "51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
+    "exactCommit": "ccf31f60095ea65f9095514f0fa0102060962049",
+    "engineCiRun": 39228439974,
+    "fullDomainSetRequired": true,
+    "sclSha256Required": true,
+    "endpointAndAccessPointRequired": true,
+    "provisionalHeuristicOnly": true,
+    "physicalQualificationRequired": true,
+    "mainlinePromotionForbidden": true
   }
 }
