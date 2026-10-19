@@ -8,7 +8,25 @@
   "priorTrialPin": {
     "commit": "51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
     "sourcePullRequest": 173,
-    "purpose": "Previous validated typed ST report baseline; retained for rollback and comparison."
+    "purpose": "M2.17-K isolated C264 acceptance trial: prior engine identity retained as immutable code-only ancestry, physical acceptance still required."
+  },
+  "p0AIdentityTrial": {
+    "status": "engine-ci-passed-consumer-ci-pending-not-physical",
+    "enginePullRequest": 177,
+    "consumerPullRequest": 623,
+    "baseEngineCommit": "51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
+    "exactCommit": "ccf31f60095ea65f9095514f0fa0102060962049",
+    "engineCiRun": 39228439974,
+    "identityMode": "verified-scl-or-provisional-mms",
+    "strictSourceSha256Required": true,
+    "uniqueAccessPointRequired": true,
+    "exactEndpointRequired": true,
+    "exactMmsDomainSetRequired": true,
+    "caseSensitiveDomainPreservation": true,
+    "heuristicConfidenceNeverHigh": true,
+    "controlAndReportingWritePathsUntouched": true,
+    "physicalQualificationRequired": true,
+    "mainlinePromotionForbidden": true
   },
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
