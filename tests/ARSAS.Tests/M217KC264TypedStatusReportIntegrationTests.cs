@@ -68,10 +68,15 @@ public sealed class M217KC264TypedStatusReportIntegrationTests
         using var lockDocument = JsonDocument.Parse(File.ReadAllText(
             Path.Combine(root!.FullName, "engines", "ARIEC61850.lock.json")));
         var lockRoot = lockDocument.RootElement;
-        Assert.Equal(ExpectedEngineSha,
+        var identityTrial = lockRoot.GetProperty("p0AIdentityTrial");
+        Assert.Equal(identityTrial.GetProperty("exactCommit").GetString(),
             lockRoot.GetProperty("commit").GetString());
-        Assert.Equal(173, lockRoot.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(177, lockRoot.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(ExpectedEngineSha, identityTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.True(identityTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(identityTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
         var trial = lockRoot.GetProperty("m217KTypedStatusReportTrial");
+        Assert.Equal(ExpectedEngineSha, trial.GetProperty("exactCommit").GetString());
         Assert.Equal("036e2c00d83a0815b6160147b14ea05975057965",
             trial.GetProperty("previousConsumerPin").GetString());
         Assert.True(trial.GetProperty("physicalQualificationRequired").GetBoolean());
