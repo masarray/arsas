@@ -107,7 +107,7 @@ public sealed class TrustedSclIdentityConsumerTests
             Directory.CreateDirectory(dir);
             var path=Path.Combine(dir,"engineering.iid");
             var remaining=string.Concat(otherLdInstances.Select(inst=>
-                $"<LDevice inst=\\"{inst}\\"><LN0 lnClass=\\"LLN0\\" lnType=\\"LLN0_t\\"/></LDevice>"));
+                $"""<LDevice inst="{inst}"><LN0 lnClass="LLN0" lnType="LLN0_t"/></LDevice>"""));
             var xml=$"""
                 <SCL xmlns="http://www.iec.ch/61850/2003/SCL">
                   <Communication><SubNetwork name="Bus"><ConnectedAP iedName="{ied}" apName="S1"><Address><P type="IP">{ip}</P></Address></ConnectedAP></SubNetwork></Communication>
