@@ -164,6 +164,32 @@ try {
     $wrongP10Pin.commit = ('f' * 40)
     Assert-Rejects $wrongP10Pin 'physical-tested'
 
+    # P0-C must never become an implicit arbitrary engine pin or a
+    # physically qualified release simply because its source compiles.
+    $wrongTypedReadSha = New-TrackedP10Fixture
+    $wrongTypedReadSha.p0CTypedReadTrial.exactCommit = ('f' * 40)
+    Assert-Rejects $wrongTypedReadSha 'physical-tested'
+
+    $wrongTypedReadParent = New-TrackedP10Fixture
+    $wrongTypedReadParent.p0CTypedReadTrial.baseEngineCommit = ('f' * 40)
+    Assert-Rejects $wrongTypedReadParent 'physical-tested'
+
+    $wrongTypedReadCi = New-TrackedP10Fixture
+    $wrongTypedReadCi.p0CTypedReadTrial.engineCiRun = 0
+    Assert-Rejects $wrongTypedReadCi 'physical-tested'
+
+    $wrongTypedReadInvoke = New-TrackedP10Fixture
+    $wrongTypedReadInvoke.p0CTypedReadTrial.strictInvokeId = $false
+    Assert-Rejects $wrongTypedReadInvoke 'physical-tested'
+
+    $wrongTypedReadOrdinal = New-TrackedP10Fixture
+    $wrongTypedReadOrdinal.p0CTypedReadTrial.strictAccessOrdinal = $false
+    Assert-Rejects $wrongTypedReadOrdinal 'physical-tested'
+
+    $wrongTypedReadPhysical = New-TrackedP10Fixture
+    $wrongTypedReadPhysical.p0CTypedReadTrial.mainlinePromotionForbidden = $false
+    Assert-Rejects $wrongTypedReadPhysical 'physical-tested'
+
     Write-Host "CI-P1 immutable engine resolver: $checks synthetic cases PASS."
 }
 finally {
