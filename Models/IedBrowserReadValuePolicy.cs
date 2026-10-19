@@ -29,6 +29,36 @@ public static class IedBrowserReadValuePolicy
         return true;
     }
 
+    /// <summary>
+    /// IEC MMS permits zero-length VisibleString/MMSString data. An empty
+    /// rendered text is not proof: require a decoded primitive wire value and
+    /// an exact compatible live declared string type.
+    /// </summary>
+    public static bool TryFormatVerifiedEmptyVisible(
+        AR.Iec61850.Mms.MmsDataValue? wire, string? modelType,
+        out string display)
+    {
+        display = "";
+        if (wire?.Value is not string { Length: 0 })
+            return false;
+        var declared = (modelType ?? "").Trim();
+        if (wire.Kind == AR.Iec61850.Mms.MmsDataKind.VisibleString &&
+            (declared.StartsWith("VisString", StringComparison.OrdinalIgnoreCase) ||
+             declared.Equals("visible-string", StringComparison.OrdinalIgnoreCase)))
+        {
+            display = "Empty VisibleString (0 characters)";
+            return true;
+        }
+        if (wire.Kind == AR.Iec61850.Mms.MmsDataKind.MmsString &&
+            (declared.StartsWith("MmsString", StringComparison.OrdinalIgnoreCase) ||
+             declared.Equals("mms-string", StringComparison.OrdinalIgnoreCase)))
+        {
+            display = "Empty MMSString (0 characters)";
+            return true;
+        }
+        return false;
+    }
+
     public static bool TryAcceptDisplay(
         string? candidate, out string display, out string rejection)
     {
