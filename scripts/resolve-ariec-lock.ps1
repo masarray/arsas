@@ -125,6 +125,8 @@ if ($null -ne $lock.sclAssociationInteroperability) {
             $p0AIdentityTrialValid = Test-P0AIdentityTrial -Lock $lock
             . (Join-Path $PSScriptRoot 'test-p0-b-rcb-trial.ps1')
             $p0BRcbTrialValid = Test-P0BRcbPlannerTrial -Lock $lock
+            . (Join-Path $PSScriptRoot 'test-p0-c-typed-read-trial.ps1')
+            $p0CTypedReadTrialValid = Test-P0CTypedReadTrial -Lock $lock
             $acceptedTrial = (
                 ($trialValid -and [string]$lock.commit -ceq [string]$trial.exactCommit -and [int]$lock.sourcePullRequest -eq 148) -or
                 ($serverAtValid -and [string]$lock.commit -ceq [string]$serverAt.exactCommit -and [int]$lock.sourcePullRequest -eq 153) -or
@@ -133,7 +135,8 @@ if ($null -ne $lock.sclAssociationInteroperability) {
                 ($p10Valid -and $coreRoutingTrialValid) -or
                 $m217KTrialValid -or
                 $p0AIdentityTrialValid -or
-                $p0BRcbTrialValid
+                $p0BRcbTrialValid -or
+                $p0CTypedReadTrialValid
             )
             if (-not $historicalAnchorValid -or -not $acceptedTrial) {
                 throw 'SCL association physical-tested engine head differs from integration lock.'
