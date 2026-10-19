@@ -27,8 +27,8 @@ public static class Iec61850DeviceIdentityResolver
         var normalizedDomains = domains
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Select(x => x.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(x => x, StringComparer.Ordinal)
             .ToArray();
         var host = liveModel?.Host ?? string.Empty;
         var engineIdentity = Iec61850IdentityResolver.ResolveFromDomains(
