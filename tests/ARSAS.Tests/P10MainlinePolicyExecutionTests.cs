@@ -73,6 +73,11 @@ public sealed class P10MainlinePolicyExecutionTests
     [InlineData("p10-cyclic-fallback-denied", false)]
     [InlineData("p10-history-tampered-denied", false)]
     [InlineData("p10-dataset-lineage-tampered-denied", false)]
+    [InlineData("p0a-wrong-exact-sha-denied", false)]
+    [InlineData("p0a-wrong-parent-denied", false)]
+    [InlineData("p0a-wrong-ci-denied", false)]
+    [InlineData("p0a-wrong-pr-denied", false)]
+    [InlineData("p0a-physical-promote-denied", false)]
     [InlineData("m217k-exact-sha-denied", false)]
     [InlineData("m217k-engine-ci-denied", false)]
     [InlineData("m217k-previous-pin-denied", false)]
@@ -124,6 +129,16 @@ public sealed class P10MainlinePolicyExecutionTests
             switch (scenario)
             {
                 case "p10-pr-main-denied": baseRef = "main"; break;
+                case "p0a-wrong-exact-sha-denied":
+                    lockDoc["p0AIdentityTrial"]!["exactCommit"] = new string('0',40); break;
+                case "p0a-wrong-parent-denied":
+                    lockDoc["p0AIdentityTrial"]!["baseEngineCommit"] = new string('0',40); break;
+                case "p0a-wrong-ci-denied":
+                    lockDoc["p0AIdentityTrial"]!["engineCiRun"] = 0; break;
+                case "p0a-wrong-pr-denied":
+                    lockDoc["p0AIdentityTrial"]!["enginePullRequest"] = 0; break;
+                case "p0a-physical-promote-denied":
+                    lockDoc["p0AIdentityTrial"]!["mainlinePromotionForbidden"] = false; break;
                 case "m217k-exact-sha-denied":
                     lockDoc["m217KTypedStatusReportTrial"]!["exactCommit"] = new string('0', 40); break;
                 case "m217k-engine-ci-denied":

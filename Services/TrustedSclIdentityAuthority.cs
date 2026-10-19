@@ -29,7 +29,8 @@ public static class TrustedSclIdentityAuthority
             source,
             liveModel.LogicalDevices.Select(ld => ld.MmsDomain),
             device.IpAddress,
-            device.SclIedName);
+            device.SclIedName,
+            device.SclAccessPointName);
     }
 
     /// <summary>
@@ -87,7 +88,8 @@ public static class TrustedSclIdentityAuthority
                     continue;
 
                 var identity = TrustedSclIedIdentityMatcher.TryMatch(
-                    document, domains, device.IpAddress, candidate.IedName);
+                    document, domains, device.IpAddress, candidate.IedName,
+                    candidate.AccessPointName);
                 if (identity is null ||
                     identity.Source != "TrustedSclExactDomainMatch" ||
                     identity.Confidence != LiveIedDiscoveryConfidenceLevel.High)
@@ -122,7 +124,7 @@ public static class TrustedSclIdentityAuthority
         {
             IedName=verified.IedName,
             Source=$"ARIEC61850 {verified.Source} ({verified.Confidence})",
-            LogicalDevices=domains.Distinct(StringComparer.OrdinalIgnoreCase).Select(domain =>
+            LogicalDevices=domains.Distinct(StringComparer.Ordinal).Select(domain =>
                 new Iec61850LogicalDeviceIdentity
                 {
                     Domain=domain,
