@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "b2d3519465e05201f2373e1b13169f91ae697b67",
+  "commit": "adffc518305926e1aa5b4829ab4bb37ff7a80e1e",
   "sourcePullRequest": 179,
   "purpose": "P0-B code-only engine trial: exact DataSet scoped read-only RCB catalog pager, 66/300 synthetic regression, deterministic bounded continuation; no physical qualification, no mainline promotion.",
   "previousTrialPin": {
@@ -290,13 +290,14 @@
     "enginePullRequest": 179,
     "consumerPullRequest": 626,
     "baseEngineCommit": "ccf31f60095ea65f9095514f0fa0102060962049",
-    "exactCommit": "b2d3519465e05201f2373e1b13169f91ae697b67",
+    "exactCommit": "adffc518305926e1aa5b4829ab4bb37ff7a80e1e",
     "targetScopedOnly": true,
     "globalCandidateAbortForbidden": true,
     "writeFreeReconciliation": true,
     "boundedContinuationRequired": true,
     "foreignReservationProtectionRequired": true,
     "physicalQualificationRequired": true,
-    "mainlinePromotionForbidden": true
+    "mainlinePromotionForbidden": true,
+    "occupiedForeignRcbRegression": true
   }
 }
