@@ -116,6 +116,8 @@ public sealed class P10MainlinePolicyExecutionTests
             // must execute the same immutable-trial gate, not a missing script.
             File.Copy(Path.Combine(root, "scripts", "test-m217k-typed-status-trial.ps1"),
                 Path.Combine(folder, "scripts", "test-m217k-typed-status-trial.ps1"));
+            File.Copy(Path.Combine(root, "scripts", "test-p0-a-identity-trial.ps1"),
+                Path.Combine(folder, "scripts", "test-p0-a-identity-trial.ps1"));
             var lockDoc = JsonNode.Parse(File.ReadAllText(Path.Combine(root,
                 "engines", "ARIEC61850.lock.json")))!.AsObject();
 
