@@ -73,6 +73,9 @@ public sealed class P10MainlinePolicyExecutionTests
     [InlineData("p10-cyclic-fallback-denied", false)]
     [InlineData("p10-history-tampered-denied", false)]
     [InlineData("p10-dataset-lineage-tampered-denied", false)]
+    [InlineData("p0a-exact-sha-denied", false)]
+    [InlineData("p0a-ci-evidence-denied", false)]
+    [InlineData("p0a-physical-promote-denied", false)]
     [InlineData("m217k-exact-sha-denied", false)]
     [InlineData("m217k-engine-ci-denied", false)]
     [InlineData("m217k-previous-pin-denied", false)]
@@ -116,6 +119,8 @@ public sealed class P10MainlinePolicyExecutionTests
             // must execute the same immutable-trial gate, not a missing script.
             File.Copy(Path.Combine(root, "scripts", "test-m217k-typed-status-trial.ps1"),
                 Path.Combine(folder, "scripts", "test-m217k-typed-status-trial.ps1"));
+            File.Copy(Path.Combine(root, "scripts", "test-p0a-identity-trial.ps1"),
+                Path.Combine(folder, "scripts", "test-p0a-identity-trial.ps1"));
             var lockDoc = JsonNode.Parse(File.ReadAllText(Path.Combine(root,
                 "engines", "ARIEC61850.lock.json")))!.AsObject();
 
@@ -124,6 +129,12 @@ public sealed class P10MainlinePolicyExecutionTests
             switch (scenario)
             {
                 case "p10-pr-main-denied": baseRef = "main"; break;
+                case "p0a-exact-sha-denied":
+                    lockDoc["p0AIdentityTrial"]!["exactCommit"] = new string('0', 40); break;
+                case "p0a-ci-evidence-denied":
+                    lockDoc["p0AIdentityTrial"]!["engineCiRun"] = 0; break;
+                case "p0a-physical-promote-denied":
+                    lockDoc["p0AIdentityTrial"]!["mainlinePromotionForbidden"] = false; break;
                 case "m217k-exact-sha-denied":
                     lockDoc["m217KTypedStatusReportTrial"]!["exactCommit"] = new string('0', 40); break;
                 case "m217k-engine-ci-denied":
