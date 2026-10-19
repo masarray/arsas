@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
-  "sourcePullRequest": 173,
-  "purpose": "M2.17-K isolated C264 acceptance trial: ARIEC typed ST enumerated Mod/Beh/Health/PhyHealth Report FCD projection with exact ST/quality/timestamp checks, preserving P10.9V control and fail-closed unknowns. ARIEC #173 Windows engine CI passed; integrated consumer CI/physical C264 replay pending. Do not promote or merge into main without acceptance.",
+  "commit": "1ed776a689c8707be5db09a6318c4a7613229f95",
+  "sourcePullRequest": 175,
+  "purpose": "P0-A/B isolated global interoperability identity + exact-target adaptive RCB planner trial. Engine PR #175 Windows CI 39216835641 passed 1145/1145 at immutable SHA. Full ARSAS integrated Windows CI and physical Siemens/BCUGE verification pending. Keep draft; do not merge or promote without end-to-end acceptance.",
   "previousTrialPin": {
-    "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
-    "sourcePullRequest": 134,
-    "purpose": "Previous P0-5b/P0-5c field-capture engine pin retained as the physical R5 baseline before canonical communication evidence, logical RCB SCL projection, and round-trip association validation were added."
+    "commit": "51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
+    "sourcePullRequest": 173,
+    "purpose": "M2.17-K isolated C264 acceptance trial: ARIEC typed ST enumerated Mod/Beh/Health/PhyHealth Report FCD projection with exact ST/quality/timestamp checks, preserving P10.9V control and fail-closed unknowns. ARIEC #173 Windows engine CI passed; integrated consumer CI/physical C264 replay pending. Do not promote or merge into main without acceptance."
   },
   "priorGoldenWirePin": {
     "commit": "0023ef9a4373855497464ed3979e359c4041c95d",
