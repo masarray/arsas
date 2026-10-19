@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
-  "sourcePullRequest": 173,
-  "purpose": "M2.17-K isolated C264 acceptance trial: ARIEC typed ST enumerated Mod/Beh/Health/PhyHealth Report FCD projection with exact ST/quality/timestamp checks, preserving P10.9V control and fail-closed unknowns. ARIEC #173 Windows engine CI passed; integrated consumer CI/physical C264 replay pending. Do not promote or merge into main without acceptance.",
+  "commit": "ccf31f60095ea65f9095514f0fa0102060962049",
+  "sourcePullRequest": 177,
+  "purpose": "P0-A trial of generic exact-prefix identity, provisional MMS-only confidence, case-sensitive LD domains and endpoint/AP-bound trusted SCL reconciliation. Engine exact-SHA CI passed; consumer exact-SHA Windows CI and physical qualification required; no mainline promotion.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
-    "purpose": "Previous P0-5b/P0-5c field-capture engine pin retained as the physical R5 baseline before canonical communication evidence, logical RCB SCL projection, and round-trip association validation were added."
+    "purpose": "Historical P0-5b/P0-5c field-capture engine baseline required by immutable golden evidence and smart-discovery capture gates."
   },
   "priorGoldenWirePin": {
     "commit": "0023ef9a4373855497464ed3979e359c4041c95d",
@@ -270,5 +270,19 @@
     "physicalQualificationRequired": true,
     "mainlinePromotionForbidden": true,
     "cyclicMmsProcessPollingForbidden": true
+  },
+  "p0AIdentityTrial": {
+    "status": "code-verified-engine-consumer-trial-not-physical",
+    "enginePullRequest": 177,
+    "consumerPullRequest": 625,
+    "baseEngineCommit": "51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
+    "exactCommit": "ccf31f60095ea65f9095514f0fa0102060962049",
+    "engineCiRun": 39228439974,
+    "fullDomainSetRequired": true,
+    "sclSha256Required": true,
+    "endpointAndAccessPointRequired": true,
+    "provisionalHeuristicOnly": true,
+    "physicalQualificationRequired": true,
+    "mainlinePromotionForbidden": true
   }
 }

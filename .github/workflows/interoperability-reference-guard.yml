@@ -88,6 +88,8 @@ jobs:
           . .\ARSAS\scripts\test-m217k-typed-status-trial.ps1
           $coreRoutingTrialValid = Test-P109FCoreRoutingTrial -Lock $lock
           $m217KTrialValid = Test-M217KTypedStatusTrial -Lock $lock
+          . .\ARSAS\scripts\test-p0-a-identity-trial.ps1
+          $p0AIdentityTrialValid = Test-P0AIdentityTrial -Lock $lock
           $trial = $lock.smartInteroperabilityCodeTrial
           $serverAt = $lock.sclServerAtTrial
           $originalTrial = $lock.commit -eq $trial.exactCommit -and
@@ -135,7 +137,7 @@ jobs:
             if ($trial.status -ne 'code-verified-not-physical' -or
                 [int]$trial.issue -ne 144 -or
                 [int]$trial.integrationPullRequest -ne 148 -or
-                -not ($originalTrial -or $serverAtTrial -or $datasetTrial -or $p10Trial -or $coreRoutingTrialValid -or $m217KTrialValid) -or
+                -not ($originalTrial -or $serverAtTrial -or $datasetTrial -or $p10Trial -or $coreRoutingTrialValid -or $m217KTrialValid -or $p0AIdentityTrialValid) -or
                 -not [bool]$trial.fullDiscoveryFallbackForbidden -or
                 -not [bool]$trial.vendorBranchingForbidden -or
                 -not [bool]$trial.physicalPromotionRequired) {

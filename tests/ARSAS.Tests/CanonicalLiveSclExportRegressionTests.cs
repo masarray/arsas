@@ -474,9 +474,12 @@ public sealed class CanonicalLiveSclExportRegressionTests
             typedStatusTrial.GetProperty("previousConsumerPin").GetString());
         Assert.Equal("51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
             typedStatusTrial.GetProperty("exactCommit").GetString());
+        var identityTrial = root.GetProperty("p0AIdentityTrial");
         Assert.Equal(typedStatusTrial.GetProperty("exactCommit").GetString(),
+            identityTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal(identityTrial.GetProperty("exactCommit").GetString(),
             root.GetProperty("commit").GetString());
-        Assert.Equal(173, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(177, root.GetProperty("sourcePullRequest").GetInt32());
         Assert.Equal(618, typedStatusTrial.GetProperty("consumerPullRequest").GetInt32());
         Assert.True(typedStatusTrial.GetProperty("strictFcAndTupleEvidenceRequired").GetBoolean());
         Assert.True(typedStatusTrial.GetProperty("physicalQualificationRequired").GetBoolean());
@@ -518,9 +521,9 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.True(zivTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
         Assert.True(zivTrial.GetProperty("fullDiscoveryFallbackForbidden").GetBoolean());
         Assert.True(zivTrial.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
-        // The current C264 report trial is PR #173, while the previous
-        // P10.9V control authority remains the unchanged PR #169.
-        Assert.Equal(173, root.GetProperty("sourcePullRequest").GetInt32());
+        // Historical C264 remains PR #173; current P0-A identity trial is #177.
+        Assert.Equal(173, typedStatusTrial.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(177, root.GetProperty("sourcePullRequest").GetInt32());
         Assert.Equal(169, typedBscTrial.GetProperty("enginePullRequest").GetInt32());
         Assert.True(genericTrial.GetProperty("typedSemanticGateRequired").GetBoolean());
         Assert.True(genericTrial.GetProperty("associationScopedInventoryRequired").GetBoolean());

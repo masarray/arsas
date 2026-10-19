@@ -116,8 +116,21 @@ public sealed class P10MainlinePolicyExecutionTests
             // must execute the same immutable-trial gate, not a missing script.
             File.Copy(Path.Combine(root, "scripts", "test-m217k-typed-status-trial.ps1"),
                 Path.Combine(folder, "scripts", "test-m217k-typed-status-trial.ps1"));
+            File.Copy(Path.Combine(root, "scripts", "test-p0-a-identity-trial.ps1"),
+                Path.Combine(folder, "scripts", "test-p0-a-identity-trial.ps1"));
             var lockDoc = JsonNode.Parse(File.ReadAllText(Path.Combine(root,
                 "engines", "ARIEC61850.lock.json")))!.AsObject();
+
+            // Historical R10 gate tests its own already-qualified M2.17-K
+            // baseline. The P0-A child is a distinct non-physical trial, not
+            // retroactive evidence that R10's historical pin changed.
+            if (scenario == "p10-stacked-valid" ||
+                scenario.StartsWith("m217k-", StringComparison.Ordinal))
+            {
+                lockDoc["commit"] = "51c2eefd61d6bcbe1116fda6b781b74bb9cf06da";
+                lockDoc["sourcePullRequest"] = 173;
+                lockDoc["purpose"] = "M2.17-K isolated C264 acceptance trial";
+            }
 
             string baseRef = "fix/512-goose-event-header-alignment";
             string sourceRef = "512/merge";
