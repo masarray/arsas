@@ -118,9 +118,14 @@ public sealed class SmartInteroperabilityTrialGuardRegressionTests
             typedStatusTrial.GetProperty("previousConsumerPin").GetString());
         Assert.Equal("51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
             typedStatusTrial.GetProperty("exactCommit").GetString());
+        var identityTrial = root.GetProperty("p0AIdentityTrial");
         Assert.Equal(typedStatusTrial.GetProperty("exactCommit").GetString(),
+            identityTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal(identityTrial.GetProperty("exactCommit").GetString(),
             root.GetProperty("commit").GetString());
-        Assert.Equal(173, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(177, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.True(identityTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(identityTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
         Assert.Equal(618, typedStatusTrial.GetProperty("consumerPullRequest").GetInt32());
         Assert.True(typedStatusTrial.GetProperty("strictFcAndTupleEvidenceRequired").GetBoolean());
         Assert.True(typedStatusTrial.GetProperty("physicalQualificationRequired").GetBoolean());
