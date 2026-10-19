@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "cd3b631911adaf0dc1eaafa13bb6bdbfa70a2582",
+  "commit": "ccf31f60095ea65f9095514f0fa0102060962049",
   "sourcePullRequest": 177,
   "purpose": "P0-A identity authority trial stacked on typed ST report engine #173: preserve full domain-derived identity without suffix surgery, provisional MMS/operator confidence, unique AP/endpoint/SCL topology verification; #177 exact-SHA CI required before production promotion.",
   "priorTrialPin": {
