@@ -67,10 +67,12 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Explicit shell icon retained independently of the .NET single-file host.
+Source: "..\Assets\app-icon.ico"; DestDir: "{app}\Assets"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\ARSAS"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExeName}"
-Name: "{autodesktop}\ARSAS"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\ARSAS"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\app-icon.ico"
+Name: "{autodesktop}\ARSAS"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\app-icon.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "Launch ARSAS"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
