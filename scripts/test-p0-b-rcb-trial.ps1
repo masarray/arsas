@@ -15,7 +15,7 @@ function Test-P0BRcbPlannerTrial {
     return (
         [string]$Lock.repository -ceq 'masarray/ARIEC61850' -and
         [string]$Lock.ref -ceq 'main' -and
-        [string]$Lock.commit -ceq 'b2d3519465e05201f2373e1b13169f91ae697b67' -and
+        [string]$Lock.commit -ceq 'adffc518305926e1aa5b4829ab4bb37ff7a80e1e' -and
         [int]$Lock.sourcePullRequest -eq 179 -and
         [string]$trial.status -ceq 'code-trial-not-physical' -and
         [string]$trial.baseEngineCommit -ceq 'ccf31f60095ea65f9095514f0fa0102060962049' -and
@@ -27,6 +27,7 @@ function Test-P0BRcbPlannerTrial {
         [bool]$trial.writeFreeReconciliation -and
         [bool]$trial.boundedContinuationRequired -and
         [bool]$trial.foreignReservationProtectionRequired -and
+        [bool]$trial.occupiedForeignRcbRegression -and
         [bool]$trial.physicalQualificationRequired -and
         [bool]$trial.mainlinePromotionForbidden
     )
