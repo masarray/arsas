@@ -68,12 +68,17 @@ public static class IedBrowserObservedVectorPresentation
                     text += " ∠ " + rendered;
                 else
                 {
-                    // The field is independently observed, not a phasor angle
-                    // pair. Keep the reason in provenance, not in Value cells.
-                    text += (text.Length == 0 ? "" : "; ") + "angle " + rendered;
+                    // Clean operator Value: when no coherent pair exists,
+                    // show a magnitude alone (or just ° if only ang exists).
+                    // Never append a pseudo phasor or "independent" jargon.
+                    // The glyph is the IEC engineering angle notation,
+                    // NOT evidence that two independent updates share a
+                    // timestamp. That distinction remains in provenance.
+                    text += (hasMag ? " ∠ " : "") + rendered;
                     unpaired.Add(part.Label + ": " + (hasMag
                         ? "angle not paired with magnitude"
-                        : "magnitude not observed"));
+                        : "magnitude not observed") +
+                        " · angle " + rendered + " [" + part.AngleReference + "]");
                 }
                 Register(part.AngleReference, angle);
             }

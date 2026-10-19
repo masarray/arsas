@@ -93,10 +93,15 @@ public sealed class P109QCommandDockCommissioningRegressionTests
         Assert.DoesNotContain("MaxHeight=\"260\"", xaml);
         Assert.Contains("Height=\"*\"/>", xaml);
         var main = Read("MainWindow.xaml.cs");
-        Assert.Contains("new GridLength(1, GridUnitType.Star)", main);
+        // The legacy explorer row must not steal half the live-signal viewport
+        // once the operator dock has been moved to the persistent shell.
         Assert.Contains("ResizeCommandDockForVerifiedControls()", main);
-        Assert.Contains("(SelectedDevice?.CommandSignals.Count ?? 0) > 5", main);
-        Assert.Contains("? new GridLength(1, GridUnitType.Star) : GridLength.Auto", main);
+        Assert.Contains("ExplorerCommandDockLayoutPolicy.LegacyRowHeight(", main);
+        Assert.Contains("dockReparented: _persistentWorkbench is not null", main);
+        var transfer = Read("MainWindow.PersistentWorkbench.cs");
+        Assert.Contains("ExplorerCommandDockRow.Height = GridLength.Auto;", transfer);
+        var policy = Read("Models/ExplorerCommandDockLayoutPolicy.cs");
+        Assert.Contains("dockReparented || !commandExpanded || controlCount <= 5", policy);
         Assert.Contains("RowHeight=\"43\" MinRowHeight=\"42\"", xaml);
         Assert.Contains("Height=\"29\" MinHeight=\"29\"", xaml);
         var styles = Read("App.xaml");

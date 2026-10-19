@@ -123,7 +123,8 @@ public sealed class M214EngineeringHierarchyUxTests
             row with { IsDataObject = false }, ledger,
             new Dictionary<string, string?>(), true, out var expanded));
         Assert.Contains("neut:", expanded.Text);
-        Assert.Contains("angle 0°", expanded.Text);
+        Assert.Contains("neut: 0", expanded.Text);
+        Assert.DoesNotContain("independent", expanded.Text);
         Assert.DoesNotContain("independent, not paired", expanded.Text);
         Assert.Contains("not paired with magnitude", expanded.Provenance);
     }

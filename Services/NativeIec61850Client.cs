@@ -503,7 +503,10 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             // Engine reports contain MMS raw type/width, which the normalized
             // value display no longer preserves. Extract before projection,
             // without any additional association or process polling.
-            wireEvidence.AddRange(IedBrowserReportWireEvidence.Extract(report));
+            // Only exact live LN-root GVA declaration order may bind nested
+            // WYE/DEL phase q/t bits; the consumer's association-fenced
+            // report ledger remains authoritative after this extraction.
+            wireEvidence.AddRange(IedBrowserReportWireEvidence.Extract(report, _liveModel));
             var header = report.Header;
             // ARIEC already decodes the actual InformationReport OptFlds BIT STRING.
             // Preserve its evidence rather than guessing option presence from a

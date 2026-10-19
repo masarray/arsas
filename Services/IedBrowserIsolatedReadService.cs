@@ -12,7 +12,8 @@ public static class IedBrowserIsolatedReadService
     public static Task<int> ReadAsync(
         Iec61850MonitorDevice device, IReadOnlyList<IedBrowserReadTarget> targets,
         IProgress<IedBrowserReadResult> values, IProgress<IedBrowserReadProgress> progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool automatic = false,
+        IReadOnlyList<IedBrowserReadTarget>? verifiedRootScope = null)
     {
         // Capture before crossing the UI/thread boundary. The current
         // monitoring association owns this exact live discovery model;
@@ -40,6 +41,8 @@ public static class IedBrowserIsolatedReadService
             }
 
             var successful = 0;
+            var sgRootFlight = new IedBrowserSgRootReadFlight(
+                client, targets, verifiedRootScope);
             for (var i = 0; i < targets.Count; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -50,7 +53,27 @@ public static class IedBrowserIsolatedReadService
                 try
                 {
                     using var leafToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                    leafToken.CancelAfter(TimeSpan.FromSeconds(5));
+                    // The root attempt has its OWN bounded per-root timeout
+                    // and negative-result cache. Do not pass a short leaf
+                    // timeout to it: otherwise each sibling retries the same
+                    // timed-out GVA root and starves all other settings.
+                    leafToken.CancelAfter(TimeSpan.FromSeconds(automatic ? 2 : 5));
+                    var verifiedSg = await sgRootFlight.TryReadAsync(
+                        target, cancellationToken).ConfigureAwait(false);
+                    // A typed root may prove OTHER exact children even when
+                    // the queued target itself was absent or refused.
+                    foreach (var extra in sgRootFlight.DrainUnscheduledSiblings(target))
+                    {
+                        values.Report(extra);
+                        successful++;
+                    }
+                    if (verifiedSg is not null)
+                    {
+                        values.Report(verifiedSg);
+                        successful++;
+                        progress.Report(new IedBrowserReadProgress(i + 1, targets.Count));
+                        continue;
+                    }
                     var raw = await client.ReadValueAsync(target.Reference,
                         target.FunctionalConstraint, target.DataType, leafToken.Token)
                         .ConfigureAwait(false);
@@ -67,8 +90,9 @@ public static class IedBrowserIsolatedReadService
                     }
                     else
                         values.Report(new IedBrowserReadResult(target, "", "", "",
-                            raw is null && client.LastErrorMessage.Length > 0
-                                ? client.LastErrorMessage : reason));
+                            IedBrowserRejectedScalarEvidence.Explain(raw, reason,
+                                target.DataType, target.FunctionalConstraint,
+                                client.LastErrorMessage)));
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {

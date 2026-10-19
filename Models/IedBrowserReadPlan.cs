@@ -124,55 +124,122 @@ public static class IedBrowserReadPlan
     /// </summary>
     public static IReadOnlyList<IedBrowserReadTarget> BuildFocused(
         LiveIedModelDiscoveryDocument? liveModel, IedBrowserTreeRow? page,
-        IedBrowserLiveValues ledger, int budget = 24)
+        IedBrowserLiveValues ledger, int budget = 32,
+        string? selectedDoReference = null,
+        Func<IedBrowserReadTarget, bool>? skipPreviouslyFailed = null)
     {
         if (liveModel is null || page is null || ledger.IsOffline || budget <= 0)
             return [];
-        if (page.Kind is not ("LN" or "SGCB" or "DataSet"))
+        if (page.Kind is not ("LN" or "DO" or "DA" or "SGCB" or "DataSet"))
             return [];
-        var candidates = Build(liveModel, page, readAll: false);
-        if (page.Payload is LiveIedDataSetModel set)
-        {
-            // IEC units belong to CF, never MX. Only an EXACT model-declared
-            // companion of the currently selected MX DataSet member is safe
-            // for an isolated read. No SCL-only read or neighboring phase.
-            var allowed = set.Members
-                .Where(member => string.Equals(member.FunctionalConstraint, "MX",
-                    StringComparison.OrdinalIgnoreCase))
-                .Select(member => IedBrowserLiveValues.CanonicalReference(member.Reference))
-                .Where(reference => reference.Length > 0)
-                .ToHashSet(StringComparer.Ordinal);
-            var companions = liveModel.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
-                .SelectMany(ln => ln.DataObjects)
-                .SelectMany(obj => obj.Attributes)
-                .Where(attr => string.Equals(attr.FunctionalConstraint, "CF",
-                    StringComparison.OrdinalIgnoreCase))
-                .Where(attr =>
-                {
-                    var reference = IedBrowserLiveValues.CanonicalReference(attr.MmsReference);
-                    if (!reference.EndsWith(".units.SIUnit", StringComparison.Ordinal) &&
-                        !reference.EndsWith(".units.multiplier", StringComparison.Ordinal))
-                        return false;
-                    var owner = reference[..reference.LastIndexOf(".units.", StringComparison.Ordinal)];
-                    return allowed.Any(member => member == owner ||
-                        member.StartsWith(owner + ".", StringComparison.Ordinal) ||
-                        owner.StartsWith(member + ".", StringComparison.Ordinal));
-                })
-                .Select(attr => new IedBrowserReadTarget(attr.MmsReference, "CF",
-                    string.IsNullOrWhiteSpace(attr.SclBType) ? attr.MmsType : attr.SclBType));
-            candidates = candidates.Concat(companions)
-                .DistinctBy(target => IedBrowserLiveValues.CanonicalReference(target.Reference)
-                    + "|" + target.FunctionalConstraint, StringComparer.Ordinal)
-                .ToArray();
-        }
+        // A DataSet is exactly its declared FCDA inventory; CF engineering
+        // metadata is a Data Model attribute, NOT an invented DataSet member.
+        // The Data Model LN/DO read may independently hydrate verified CF.
+        var candidates = Build(liveModel, page, readAll: false,
+            page.Kind == "LN" ? selectedDoReference : null);
+        // Unit metadata belongs to the canonical Data Model [CF], not to the
+        // DataSet membership. Hydrate its exact source leaves before drawing
+        // process magnitudes in DataSet/Report views.
+        var metadata = page.Kind == "DataSet"
+            ? IedBrowserMeasurementMetadataReadPlan.BuildForPage(
+                liveModel, page, ledger, budget)
+            : page.Kind == "SGCB"
+                ? IedBrowserMeasurementMetadataReadPlan.BuildForSettingGroup(
+                    liveModel, page, ledger, budget)
+                : [];
         // Do not publish another reader's result as though this association
         // observed it. Existing Report/MMS Read evidence is always reused.
-        return candidates.Where(target =>
-                !ledger.TryGet(target.Reference, target.FunctionalConstraint, out _))
-            .OrderBy(target => FocusPriority(page.Kind, target))
+        var ordered = metadata.Concat(candidates)
+            .Where(target => !ledger.TryGet(target.Reference,
+                target.FunctionalConstraint, out _))
+            // Failed targets must not monopolize a subsequent bounded SGCB
+            // continuation. Only the caller's association-scoped absence
+            // evidence may exclude them; manual Read passes no exclusion.
+            .Where(target => skipPreviouslyFailed?.Invoke(target) != true)
+            .DistinctBy(target =>
+                IedBrowserLiveValues.CanonicalReference(target.Reference) + "|" +
+                target.FunctionalConstraint, StringComparer.Ordinal)
+            .OrderBy(target => page.Kind == "SGCB" &&
+                target.FunctionalConstraint == "SG" ? -2 :
+                page.Kind == "DataSet" &&
+                target.FunctionalConstraint == "CF" ? -1 :
+                FocusPriority(page.Kind, target))
             .ThenBy(target => target.Reference, StringComparer.Ordinal)
-            .Take(Math.Min(budget, 24))
             .ToArray();
+        var cap = Math.Min(budget, page.Kind == "SGCB" ? 32 : 24);
+        // An LN with dozens of ST status leaves previously exhausted the
+        // FIRST 24 slots, so verified SP/SG settings and CF unit companions
+        // were never attempted. Distribute the same finite budget across
+        // FC namespaces, retaining old single-DO/low-budget priority rules.
+        return page.Kind == "LN" && selectedDoReference is null && cap >= 8
+            ? FairLnTargets(ordered, cap)
+            : ordered.Take(cap).ToArray();
+    }
+
+    /// <summary>
+    /// Explicit Read LN still reads the ENTIRE verified LN selection. Schedule
+    /// its first targets by FC so slow ST/DC leaves do not postpone every
+    /// protection SP setting or CF engineering unit until the end of a large
+    /// manually requested sweep. No membership or read count changes.
+    /// </summary>
+    public static IReadOnlyList<IedBrowserReadTarget> PrioritizeExplicitLn(
+        IReadOnlyList<IedBrowserReadTarget> targets)
+    {
+        ArgumentNullException.ThrowIfNull(targets);
+        if (targets.Count < 8) return targets;
+        var ordered = targets.OrderBy(t => FocusPriority("LN", t))
+            .ThenBy(t => t.Reference, StringComparer.Ordinal).ToArray();
+        var head = FairLnTargets(ordered, Math.Min(24, ordered.Length));
+        var frontKeys = head.Select(t =>
+            IedBrowserLiveValues.CanonicalReference(t.Reference) + "|" +
+            t.FunctionalConstraint.ToUpperInvariant())
+            .ToHashSet(StringComparer.Ordinal);
+        return head.Concat(ordered.Where(t => !frontKeys.Contains(
+            IedBrowserLiveValues.CanonicalReference(t.Reference) + "|" +
+            t.FunctionalConstraint.ToUpperInvariant()))).ToArray();
+    }
+
+    /// <summary>
+    /// Finite read-only LN sample. Exact FC/attribute references are already
+    /// proven by Build(); there is no sibling inference or new MMS polling.
+    /// A full explicit Read LN retains the independent operator-selected
+    /// sweep; this only prevents automatic focused-admission starvation.
+    /// </summary>
+    private static IReadOnlyList<IedBrowserReadTarget> FairLnTargets(
+        IReadOnlyList<IedBrowserReadTarget> ordered, int cap)
+    {
+        var output = new List<IedBrowserReadTarget>(cap);
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        static string Key(IedBrowserReadTarget t)
+            => IedBrowserLiveValues.CanonicalReference(t.Reference) + "|" +
+               t.FunctionalConstraint.ToUpperInvariant();
+        void TakeFc(int max, Func<IedBrowserReadTarget, bool> predicate)
+        {
+            var added = 0;
+            foreach (var target in ordered)
+            {
+                if (added >= max || output.Count >= cap) break;
+                if (!predicate(target) || !keys.Add(Key(target))) continue;
+                output.Add(target);
+                added++;
+            }
+        }
+        // Adequate headroom for the GE overcurrent LN's setting owners,
+        // while leaving process state, analog and CF provenance represented.
+        // Structured SP/SG and CF FC roots can hydrate many exact attributes
+        // with one typed MMS Read. Attempt them before individual ST leaves
+        // consume the auto-read wall clock.
+        TakeFc(Math.Min(10, cap), t => t.FunctionalConstraint is "SP" or "SG");
+        TakeFc(Math.Min(4, cap), t => t.FunctionalConstraint == "CF");
+        TakeFc(Math.Min(4, cap), t => t.FunctionalConstraint == "ST");
+        TakeFc(Math.Min(4, cap), t => t.FunctionalConstraint == "MX");
+        TakeFc(Math.Min(2, cap), t => t.FunctionalConstraint is "DC" or "EX");
+        foreach (var target in ordered)
+        {
+            if (output.Count == cap) break;
+            if (keys.Add(Key(target))) output.Add(target);
+        }
+        return output;
     }
 
     private static int FocusPriority(string kind, IedBrowserReadTarget target)
@@ -183,12 +250,37 @@ public static class IedBrowserReadPlan
                    reference.EndsWith(".ActSG", StringComparison.Ordinal) ? 0 :
                    reference.EndsWith(".LActTm", StringComparison.Ordinal) ? 2 : 3;
         var fc = (target.FunctionalConstraint ?? "").ToUpperInvariant();
+        if (fc == "DC" && reference.Contains(".NamPlt.", StringComparison.Ordinal) &&
+            (reference.EndsWith(".vendor", StringComparison.Ordinal) ||
+             reference.EndsWith(".d", StringComparison.Ordinal) ||
+             reference.EndsWith(".swRev", StringComparison.Ordinal) ||
+             reference.EndsWith(".configRev", StringComparison.Ordinal)))
+            return 0;
         if (fc == "ST" &&
             (reference.EndsWith(".stVal", StringComparison.Ordinal) ||
-             reference.EndsWith(".posVal", StringComparison.Ordinal)))
+             reference.EndsWith(".posVal", StringComparison.Ordinal) ||
+             // ACD/ACT protection process flags are genuine observed IEC
+             // statuses. Read them before CF/DC inventory so a focused LN
+             // budget does not leave Str, Op or Blk at Not read while
+             // their non-process description siblings occupy the budget.
+             reference.EndsWith(".general", StringComparison.Ordinal) ||
+             reference.EndsWith(".neut", StringComparison.Ordinal) ||
+             reference.EndsWith(".actVal", StringComparison.Ordinal)))
             return 0;
         if (fc == "MX" && (reference.EndsWith(".mag.f", StringComparison.Ordinal) ||
                             reference.EndsWith(".instMag.f", StringComparison.Ordinal)))
+            return 1;
+        // Operators browse the exact protection setting value, not its DC
+        // description or min/max tables. A bounded 24-target focused read
+        // used to spend its budget on CF before reaching SP setVal, leaving
+        // PTOCEna, InMagTyp, RsMod and TmACrv falsely looking unread.
+        // Only verified read-only SG/SP scalar identities are promoted;
+        // SE editing state and controls are never included here.
+        if ((fc is "SG" or "SP") &&
+            (reference.EndsWith(".setVal", StringComparison.Ordinal) ||
+             reference.EndsWith(".setCharact", StringComparison.Ordinal) ||
+             reference.EndsWith(".setMag", StringComparison.Ordinal) ||
+             reference.EndsWith(".setMag.f", StringComparison.Ordinal)))
             return 1;
         if ((fc is "ST" or "MX") &&
             (reference.EndsWith(".q", StringComparison.Ordinal) ||

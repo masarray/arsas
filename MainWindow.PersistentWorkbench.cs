@@ -134,6 +134,10 @@ public partial class MainWindow
         // Remove before adding: WPF elements can have only one logical/visual parent.
         legacyExplorerLayout.Children.Remove(explorerPane);
         legacyCommandParent.Children.Remove(CommandPanelExpander);
+        // The legacy tab still has a named Grid.RowDefinition after the
+        // expander moves. Release any previous Star height immediately, even
+        // if the selected device has many controls.
+        ExplorerCommandDockRow.Height = GridLength.Auto;
         root.Children.Remove(MainTabs);
 
         // The old Explorer tab now owns only its right-hand data workspace.
@@ -149,6 +153,15 @@ public partial class MainWindow
         shell.Children.Add(explorerPane);
 
         MainTabs.Margin = new Thickness(0);
+        // TabControl's header consumes part of the shell star row. Forcing the
+        // tab CONTENT MinHeight to the full shell-row height clipped its lower
+        // Live Signal Values under the Command Dock, especially at 100–150% DPI.
+        // Keep the content stretchable and let WPF measure the actual tab viewport.
+        MainTabs.VerticalAlignment = VerticalAlignment.Stretch;
+        MainTabs.VerticalContentAlignment = VerticalAlignment.Stretch;
+        MainTabs.MinHeight = 0;
+        legacyExplorerLayout.VerticalAlignment = VerticalAlignment.Stretch;
+        legacyExplorerLayout.MinHeight = 0;
         Grid.SetColumn(MainTabs, 2);
         Grid.SetRow(MainTabs, 0);
         Grid.SetRowSpan(MainTabs, 1);

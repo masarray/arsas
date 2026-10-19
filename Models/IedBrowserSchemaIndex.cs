@@ -18,13 +18,18 @@ public sealed class IedBrowserSchemaIndex
     // Schema-only DPC stVal/DO identities, computed once on model replacement.
     // Never classify arbitrary numeric enums or a name-only Pos as Dbpos.
     private readonly HashSet<string> _declaredDoublePointValues = new(StringComparer.Ordinal);
+    // Exact, immutable model-verified status enum declarations. No runtime values.
+    private readonly Dictionary<string, string> _standardEnumObjects =
+        new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _qualityLeaves =
         new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _timestampLeaves =
         new(StringComparer.Ordinal);
 
     private static readonly HashSet<string> ProcessLeaves =
-        new(["stVal", "posVal", "valWTr", "general", "mag.f", "instMag.f", "cVal.mag.f", "instCVal.mag.f"],
+        new(["stVal", "actVal", "posVal", "valWTr", "general",
+            "mag.f", "instMag.f", "cVal.mag.f", "instCVal.mag.f",
+            "setMag", "setMag.f"],
             StringComparer.Ordinal);
 
     public LiveIedModelDiscoveryDocument SourceModel { get; }
@@ -54,8 +59,10 @@ public sealed class IedBrowserSchemaIndex
             }
         }
 
-        foreach (var obj in model.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
-                     .SelectMany(ln => ln.DataObjects))
+        foreach (var (obj, lnClass) in model.LogicalDevices
+                     .SelectMany(ld => ld.LogicalNodes)
+                     .SelectMany(ln => ln.DataObjects.Select(obj =>
+                         (obj, ln.LnClass))))
         {
             var owner = IedBrowserLiveValues.CanonicalReference(obj.Reference);
             if (owner.Length == 0) continue;
@@ -69,6 +76,26 @@ public sealed class IedBrowserSchemaIndex
                     !reference.StartsWith(owner + ".", StringComparison.Ordinal))
                     continue;
                 var relative = reference[(owner.Length + 1)..];
+                if (fc == "ST" && relative == "stVal" &&
+                    string.Equals(lnClass, "XCBR", StringComparison.Ordinal) &&
+                    string.Equals(obj.Name, "CBOpCap", StringComparison.Ordinal) &&
+                    // Different editions expose XCBR capability as ENG or
+                    // ENS. It is still a typed enumerated status, never an
+                    // arbitrary INT32, a similarly named vendor object, or
+                    // a guessed ordinal-to-symbol mapping.
+                    (string.Equals(obj.InferredCdc, "ENG", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(obj.InferredCdc, "ENS", StringComparison.OrdinalIgnoreCase) ||
+                     // MMS discovery may provide a proven enumerated ST
+                     // primitive without enough SCL CDC metadata to infer
+                     // ENG/ENS. The exact XCBR/CBOpCap/ST/typed-enum
+                     // identity still qualifies; arbitrary numeric DOs do not.
+                     string.IsNullOrWhiteSpace(obj.InferredCdc) ||
+                     string.Equals(obj.InferredCdc, "Unknown", StringComparison.OrdinalIgnoreCase)) &&
+                    (string.Equals(attr.SclBType, "Enum", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(attr.MmsType, "enumerated", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(attr.MmsType, "enum", StringComparison.OrdinalIgnoreCase)))
+                    _standardEnumObjects[Key(reference, fc)] = obj.Name;
+
                 // IEC DPC declarations and exact Dbpos BTypes are the only
                 // authority for double-point display. Both the precise
                 // process leaf and its own DO row may use this presentation.
@@ -132,7 +159,33 @@ public sealed class IedBrowserSchemaIndex
             .Distinct()
             .Take(3)
             .ToArray();
-        if (candidates.Length == 0 || candidates.Select(x => x.Fc).Distinct().Count() != 1)
+        // IEC APC/ASG-like setting magnitude is a scalar value *only*
+        // when this DO declares no ST/MX process scalar. Read-only SP must
+        // never override a live ST counter nor borrow another DO's value.
+        if (candidates.Length == 0)
+        {
+            // IEC protection settings carry process-readable scalars under
+            // SP as well as active SG. BCUGE PTOC exposes PTOCEna/RsMod/
+            // InMagTyp as SP setVal and TmACrv as SP setCharact; without
+            // these the parent says Not read despite a received MMS child.
+            // Accept ONLY exact schema-declared scalar names and FC, never
+            // SE (editable group), CF/DC, neighboring DOs or first child.
+            var settings = obj.Attributes
+                .Select(a => (
+                    Reference: IedBrowserLiveValues.CanonicalReference(a.MmsReference),
+                    Fc: NormalizeFc(a.FunctionalConstraint)))
+                .Where(x => x.Fc is "SG" or "SP" &&
+                    (x.Reference == owner + ".setVal" ||
+                     x.Reference == owner + ".setCharact" ||
+                     x.Reference == owner + ".setMag" ||
+                     x.Reference == owner + ".setMag.f"))
+                .Distinct().Take(2).ToArray();
+            if (settings.Length != 1) return false;
+            leaf = settings[0].Reference;
+            fc = settings[0].Fc;
+            return true;
+        }
+        if (candidates.Select(x => x.Fc).Distinct().Count() != 1)
             return false;
         if (!TrySelectDisplayLeaf(owner, candidates.Select(x => x.Reference),
             out leaf))
@@ -177,6 +230,11 @@ public sealed class IedBrowserSchemaIndex
         }
         return false;
     }
+
+    public bool TryGetVerifiedStandardEnumObject(
+        string reference, string fc, out string objectName)
+        => _standardEnumObjects.TryGetValue(
+            Key(IedBrowserLiveValues.CanonicalReference(reference), fc), out objectName!);
 
     private static string NormalizeFc(string? fc)
         => (fc ?? "").Trim().ToUpperInvariant();

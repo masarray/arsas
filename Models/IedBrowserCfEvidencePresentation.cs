@@ -16,13 +16,17 @@ public sealed class IedBrowserCfEvidencePresentation
     // Weak keys prevent retained IED schemas/snapshots after reload. These
     // indexes contain declarations and historical evidence only, never
     // mutable current Report/Read observations.
-    private sealed record SchemaIndex(HashSet<string> DeclaredCf, string[] UnitOwners);
+    private sealed record SchemaIndex(
+        HashSet<string> DeclaredCf, string[] UnitOwners, string[] SettingOwners,
+        HashSet<string> NumericStatusLeaves);
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
         LiveIedModelDiscoveryDocument, SchemaIndex> SchemaCache = new();
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
         LiveIedCanonicalModel, Dictionary<string, string?>> SnapshotCache = new();
     private readonly LiveIedModelDiscoveryDocument? _model;
     private readonly string[] _unitOwners;
+    private readonly string[] _settingOwners;
+    private readonly HashSet<string> _numericStatusLeaves = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string?> _snapshot = new(StringComparer.Ordinal);
     private readonly HashSet<string> _declaredCf = new(StringComparer.Ordinal);
     public bool HasSnapshot { get; }
@@ -38,8 +42,14 @@ public sealed class IedBrowserCfEvidencePresentation
             var schema = SchemaCache.GetValue(currentModel, BuildSchema);
             _declaredCf = schema.DeclaredCf;
             _unitOwners = schema.UnitOwners;
+            _settingOwners = schema.SettingOwners;
+            _numericStatusLeaves = schema.NumericStatusLeaves;
         }
-        else _unitOwners = [];
+        else
+        {
+            _unitOwners = [];
+            _settingOwners = [];
+        }
         if (canonical is not null && currentModel is not null &&
             ReferenceEquals(currentModel, canonical.Discovery))
         {
@@ -52,14 +62,61 @@ public sealed class IedBrowserCfEvidencePresentation
     {
         var declared = new HashSet<string>(StringComparer.Ordinal);
         var owners = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var a in model.LogicalDevices.SelectMany(d => d.LogicalNodes)
-                     .SelectMany(n => n.DataObjects).SelectMany(o => o.Attributes))
+        var settingOwners = new HashSet<string>(StringComparer.Ordinal);
+        var objects = model.LogicalDevices.SelectMany(d => d.LogicalNodes)
+            .SelectMany(n => n.DataObjects).ToArray();
+        var exactOwners = objects.Select(o =>
+            IedBrowserLiveValues.CanonicalReference(o.Reference))
+            .Where(o => o.Length > 0).ToHashSet(StringComparer.Ordinal);
+        var numericStatusCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var a in objects.SelectMany(o => o.Attributes))
         {
             var reference = IedBrowserLiveValues.CanonicalReference(a.MmsReference);
             if (reference.Length == 0) continue;
+            var fc = (a.FunctionalConstraint ?? "").Trim().ToUpperInvariant();
+            // Only a typed exact scalar DA can inherit the units of its
+            // OWN IEC DO. XCBR accumulations use actVal[ST], while some
+            // threshold/time settings expose setMag[SP] rather than stVal.
+            var statusSuffix = fc == "ST" &&
+                         reference.EndsWith(".stVal", StringComparison.Ordinal)
+                ? ".stVal" : fc == "ST" &&
+                               reference.EndsWith(".actVal", StringComparison.Ordinal)
+                    ? ".actVal" : fc == "SP" &&
+                                   reference.EndsWith(".setMag.f", StringComparison.Ordinal)
+                        ? ".setMag.f" : fc == "SP" &&
+                                       reference.EndsWith(".setMag", StringComparison.Ordinal)
+                            ? ".setMag" : "";
+            if (statusSuffix.Length > 0)
+            {
+                var owner = reference[..^statusSuffix.Length];
+                if (exactOwners.Contains(owner) &&
+                    (string.Equals(IedBrowserLiveValues.CanonicalReference(a.ObjectReference),
+                        owner, StringComparison.Ordinal) ||
+                     string.Equals(IedBrowserLiveValues.CanonicalReference(a.ObjectReference),
+                        reference, StringComparison.Ordinal)) &&
+                    IsTypedNumericScalar(a, fc))
+                {
+                    var key = Key(reference, fc);
+                    numericStatusCounts[key] =
+                        numericStatusCounts.GetValueOrDefault(key) + 1;
+                }
+            }
             if (string.Equals(a.FunctionalConstraint, "CF",
                     StringComparison.OrdinalIgnoreCase))
                 declared.Add(Key(reference, "CF"));
+            if (string.Equals(a.FunctionalConstraint, "SG",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                // IEC ASG analogue setMag shares the same observed CF unit
+                // owner. Do not treat enum setVal or a vendor string as a
+                // measurement and do not infer units from DO names.
+                var settingSuffix = reference.EndsWith(".setMag.f",
+                    StringComparison.Ordinal) ? ".setMag.f" :
+                    reference.EndsWith(".setMag", StringComparison.Ordinal)
+                        ? ".setMag" : "";
+                if (settingSuffix.Length > 0)
+                    settingOwners.Add(reference[..^settingSuffix.Length]);
+            }
             if (!string.Equals(a.FunctionalConstraint, "MX",
                     StringComparison.OrdinalIgnoreCase)) continue;
             var suffix = reference.EndsWith(".cVal.mag.f", StringComparison.Ordinal)
@@ -68,7 +125,9 @@ public sealed class IedBrowserCfEvidencePresentation
             if (suffix.Length != 0) owners.Add(reference[..^suffix.Length]);
         }
         return new SchemaIndex(declared, owners.OrderBy(s => s, StringComparer.Ordinal)
-            .ToArray());
+            .ToArray(), settingOwners.OrderBy(s => s, StringComparer.Ordinal).ToArray(),
+            numericStatusCounts.Where(x => x.Value == 1)
+                .Select(x => x.Key).ToHashSet(StringComparer.Ordinal));
     }
 
     private static Dictionary<string, string?> BuildSnapshot(LiveIedCanonicalModel canonical)
@@ -145,6 +204,31 @@ public sealed class IedBrowserCfEvidencePresentation
         return true;
     }
 
+    private static bool IsTypedIntegerStatus(LiveIedDataAttributeModel declaration)
+    {
+        // A typed status counter, not an arbitrary numeric enumeration.
+        var btype = (declaration.SclBType ?? "").Trim().ToUpperInvariant();
+        var mms = (declaration.MmsType ?? "").Trim().ToLowerInvariant();
+        var isInteger = btype is "INT8" or "INT16" or "INT32" or "INT64" or
+            "INT8U" or "INT16U" or "INT32U" or "INT64U" or "INT24U" ||
+            mms is "integer" or "unsigned";
+        return isInteger && btype is not ("ENUM" or "DBPOS" or "DPC") &&
+            mms is not ("bit-string" or "boolean" or "enumerated");
+    }
+
+    private static bool IsTypedNumericScalar(
+        LiveIedDataAttributeModel attribute, string fc)
+    {
+        if (fc == "ST") return IsTypedIntegerStatus(attribute);
+        if (fc != "SP") return false;
+        var btype = (attribute.SclBType ?? "").Trim().ToUpperInvariant();
+        var mms = (attribute.MmsType ?? "").Trim().ToLowerInvariant();
+        return btype is "FLOAT32" or "FLOAT64" or "INT8" or "INT16" or
+            "INT32" or "INT64" or "INT8U" or "INT16U" or "INT32U" or
+            "INT64U" || (btype.Length == 0 &&
+                mms is "floating-point" or "integer" or "unsigned");
+    }
+
     private bool TryVerifyUnitPair(string owner, out string unit,
         out string provenance, out bool fresh)
     {
@@ -172,6 +256,36 @@ public sealed class IedBrowserCfEvidencePresentation
                      multiplier + " [" + mulSource + "]";
         fresh = siLive && mulLive;
         return true;
+    }
+
+    /// <summary>
+    /// IEC numeric ST (e.g. a switching accumulation counter) is not an
+    /// enumeration. Permit its engineering unit only when the exact model
+    /// declares a scalar integer stVal and fresh SIUnit+multiplier under
+    /// that SAME DO/FC=CF. No DO-name heuristics, ancestor/sibling borrowing,
+    /// historical-only snapshot, or setting-group conversion.
+    /// </summary>
+    public bool TryFormatVerifiedNumericStatusUnit(
+        string reference, string fc, out string unit, out string provenance)
+    {
+        unit = "";
+        provenance = "";
+        if (_model is null) return false;
+        var constraint = (fc ?? "").Trim().ToUpperInvariant();
+        var path = IedBrowserLiveValues.CanonicalReference(reference);
+        var suffix = constraint == "ST" &&
+                     path.EndsWith(".stVal", StringComparison.Ordinal)
+            ? ".stVal" : constraint == "ST" &&
+                           path.EndsWith(".actVal", StringComparison.Ordinal)
+                ? ".actVal" : constraint == "SP" &&
+                               path.EndsWith(".setMag.f", StringComparison.Ordinal)
+                    ? ".setMag.f" : constraint == "SP" &&
+                                   path.EndsWith(".setMag", StringComparison.Ordinal)
+                        ? ".setMag" : "";
+        if (suffix.Length == 0 ||
+            !_numericStatusLeaves.Contains(Key(path, constraint))) return false;
+        return TryVerifyUnitPair(path[..^suffix.Length] + ".units",
+            out unit, out provenance, out var fresh) && fresh;
     }
 
     /// <summary>Exact standard enum registry, never infer units from DO names.</summary>
@@ -223,6 +337,42 @@ public sealed class IedBrowserCfEvidencePresentation
                 index.Add(key, composed);
             else if (!string.Equals(previous, composed, StringComparison.Ordinal))
                 index[key] = fresh ? composed : null;
+
+            // A live IEC CF pair is more authoritative than generic
+            // SignalDefinition.Unit metadata on individual magnitude leaves.
+            // Do not apply a phase unit to a sibling, angle, quality or LN.
+            if (!fresh) continue;
+            index[key] = composed;
+            foreach (var leaf in new[]
+            {
+                ".cVal.mag.f", ".instCVal.mag.f", ".mag.f", ".instMag.f"
+            })
+            {
+                var exact = owner + leaf + "|MX";
+                // Only exact paths whose owners carry this verified CF pair.
+                // Avoid adding aliases when the live schema has no such leaf.
+                if (index.ContainsKey(exact))
+                    index[exact] = composed;
+            }
+        }
+        // IEC ASG/SG setting magnitude: CF units belong to its exact DO,
+        // never to a neighboring setting or to ordinal enum setVal values.
+        foreach (var owner in _settingOwners)
+        {
+            if (!TryVerifyUnitPair(owner + ".units", out var composed,
+                    out _, out var fresh)) continue;
+            var key = Key(owner, "SG");
+            if (!index.TryGetValue(key, out var previous))
+                index.Add(key, composed);
+            else if (!string.Equals(previous, composed, StringComparison.Ordinal))
+                index[key] = fresh ? composed : null;
+            if (fresh) index[key] = composed;
+            if (fresh)
+                foreach (var leaf in new[] { ".setMag", ".setMag.f" })
+                {
+                    var exact = owner + leaf + "|SG";
+                    if (index.ContainsKey(exact)) index[exact] = composed;
+                }
         }
         return index;
     }

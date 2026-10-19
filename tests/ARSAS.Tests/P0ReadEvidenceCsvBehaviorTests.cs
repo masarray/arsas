@@ -1,0 +1,70 @@
+using AR.Iec61850.Discovery;
+using ArIED61850Tester.Models;
+
+namespace ARSAS.Tests;
+
+public sealed class P0ReadEvidenceCsvBehaviorTests
+{
+    private const string Domain = "BCUGEF650";
+    private static LiveIedDataAttributeModel Attribute(string name)
+        => new()
+        {
+            ObjectReference = Domain + "/LLN0." + name,
+            AttributePath = name + ".setVal",
+            MmsReference = Domain + "/LLN0$SG$" + name + "$setVal",
+            FunctionalConstraint = "SG", SclBType = "BOOLEAN",
+            TypeDiscoveryStatus = "Exact"
+        };
+
+    [Fact]
+    public void CsvSeparatesCanonicalObservedMmsReadFromExactFailureAndUninstrumentedWire()
+    {
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel
+            {
+                MmsDomain = Domain,
+                LogicalNodes = [new LiveIedLogicalNodeModel
+                {
+                    Name = "LLN0", DataObjects =
+                    [
+                        new LiveIedDataObjectModel
+                        {
+                            Name = "PIOCEna", Reference = Domain + "/LLN0.PIOCEna",
+                            Attributes = [Attribute("PIOCEna")]
+                        },
+                        new LiveIedDataObjectModel
+                        {
+                            Name = "InMagTyp", Reference = Domain + "/LLN0.InMagTyp",
+                            Attributes = [Attribute("InMagTyp")]
+                        }
+                    ]
+                }]
+            }]
+        };
+        var page = new IedBrowserTreeRow("sgcb/LD", "SGCB", "SGCB", 2,
+            new LiveIedControlBlockModel
+            { Kind = "SettingGroupControl", Domain = Domain, LogicalNode = "LLN0" });
+        var ledger = new IedBrowserLiveValues();
+        var association = ledger.BeginAssociation();
+        Assert.True(ledger.PublishForAssociation(association,
+            Domain + "/LLN0.PIOCEna.setVal", "SG", "false", "", "", "MMS Read"));
+        var csv = IedBrowserReadEvidenceCsv.Build(model, page, ledger,
+            target => target.Reference.Contains("$InMagTyp$", StringComparison.Ordinal)
+                ? new IedBrowserReadFailureSample(target.Reference, "SG",
+                    "typed root mismatch, refused", IedBrowserReadAbsenceKind.Failed)
+                : null);
+        Assert.Contains("\"BCUGEF650/LLN0.PIOCEna.setVal\",\"SG\"", csv);
+        Assert.Contains("\"OBSERVED\"", csv);
+        Assert.Contains("\"MMS Read\"", csv);
+        Assert.Contains("\"READ_FAILED\"", csv);
+        Assert.Contains("\"typed root mismatch, refused\"", csv);
+        Assert.Contains("\"NOT_CAPTURED\",\"NOT_CAPTURED\",\"NOT_MEASURED\"", csv);
+        Assert.DoesNotContain("\"phasor\"", csv);
+
+        ledger.BeginAssociation();
+        var stale = IedBrowserReadEvidenceCsv.Build(model, page, ledger);
+        Assert.DoesNotContain("\"OBSERVED\"", stale);
+        Assert.Contains("\"NOT_OBSERVED_NO_ATTEMPT_EVIDENCE\"", stale);
+    }
+}

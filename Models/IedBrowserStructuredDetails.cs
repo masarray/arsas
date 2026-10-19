@@ -111,6 +111,7 @@ public static class IedBrowserStructuredDetails
             IsDataObject = true,
             ReadObjectReference = obj.Reference,
             ScalarComponents = scalarComponents,
+            NameplateDcReferences = IedBrowserNameplatePresentation.BuildReferences(obj),
             PolarPlan = polarPlan,
             PhasePlans = phasePlans,
             ValueReference = hasLeaf ? processLeaf : obj.Reference,
@@ -262,44 +263,9 @@ public static class IedBrowserStructuredDetails
         var result = AttributeRows(candidateAttributes, parent.Name, depth,
             !IedBrowserEngineeringComposite.IsScalarCdc(parent.InferredCdc)).ToList();
 
-        // A report DataSet contains process MX/ST, not necessarily the
-        // associated IEC 61850 CF engineering declaration. Surface only the
-        // EXACT selected member's model-declared units.SIUnit/multiplier as
-        // companion rows; their values remain unobserved until a real CF
-        // read or verified discovery instance provides evidence. Do not
-        // introduce an MX/CF alias or infer a multiplier from display text.
-        if (string.Equals(member.FunctionalConstraint, "MX",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            // The IEC MV/WYE measurement can place Unit on the owning DO
-            // (A.units) while the reported FCDA selects A.phsA. Permit only
-            // the exact member and its verified owning DO, never sibling
-            // phases, related LN names, or another functional constraint.
-            var unitPrefixes = new HashSet<string>(StringComparer.Ordinal)
-            {
-                memberReference + ".units."
-            };
-            var parentReference = IedBrowserLiveValues.CanonicalReference(parent.Reference);
-            if (memberReference == parentReference ||
-                memberReference.StartsWith(parentReference + ".", StringComparison.Ordinal))
-                unitPrefixes.Add(parentReference + ".units.");
-            var units = parent.Attributes.Where(attr =>
-                string.Equals(attr.FunctionalConstraint, "CF",
-                    StringComparison.OrdinalIgnoreCase) &&
-                unitPrefixes.Any(prefix =>
-                    IedBrowserLiveValues.CanonicalReference(attr.MmsReference)
-                        == prefix + "SIUnit" ||
-                    IedBrowserLiveValues.CanonicalReference(attr.MmsReference)
-                        == prefix + "multiplier"))
-                .GroupBy(attr => IedBrowserLiveValues.CanonicalReference(attr.MmsReference),
-                    StringComparer.Ordinal)
-                .Where(group => group.Count() == 1)
-                .Select(group => group.Single())
-                .ToArray();
-            if (units.Length > 0)
-                result.AddRange(AttributeRows(units, parent.Name, depth,
-                    allowVector: false));
-        }
+        // Do not attach units.SIUnit/multiplier [CF] as children of a
+        // DataSet member [MX]. They belong to the canonical Data Model,
+        // and can only be observed there from a verified CF MMS Read.
         return result;
     }
 
@@ -371,6 +337,7 @@ public static class IedBrowserStructuredDetails
                 string.Join(", ", fcs))
             {
                 IsDataObject = true,
+                ReadObjectReference = qualified,
                 ValueReference = chosen,
                 FunctionalConstraint = fc,
                 EngineeringUnitReference = scalar ?? polar?.MagnitudeReference ?? "",
@@ -432,6 +399,14 @@ public static class IedBrowserStructuredDetails
                 IedBrowserReadPlan.UnobservedValue(attr.FunctionalConstraint), depth,
                 $"IEC declaration · {attr.MmsReference} · {attr.TypeSource}")
             {
+                // Expanding an IEC units [CF] parent may request ONLY
+                // its two declared child leaves through the existing
+                // association-fenced, bounded configuration Read. This is
+                // a read scope, never a synthetic parent observation.
+                ReadObjectReference = name == "units" &&
+                    string.Equals(group.Key.Fc, "CF", StringComparison.Ordinal)
+                    ? ExactUnitPairScope(groupArray.Select(x => x.attr))
+                    : "",
                 // A structured intermediate row may have its own observed
                 // report value even when no scalar attribute is declared at
                 // that exact depth. Keep the verified parent reference/FC.
@@ -440,8 +415,12 @@ public static class IedBrowserStructuredDetails
                     : scalarLeaf ?? (attr.ObjectReference + "." +
                         string.Join(".", groupArray[0].parts.Take(pathIndex + 1))),
                 FallbackValueReference = hasDirect ? scalarLeaf ?? "" : "",
-                EngineeringUnitReference = scalarLeaf ?? "",
-                IsEngineeringValue = scalarLeaf is not null && descendants.Length > 0,
+                EngineeringUnitReference = scalarLeaf ??
+                    (name == "setMag" ? fullPrefix : ""),
+                IsEngineeringValue = scalarLeaf is not null && descendants.Length > 0 ||
+                    name == "setMag" && hasDirect &&
+                    string.Equals(attr.FunctionalConstraint, "SG",
+                        StringComparison.OrdinalIgnoreCase),
                 PolarPlan = polar,
                 PhasePlans = phases,
                 VectorComponents = !allowVector || name is "q" or "t" ?
@@ -461,6 +440,31 @@ public static class IedBrowserStructuredDetails
         return result;
     }
 
+
+    /// <summary>
+    /// Only the same modeled IEC CF Unit substructure containing a unique
+    /// SIUnit and multiplier can authorize a focused on-expand metadata read.
+    /// Exact MMS references rather than ObjectReference are authoritative:
+    /// GVA and SCL disagree on whether the latter denotes the DO or DA.
+    /// </summary>
+    private static string ExactUnitPairScope(
+        IEnumerable<LiveIedDataAttributeModel> attributes)
+    {
+        var refs = attributes
+            .Where(a => string.Equals(a.FunctionalConstraint, "CF",
+                StringComparison.OrdinalIgnoreCase))
+            .Select(a => IedBrowserLiveValues.CanonicalReference(a.MmsReference))
+            .ToArray();
+        var si = refs.Where(r => r.EndsWith(".units.SIUnit",
+            StringComparison.Ordinal)).Distinct(StringComparer.Ordinal).ToArray();
+        var multiplier = refs.Where(r => r.EndsWith(".units.multiplier",
+            StringComparison.Ordinal)).Distinct(StringComparer.Ordinal).ToArray();
+        if (si.Length != 1 || multiplier.Length != 1)
+            return "";
+        var owner = si[0][..^".SIUnit".Length];
+        return string.Equals(multiplier[0], owner + ".multiplier",
+            StringComparison.Ordinal) ? owner : "";
+    }
 
     /// <summary>
     /// Vector eligibility is schema-only: a matching normal cVal/mag+ang pair
@@ -527,7 +531,7 @@ public static class IedBrowserStructuredDetails
         IEnumerable<(string Reference, string Relative)> rows)
     {
         var candidates = rows.Where(x => !string.IsNullOrWhiteSpace(x.Reference) &&
-                x.Relative is "f" or "stVal" or "posVal" or "general" or
+                x.Relative is "f" or "i" or "stVal" or "posVal" or "general" or
                     "valWTr" or "mag.f" or "instMag.f" or "cVal.mag.f" or
                     "instCVal.mag.f" or "ang.f" or "cVal.ang.f")
             .DistinctBy(x => x.Reference, StringComparer.Ordinal)

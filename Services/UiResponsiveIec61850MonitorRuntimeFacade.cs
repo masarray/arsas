@@ -83,9 +83,11 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         IReadOnlyList<IedBrowserReadTarget> targets,
         IProgress<IedBrowserReadResult> values,
         IProgress<IedBrowserReadProgress> progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<IedBrowserReadTarget>? verifiedRootScope = null)
         => RunDeviceOperationAsync(device.DeviceId, cancellationToken,
-            token => _inner.ReadBrowserValuesAsync(device, targets, values, progress, token));
+            token => _inner.ReadBrowserValuesAsync(device, targets, values, progress,
+                token, verifiedRootScope));
 
     public Task<int> EnrichSelectedStaticDataSetUnitsAsync(
         Iec61850MonitorDevice device,

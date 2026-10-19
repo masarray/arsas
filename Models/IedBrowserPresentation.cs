@@ -69,6 +69,15 @@ public sealed class IedBrowserTreeRow : ObservableObject
             _ => report.Reason
         } : "";
 
+    /// <summary>RCB status changes after the lazy tree is built. Notify its
+    /// bound glyph without resetting navigation, selection or scroll state.</summary>
+    public void RefreshRcbUsage()
+    {
+        if (Payload is not RcbExportRow) return;
+        Raise(nameof(RcbUsageGlyph));
+        Raise(nameof(RcbUsageTooltip));
+    }
+
     private bool _isExpanded;
     public bool IsExpanded
     {
@@ -223,6 +232,10 @@ public sealed record IedBrowserDetailRow(
     // These fields are independent, not a synthetic IEC scalar or phasor.
     public IReadOnlyList<IedBrowserScalarComponent> ScalarComponents { get; init; } =
         Array.Empty<IedBrowserScalarComponent>();
+    // Model-proven, immutable metadata ONLY: priority-ordered exact FC=DC
+    // leaves of this Nameplate object. No values are retained outside SSOT.
+    public IReadOnlyList<string> NameplateDcReferences { get; init; } =
+        Array.Empty<string>();
     // A typed child of a received q/t field; never treat the entire parent
     // value text as this individual Boolean/time-quality bit.
     public string EvidenceField { get; init; } = "";
@@ -247,6 +260,17 @@ public sealed record IedBrowserDetailRow(
         System.Windows.Media.Brushes.SteelBlue;
     public string RcbUsageGlyph => NavigateTo?.RcbUsageGlyph ?? "";
     public string RcbUsageTooltip => NavigateTo?.RcbUsageTooltip ?? "";
+
+    /// <summary>Mirror the same RCB node's active state in the right list.</summary>
+    public void RefreshRcbUsage()
+    {
+        if (NavigateTo?.Payload is not RcbExportRow rcb) return;
+        PropertyChanged?.Invoke(this,
+            new PropertyChangedEventArgs(nameof(RcbUsageGlyph)));
+        PropertyChanged?.Invoke(this,
+            new PropertyChangedEventArgs(nameof(RcbUsageTooltip)));
+        if (Kind == "Object") Value = rcb.StatusText;
+    }
 
     public bool ExpandByDefault { get; init; }
     public bool HasChildren => LoadChildren is not null;

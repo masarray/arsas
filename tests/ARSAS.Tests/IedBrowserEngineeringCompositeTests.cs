@@ -118,9 +118,9 @@ public sealed class IedBrowserEngineeringCompositeTests
             phase.AngleReference, "MX", "33", "", "timestamp2", "Report");
         Assert.True(IedBrowserEngineeringComposite.TryCompose(
             row, ledger, new Dictionary<string, string?>(), true, out var output));
-        Assert.Equal("12; angle 33°", output.Text);
-        Assert.DoesNotContain("∠", output.Text);
-        Assert.Contains("independent", output.Provenance);
+        Assert.Equal("12 ∠ 33°", output.Text); // angle remains accessible on its child
+        Assert.Contains("separate", output.Provenance); // glyph does not imply correlated timestamps
+        Assert.Contains("33°", output.Provenance);
     }
 
     [Fact]
@@ -287,6 +287,46 @@ public sealed class IedBrowserEngineeringCompositeTests
         // not suppress phase components or valid three-phase groups.
         var root = IedBrowserStructuredDetails.DataObject(vector, "MX");
         Assert.Equal(3, root.PhasePlans.Count);
+    }
+
+    [Fact]
+    public void ModelAndReportDataSetShareTheSameUnitsAndSafePolarProjection()
+    {
+        var obj = Object();
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel
+            {
+                LogicalNodes = [new LiveIedLogicalNodeModel
+                {
+                    DataObjects = [obj]
+                }]
+            }]
+        };
+        var member = new LiveIedDataSetMemberModel
+        {
+            Reference = Owner, FunctionalConstraint = "MX"
+        };
+        var dataModel = IedBrowserStructuredDetails.DataObject(obj, "MX");
+        var reportOrDataSet = IedBrowserStructuredDetails.Member(member, model);
+        var ledger = new IedBrowserLiveValues();
+        var association = ledger.BeginAssociation();
+        var units = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var phase in dataModel.PhasePlans)
+        {
+            ledger.PublishForAssociation(association, phase.MagnitudeReference,
+                "MX", "0", "", "same-wire-time", "Report");
+            ledger.PublishForAssociation(association, phase.AngleReference,
+                "MX", "0", "", "same-wire-time", "Report");
+            units[phase.MagnitudeReference + "|MX"] = "kV";
+        }
+        Assert.True(IedBrowserEngineeringComposite.TryCompose(
+            dataModel, ledger, units, true, out var modelValue));
+        Assert.True(IedBrowserEngineeringComposite.TryCompose(
+            reportOrDataSet, ledger, units, true, out var reportValue));
+        Assert.Equal(modelValue.Text, reportValue.Text);
+        Assert.Equal("phsA: 0 kV ∠ 0°; phsB: 0 kV ∠ 0°; phsC: 0 kV ∠ 0°",
+            reportValue.Text);
     }
 
 }

@@ -168,21 +168,27 @@ public static class IedBrowserEngineeringComposite
                 references.Add(plan.AngleReference + "[" + plan.FunctionalConstraint + "]");
                 anglePaired = true;
             }
-            if (!anglePaired && !compactDo && plan.AngleReference.Length > 0 &&
+            if (!anglePaired && plan.AngleReference.Length > 0 &&
                 ledger.TryGet(plan.AngleReference, plan.FunctionalConstraint,
                     out var independentAngle, preferReport: monitoring) &&
                 double.TryParse(independentAngle.Value, NumberStyles.Float,
                     CultureInfo.InvariantCulture, out var independentNumber) &&
                 double.IsFinite(independentNumber))
             {
-                // Two real values can be displayed separately. Never add ∠
-                // unless the actual report/read evidence passed CanPair.
+                // Keep the operator's Value column clean: do not claim a
+                // phasor from mismatched timestamp/source observations.
+                // The real angle remains accessible at ang [MX] and in the
+                // provenance tooltip, never discarded from the SSOT ledger.
                 var independentUnit = IedBrowserEngineeringValuePresentation.ResolveVectorAngleUnit(
                     unitIndex, plan.AngleReference, plan.FunctionalConstraint);
-                text += "; angle " + IedBrowserEngineeringValuePresentation.Format(
+                var angleText = IedBrowserEngineeringValuePresentation.Format(
                     independentAngle.Value, independentUnit);
-                references.Add(plan.AngleReference + "[independent " +
-                    plan.FunctionalConstraint + "]");
+                // This is a visible angle observation, NOT a paired phasor.
+                // Show it without inventing sample coherence. The leaf and
+                // provenance still preserve the original MMS source/time.
+                text += " ∠ " + angleText;
+                references.Add(plan.AngleReference + "[separate " +
+                    plan.FunctionalConstraint + "]: " + angleText);
             }
             components.Add(plan.Phase.Length == 0 ? text : plan.Phase + ": " + text);
         }
@@ -210,7 +216,7 @@ public static class IedBrowserEngineeringComposite
                 out var independent))
             return false;
         result = new IedBrowserCompositeObservation(
-            independent.Value, "Independent " + independent.Source,
+            independent.Value, independent.Source,
             independent.Provenance, independent.IsStale);
         return true;
     }

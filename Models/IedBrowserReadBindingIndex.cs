@@ -75,12 +75,12 @@ public sealed class IedBrowserReadBindingIndex
     {
         ArgumentNullException.ThrowIfNull(read);
         ArgumentNullException.ThrowIfNull(live);
-        if (!IsCurrent || _device.IsMonitoring || !_device.IsConnected ||
+        if (!IsCurrent || !_device.IsConnected ||
             !string.IsNullOrWhiteSpace(read.Error) ||
             string.IsNullOrWhiteSpace(read.Value) ||
             live.Association != association ||
             !live.TryGet(read.Target.Reference, read.Target.FunctionalConstraint,
-                out var observed, preferReport: false) ||
+                out var observed, preferReport: _device.IsMonitoring) ||
             observed.IsStale || observed.Association != association ||
             !string.Equals(observed.Source, "MMS Read", StringComparison.Ordinal))
             return 0;
@@ -90,9 +90,16 @@ public sealed class IedBrowserReadBindingIndex
         if (_signals.TryGetValue(key, out var signals))
             foreach (var signal in signals)
             {
+                if (signal.IsControlSignal) continue;
                 ApplyObservedReadSignal(signal, observed, association);
                 updated++;
             }
+        // Monitoring owns point state transitions and SOE: never write a
+        // background Read into those mutable runtime/command-feedback rows.
+        // Device Explorer's non-control signal projection can still display
+        // the exact canonical Read when NO Report exists for that FC key.
+        if (_device.IsMonitoring)
+            return updated;
         if (_points.TryGetValue(key, out var points))
             foreach (var point in points)
             {
