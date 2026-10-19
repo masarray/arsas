@@ -10,10 +10,12 @@ namespace ARSAS.Tests;
 public sealed class SiemensBcuP0RegressionTests
 {
     [Fact]
-    public void CanonicalStaticPlannerBudget_CoversSiemensSixtySixDiscoveredRcbs()
+    public void CanonicalStaticPlanner_UsesBoundedTargetPages_NotGlobalSixtySixRcbQuota()
     {
         var source = File.ReadAllText(Find("Services/NativeIec61850Client.StaticDataSetReporting.cs"));
-        Assert.Contains("MaxReportControlCandidates = 128", source, StringComparison.Ordinal);
+        Assert.Contains("MaxReportControlCandidates = 64", source, StringComparison.Ordinal);
+        Assert.Contains("MaxCandidatePagesPerInvocation = 8", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxReportControlCandidates = 128", source, StringComparison.Ordinal);
         Assert.Contains("ReadDataSetDirectories = true", source, StringComparison.Ordinal);
         Assert.Contains("MaxExactTargets = 64", source, StringComparison.Ordinal);
         Assert.Contains("CallerOwnedRcbReferences = callerOwnedRcbReferences", source, StringComparison.Ordinal);
