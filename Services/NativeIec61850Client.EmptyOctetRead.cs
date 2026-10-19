@@ -14,11 +14,13 @@ public sealed partial class NativeIec61850Client
     private static Iec61850ReadValue? PreserveVerifiedEmptyOctet(
         Iec61850ReadValue? projected, MmsDataValue? wire, string modelType)
     {
-        if (projected is null ||
-            projected.Value is not string { Length: 0 } ||
-            !IedBrowserReadValuePolicy.TryFormatVerifiedEmptyOctet(
-                wire, modelType, out var display))
+        if (projected is null || projected.Value is not string { Length: 0 })
             return projected;
+        var proved = IedBrowserReadValuePolicy.TryFormatVerifiedEmptyOctet(
+            wire, modelType, out var display) ||
+            IedBrowserReadValuePolicy.TryFormatVerifiedEmptyVisible(
+                wire, modelType, out display);
+        if (!proved) return projected;
 
         return new Iec61850ReadValue
         {
@@ -28,7 +30,7 @@ public sealed partial class NativeIec61850Client
             DeviceTimestamp = projected.DeviceTimestamp,
             SourceReference = projected.SourceReference,
             ReadReference = projected.ReadReference,
-            Projection = projected.Projection + "; verified empty OCTET STRING (0 bytes)",
+            Projection = projected.Projection + "; verified zero-length wire string (" + modelType + ")",
             QualityEvidence = projected.QualityEvidence,
             UtcTimeEvidence = projected.UtcTimeEvidence
         };
