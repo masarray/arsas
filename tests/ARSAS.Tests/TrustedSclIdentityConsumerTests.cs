@@ -71,6 +71,20 @@ public sealed class TrustedSclIdentityConsumerTests
         Assert.Equal("UD2",consumer.LogicalDevices.Last().Instance);
     }
 
+
+    [Fact]
+    public async Task Verified_Identity_Preserves_Case_Distinct_Raw_Mms_Domains_In_Consumer()
+    {
+        using var temp=TempScl.Create("STATIONBCU","CTRL","192.0.2.20","ctrl");
+        var domains=new[] {"STATIONBCUCTRL","STATIONBCUctrl"};
+        var verified=await TrustedSclIdentityAuthority.TryMatchAsync(temp.Device,Model(domains));
+        Assert.NotNull(verified);
+        var projected=TrustedSclIdentityAuthority.ToConsumerIdentity(verified,domains);
+        Assert.Equal(domains,projected.LogicalDevices.Select(x=>x.Domain).ToArray());
+        Assert.Equal(new[] {"CTRL","ctrl"},
+            projected.LogicalDevices.Select(x=>x.Instance).ToArray());
+    }
+
     [Fact]
     public void Canonical_Save_And_RCB_Export_Must_Consume_Verified_Identity()
     {
