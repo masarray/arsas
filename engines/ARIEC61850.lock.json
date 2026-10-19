@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "a662834be11227b1872df011551029fbc24e9e81",
+  "commit": "ccf31f60095ea65f9095514f0fa0102060962049",
   "sourcePullRequest": 177,
-  "purpose": "P0-A isolated generically inferred/provisional IED identity and SHA-pinned SCL exact AP/endpoint/domain verification; engine #177 exact-SHA Windows verification required. No changes to report/control, no physical field acceptance.",
+  "purpose": "P0-A identity code-only trial: exact case-sensitive MMS domain identity, provisional heuristics, SHA-pinned SCL AP/endpoint/domain evidence. Engine #177 Windows CI pending final verification; no physical promotion.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
@@ -274,6 +274,20 @@
   "previousIdentityTrialPin": {
     "commit": "51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
     "sourcePullRequest": 173,
-    "purpose": "M2.17-K typed ST report baseline retained for independent identity trial and rollback."
+    "purpose": "M2.17-K isolated C264 acceptance trial: ARIEC typed ST enumerated Mod/Beh/Health/PhyHealth Report FCD projection with exact ST/quality/timestamp checks, preserving P10.9V control and fail-closed unknowns. ARIEC #173 Windows engine CI passed; integrated consumer CI/physical C264 replay pending. Do not promote or merge into main without acceptance."
+  },
+  "p0AIdentityTrial": {
+    "status": "code-trial-not-physical",
+    "baseEngineCommit": "51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
+    "exactCommit": "ccf31f60095ea65f9095514f0fa0102060962049",
+    "enginePullRequest": 177,
+    "consumerPullRequest": 624,
+    "engineCiRun": 39228439974,
+    "exactDomainCaseRequired": true,
+    "sclShaPinnedRequired": true,
+    "exactEndpointAndAccessPointRequired": true,
+    "discoveryWritesForbidden": true,
+    "physicalQualificationRequired": true,
+    "mainlinePromotionForbidden": true
   }
 }
