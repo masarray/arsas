@@ -73,9 +73,16 @@ public sealed class M217KC264TypedStatusReportIntegrationTests
         var rcbTrial = lockRoot.GetProperty("p0BRcbPlannerTrial");
         Assert.Equal(identityTrial.GetProperty("exactCommit").GetString(),
             rcbTrial.GetProperty("baseEngineCommit").GetString());
+        var typedReadTrial = lockRoot.GetProperty("p0CTypedReadTrial");
         Assert.Equal(rcbTrial.GetProperty("exactCommit").GetString(),
+            typedReadTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal(typedReadTrial.GetProperty("exactCommit").GetString(),
             lockRoot.GetProperty("commit").GetString());
-        Assert.Equal(179, lockRoot.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(181, lockRoot.GetProperty("sourcePullRequest").GetInt32());
+        Assert.True(typedReadTrial.GetProperty("strictInvokeId").GetBoolean());
+        Assert.True(typedReadTrial.GetProperty("strictAccessOrdinal").GetBoolean());
+        Assert.True(typedReadTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(typedReadTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
         var trial = lockRoot.GetProperty("m217KTypedStatusReportTrial");
         Assert.Equal("036e2c00d83a0815b6160147b14ea05975057965",
             trial.GetProperty("previousConsumerPin").GetString());

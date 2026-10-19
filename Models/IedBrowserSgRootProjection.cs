@@ -111,8 +111,10 @@ public static class IedBrowserSgRootProjection
             "boolean" => kind == MmsDataKind.Boolean,
             "enumerated" => kind is MmsDataKind.Integer or MmsDataKind.Unsigned,
             "enum" => kind is MmsDataKind.Integer or MmsDataKind.Unsigned,
-            "integer" => kind is MmsDataKind.Integer or MmsDataKind.Unsigned,
-            "unsigned" => kind is MmsDataKind.Unsigned or MmsDataKind.Integer,
+            // Preserve signedness proven by the live GVA type tree. A
+            // negative Integer is never an Unsigned scalar and vice versa.
+            "integer" => kind == MmsDataKind.Integer,
+            "unsigned" => kind == MmsDataKind.Unsigned,
             "floating-point" => kind == MmsDataKind.FloatingPoint,
             "visible-string" => kind is MmsDataKind.VisibleString or MmsDataKind.MmsString,
             "mms-string" => kind is MmsDataKind.MmsString or MmsDataKind.VisibleString,

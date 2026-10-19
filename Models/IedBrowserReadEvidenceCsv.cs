@@ -18,22 +18,18 @@ public static class IedBrowserReadEvidenceCsv
     {
         ArgumentNullException.ThrowIfNull(ledger);
         var result = new StringBuilder();
-        result.AppendLine("CanonicalReference,FC,MmsReference,ModelType,RootCandidate,LedgerState,FailureKind,Reason,Association,ObservedUtc,Source,RawValue,Quality,DeviceTimestamp,GvaStatus,MmsInvokeStatus,UiProjection");
+        result.AppendLine("CanonicalReference,FC,MmsReference,ModelType,RootCandidate,LedgerState,FailureKind,Reason,Association,ObservedUtc,Source,RawValue,Quality,DeviceTimestamp,GvaStatus,MmsInvokeStatus,UiProjection,FailureReasonCode");
         if (model is null || page is null || maxTargets <= 0)
             return result.ToString();
         var targets = IedBrowserReadPlan.Build(model, page, readAll: false)
             .Take(Math.Min(maxTargets, 4096)).ToArray();
         foreach (var target in targets)
         {
-            var observation = ledger.TryGet(target.Reference, target.FunctionalConstraint,
-                out var current) && !current.IsStale &&
-                current.Association == ledger.Association ? current : null;
-            var failure = observation is null ? absence?.Invoke(target) : null;
-            var state = observation is not null ? "OBSERVED" :
-                failure?.Kind == IedBrowserReadAbsenceKind.Failed ? "READ_FAILED" :
-                failure?.Kind == IedBrowserReadAbsenceKind.Interrupted ? "INTERRUPTED" :
-                failure?.Kind == IedBrowserReadAbsenceKind.Deferred ? "DEFERRED" :
-                "NOT_OBSERVED_NO_ATTEMPT_EVIDENCE";
+            var projection = IedBrowserReadEvidenceProjector.Project(
+                target, ledger, absence?.Invoke(target));
+            var observation = projection.Observation;
+            var failure = projection.Failure;
+            var state = projection.State;
             var cells = new[]
             {
                 IedBrowserLiveValues.CanonicalReference(target.Reference),
@@ -44,7 +40,8 @@ public static class IedBrowserReadEvidenceCsv
                 observation?.ObservedUtc.ToString("O") ?? "",
                 observation?.Source ?? "", observation?.Value ?? "",
                 observation?.Quality ?? "", observation?.DeviceTimestamp ?? "",
-                "NOT_CAPTURED", "NOT_CAPTURED", "NOT_MEASURED"
+                "NOT_CAPTURED", "NOT_CAPTURED", "NOT_MEASURED",
+                projection.FailureReasonCode
             };
             result.AppendLine(string.Join(",", cells.Select(Csv)));
         }
