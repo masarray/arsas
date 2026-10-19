@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "ccf31f60095ea65f9095514f0fa0102060962049",
-  "sourcePullRequest": 177,
-  "purpose": "P0-A trial of generic exact-prefix identity, provisional MMS-only confidence, case-sensitive LD domains and endpoint/AP-bound trusted SCL reconciliation. Engine exact-SHA CI passed; consumer exact-SHA Windows CI and physical qualification required; no mainline promotion.",
+  "commit": "b2d3519465e05201f2373e1b13169f91ae697b67",
+  "sourcePullRequest": 179,
+  "purpose": "P0-B code-only engine trial: exact DataSet scoped read-only RCB catalog pager, 66/300 synthetic regression, deterministic bounded continuation; no physical qualification, no mainline promotion.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
@@ -282,6 +282,20 @@
     "sclSha256Required": true,
     "endpointAndAccessPointRequired": true,
     "provisionalHeuristicOnly": true,
+    "physicalQualificationRequired": true,
+    "mainlinePromotionForbidden": true
+  },
+  "p0BRcbPlannerTrial": {
+    "status": "code-trial-not-physical",
+    "enginePullRequest": 179,
+    "consumerPullRequest": 626,
+    "baseEngineCommit": "ccf31f60095ea65f9095514f0fa0102060962049",
+    "exactCommit": "b2d3519465e05201f2373e1b13169f91ae697b67",
+    "targetScopedOnly": true,
+    "globalCandidateAbortForbidden": true,
+    "writeFreeReconciliation": true,
+    "boundedContinuationRequired": true,
+    "foreignReservationProtectionRequired": true,
     "physicalQualificationRequired": true,
     "mainlinePromotionForbidden": true
   }
