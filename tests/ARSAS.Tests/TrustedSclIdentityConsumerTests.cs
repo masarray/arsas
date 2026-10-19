@@ -44,6 +44,33 @@ public sealed class TrustedSclIdentityConsumerTests
             temp.Device,Model("BCUGEF650")));
     }
 
+
+    [Fact]
+    public async Task Scl_Identity_Requires_The_Selected_AccessPoint()
+    {
+        using var temp=TempScl.Create("STATIONBCU","CTRL","192.0.2.20");
+        temp.Device.SclAccessPointName="OTHER_AP";
+        Assert.Null(await TrustedSclIdentityAuthority.TryMatchAsync(
+            temp.Device,Model("STATIONBCUCTRL")));
+    }
+
+    [Fact]
+    public async Task Five_Live_Domains_With_Verified_Scl_Preserve_Exact_Ied_And_Original_Mms_Refs()
+    {
+        using var temp=TempScl.Create("SIEBCU","CTRL","192.0.2.20",
+            "MEAS","PROT","UD1","UD2");
+        var domains=new[] {"SIEBCUCTRL","SIEBCUMEAS","SIEBCUPROT","SIEBCUUD1","SIEBCUUD2"};
+        var model=Model(domains);
+        var verified=await TrustedSclIdentityAuthority.TryMatchAsync(temp.Device,model);
+        Assert.NotNull(verified);
+        Assert.Equal("SIEBCU",verified.IedName);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.High,verified.Confidence);
+        var consumer=TrustedSclIdentityAuthority.ToConsumerIdentity(verified,domains);
+        Assert.Equal("SIEBCU",consumer.IedName);
+        Assert.Equal(domains,consumer.LogicalDevices.Select(d=>d.Domain).ToArray());
+        Assert.Equal("UD2",consumer.LogicalDevices.Last().Instance);
+    }
+
     [Fact]
     public void Canonical_Save_And_RCB_Export_Must_Consume_Verified_Identity()
     {
@@ -60,10 +87,10 @@ public sealed class TrustedSclIdentityConsumerTests
         Assert.Contains("TrustedSclIdentityAuthority.ToConsumerIdentity",runtime);
     }
 
-    private static LiveIedModelDiscoveryDocument Model(string domain) => new()
+    private static LiveIedModelDiscoveryDocument Model(params string[] domains) => new()
     {
         Host="192.16.1.33",IedName="IED_192_16_1_33",
-        LogicalDevices=[new LiveIedLogicalDeviceModel{MmsDomain=domain,Inst=domain}]
+        LogicalDevices=domains.Select(domain=>new LiveIedLogicalDeviceModel{MmsDomain=domain,Inst=domain}).ToArray()
     };
 
     private sealed class TempScl : IDisposable
@@ -74,15 +101,17 @@ public sealed class TrustedSclIdentityConsumerTests
         {
             _folder=folder;Device=device;
         }
-        public static TempScl Create(string ied,string ld,string ip)
+        public static TempScl Create(string ied,string ld,string ip,params string[] otherLdInstances)
         {
             var dir=Path.Combine(Path.GetTempPath(),"arsas-ied-p10-"+Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
             var path=Path.Combine(dir,"engineering.iid");
+            var remaining=string.Concat(otherLdInstances.Select(inst=>
+                $"<LDevice inst=\\"{inst}\\"><LN0 lnClass=\\"LLN0\\" lnType=\\"LLN0_t\\"/></LDevice>"));
             var xml=$"""
                 <SCL xmlns="http://www.iec.ch/61850/2003/SCL">
                   <Communication><SubNetwork name="Bus"><ConnectedAP iedName="{ied}" apName="S1"><Address><P type="IP">{ip}</P></Address></ConnectedAP></SubNetwork></Communication>
-                  <IED name="{ied}"><AccessPoint name="S1"><Server><LDevice inst="{ld}"><LN0 lnClass="LLN0" lnType="LLN0_t"/></LDevice></Server></AccessPoint></IED>
+                  <IED name="{ied}"><AccessPoint name="S1"><Server><LDevice inst="{ld}"><LN0 lnClass="LLN0" lnType="LLN0_t"/></LDevice>{remaining}</Server></AccessPoint></IED>
                 </SCL>
                 """;
             File.WriteAllText(path,xml);
