@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
-  "sourcePullRequest": 173,
-  "purpose": "M2.17-K isolated C264 acceptance trial: ARIEC typed ST enumerated Mod/Beh/Health/PhyHealth Report FCD projection with exact ST/quality/timestamp checks, preserving P10.9V control and fail-closed unknowns. ARIEC #173 Windows engine CI passed; integrated consumer CI/physical C264 replay pending. Do not promote or merge into main without acceptance.",
+  "commit": "ccf31f60095ea65f9095514f0fa0102060962049",
+  "sourcePullRequest": 177,
+  "purpose": "P0-A trial of generic exact-prefix identity, provisional MMS-only confidence, case-sensitive LD domains and endpoint/AP-bound trusted SCL reconciliation. Engine exact-SHA CI passed; consumer exact-SHA Windows CI and physical qualification required; no mainline promotion.",
   "previousTrialPin": {
-    "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
-    "sourcePullRequest": 134,
-    "purpose": "Previous P0-5b/P0-5c field-capture engine pin retained as the physical R5 baseline before canonical communication evidence, logical RCB SCL projection, and round-trip association validation were added."
+    "commit": "51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
+    "sourcePullRequest": 173,
+    "purpose": "M2.17-K typed ST report baseline preserved as direct ancestor of P0-A identity trial."
   },
   "priorGoldenWirePin": {
     "commit": "0023ef9a4373855497464ed3979e359c4041c95d",
