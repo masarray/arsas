@@ -29,6 +29,22 @@ public sealed class TrustedSclIdentityConsumerTests
     }
 
     [Fact]
+    public void Live_Mms_Domains_Differing_Only_By_Case_Do_Not_Collapse()
+    {
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            Host = "192.0.2.60",
+            IedName = "stale",
+            LogicalDevices = new[] { "PlantCTRL", "plantCTRL" }
+                .Select(domain => new LiveIedLogicalDeviceModel { MmsDomain = domain }).ToArray()
+        };
+        var resolved = Iec61850DeviceIdentityResolver.Resolve(null, model, Array.Empty<SignalDefinition>());
+        Assert.Equal(2, resolved.LogicalDevices.Count);
+        Assert.Contains(resolved.LogicalDevices, ld => ld.Domain == "PlantCTRL");
+        Assert.Contains(resolved.LogicalDevices, ld => ld.Domain == "plantCTRL");
+    }
+
+    [Fact]
     public async Task Wrong_Explicit_AccessPoint_Does_Not_Authenticate_Trusted_Scl_Identity()
     {
         using var temp = TempScl.Create("SIEBCU", "CTRL", "192.0.2.55");
