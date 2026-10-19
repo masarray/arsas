@@ -63,6 +63,13 @@ public sealed class SiemensBcuP0RegressionTests
             StringComparison.Ordinal);
         Assert.Contains(@"IconFilename: ""{app}\Assets\app-icon.ico""", installer,
             StringComparison.Ordinal);
+        Assert.Contains(@"AppUserModelID: ""masarray.ARSAS.IEC61850""", installer,
+            StringComparison.Ordinal);
+        Assert.Equal(2, installer.Split(@"AppUserModelID: ""masarray.ARSAS.IEC61850""",
+            StringSplitOptions.None).Length - 1);
+        var processIdentity = File.ReadAllText(Find("App.WindowsIdentity.cs"));
+        Assert.Contains(@"""masarray.ARSAS.IEC61850""", processIdentity,
+            StringComparison.Ordinal);
         Assert.True(new FileInfo(Find("Assets/app-icon.ico")).Length > 1000);
         var project = File.ReadAllText(Find("ArIED61850Tester.csproj"));
         Assert.Contains(@"<ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>", project,
