@@ -124,9 +124,16 @@ public sealed class SmartInteroperabilityTrialGuardRegressionTests
         var rcbTrial = root.GetProperty("p0BRcbPlannerTrial");
         Assert.Equal(identityTrial.GetProperty("exactCommit").GetString(),
             rcbTrial.GetProperty("baseEngineCommit").GetString());
+        var typedReadTrial = root.GetProperty("p0CTypedReadTrial");
         Assert.Equal(rcbTrial.GetProperty("exactCommit").GetString(),
+            typedReadTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal(typedReadTrial.GetProperty("exactCommit").GetString(),
             root.GetProperty("commit").GetString());
-        Assert.Equal(179, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(181, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.True(typedReadTrial.GetProperty("strictInvokeId").GetBoolean());
+        Assert.True(typedReadTrial.GetProperty("strictAccessOrdinal").GetBoolean());
+        Assert.True(typedReadTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(typedReadTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
         Assert.True(rcbTrial.GetProperty("writeFreeReconciliation").GetBoolean());
         Assert.True(rcbTrial.GetProperty("boundedContinuationRequired").GetBoolean());
         Assert.True(rcbTrial.GetProperty("physicalQualificationRequired").GetBoolean());
