@@ -38,6 +38,31 @@ public sealed class P0DWireEmptyOctetReadTests
     }
 
     [Fact]
+    public void ExactEmptyVisibleString_IsNotAReadFailure_ButNeverInventedFromBlankText()
+    {
+        var visible = Assert.Single(MmsDataCodec.DecodeAllData(
+            Convert.FromHexString("8A00")));
+        Assert.Equal(MmsDataKind.VisibleString, visible.Kind);
+        Assert.True(IedBrowserReadValuePolicy.TryFormatVerifiedEmptyVisible(
+            visible, "VisString255", out var display));
+        Assert.Equal("Empty VisibleString (0 characters)", display);
+
+        var mmsString = Assert.Single(MmsDataCodec.DecodeAllData(
+            Convert.FromHexString("9000")));
+        Assert.True(IedBrowserReadValuePolicy.TryFormatVerifiedEmptyVisible(
+            mmsString, "MmsString", out var mmsDisplay));
+        Assert.Equal("Empty MMSString (0 characters)", mmsDisplay);
+        Assert.False(IedBrowserReadValuePolicy.TryFormatVerifiedEmptyVisible(
+            visible, "Octet64", out _));
+        Assert.False(IedBrowserReadValuePolicy.TryFormatVerifiedEmptyVisible(
+            mmsString, "VisString255", out _));
+        Assert.False(IedBrowserReadValuePolicy.TryFormatVerifiedEmptyVisible(
+            MmsDataValue.VisibleString("value1"), "VisString255", out _));
+        Assert.False(IedBrowserReadValuePolicy.TryFormatVerifiedEmptyVisible(
+            null, "VisString255", out _));
+    }
+
+    [Fact]
     public void BlankText_UnknownTag_Struct_AndWrongModelNeverEnterObservedOctetState()
     {
         var bytes = new byte[] {1,2};
