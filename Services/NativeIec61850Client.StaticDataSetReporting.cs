@@ -84,11 +84,13 @@ public sealed partial class NativeIec61850Client
                     MaxNameListPages = 64,
                     MaxConcurrentDomains = 4,
                     UnknownPeerMaxConcurrentDomains = 2,
-                    MaxReportControlCandidates = 128
+                    MaxReportControlCandidates = 64,
+                    MaxCandidatePagesPerInvocation = 8
                 },
                 acquisitionOptions: new ArMms.MmsCanonicalStaticAcquisitionProbeOptions
                 {
                     MaxExactTargets = 64,
+                    MaxExactTargetPagesPerInvocation = 8,
                     ReadDataSetDirectories = true,
                     CallerOwnedRcbReferences = callerOwnedRcbReferences
                 },
