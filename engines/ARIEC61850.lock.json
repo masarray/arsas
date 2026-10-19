@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "d9e795275447ea1dcc3bea435b57f948595de310",
-  "sourcePullRequest": 179,
-  "purpose": "P0-B code-only engine trial: exact DataSet scoped read-only RCB catalog pager, 66/300 synthetic regression, deterministic bounded continuation; no physical qualification, no mainline promotion.",
+  "commit": "ba21d882f67de22c10d3155b449aac77aa8b4899",
+  "sourcePullRequest": 181,
+  "purpose": "P0-C typed MMS read evidence and SSOT read-outcome projection isolated code trial; historical P0-A/B + report controls remain unchanged; physical qualification required.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
@@ -302,5 +302,23 @@
     "exactNameContradictoryDatasetBlocked": true,
     "indexedInstanceReadPriorityOnly": true,
     "exactTargetAvailabilityPages": true
+  },
+  "p0CTypedReadTrial": {
+    "status": "code-trial-not-physical",
+    "enginePullRequest": 181,
+    "consumerPullRequest": 627,
+    "baseEngineCommit": "d9e795275447ea1dcc3bea435b57f948595de310",
+    "exactCommit": "ba21d882f67de22c10d3155b449aac77aa8b4899",
+    "engineCiRun": 39244846312,
+    "strictInvokeId": true,
+    "strictAccessOrdinal": true,
+    "malformedNumericsNeverZero": true,
+    "typedGvaRequired": true,
+    "perReferenceFailureEvidence": true,
+    "sgcbDeferredSeparated": true,
+    "observationsSingleSource": true,
+    "readOnly": true,
+    "physicalQualificationRequired": true,
+    "mainlinePromotionForbidden": true
   }
 }
