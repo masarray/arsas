@@ -124,7 +124,7 @@ public static class TrustedSclIdentityAuthority
         {
             IedName=verified.IedName,
             Source=$"ARIEC61850 {verified.Source} ({verified.Confidence})",
-            LogicalDevices=domains.Distinct(StringComparer.OrdinalIgnoreCase).Select(domain =>
+            LogicalDevices=domains.Distinct(StringComparer.Ordinal).Select(domain =>
                 new Iec61850LogicalDeviceIdentity
                 {
                     Domain=domain,
