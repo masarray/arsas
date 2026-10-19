@@ -2,9 +2,14 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
-  "sourcePullRequest": 173,
-  "purpose": "M2.17-K isolated C264 acceptance trial: ARIEC typed ST enumerated Mod/Beh/Health/PhyHealth Report FCD projection with exact ST/quality/timestamp checks, preserving P10.9V control and fail-closed unknowns. ARIEC #173 Windows engine CI passed; integrated consumer CI/physical C264 replay pending. Do not promote or merge into main without acceptance.",
+  "commit": "f2bdb7f990fbb10fce9b5abeb2ca5a5cb2cdaeba",
+  "sourcePullRequest": 177,
+  "purpose": "P0-A identity authority trial stacked on typed ST report engine #173: preserve full domain-derived identity without suffix surgery, provisional MMS/operator confidence, unique AP/endpoint/SCL topology verification; #177 exact-SHA CI required before production promotion.",
+  "priorTrialPin": {
+    "commit": "51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
+    "sourcePullRequest": 173,
+    "purpose": "Previous validated typed ST report baseline; retained for rollback and comparison."
+  },
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
