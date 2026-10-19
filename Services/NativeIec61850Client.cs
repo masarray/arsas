@@ -1065,7 +1065,9 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                     if (smart.ReadResult.IsSuccess)
                     {
                         var projected = AttachBrowserWireEvidence(
-                            ProjectReadValue(smart.ReadResult.Value, dataType, candidate.Reference, objectReference),
+                            PreserveVerifiedEmptyOctet(
+                                ProjectReadValue(smart.ReadResult.Value, dataType, candidate.Reference, objectReference),
+                                smart.ReadResult.Value, dataType),
                             smart.ReadResult.Value, objectReference);
                         if (projected != null)
                         {
@@ -1092,7 +1094,9 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 if (result.IsSuccess)
                 {
                     var projected = AttachBrowserWireEvidence(
-                        ProjectReadValue(result.Value, dataType, candidate.Reference, objectReference),
+                        PreserveVerifiedEmptyOctet(
+                                ProjectReadValue(result.Value, dataType, candidate.Reference, objectReference),
+                                result.Value, dataType),
                         result.Value, objectReference);
                     if (projected != null)
                     {
