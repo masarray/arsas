@@ -2,11 +2,88 @@ using AR.Iec61850.Discovery;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Services;
 using System.Security.Cryptography;
+using System.Xml.Linq;
 
 namespace ARSAS.Tests;
 
 public sealed class TrustedSclIdentityConsumerTests
 {
+
+    [Fact]
+    public void Previous_Live_Model_Heuristic_Cannot_Override_A_Fresh_Five_Domain_Identity()
+    {
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            Host = "192.0.2.55",
+            IedName = "SIE",
+            LogicalDevices = new[] { "SIEBCUCTRL", "SIEBCUMEAS", "SIEBCUPROT", "SIEBCUUD1", "SIEBCUUD2" }
+                .Select(domain => new LiveIedLogicalDeviceModel { MmsDomain = domain, Inst = domain })
+                .ToArray()
+        };
+        var resolved = Iec61850DeviceIdentityResolver.Resolve(
+            null, model, Array.Empty<SignalDefinition>());
+
+        Assert.Equal("SIEBCU", resolved.IedName);
+        Assert.Contains("MmsDomainCommonPrefix (Medium)", resolved.Source, StringComparison.Ordinal);
+        Assert.Equal("UD2", resolved.LogicalDevices.Single(ld => ld.Domain == "SIEBCUUD2").Instance);
+    }
+
+    [Fact]
+    public void Live_Mms_Domains_Differing_Only_By_Case_Do_Not_Collapse()
+    {
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            Host = "192.0.2.60",
+            IedName = "stale",
+            LogicalDevices = new[] { "PlantCTRL", "plantCTRL" }
+                .Select(domain => new LiveIedLogicalDeviceModel { MmsDomain = domain }).ToArray()
+        };
+        var resolved = Iec61850DeviceIdentityResolver.Resolve(null, model, Array.Empty<SignalDefinition>());
+        Assert.Equal(2, resolved.LogicalDevices.Count);
+        Assert.Contains(resolved.LogicalDevices, ld => ld.Domain == "PlantCTRL");
+        Assert.Contains(resolved.LogicalDevices, ld => ld.Domain == "plantCTRL");
+    }
+
+    [Fact]
+    public async Task Wrong_Explicit_AccessPoint_Does_Not_Authenticate_Trusted_Scl_Identity()
+    {
+        using var temp = TempScl.Create("SIEBCU", "CTRL", "192.0.2.55");
+        temp.Device.SclAccessPointName = "DifferentAP";
+
+        Assert.Null(await TrustedSclIdentityAuthority.TryMatchAsync(
+            temp.Device, Model("SIEBCUCTRL")));
+    }
+
+    [Fact]
+    public async Task Sha_Pinned_Five_Domain_Scl_Promotes_Exact_Ied_And_Every_Ld()
+    {
+        using var temp = TempScl.Create("SIEBCU", "CTRL", "192.0.2.55");
+        XNamespace ns = "http://www.iec.ch/61850/2003/SCL";
+        var document = XDocument.Load(temp.Device.SclSourcePath);
+        var server = Assert.Single(document.Descendants(ns + "Server"));
+        foreach (var inst in new[] { "MEAS", "PROT", "UD1", "UD2" })
+            server.Add(new XElement(ns + "LDevice", new XAttribute("inst", inst)));
+        document.Save(temp.Device.SclSourcePath);
+        temp.Device.SclSourceSha256 = Convert.ToHexString(
+            SHA256.HashData(File.ReadAllBytes(temp.Device.SclSourcePath)));
+
+        var domains = new[] { "SIEBCUCTRL", "SIEBCUMEAS", "SIEBCUPROT", "SIEBCUUD1", "SIEBCUUD2" };
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            Host = "192.0.2.55",
+            IedName = "SIE",
+            LogicalDevices = domains.Select(domain =>
+                new LiveIedLogicalDeviceModel { MmsDomain = domain, Inst = domain }).ToArray()
+        };
+        var identity = await TrustedSclIdentityAuthority.TryMatchAsync(temp.Device, model);
+        Assert.NotNull(identity);
+        var projected = TrustedSclIdentityAuthority.ToConsumerIdentity(identity, domains);
+
+        Assert.Equal("SIEBCU", projected.IedName);
+        Assert.Equal(5, projected.LogicalDevices.Count);
+        Assert.Equal("UD2", projected.LogicalDevices.Single(ld => ld.Domain == "SIEBCUUD2").Instance);
+    }
+
     [Fact]
     public async Task GE_F650_SHA_Pinned_Engineering_Source_Promotes_IED_And_LD_Without_Touching_MMS_Domain()
     {
