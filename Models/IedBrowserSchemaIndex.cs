@@ -133,6 +133,14 @@ public sealed class IedBrowserSchemaIndex
             foreach (var (fc, paths) in primaries)
                 if (TrySelectDisplayLeaf(owner, paths, out var primary))
                     _primaryLeaves[Key(owner, fc)] = primary;
+
+            // A model-declared setting DO is allowed to reuse exactly ONE
+            // SG/SP scalar child from the canonical observation ledger.
+            // This is an alias of observed evidence, never a parent value
+            // fabricated from SCL or a sibling with another FC.
+            if (TryGetUniqueProcessLeaf(obj, out var settingLeaf, out var settingFc) &&
+                settingFc is "SG" or "SP")
+                _primaryLeaves[Key(owner, settingFc)] = settingLeaf;
         }
     }
 
