@@ -36,11 +36,11 @@ public sealed class P0DReportBufferOverflowPersistenceTests
                     GeneralInterrogationReasonSeen = false
                 }, buffered: true));
         }
-        Assert.Equal(13, state.FramesSeen);
-        Assert.Equal(13, state.SequencedFrames);
-        Assert.Equal(0, state.SequenceDiscontinuities);
-        Assert.Equal(1, state.BufferOverflows);
-        Assert.Equal(12, state.FramesAfterLastFinding);
+        Assert.Equal(13L, state.FramesSeen);
+        Assert.Equal(13L, state.SequencedFrames);
+        Assert.Equal(0L, state.SequenceDiscontinuities);
+        Assert.Equal(1L, state.BufferOverflows);
+        Assert.Equal(12L, state.FramesAfterLastFinding);
         Assert.True(state.AnomalousFrames >= 1);
     }
 }
