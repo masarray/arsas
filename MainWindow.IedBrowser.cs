@@ -1015,9 +1015,20 @@ public partial class MainWindow
             // Typed Quality is decoded once at ingress, never guessed from
             // valid-looking text. Offline snapshots remain clearly stale.
             string display;
-            if (row.EvidenceKind == "Quality")
+            if (row.EvidenceKind == "Quality" ||
+                (row.EvidenceField.Length == 0 &&
+                 string.Equals(row.FunctionalConstraint, "ST", StringComparison.Ordinal) &&
+                 IedBrowserLiveValues.CanonicalReference(row.ValueReference)
+                     .EndsWith(".q", StringComparison.Ordinal)))
+            {
+                // An exact IEC .q attribute in a DataSet/RCB detail row can be
+                // built from a member without EvidenceKind="Quality". Present
+                // the typed 13-bit quality instead of the raw bits(0000,...).
                 display = live.QualityBits?.FormatField(row.EvidenceField) ??
                     Iec61850QualityPresentation.FormatObserved(live.Value, row.EvidenceField);
+                if (display == "Not exposed")
+                    display = "Not decoded";
+            }
             else if (row.EvidenceKind == "Timestamp" && row.EvidenceField.Length > 0)
                 display = IedBrowserUtcTimeQualityPresentation.FormatField(
                     live.TimeBits, row.EvidenceField);
