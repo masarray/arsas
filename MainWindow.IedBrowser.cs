@@ -644,10 +644,13 @@ public partial class MainWindow
                             target.Reference, target.FunctionalConstraint, out var value) &&
                            !value.IsStale && value.Association == readAssociation;
                     bool HasTerminalFailure(IedBrowserReadTarget target)
-                        => _iedBrowserReadFailureEvidence?.TryGet(
-                            sourceDevice, target.Reference, "",
-                            target.FunctionalConstraint, out _, out var kind) == true &&
-                            kind != IedBrowserReadAbsenceKind.Deferred;
+                    {
+                        if (_iedBrowserReadFailureEvidence is not { } evidence)
+                            return false;
+                        return evidence.TryGet(sourceDevice, target.Reference, "",
+                                   target.FunctionalConstraint, out _, out var kind) &&
+                               kind != IedBrowserReadAbsenceKind.Deferred;
+                    }
                     var gaps = IedBrowserReadCompletionAccounting.Classify(
                         declaredSelection, targets, IsObserved, HasTerminalFailure);
                     unverifiedReadTargets = gaps.Count;
