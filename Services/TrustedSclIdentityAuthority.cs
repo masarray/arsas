@@ -29,7 +29,8 @@ public static class TrustedSclIdentityAuthority
             source,
             liveModel.LogicalDevices.Select(ld => ld.MmsDomain),
             device.IpAddress,
-            device.SclIedName);
+            device.SclIedName,
+            device.SclAccessPointName);
     }
 
     /// <summary>
@@ -87,7 +88,8 @@ public static class TrustedSclIdentityAuthority
                     continue;
 
                 var identity = TrustedSclIedIdentityMatcher.TryMatch(
-                    document, domains, device.IpAddress, candidate.IedName);
+                    document, domains, device.IpAddress, candidate.IedName,
+                    candidate.AccessPointName);
                 if (identity is null ||
                     identity.Source != "TrustedSclExactDomainMatch" ||
                     identity.Confidence != LiveIedDiscoveryConfidenceLevel.High)
