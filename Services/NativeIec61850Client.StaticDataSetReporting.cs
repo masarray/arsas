@@ -90,6 +90,7 @@ public sealed partial class NativeIec61850Client
                 acquisitionOptions: new ArMms.MmsCanonicalStaticAcquisitionProbeOptions
                 {
                     MaxExactTargets = 64,
+                    MaxExactTargetPagesPerInvocation = 8,
                     ReadDataSetDirectories = true,
                     CallerOwnedRcbReferences = callerOwnedRcbReferences
                 },
