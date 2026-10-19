@@ -303,15 +303,34 @@ public partial class MainWindow
                        DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + ".csv",
             DefaultExt = ".csv",
             AddExtension = true,
-            Filter = "Read-only IEC CSV evidence (*.csv)|*.csv"
+            Filter = "Read-only IEC CSV evidence (*.csv)|*.csv|" +
+                     "Selected-page evidence bundle (*.zip)|*.zip"
         };
         if (dialog.ShowDialog(this) != true) return;
         try
         {
             var csv = IedBrowserReadEvidenceCsv.Build(
                 model, page, device.LiveValues, ResolveAbsence);
-            System.IO.File.WriteAllText(dialog.FileName, csv,
-                new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+            if (dialog.FilterIndex == 2)
+            {
+                var appVersion = typeof(MainWindow).Assembly
+                    .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                    .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+                    .FirstOrDefault()?.InformationalVersion ?? "NOT_CAPTURED";
+                var engineVersion = typeof(AR.Iec61850.Mms.MmsDataValue).Assembly
+                    .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                    .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+                    .FirstOrDefault()?.InformationalVersion ?? "NOT_CAPTURED";
+                var bundle = IedBrowserReadEvidenceBundle.Build(
+                    csv, appVersion, engineVersion, device.LiveValues.Association,
+                    DateTimeOffset.UtcNow);
+                System.IO.File.WriteAllBytes(dialog.FileName, bundle);
+            }
+            else
+            {
+                System.IO.File.WriteAllText(dialog.FileName, csv,
+                    new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+            }
             IedBrowserSubtitle.Text =
                 "Read evidence exported · exact FC, ledger, failures and deferrals; " +
                 "GVA/invoke not instrumented (never inferred).";
