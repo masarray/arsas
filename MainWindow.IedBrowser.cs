@@ -272,7 +272,7 @@ public partial class MainWindow
         }
     }
 
-    private void IedBrowserExportReadEvidence_Click(object sender, RoutedEventArgs e)
+    private async void IedBrowserExportReadEvidence_Click(object sender, RoutedEventArgs e)
     {
         var device = SelectedDevice;
         var model = device?.LiveDiscoveryModel;
@@ -303,15 +303,37 @@ public partial class MainWindow
                        DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + ".csv",
             DefaultExt = ".csv",
             AddExtension = true,
-            Filter = "Read-only IEC CSV evidence (*.csv)|*.csv"
+            Filter = "Read-only IEC CSV evidence (*.csv)|*.csv|" +
+                     "Selected-page evidence bundle (*.zip)|*.zip"
         };
         if (dialog.ShowDialog(this) != true) return;
         try
         {
             var csv = IedBrowserReadEvidenceCsv.Build(
                 model, page, device.LiveValues, ResolveAbsence);
-            System.IO.File.WriteAllText(dialog.FileName, csv,
-                new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+            if (dialog.FilterIndex == 2)
+            {
+                var appVersion = typeof(MainWindow).Assembly
+                    .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                    .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+                    .FirstOrDefault()?.InformationalVersion ?? "NOT_CAPTURED";
+                var engineVersion = typeof(AR.Iec61850.Mms.MmsDataValue).Assembly
+                    .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                    .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+                    .FirstOrDefault()?.InformationalVersion ?? "NOT_CAPTURED";
+                var association = device.LiveValues.Association;
+                var capturedAtUtc = DateTimeOffset.UtcNow;
+                var bundle = await Task.Run(() =>
+                    IedBrowserReadEvidenceBundle.Build(
+                        csv, appVersion, engineVersion, association, capturedAtUtc));
+                var exportPath = System.IO.Path.ChangeExtension(dialog.FileName, ".zip");
+                await System.IO.File.WriteAllBytesAsync(exportPath, bundle);
+            }
+            else
+            {
+                await System.IO.File.WriteAllTextAsync(dialog.FileName, csv,
+                    new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+            }
             IedBrowserSubtitle.Text =
                 "Read evidence exported · exact FC, ledger, failures and deferrals; " +
                 "GVA/invoke not instrumented (never inferred).";
@@ -488,6 +510,7 @@ public partial class MainWindow
         var sourceDevice = device;
         var successes = 0;
         var failures = 0;
+        var unverifiedReadTargets = 0;
         var autoContinue = false;
         // Bounded diagnostic examples; these are never another value cache.
         var failureExamples = new List<string>(3);
@@ -608,6 +631,39 @@ public partial class MainWindow
                     device.ApplyBrowserReadProgress(targets.Count, targets.Count);
                     device.CompleteDiscoveryProgressAnimation();
                 }
+                // LN/DO/DataSet focused reads can be narrower than the
+                // declared page or fail to yield a terminal callback. Preserve
+                // both cases as deferred/unknown, never as an IED AccessDenied.
+                // Only the current explicit scope is accounted; metadata,
+                // companion reads and unrelated model pages are excluded.
+                if (!readAll && currentPage?.Kind is "LN" or "DO" or "DA" or "DataSet" &&
+                    configRequest is null && companionRequest is null &&
+                    !reportUnitRequest)
+                {
+                    var declaredSelection = IedBrowserReadPlan.Build(
+                        model, currentPage, readAll: false, selectedDoReference: selectedDo);
+                    bool IsObserved(IedBrowserReadTarget target)
+                        => sourceDevice.LiveValues.TryGet(
+                            target.Reference, target.FunctionalConstraint, out var value) &&
+                           !value.IsStale && value.Association == readAssociation;
+                    bool HasTerminalFailure(IedBrowserReadTarget target)
+                    {
+                        if (_iedBrowserReadFailureEvidence is not { } evidence)
+                            return false;
+                        return evidence.TryGet(sourceDevice, target.Reference, "",
+                                   target.FunctionalConstraint, out _, out var kind) &&
+                               kind != IedBrowserReadAbsenceKind.Deferred;
+                    }
+                    var gaps = IedBrowserReadCompletionAccounting.Classify(
+                        declaredSelection, targets, IsObserved, HasTerminalFailure);
+                    unverifiedReadTargets = gaps.Count;
+                    foreach (var gap in gaps)
+                        _iedBrowserReadFailureEvidence?.RecordDeferred(gap.Target,
+                            gap.Kind == IedBrowserDeferredReadKind.NotScheduled
+                                ? "Not scheduled in this bounded selected-object Read."
+                                : "Read queued but no terminal result for this FC; on-wire attempt unverified.");
+                }
+
                 if (!readAll && currentPage?.Kind == "SGCB")
                 {
                     // The completed 32-target focused chunk is NOT the total
@@ -644,7 +700,9 @@ public partial class MainWindow
                         $"{unavailable:N0} unavailable · {deferred:N0} deferred";
                 }
                 else
-                    IedBrowserSubtitle.Text = $"Read complete · {successes:N0} verified scalar values / {targets.Count:N0} attributes · {failures:N0} unavailable";
+                    IedBrowserSubtitle.Text =
+                        $"Read finished · {successes:N0} verified scalar values / {targets.Count:N0} scheduled attributes · " +
+                        $"{failures:N0} failed · {unverifiedReadTargets:N0} deferred/unverified";
                 IedBrowserSubtitle.ToolTip = failureExamples.Count == 0
                     ? null
                     : "First unavailable attributes (no scalar was published):\n" +
