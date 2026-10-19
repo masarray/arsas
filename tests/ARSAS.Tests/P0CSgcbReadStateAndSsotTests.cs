@@ -70,6 +70,21 @@ public sealed class P0CSgcbReadStateAndSsotTests
         var observed = Domain + "/LLN0.PTOCEna";
         Assert.True(ledger.TryGet(observed, "SG", out var parent, schema: schema));
         Assert.Equal("false", parent.Value);
+        // Browser detail, parent DO, child DA and CSV must be projections
+        // of the SAME revision/association from one observation store.
+        var browserRow = new IedBrowserDetailRow("Object", "PTOCEna")
+        {
+            ValueReference = observed,
+            FunctionalConstraint = "SG",
+            IsDataObject = true
+        };
+        Assert.True(IedBrowserDetailEvidenceResolver.TryResolve(ledger, browserRow,
+            schema, monitoring: false, out var browserEvidence, out _));
+        Assert.Equal(parent.Revision, browserEvidence.Revision);
+        Assert.Equal(association, browserEvidence.Association);
+        Assert.Equal("false", browserEvidence.Value);
+        Assert.True(ledger.TryGet(observed + ".setVal", "SG", out var child));
+        Assert.Equal(child.Revision, parent.Revision);
         Assert.False(ledger.TryGet(observed, "SP", out _, schema: schema));
         Assert.False(ledger.TryGet(Domain + "/LLN0.InMagTyp", "SG",
             out _, schema: schema));
