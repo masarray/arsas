@@ -118,9 +118,14 @@ public sealed class SmartInteroperabilityTrialGuardRegressionTests
             typedStatusTrial.GetProperty("previousConsumerPin").GetString());
         Assert.Equal("51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
             typedStatusTrial.GetProperty("exactCommit").GetString());
-        Assert.Equal(typedStatusTrial.GetProperty("exactCommit").GetString(),
-            root.GetProperty("commit").GetString());
-        Assert.Equal(173, root.GetProperty("sourcePullRequest").GetInt32());
+        var identityTrial = root.GetProperty("p0AIdentityTrial");
+        Assert.Equal(typedStatusTrial.GetProperty("exactCommit").GetString(), identityTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal(typedStatusTrial.GetProperty("exactCommit").GetString(), root.GetProperty("previousIdentityTrialPin").GetProperty("commit").GetString());
+        Assert.Equal(identityTrial.GetProperty("exactCommit").GetString(), root.GetProperty("commit").GetString());
+        Assert.Equal("code-trial-not-physical", identityTrial.GetProperty("status").GetString());
+        Assert.True(identityTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(identityTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
+        Assert.Equal(177, root.GetProperty("sourcePullRequest").GetInt32());
         Assert.Equal(618, typedStatusTrial.GetProperty("consumerPullRequest").GetInt32());
         Assert.True(typedStatusTrial.GetProperty("strictFcAndTupleEvidenceRequired").GetBoolean());
         Assert.True(typedStatusTrial.GetProperty("physicalQualificationRequired").GetBoolean());
@@ -168,7 +173,7 @@ public sealed class SmartInteroperabilityTrialGuardRegressionTests
         Assert.True(zivTrial.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
         // The current C264 report trial is PR #173, while the previous
         // P10.9V control authority remains the unchanged PR #169.
-        Assert.Equal(173, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(177, root.GetProperty("sourcePullRequest").GetInt32());
         Assert.Equal(169, typedBscTrial.GetProperty("enginePullRequest").GetInt32());
         Assert.Equal(540, genericTrial.GetProperty("issue").GetInt32());
         Assert.Equal(38231327892L, genericTrial.GetProperty("engineCiRun").GetInt64());
