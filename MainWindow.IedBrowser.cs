@@ -272,7 +272,7 @@ public partial class MainWindow
         }
     }
 
-    private void IedBrowserExportReadEvidence_Click(object sender, RoutedEventArgs e)
+    private async void IedBrowserExportReadEvidence_Click(object sender, RoutedEventArgs e)
     {
         var device = SelectedDevice;
         var model = device?.LiveDiscoveryModel;
@@ -321,14 +321,17 @@ public partial class MainWindow
                     .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
                     .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
                     .FirstOrDefault()?.InformationalVersion ?? "NOT_CAPTURED";
-                var bundle = IedBrowserReadEvidenceBundle.Build(
-                    csv, appVersion, engineVersion, device.LiveValues.Association,
-                    DateTimeOffset.UtcNow);
-                System.IO.File.WriteAllBytes(dialog.FileName, bundle);
+                var association = device.LiveValues.Association;
+                var capturedAtUtc = DateTimeOffset.UtcNow;
+                var bundle = await Task.Run(() =>
+                    IedBrowserReadEvidenceBundle.Build(
+                        csv, appVersion, engineVersion, association, capturedAtUtc));
+                var exportPath = System.IO.Path.ChangeExtension(dialog.FileName, ".zip");
+                await System.IO.File.WriteAllBytesAsync(exportPath, bundle);
             }
             else
             {
-                System.IO.File.WriteAllText(dialog.FileName, csv,
+                await System.IO.File.WriteAllTextAsync(dialog.FileName, csv,
                     new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
             }
             IedBrowserSubtitle.Text =
