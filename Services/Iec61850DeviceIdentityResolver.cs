@@ -34,7 +34,7 @@ public static class Iec61850DeviceIdentityResolver
         var engineIdentity = Iec61850IdentityResolver.ResolveFromDomains(
             normalizedDomains,
             host,
-            liveModel?.IedName);
+            explicitIedName: null);
 
         return new Iec61850DeviceIdentity
         {
