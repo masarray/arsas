@@ -113,7 +113,7 @@ jobs:
           . .\scripts\test-m217k-typed-status-trial.ps1
           $coreRoutingTrialValid = Test-P109FCoreRoutingTrial -Lock $lock
           $m217KTrialValid = Test-M217KTypedStatusTrial -Lock $lock
-          . .\ARSAS\scripts\test-p0-a-identity-trial.ps1
+          . .\scripts\test-p0-a-identity-trial.ps1
           $p0AIdentityTrialValid = Test-P0AIdentityTrial -Lock $lock
           $trial = $lock.smartInteroperabilityCodeTrial
           $serverAt = $lock.sclServerAtTrial
