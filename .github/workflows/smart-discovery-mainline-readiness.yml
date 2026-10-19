@@ -115,6 +115,8 @@ jobs:
           $m217KTrialValid = Test-M217KTypedStatusTrial -Lock $lock
           . .\scripts\test-p0-a-identity-trial.ps1
           $p0AIdentityTrialValid = Test-P0AIdentityTrial -Lock $lock
+          . .\scripts\test-p0-b-rcb-trial.ps1
+          $p0BRcbTrialValid = Test-P0BRcbPlannerTrial -Lock $lock
           $trial = $lock.smartInteroperabilityCodeTrial
           $serverAt = $lock.sclServerAtTrial
           $closure = $lock.datasetFirstDiscoveryTrial
@@ -166,7 +168,7 @@ jobs:
                       $lock.commit -eq $p10.exactCommit -and
                       [int]$lock.sourcePullRequest -eq 161
 
-          if ($originalTrial -or $serverAtTrial -or $datasetTrial -or $p10Trial -or $coreRoutingTrialValid -or $m217KTrialValid -or $p0AIdentityTrialValid) {
+          if ($originalTrial -or $serverAtTrial -or $datasetTrial -or $p10Trial -or $coreRoutingTrialValid -or $m217KTrialValid -or $p0AIdentityTrialValid -or $p0BRcbTrialValid) {
             if (-not $historicalTrialValid -or
                 $lock.ref -ne 'main') {
               throw 'Stacked trial identity or ancestor authority is inconsistent.'
