@@ -18,8 +18,10 @@ public sealed class Iec61850ReportQualityRouteIndex
     {
         ArgumentNullException.ThrowIfNull(schema);
         ArgumentNullException.ThrowIfNull(points);
-        var indexed = new Dictionary<string, List<Iec61850MonitorPoint>>(
-            StringComparer.Ordinal);
+        // One hash insertion per selected point (including multi-leaf DOs).
+        // Avoid O(n²) List.Any when many process leaves share the same CDC q.
+        var indexed = new Dictionary<string,
+            Dictionary<string, Iec61850MonitorPoint>>(StringComparer.Ordinal);
         var conflictingHints = 0;
         var samples = new List<string>(capacity: 3);
         foreach (var point in points)
@@ -40,18 +42,24 @@ public sealed class Iec61850ReportQualityRouteIndex
             {
                 conflictingHints++;
                 if (samples.Count < 3)
-                    samples.Add(point.IecReference + " [" + point.FunctionalConstraint +
-                        "]: inventory=" + point.QualityReference + ", model=" + qRef);
+                {
+                    static string Bounded(string value) =>
+                        value.Length <= 200 ? value : value[..200] + "…";
+                    samples.Add(Bounded(point.IecReference) +
+                        " [" + point.FunctionalConstraint + "]: inventory=" +
+                        Bounded(point.QualityReference) + ", model=" + Bounded(qRef));
+                }
             }
             var key = Key(qRef, point.FunctionalConstraint);
             if (!indexed.TryGetValue(key, out var targets))
-                indexed[key] = targets = [];
-            if (!targets.Any(other => other.PointKey == point.PointKey))
-                targets.Add(point);
+                indexed[key] = targets =
+                    new Dictionary<string, Iec61850MonitorPoint>(
+                        StringComparer.OrdinalIgnoreCase);
+            targets.TryAdd(point.PointKey, point);
         }
         _points = indexed.ToDictionary(
             pair => pair.Key,
-            pair => (IReadOnlyList<Iec61850MonitorPoint>)pair.Value.ToArray(),
+            pair => (IReadOnlyList<Iec61850MonitorPoint>)pair.Value.Values.ToArray(),
             StringComparer.Ordinal);
         ConflictingHintCount = conflictingHints;
         ConflictingHintSamples = samples.ToArray();
