@@ -76,9 +76,8 @@ public sealed class M217KC264TypedStatusReportIntegrationTests
         var typedReadTrial = lockRoot.GetProperty("p0CTypedReadTrial");
         Assert.Equal(rcbTrial.GetProperty("exactCommit").GetString(),
             typedReadTrial.GetProperty("baseEngineCommit").GetString());
-        Assert.Equal(typedReadTrial.GetProperty("exactCommit").GetString(),
-            lockRoot.GetProperty("commit").GetString());
-        Assert.Equal(181, lockRoot.GetProperty("sourcePullRequest").GetInt32());
+        P0GEngineLockEvidenceAssert.AssertAuthorizedPinnedEngine(
+            lockRoot, typedReadTrial);
         Assert.True(typedReadTrial.GetProperty("strictInvokeId").GetBoolean());
         Assert.True(typedReadTrial.GetProperty("strictAccessOrdinal").GetBoolean());
         Assert.True(typedReadTrial.GetProperty("physicalQualificationRequired").GetBoolean());

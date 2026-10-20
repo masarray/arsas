@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "ba21d882f67de22c10d3155b449aac77aa8b4899",
-  "sourcePullRequest": 181,
-  "purpose": "P0-C typed MMS read evidence and SSOT read-outcome projection isolated code trial; historical P0-A/B + report controls remain unchanged; physical qualification required.",
+  "commit": "ded5036029706db1a752bb045d1fbc43b67fe9c6",
+  "sourcePullRequest": 182,
+  "purpose": "P0-G Edition 2.2 SCL identity classifier stacked on P0-C; historical physical baselines preserved; code trial only.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
@@ -320,5 +320,22 @@
     "readOnly": true,
     "physicalQualificationRequired": true,
     "mainlinePromotionForbidden": true
+  },
+  "p0GSclEditionTrial": {
+    "status": "code-trial-not-physical",
+    "enginePullRequest": 182,
+    "baseEngineCommit": "ba21d882f67de22c10d3155b449aac77aa8b4899",
+    "exactCommit": "ded5036029706db1a752bb045d1fbc43b67fe9c6",
+    "engineCiRun": 39368865409,
+    "syntheticEdition1_2_21_22MatrixRequired": true,
+    "preserveHistoricalSclNamespaceRequired": true,
+    "unknownReleaseCannotDowngrade": true,
+    "existingEditionEnumOrdinalsPreserved": true,
+    "mmsEngineUnchanged": true,
+    "physicalQualificationRequired": true,
+    "mainlinePromotionForbidden": true,
+    "vendorBranchingForbidden": true,
+    "cyclicMmsProcessPollingForbidden": true,
+    "controlAndRcbWritesForbidden": true
   }
 }
