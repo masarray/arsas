@@ -377,6 +377,20 @@
                                                             <ContextMenu/>
                                                         </TextBlock.ContextMenu>
                                                     </TextBlock>
+                                                    <!-- Fixed-height, non-layout-shifting read indicator:
+                                                         retained even while idle, and below endpoint/IP.
+                                                         Browser reads never cover the card with BusyOverlay. -->
+                                                    <Grid Height="5" Margin="6,4,6,0" ClipToBounds="True"
+                                                          ToolTip="{Binding BusyStage}">
+                                                        <Border Height="3" VerticalAlignment="Center"
+                                                                CornerRadius="2" Background="#E4EBF5"/>
+                                                        <ProgressBar x:Name="BrowserCardReadProgress"
+                                                                     Value="{Binding DiscoveryProgressPercent, Mode=OneWay}"
+                                                                     Minimum="0" Maximum="100" Height="3"
+                                                                     VerticalAlignment="Center"
+                                                                     Style="{StaticResource DiscoveryProgressBar}"
+                                                                     Visibility="Hidden"/>
+                                                    </Grid>
                                                 </StackPanel>
                                       <!-- Adaptive five-slot action bar. It spans the card and reserves the relay-icon area so Play/Stop never clip. -->
                                       <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="62,4,1,0" Panel.ZIndex="10">
@@ -481,7 +495,7 @@
                                                 <Setter TargetName="BusyOverlay" Property="Visibility" Value="Visible"/>
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding IsBrowserReading}" Value="True">
-                                                <Setter TargetName="BusyOverlay" Property="Visibility" Value="Visible"/>
+                                                <Setter TargetName="BrowserCardReadProgress" Property="Visibility" Value="Visible"/>
                                             </DataTrigger>
                                         </DataTemplate.Triggers>
                                     </DataTemplate>
