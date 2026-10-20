@@ -45,7 +45,7 @@ Model these concerns independently:
 
 Atomic **commit or reject** of a typed control inspection, fenced to its original association/session generation and target identity. It should not publish `ControlSemanticVerified=false` halfway through an in-place refresh of the same active association, nor let a previous session's late inspection resurrect permissions after reconnect.
 
-### Command latency and IEDSCOUT comparison plan
+### Command latency and reference MMS client comparison plan
 
 Introduce monotonic stage timestamps at UI click -> runtime admitted -> initial live feedback -> SBOw send/response -> Operate send/response -> CommandTermination ingress -> final process state. Record active MMS queue time and number of competing background read requests separately. Engine PR #183 already adds local `serviceMs` and `postResponseWaitMs`, but those are NOT packet timestamps. Correlate invoke IDs and report/control timestamps with Wireshark when stage data indicates the long interval.
 
@@ -70,7 +70,7 @@ This is an architectural first step, **NOT** full implementation of proof-commit
 
 **Phase C — event-driven WPF**: replace 2.5-second whole-tree visual scanning and repeated preload with one-time XAML/template binding plus deliberate discovery/selection/association events. Deduplicate read requests by target and generation; no UI reparent while navigating; keep command dock fixed shell geometry and preserve user pending confirmations across ordinary tab switches (but clear on selected IED change, disconnect or unsafe lifetime boundary). No changes to the user's actual Interlock/Sync/Test settings.
 
-**Phase D — control performance proof**: instrument engine MMS queue, SBOw/Operate service and response, termination/report arrival, feedback confirmation separately; compare same IED/same ctlModel and flags in IEDSCOUT and ARSAS. Use percentile p50/p95 for 20+ benign bench commands rather than one optimistic example. Demonstrate command admission is not blocked by discovery/report/Browser work.
+**Phase D — control performance proof**: instrument engine MMS queue, SBOw/Operate service and response, termination/report arrival, feedback confirmation separately; compare same IED/same ctlModel and flags in reference MMS client and ARSAS. Use percentile p50/p95 for 20+ benign bench commands rather than one optimistic example. Demonstrate command admission is not blocked by discovery/report/Browser work.
 
 **Mandatory release gates:** Windows build, full consumer/engine tests, XAML lifecycle UI tests with 100 tab transitions, command grid row/selection/scroll continuity, no reset in unchanged state, multi-IED isolation, association reconnect/stale callback rejection, slow CommandTermination, duplicate or late termination, malformed report, silent endpoint, uncertain wire quarantine, real physical IED with interlock/sync/test combinations, and exact combined-head CI after merging command #635/#638 with independent leaf #636. No public build until hardware sign-off.
 
