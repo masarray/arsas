@@ -149,4 +149,32 @@ public sealed class M2TypedQualityEvidenceTests
         Assert.All(t.GetChildren(), row => Assert.Equal("Timestamp", row.EvidenceKind));
     }
 
+
+    [Fact]
+    public void SubstitutionQualityRetainsTypedFlagsOnlyForSvAndThirteenBits()
+    {
+        const string subQ = "LD/XCBR1.Pos.subQ";
+        var ledger = new IedBrowserLiveValues();
+        var assoc = ledger.BeginAssociation();
+        Assert.True(ledger.PublishForAssociation(
+            assoc, subQ, "SV", "bits(0000,unused=3)", "", "", "MMS Read"));
+        Assert.True(ledger.TryGet(subQ, "SV", out var observed));
+        Assert.NotNull(observed.QualityBits);
+        Assert.Equal("good", observed.QualityBits!.FormatField("Validity"));
+        Assert.Equal("process", observed.QualityBits.FormatField("Source"));
+
+        Assert.True(ledger.PublishForAssociation(
+            assoc, "LD/XCBR1.Pos.subVal", "SV",
+            "bits(00,unused=6)", "", "", "MMS Read"));
+        Assert.True(ledger.TryGet("LD/XCBR1.Pos.subVal", "SV", out var status));
+        Assert.Null(status.QualityBits);
+        Assert.True(ledger.PublishForAssociation(
+            assoc, subQ, "ST", "bits(0000,unused=3)", "", "", "MMS Read"));
+        Assert.True(ledger.TryGet(subQ, "ST", out var wrongFc));
+        Assert.Null(wrongFc.QualityBits);
+        Assert.True(ledger.PublishForAssociation(
+            assoc, subQ, "SV", "bits(00,unused=6)", "", "", "MMS Read"));
+        Assert.True(ledger.TryGet(subQ, "SV", out var wrongWidth));
+        Assert.Null(wrongWidth.QualityBits);
+    }
 }
