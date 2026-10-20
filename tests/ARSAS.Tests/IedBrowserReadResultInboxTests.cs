@@ -85,7 +85,7 @@ public sealed class IedBrowserReadResultInboxTests
             "            DrainReadResults();", finishedProducers, StringComparison.Ordinal);
         var catalogFence = normalized.IndexOf(
             "if (bindingIndex is not { IsCurrent: true })", finalDrain, StringComparison.Ordinal);
-        var summary = normalized.IndexOf("Read finished ·", StringComparison.Ordinal);
+        var summary = normalized.IndexOf("Read {readScope} finished ·", catalogFence, StringComparison.Ordinal);
         Assert.True(finishedProducers >= 0 && finalDrain > finishedProducers &&
                     catalogFence > finalDrain && summary > catalogFence);
         Assert.Contains("IedBrowserReadCompletionAccounting.Classify(", normalized);
