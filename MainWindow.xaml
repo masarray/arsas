@@ -436,10 +436,8 @@
                                                 <Setter TargetName="MonitorStateText" Property="Text" Value="LIVE"/>
                                                 <Setter TargetName="MonitorStateText" Property="Foreground" Value="{StaticResource Success}"/>
                                             </DataTrigger>
-                                            <DataTrigger Binding="{Binding IsBusy}" Value="True">
-                                                <!-- Keep relay identity/IP visible while disabling unsafe in-flight actions. -->
-                                                <Setter TargetName="CardContent" Property="IsHitTestVisible" Value="False"/>
-                                            </DataTrigger>
+                                            <!-- Each action retains its own CanPlay/CanStop/IsActionEnabled gate.
+                                                 Stop must remain clickable during an in-flight discovery. -->
                                             <DataTrigger Binding="{Binding IsDiscoveryProgressActive}" Value="True">
                                                 <Setter TargetName="BrowserReadProgressLine" Property="Opacity" Value="1"/>
                                             </DataTrigger>
