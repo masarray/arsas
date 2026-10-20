@@ -13,7 +13,9 @@ public static class IedBrowserDoublePointPresentation
         string selectedReference, string declaredReference,
         string fc, IedBrowserSchemaIndex? schema)
     {
-        if (schema is null || !string.Equals(fc, "ST", StringComparison.OrdinalIgnoreCase) ||
+        if (schema is null ||
+            ( !string.Equals(fc, "ST", StringComparison.OrdinalIgnoreCase) &&
+              !string.Equals(fc, "SV", StringComparison.OrdinalIgnoreCase)) ||
             !(schema.IsDeclaredDoublePointValue(selectedReference, fc) ||
               schema.IsDeclaredDoublePointValue(declaredReference, fc)))
             return rawDisplay;
