@@ -233,4 +233,29 @@ public sealed class M217TypedDoublePointLiveModelTests
             IedBrowserDoublePointPresentation.FormatSubstitutionQuality(
                 "bits(0000,unused=3)", owner + ".subQ", "SV", unknown));
     }
+
+    [Fact]
+    public void SubQDetailsExposeVerifiedQualityFieldsWithoutTreatingItAsStatus()
+    {
+        const string owner = "LD/XCBR1.Pos";
+        var attrs = new[] {
+            Attr(owner, "subVal", "SV", "Check"),
+            Attr(owner, "subQ", "SV", "Check"),
+            Attr(owner, "subID", "SV", "VisString255")
+        };
+        var rows = IedBrowserStructuredDetails.AttributeRows(attrs, "Pos");
+        var q = Assert.Single(rows.Where(r => r.Name == "subQ [SV]"));
+        Assert.Equal("Quality", q.EvidenceKind);
+        Assert.Equal("SV", q.FunctionalConstraint);
+        var fields = Assert.IsAssignableFrom<IReadOnlyList<IedBrowserDetailRow>>(
+            q.LoadChildren!());
+        Assert.Contains(fields, row => row.Name == "Validity" &&
+            row.EvidenceField == "Validity" && row.EvidenceKind == "Quality");
+        Assert.Contains(fields, row => row.Name == "Source");
+        Assert.Contains(fields, row => row.Name == "Test");
+        Assert.Contains(fields, row => row.Name == "OperatorBlocked");
+        Assert.Contains(fields, row => row.Name == "Quality Details");
+        Assert.DoesNotContain(rows, row => row.Name == "subVal [SV]" &&
+            row.EvidenceKind == "Quality");
+    }
 }
