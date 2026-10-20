@@ -28,8 +28,19 @@ public static class IedBrowserReadPlan
             _ => IedBrowserReadSelectionKind.FcAttributes
         };
 
+    // The live MMS model may declare status-only substitution (SV), operation
+    // supervision (OR), and blocking (BL) leaves. They are safe to *read*
+    // explicitly, never to operate or modify. FC CO remains excluded.
     private static readonly HashSet<string> ReadableFc = new(
-        ["ST", "MX", "CF", "DC", "SP", "SG", "SE", "EX"], StringComparer.OrdinalIgnoreCase);
+        ["ST", "MX", "CF", "DC", "SP", "SG", "SE", "EX", "SV", "OR", "BL"],
+        StringComparer.OrdinalIgnoreCase);
+
+    // Focused navigation hydration runs without an explicit operator sweep.
+    // Keep its historical bounded FC set, so merely opening XCBR1 does not
+    // start extra substitution, blocking or operation-supervision reads.
+    private static readonly HashSet<string> AutoFocusedFc = new(
+        ["ST", "MX", "CF", "DC", "SP", "SG", "SE", "EX"],
+        StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// FC CO denotes command parameters, not scalar MMS Read targets.
@@ -150,6 +161,7 @@ public static class IedBrowserReadPlan
         // Do not publish another reader's result as though this association
         // observed it. Existing Report/MMS Read evidence is always reused.
         var ordered = metadata.Concat(candidates)
+            .Where(target => AutoFocusedFc.Contains(target.FunctionalConstraint))
             .Where(target => !ledger.TryGet(target.Reference,
                 target.FunctionalConstraint, out _))
             // Failed targets must not monopolize a subsequent bounded SGCB
