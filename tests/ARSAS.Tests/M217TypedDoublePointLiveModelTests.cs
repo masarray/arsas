@@ -159,4 +159,78 @@ public sealed class M217TypedDoublePointLiveModelTests
             "on", "LD/CSWI1.Mod.stVal", "LD/CSWI1.Mod", "ST",
             Index(Obj("LD/CSWI1.Mod", "ENS"))));
     }
+
+    [Theory]
+    [InlineData("bits(00,unused=6)", "Intermediate [00]")]
+    [InlineData("bits(40,unused=6)", "Open [01]")]
+    [InlineData("bits(80,unused=6)", "Close [10]")]
+    [InlineData("bits(C0,unused=6)", "Bad state [11]")]
+    public void VerifiedDpcSubstitutionUsesTwoBitCodeWithoutMutatingWire(
+        string raw, string expected)
+    {
+        const string owner = "LD/XCBR1.Pos";
+        var obj = new LiveIedDataObjectModel
+        {
+            Name = "Pos", Reference = owner, InferredCdc = "",
+            Attributes =
+            [
+                Attr(owner, "stVal", "ST", "Check"),
+                Attr(owner, "subVal", "SV", "Check"),
+                Attr(owner, "subQ", "SV", "Check")
+            ]
+        };
+        var schema = Index(obj);
+        Assert.True(schema.IsDeclaredDoublePointValue(owner + ".subVal", "SV"));
+        var ledger = new IedBrowserLiveValues();
+        var assoc = ledger.BeginAssociation();
+        Assert.True(ledger.PublishForAssociation(assoc, owner + ".subVal", "SV",
+            raw, "", "", "MMS Read"));
+        Assert.Equal(expected, IedBrowserDoublePointPresentation.Format(
+            raw, owner + ".subVal", owner + ".subVal", "SV", schema));
+        Assert.True(ledger.TryGet(owner + ".subVal", "SV", out var original));
+        Assert.Equal(raw, original.Value);
+    }
+
+    [Fact]
+    public void VerifiedDpcSubQUses13BitQualityNotDbpos()
+    {
+        const string owner = "LD/XCBR1.Pos";
+        var schema = Index(new LiveIedDataObjectModel
+        {
+            Name = "Pos", Reference = owner, InferredCdc = "DPC",
+            Attributes = [
+                Attr(owner, "stVal", "ST", "Check"),
+                Attr(owner, "subVal", "SV", "Check"),
+                Attr(owner, "subQ", "SV", "Check")
+            ]
+        });
+        Assert.Equal("Good", IedBrowserDoublePointPresentation.FormatSubstitutionQuality(
+            "bits(0000, unused=3)", owner + ".subQ", "SV", schema));
+        Assert.Equal("Invalid", IedBrowserDoublePointPresentation.FormatSubstitutionQuality(
+            "bits(4000, unused=3)", owner + ".subQ", "SV", schema));
+        Assert.Equal("bits(00,unused=6)",
+            IedBrowserDoublePointPresentation.FormatSubstitutionQuality(
+                "bits(00,unused=6)", owner + ".subQ", "SV", schema));
+        Assert.Equal("bits(0000,unused=3)",
+            IedBrowserDoublePointPresentation.FormatSubstitutionQuality(
+                "bits(0000,unused=3)", owner + ".subQ", "ST", schema));
+    }
+
+    [Fact]
+    public void SubstitutionWithoutExactDpcProofFailsClosed()
+    {
+        const string owner = "LD/VENDOR1.Pos";
+        var unknown = Index(new LiveIedDataObjectModel {
+            Name = "Pos", Reference = owner, InferredCdc = "SPS",
+            Attributes = [Attr(owner, "stVal", "ST", "Check"),
+                          Attr(owner, "subVal", "SV", "Check")]
+        });
+        Assert.False(unknown.IsDeclaredDoublePointValue(owner + ".subVal", "SV"));
+        Assert.Equal("bits(00,unused=6)", IedBrowserDoublePointPresentation.Format(
+            "bits(00,unused=6)", owner + ".subVal", owner + ".subVal",
+            "SV", unknown));
+        Assert.Equal("bits(0000,unused=3)",
+            IedBrowserDoublePointPresentation.FormatSubstitutionQuality(
+                "bits(0000,unused=3)", owner + ".subQ", "SV", unknown));
+    }
 }
