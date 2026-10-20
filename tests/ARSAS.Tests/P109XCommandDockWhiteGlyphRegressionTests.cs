@@ -32,9 +32,9 @@ public sealed class P109XCommandDockWhiteGlyphRegressionTests
         string Geometry(string key) => app.Descendants(Presentation + "Geometry")
             .Single(node => (string?)node.Attribute(Xaml + "Key") == key).Value.Trim();
 
-        Assert.Equal(
-            "m480-340 180-180-57-56-123 123-123-57 56 180 180Zm0 260".Replace("123-123-57", "123-123-123-57"),
-            Geometry("OperatorCommandDockChevronDownIcon")[..("m480-340 180-180-57-56-123 123-123-123-57 56 180 180Zm0 260".Length)]);
+        Assert.StartsWith(
+            "m480-340 180-180-57-56-123 123-123-123-57 56 180 180Zm0 260",
+            Geometry("OperatorCommandDockChevronDownIcon"), StringComparison.Ordinal);
         Assert.StartsWith("m357-384 123-123 123 123 57-56", Geometry("OperatorCommandDockChevronUpIcon"), StringComparison.Ordinal);
         Assert.StartsWith("M324-111.5Q251-143 197-197", Geometry("OperatorCommandDockPowerIcon"), StringComparison.Ordinal);
         var style = app.Descendants(Presentation + "Style")
