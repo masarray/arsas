@@ -389,8 +389,12 @@ public partial class MainWindow
             ReferenceEquals(_iedBrowserRenderedPage, currentPage) &&
             currentPage?.Payload is LiveIedLogicalNodeModel
                 ? _iedBrowserSelectedDoReference : null;
+        // SV/OR/BL are passive state reads, never automatic navigation probes.
+        // Admit them only from exact current model inventory after the user
+        // presses Read DO / Read LN / Read All. No control writes or inference.
         var targets = IedBrowserReadPlan.Build(
-            model, currentPage, readAll, selectedDo);
+            model, currentPage, readAll, selectedDo,
+            includeExplicitStateFc: !automatic);
         if (!automatic && !readAll && selectedDo is null &&
             currentPage?.Kind == "LN")
             targets = IedBrowserReadPlan.PrioritizeExplicitLn(targets);
