@@ -394,7 +394,8 @@ public partial class MainWindow
         // presses Read DO / Read LN / Read All. No control writes or inference.
         var targets = IedBrowserReadPlan.Build(
             model, currentPage, readAll, selectedDo,
-            includeExplicitStateFc: !automatic);
+            includeExplicitStateFc: !automatic &&
+                ReferenceEquals(model, device.LiveDiscoveryModel));
         if (!automatic && !readAll && selectedDo is null &&
             currentPage?.Kind == "LN")
             targets = IedBrowserReadPlan.PrioritizeExplicitLn(targets);
