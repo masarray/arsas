@@ -31,4 +31,4 @@ SIEBCU `XCBR1.OpCnt.stVal [ST]` is `NOT_OBSERVED_NO_ATTEMPT_EVIDENCE`, not a con
 - Windows CI and installer/portable smoke are gates; field FAT on two IED types is a separate, still-required gate.
 
 ## Exit / promotion
-Do not mark physical acceptance until exact-SHA package deployed and operator-provided captures prove value/quality parity, negative isolation, no false SOE, and IEDScout-equivalent typed detail on the tested attributes. Branches and PRs remain draft; no release or main merge without that evidence.
+Do not mark physical acceptance until exact-SHA package deployed and operator-provided captures prove value/quality parity, negative isolation, no false SOE, and reference-client-parity typed detail on the tested attributes. Branches and PRs remain draft; no release or main merge without that evidence.
