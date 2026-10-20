@@ -10,7 +10,7 @@ public sealed class P0DTypedEmptyOctetEvidenceTests
     [Fact]
     public void ExactTypedEmptyOriginIdentifier_IsObserved_NotReadFailed()
     {
-        using var client = new NativeIec61850Client();
+        var client = new NativeIec61850Client();
         var method = typeof(NativeIec61850Client).GetMethod(
             "ProjectReadValue", BindingFlags.NonPublic | BindingFlags.Instance);
         Assert.NotNull(method);
