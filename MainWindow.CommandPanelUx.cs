@@ -78,6 +78,7 @@ public partial class MainWindow
     private readonly ConditionalWeakTable<SignalDefinition, Marker> _controlSafetyDefaultsApplied = new();
     private readonly HashSet<string> _controlModelPreloadAttempts = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _controlModelPreloadGate = new(1, 1);
+    private bool _controlModelPreloadPending;
 
     private readonly HashSet<DataGrid> _configuredCommandGrids = new();
     private readonly ConditionalWeakTable<DataGridRow, Marker> _configuredCommandRows = new();
@@ -257,11 +258,19 @@ public partial class MainWindow
     private async Task PreloadControlModelsAsync()
     {
         if (!await _controlModelPreloadGate.WaitAsync(0))
+        {
+            // Connection/selection changes during an active sweep require a
+            // second pass, not a competing MMS read queue or a dropped event.
+            _controlModelPreloadPending = true;
             return;
+        }
 
         try
         {
-            foreach (var device in Devices.Where(device => device.IsConnected && device.SelectedControlSignalCount > 0))
+            do
+            {
+                _controlModelPreloadPending = false;
+                foreach (var device in Devices.Where(device => device.IsConnected && device.SelectedControlSignalCount > 0))
             {
                 foreach (var signal in device.Signals.Where(signal => signal.IsSelected && signal.IsValidControlObject))
                     EnsureDefaultControlSafetyChecks(signal);
@@ -272,9 +281,7 @@ public partial class MainWindow
                     continue;
 
                 // Cache aliases of the same DataObject share one ctlModel probe.
-                var candidates = Iec61850ControlIdentity.InspectionRepresentatives(device.Signals)
-                    .Where(signal => _controlModelPreloadAttempts.Add(ControlModelAttemptKey(device, signal)))
-                    .ToArray();
+                var candidates = Iec61850ControlIdentity.InspectionRepresentatives(device.Signals);
 
                 if (candidates.Length == 0)
                     continue;
@@ -288,6 +295,11 @@ public partial class MainWindow
                         device.Signals.Any(candidate => candidate.ControlCommandBusy))
                         break;
                     if (signal.ControlModelResolved || signal.ControlInspectionBusy || signal.ControlCommandBusy)
+                        continue;
+                    // Do not reserve a later target before it is actually
+                    // admitted; if a command interrupts the sweep, remaining
+                    // objects can still be inspected on the next real event.
+                    if (!_controlModelPreloadAttempts.Add(ControlModelAttemptKey(device, signal)))
                         continue;
                     signal.ControlInspectionBusy = true;
                     try
@@ -325,9 +337,11 @@ public partial class MainWindow
                     }
                 }
 
-                device.RefreshCommandSignalProjection();
-                RebuildControlFeedbackIndex(device);
+                    device.RefreshCommandSignalProjection();
+                    RebuildControlFeedbackIndex(device);
+                }
             }
+            while (_controlModelPreloadPending && !_applicationCancellation.IsCancellationRequested);
         }
         finally
         {
