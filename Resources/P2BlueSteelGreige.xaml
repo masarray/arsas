@@ -496,7 +496,7 @@
         </Setter>
     </Style>
 
-    <!-- Cleaner industrial IED cards with a narrow blue selection rail. -->
+    <!-- Calm IED card: selection is integrated into the card's rounded left border. -->
     <Style x:Key="P2MainIedListItemStyle" TargetType="ListBoxItem">
         <Setter Property="Padding" Value="0"/>
         <Setter Property="Margin" Value="0,0,0,8"/>
@@ -507,15 +507,21 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ListBoxItem">
-                    <Grid>
-                        <Border x:Name="SelectionRail" Width="3" HorizontalAlignment="Left"
-                                Margin="0,8,0,8" CornerRadius="2" Background="Transparent"/>
-                        <Border x:Name="Card" Margin="5,0,0,0"
+                    <Grid SnapsToDevicePixels="True" UseLayoutRounding="True">
+                        <!-- One card silhouette: the selection accent is painted ON the
+                             left card edge, never in a detached 5px gutter. -->
+                        <Border x:Name="Card"
                                 Background="{StaticResource IedCardSurface}"
                                 BorderBrush="#B8C1C5" BorderThickness="1"
                                 CornerRadius="10" Padding="9">
                             <ContentPresenter/>
                         </Border>
+                        <!-- Overlay only the straight section of the rounded border.
+                             No extra measure width, hit testing, or layout reflow. -->
+                        <Border x:Name="SelectionRail" Width="3" HorizontalAlignment="Left"
+                                Margin="0,8,0,8" CornerRadius="0,2,2,0"
+                                Background="Transparent" IsHitTestVisible="False"
+                                Panel.ZIndex="1"/>
                     </Grid>
                     <ControlTemplate.Triggers>
                         <DataTrigger Binding="{Binding IsMonitoring}" Value="True">
@@ -556,15 +562,21 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ListBoxItem">
-                    <Grid>
-                        <Border x:Name="SelectionRail" Width="3" HorizontalAlignment="Left"
-                                Margin="0,8,0,8" CornerRadius="2" Background="Transparent"/>
-                        <Border x:Name="IedCard" Margin="5,0,0,0"
+                    <Grid SnapsToDevicePixels="True" UseLayoutRounding="True">
+                        <!-- One card silhouette: the selection accent is painted ON the
+                             left card edge, never in a detached 5px gutter. -->
+                        <Border x:Name="IedCard"
                                 Background="{StaticResource IedCardSurface}"
                                 BorderBrush="#B8C1C5" BorderThickness="1"
                                 CornerRadius="10" Padding="10">
                             <ContentPresenter/>
                         </Border>
+                        <!-- Overlay only the straight section of the rounded border.
+                             No extra measure width, hit testing, or layout reflow. -->
+                        <Border x:Name="SelectionRail" Width="3" HorizontalAlignment="Left"
+                                Margin="0,8,0,8" CornerRadius="0,2,2,0"
+                                Background="Transparent" IsHitTestVisible="False"
+                                Panel.ZIndex="1"/>
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
