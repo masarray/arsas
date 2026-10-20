@@ -244,7 +244,7 @@ public sealed class M217TypedDoublePointLiveModelTests
             Attr(owner, "subID", "SV", "VisString255")
         };
         var rows = IedBrowserStructuredDetails.AttributeRows(attrs, "Pos");
-        var q = Assert.Single(rows.Where(r => r.Name == "subQ [SV]"));
+        var q = Assert.Single(rows, r => r.Name == "subQ [SV]");
         Assert.Equal("Quality", q.EvidenceKind);
         Assert.Equal("SV", q.FunctionalConstraint);
         var fields = Assert.IsAssignableFrom<IReadOnlyList<IedBrowserDetailRow>>(
