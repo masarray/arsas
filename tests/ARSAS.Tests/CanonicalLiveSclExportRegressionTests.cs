@@ -488,9 +488,24 @@ public sealed class CanonicalLiveSclExportRegressionTests
             controlTrial.GetProperty("baseEngineCommit").GetString());
         Assert.Equal("c85d4e20db722bd0c2729f2533b323b13d3ef735",
             controlTrial.GetProperty("exactCommit").GetString());
+        // The current code-only stage observation trial must be descended
+        // EXACTLY from historical #183. Physical acceptance does not transfer.
+        var stageTrial = root.GetProperty("p0CStageObservationTrial");
         Assert.Equal(controlTrial.GetProperty("exactCommit").GetString(),
+            stageTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal("9c7cb40364023a7b217e5ec31ab3105ba90142eb",
+            stageTrial.GetProperty("exactCommit").GetString());
+        Assert.Equal(stageTrial.GetProperty("exactCommit").GetString(),
             root.GetProperty("commit").GetString());
-        Assert.Equal(183, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(184, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(184, stageTrial.GetProperty("enginePullRequest").GetInt32());
+        Assert.Equal(185, stageTrial.GetProperty("engineCiOnlyPullRequest").GetInt32());
+        Assert.Equal(1182, stageTrial.GetProperty("engineTestsPassed").GetInt32());
+        Assert.True(stageTrial.GetProperty("sbo400msSafetyGatePreserved").GetBoolean());
+        Assert.True(stageTrial.GetProperty("negativeAndDelayedLastApplErrorRegression").GetBoolean());
+        Assert.True(stageTrial.GetProperty("noUnqualifiedImmediateOperate").GetBoolean());
+        Assert.True(stageTrial.GetProperty("physicalLatencyQualificationRequired").GetBoolean());
+        Assert.True(stageTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
         Assert.True(controlTrial.GetProperty("physicalQualificationRequired").GetBoolean());
         Assert.True(controlTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
         Assert.True(controlTrial.GetProperty("controlChecksUnchanged").GetBoolean());
