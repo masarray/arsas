@@ -8,13 +8,32 @@ public sealed class P0FBrowserCardAndFcReadScopeTests
     [InlineData("SV")]
     [InlineData("OR")]
     [InlineData("BL")]
+    public void SubstitutionAndOperationStatesRequireExplicitVerifiedRead(string fc)
+    {
+        Assert.Equal("Not read", IedBrowserReadPlan.UnobservedValue(fc));
+        Assert.Contains("explicit Read LN/DO",
+            IedBrowserReadPlan.UnobservedExplanation(fc), StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData("RP")]
     [InlineData("BR")]
-    public void UnsupportedFunctionalConstraintsAreNotMisreportedAsReadAttempts(string fc)
+    public void ControlBlocksRemainOutsideGenericScalarRead(string fc)
     {
         Assert.Equal("Outside read scope", IedBrowserReadPlan.UnobservedValue(fc));
         Assert.Contains("No Read attempt was scheduled",
             IedBrowserReadPlan.UnobservedExplanation(fc), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ExtendedFcAdmissionIsWiredOnlyFromExplicitUserRead()
+    {
+        var code = Read("MainWindow.IedBrowser.cs");
+        Assert.Contains("includeExplicitStateFc: !automatic", code);
+        var plan = Read("Models/IedBrowserReadPlan.cs");
+        Assert.Contains("includeExplicitStateFc = false", plan);
+        Assert.Contains("includeExplicitStateFc && ExplicitStateFc.Contains", plan);
+        Assert.Contains("private static readonly HashSet<string> ExplicitStateFc", plan);
     }
 
     [Theory]
