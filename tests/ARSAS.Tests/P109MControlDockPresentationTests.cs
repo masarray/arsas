@@ -41,7 +41,7 @@ public sealed class P109MControlDockPresentationTests
     }
 
     [Fact]
-    public void CommandDockNeverIncludesStatusOnlyUnknownOrUnverifiedControls()
+    public void CommandDockShowsSelectedControlObjectsWithoutAuthorizingUnverifiedOnes()
     {
         var device = new Iec61850MonitorDevice();
         var readOnly = Control("C264CONTROL/CSWI1.Mod", "ENC");
@@ -56,23 +56,30 @@ public sealed class P109MControlDockPresentationTests
         Assert.True(verified.ControlSupportsOperate);
         device.Signals.ReplaceAll([readOnly, unknown, unsafeSemantic, verified]);
         device.RecountSelectedSignals();
-        Assert.Single(device.CommandSignals);
-        Assert.Same(verified, device.CommandSignals[0]);
+        Assert.Equal(4, device.CommandSignals.Count);
+        Assert.Contains(verified, device.CommandSignals);
+        Assert.Contains(readOnly, device.CommandSignals);
+        Assert.False(readOnly.ControlSupportsOperate);
+        Assert.False(unknown.ControlSupportsOperate);
+        Assert.False(unsafeSemantic.ControlSupportsOperate);
+        Assert.Single(Iec61850ControlIdentity.DistinctOperable(device.Signals));
         Assert.Equal(4, Iec61850ControlIdentity.CountSelected(device.Signals));
 
         // Connected inspection makes another Pos operable without a new
         // selection wizard, cache or second command model.
         unsafeSemantic.ControlSemanticVerified = true;
         device.RefreshCommandSignalProjection();
-        Assert.Equal(2, device.CommandSignals.Count);
-        Assert.DoesNotContain(device.CommandSignals, x => x.Name == "Mod");
-        Assert.DoesNotContain(device.CommandSignals, x => x.ControlModelKind ==
+        Assert.Equal(4, device.CommandSignals.Count);
+        Assert.Equal(2, Iec61850ControlIdentity.DistinctOperable(device.Signals).Length);
+        Assert.Contains(device.CommandSignals, x => x.Name == "Mod");
+        Assert.Contains(device.CommandSignals, x => x.ControlModelKind ==
             Iec61850ControlModelKind.StatusOnly);
-        // Lost association revokes command authority in the same projection.
+        // Lost association revokes command authority, not operator inventory.
         verified.ClearLiveControlAuthority();
         unsafeSemantic.ClearLiveControlAuthority();
         device.RefreshCommandSignalProjection();
-        Assert.Empty(device.CommandSignals);
+        Assert.Equal(4, device.CommandSignals.Count);
+        Assert.Empty(Iec61850ControlIdentity.DistinctOperable(device.Signals));
     }
 
     [Fact]

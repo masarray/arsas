@@ -738,10 +738,11 @@ public sealed class Iec61850MonitorDevice : ObservableObject
 
     private void RefreshCommandSignals()
     {
-        // Command Dock is an operator-action surface, not an inventory of
-        // selected CF/status-only objects. Keep those in Data Model/Signals.
-        // A typed live ctlModel and semantic CDC proof are mandatory here.
-        var selected = Iec61850ControlIdentity.DistinctOperable(Signals)
+        // Inventory membership is NOT operating authority. Show exact selected
+        // CO DataObjects including ZIV ctlModel=0 so commissioning can explicitly
+        // read/configure them; every physical action is still gated by typed
+        // live ctlModel + CDC proof in SignalDefinition/runtime.
+        var selected = Iec61850ControlIdentity.DistinctSelected(Signals)
             .OrderBy(signal => signal.SortPriority)
             .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
             .ThenBy(signal => signal.Name, StringComparer.OrdinalIgnoreCase)
@@ -749,7 +750,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
 
         // Stable WPF row lifetime is an architectural invariant: report,
         // navigation, and repeated verification updates must never Reset the
-        // entire operator-action grid when the verified membership is unchanged.
+        // entire operator-action grid when the selected membership is unchanged.
         // Keep the same SignalDefinition objects (the control state authority),
         // and reconcile only actual membership/order changes. This small
         // operator command list deliberately uses granular notifications rather
@@ -781,8 +782,18 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         }
     }
 
+    // Conservative GoCB evidence: current live association outranks saved SCL.
+    // Offline IEDs may expose a GoCB declared in their explicitly loaded SCL;
+    // a connected IED requires a GoCB in current live discovery, not an
+    // unrelated station capture capability or an advisory SCL entry.
+    [JsonIgnore]
+    public bool HasGooseControlBlock => IsConnected
+        ? LiveDiscoveryModel?.GooseControlBlocks.Count > 0
+        : SclWorkspace?.GooseStreams.Count > 0;
+
     public void RefreshComputed()
     {
+        Raise(nameof(HasGooseControlBlock));
         Raise(nameof(EndpointText));
         Raise(nameof(SclEndpointHint));
         Raise(nameof(SignalCount));

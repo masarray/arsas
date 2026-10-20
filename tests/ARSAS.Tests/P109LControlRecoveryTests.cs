@@ -18,7 +18,7 @@ public sealed class P109LControlRecoveryTests
         };
 
     [Fact]
-    public void FiveZivControlsRemainInInventoryButDockWaitsForTypedInspection()
+    public void FiveZivControlsRemainVisibleForModelCommissioning_ButCannotOperate()
     {
         var device = new Iec61850MonitorDevice();
         foreach (var (reference, cdc) in new[] {
@@ -32,7 +32,7 @@ public sealed class P109LControlRecoveryTests
         device.RecountSelectedSignals();
 
         Assert.Equal(5, device.SelectedControlSignalCount);
-        Assert.Empty(device.CommandSignals);
+        Assert.Equal(5, device.CommandSignals.Count);
         var inventory = Iec61850ControlIdentity.DistinctSelected(device.Signals);
         Assert.Equal(5, inventory.Length);
         Assert.Equal(5, Iec61850ControlIdentity.InspectionRepresentatives(device.Signals).Length);
@@ -57,7 +57,7 @@ public sealed class P109LControlRecoveryTests
         device.Signals.Add(readOnly);
         device.RecountSelectedSignals();
 
-        Assert.Empty(device.CommandSignals);
+        Assert.Equal(2, device.CommandSignals.Count);
         Assert.Equal(2, Iec61850ControlIdentity.DistinctSelected(device.Signals).Length);
         Assert.All(device.Signals, s => Assert.False(s.ControlSupportsOperate));
         Assert.Single(Iec61850ControlIdentity.InspectionRepresentatives(device.Signals));

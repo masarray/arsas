@@ -124,7 +124,7 @@ public sealed class P109WCommandDockLifecycleArchitectureTests
     {
         var source = Source("MainWindow.CommandPanelUx.cs");
         var xaml = Source("MainWindow.xaml");
-        Assert.Contains("if (content is \"Open\" or \"Close\")", source, StringComparison.Ordinal);
+        Assert.Contains("if (content is \"Open\" or \"Close\" or \"Model\")", source, StringComparison.Ordinal);
         Assert.Contains("IsEnabled=\"{Binding ControlCanInspectPosition}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("var enabledBinding = new MultiBinding", source, StringComparison.Ordinal);
     }
