@@ -94,6 +94,41 @@ public sealed class P109WCommandDockLifecycleArchitectureTests
     }
 
     [Fact]
+    public void LiveInspectionBusyRejectsAllCommandClaimsUntilTypedReadFinishes()
+    {
+        var row = new SignalDefinition
+        {
+            ObjectReference = "LD0/CSWI1.Pos",
+            IsControlSignal = true,
+            IsSelected = true,
+            FunctionalConstraint = "CO",
+            ControlCdc = "DPC",
+            ControlModelText = "Select Before Operate (SBO) • Enhanced security"
+        };
+        row.AcceptVerifiedLiveControlCdc("DPC");
+        row.ControlSemanticVerified = true;
+        Assert.True(row.TryStageControlConfirmation("Closed [10]", "Close", out _));
+        row.ControlInspectionBusy = true;
+        Assert.False(row.ControlCanConfirm);
+        Assert.False(row.TryClaimControlConfirmation(out _, out var pendingReason));
+        Assert.Contains("being verified", pendingReason, StringComparison.OrdinalIgnoreCase);
+        Assert.False(row.TryStageControlConfirmation("Open [01]", "Open", out _));
+        Assert.False(row.TryBeginDirectControlCommand("Closed [10]", "Close", out _, out _));
+        row.ControlInspectionBusy = false;
+        Assert.True(row.ControlCanConfirm);
+    }
+
+    [Fact]
+    public void FirstClickOpenCloseStillUsesReadOnlyModelPreflight()
+    {
+        var source = Source("MainWindow.CommandPanelUx.cs");
+        var xaml = Source("MainWindow.xaml");
+        Assert.Contains("if (content is \"Open\" or \"Close\")", source, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled=\"{Binding ControlCanInspectPosition}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("var enabledBinding = new MultiBinding", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void InspectionPublishesTypedAuthorizationOnlyAfterFinalMmsReads()
     {
         var client = Source("Services/NativeIec61850Client.cs");
