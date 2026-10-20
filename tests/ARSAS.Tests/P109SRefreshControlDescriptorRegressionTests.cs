@@ -6,6 +6,22 @@ namespace ARSAS.Tests;
 public sealed class P109SRefreshControlDescriptorRegressionTests
 {
     [Fact]
+    public void ReopeningDockDoesNotReprobeVerifiedStatusOnlyOrBusyControls()
+    {
+        var signal = new SignalDefinition { ControlCurrentValue = "-" };
+        Assert.True(Iec61850ControlIdentity.NeedsInspection(signal, false));
+        signal.ControlModelText = "Status only";
+        Assert.True(signal.ControlModelResolved);
+        Assert.False(Iec61850ControlIdentity.NeedsInspection(signal, false));
+        Assert.True(Iec61850ControlIdentity.NeedsInspection(signal, true));
+        signal.ControlInspectionBusy = true;
+        Assert.False(Iec61850ControlIdentity.NeedsInspection(signal, true));
+        signal.ControlInspectionBusy = false;
+        signal.ControlCommandBusy = true;
+        Assert.False(Iec61850ControlIdentity.NeedsInspection(signal, true));
+    }
+
+    [Fact]
     public void InspectRebuildsCachedDescriptorBeforeControlModelAndTypedSemanticEvaluation()
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);

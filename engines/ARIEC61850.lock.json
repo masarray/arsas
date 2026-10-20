@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "ba21d882f67de22c10d3155b449aac77aa8b4899",
-  "sourcePullRequest": 181,
-  "purpose": "P0-C typed MMS read evidence and SSOT read-outcome projection isolated code trial; historical P0-A/B + report controls remain unchanged; physical qualification required.",
+  "commit": "c85d4e20db722bd0c2729f2533b323b13d3ef735",
+  "sourcePullRequest": 183,
+  "purpose": "Control/report isolation and per-service latency evidence trial; preserves P0-C typed read authority; physical command latency remains unqualified.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
