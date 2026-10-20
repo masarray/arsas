@@ -475,6 +475,13 @@ public partial class MainWindow
             return;
         }
 
+        // Plan transparency: the clicked scope, not whichever DO is visually
+        // expanded elsewhere, determines Read targets. Show FC admission so a
+        // bounded focused sample cannot be mistaken for a whole LN Read.
+        var scheduledFc = IedBrowserReadPlan.DescribeScheduledFunctionalConstraints(targets);
+        var readScope = readAll ? "IED" :
+            selectedDo is not null ? "DO" :
+            currentPage?.Kind ?? "Selection";
         // Admission is claimed only after a concrete, nonempty verified plan
         // reaches the read handler. A queued Dispatcher callback is NOT a read.
         // Rejected/busy/cancelled preflight cannot poison a future visit.
@@ -575,6 +582,9 @@ public partial class MainWindow
                 RefreshIedBrowserVisibleValues();
             }
         }
+        if (!automatic)
+            IedBrowserSubtitle.Text =
+                $"Read {readScope} · {targets.Count:N0} verified target(s) · FC {scheduledFc}";
         if (!automatic)
             device.ResetDiscoveryProgress("Preparing read-only MMS values…",
             readAll ? "Reading all IED values" : selectedDo is not null
@@ -703,12 +713,14 @@ public partial class MainWindow
                 }
                 else
                     IedBrowserSubtitle.Text =
-                        $"Read finished · {successes:N0} verified scalar values / {targets.Count:N0} scheduled attributes · " +
+                        $"Read {readScope} finished · {successes:N0}/{targets.Count:N0} observed · " +
                         $"{failures:N0} failed · {unverifiedReadTargets:N0} deferred/unverified";
-                IedBrowserSubtitle.ToolTip = failureExamples.Count == 0
-                    ? null
-                    : "First unavailable attributes (no scalar was published):\n" +
-                      string.Join("\n", failureExamples);
+                IedBrowserSubtitle.ToolTip =
+                    $"Explicit scope: {readScope}; scheduled FC: {scheduledFc}" +
+                    (failureExamples.Count == 0
+                        ? string.Empty
+                        : "\nFirst unavailable attributes (no scalar was published):\n" +
+                          string.Join("\n", failureExamples));
                 RefreshIedBrowserVisibleValues();
                 // A few permanently refused SG leaves must not block the next
                 // finite SGCB chunk. Per-page auto admission still caps attempts
