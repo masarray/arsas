@@ -3022,6 +3022,16 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
     {
         var now = DateTime.Now;
         var signals = new List<SignalDefinition>();
+        // The canonical projection is a one-shot, bounded list. Index only
+        // references already emitted by its typed plan; the index is not a
+        // second value store and is discarded after this discovery flight.
+        var seenReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var indexedCount = 0;
+        void IndexEmittedSignals()
+        {
+            while (indexedCount < signals.Count)
+                seenReferences.Add(NormalizeReference(signals[indexedCount++].ObjectReference));
+        }
 
         foreach (var logicalDevice in model.LogicalDevices)
         {
@@ -3048,13 +3058,19 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 // Some IEDs expose the LN shell and DataSet/RCB correctly, but their online
                 // data-object tree is shallow. Keep every logical-node instance separate; the
                 // later probe/runtime decides readable vs polling fallback.
-                AddArIecLogicalNodeFallbackTargets(signals, logicalDevice, logicalNode, logicalDeviceDomainHint, now);
+                IndexEmittedSignals();
+                AddArIecLogicalNodeFallbackTargets(signals, logicalDevice, logicalNode,
+                    logicalDeviceDomainHint, now, seenReferences);
             }
         }
 
+        IndexEmittedSignals();
         foreach (var fallback in NativeMmsDiscoveryMapper.BuildSignals(fallbackSnapshot))
         {
-            if (!signals.Any(s => ReferencesEqual(s.ObjectReference, fallback.ObjectReference)))
+            // The old Any() scan repeated normalized reference comparisons for
+            // every fallback candidate, making projection cost grow quadratically.
+            // Preserve first-source precedence and insertion order exactly.
+            if (seenReferences.Add(NormalizeReference(fallback.ObjectReference)))
                 signals.Add(fallback);
         }
 
@@ -3507,7 +3523,8 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         object logicalDevice,
         LiveIedLogicalNodeModel logicalNode,
         string logicalDeviceDomainHint,
-        DateTime now)
+        DateTime now,
+        ISet<string> seenReferences)
     {
         var lnClass = (logicalNode.LnClass ?? string.Empty).ToUpperInvariant();
         if (lnClass is not ("MMXU" or "MMXN" or "GGIO" or "CSWI" or "XCBR" or "XSWI" or "PTOC" or "PTRC" or "PDIF" or "PDIS" or "PIOC" or "PTOV" or "PTUV" or "PTEF" or "PDEF" or "RBRF"))
@@ -3525,7 +3542,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 continue;
 
             var reference = $"{lnReference}.{point.Path}";
-            if (signals.Any(s => ReferencesEqual(s.ObjectReference, reference)))
+            if (!seenReferences.Add(NormalizeReference(reference)))
                 continue;
 
             signals.Add(CreateArIecSignal(
