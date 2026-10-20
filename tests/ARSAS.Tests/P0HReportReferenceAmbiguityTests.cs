@@ -28,11 +28,13 @@ public sealed class P0HReportReferenceAmbiguityTests
     }
 
     [Fact]
-    public void UniqueLegacyAliasAndExactLeafRemainResolvable()
+    public void OneSelectedPhaseDoesNotProveParentAggregateButExactFcAliasDoes()
     {
         var phaseA = Point("IEDLD0/MMXU1.A.phsA.cVal.mag.f");
         var unrelated = Point("IEDLD0/MMXU1.B.phsB.cVal.mag.f");
-        Assert.Same(phaseA, Iec61850MonitorRuntime.FindUniqueReportReferenceFallback(
+        // A three-phase parent cannot be reduced to a selected child, even
+        // when that child is the only one currently monitored.
+        Assert.Null(Iec61850MonitorRuntime.FindUniqueReportReferenceFallback(
             new[] { phaseA, unrelated }, "IEDLD0/MMXU1.A"));
         Assert.Same(phaseA, Iec61850MonitorRuntime.FindUniqueReportReferenceFallback(
             new[] { phaseA, unrelated }, "IEDLD0/MMXU1$MX$A$phsA$cVal$mag$f"));
