@@ -28,8 +28,10 @@ public static class IedBrowserReadPlan
             _ => IedBrowserReadSelectionKind.FcAttributes
         };
 
+    // Explicit, schema-verified MMS Read includes substitution (SV), originator
+    // (OR) and blocking (BL) attributes. These are observations, never writes.
     private static readonly HashSet<string> ReadableFc = new(
-        ["ST", "MX", "CF", "DC", "SP", "SG", "SE", "EX"], StringComparer.OrdinalIgnoreCase);
+        ["ST", "MX", "CF", "DC", "SP", "SG", "SE", "EX", "SV", "OR", "BL"], StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// FC CO denotes command parameters, not scalar MMS Read targets.
