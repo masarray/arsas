@@ -694,13 +694,12 @@
                             <ToggleButton x:Name="CommandDockHeaderToggle" Grid.Row="0"
                                           Content="{TemplateBinding Header}"
                                           Background="Transparent" BorderBrush="Transparent" BorderThickness="0"
-                                          Padding="0" Cursor="Hand" Focusable="True"
+                                          Padding="0" Cursor="Hand" Focusable="True" FocusVisualStyle="{x:Null}"
                                           AutomationProperties.Name="Expand or collapse Command Dock"
                                           IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
                                 <ToggleButton.Template>
                                     <ControlTemplate TargetType="{x:Type ToggleButton}">
-                                        <Border x:Name="HeaderFocusRing" Background="Transparent"
-                                                BorderBrush="Transparent" BorderThickness="1" CornerRadius="4">
+                                        <Border Background="Transparent" BorderThickness="0">
                                             <Grid Background="Transparent" MinHeight="28">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="25"/>
@@ -729,9 +728,6 @@
                                             </Trigger>
                                             <Trigger Property="IsMouseOver" Value="True">
                                                 <Setter Property="Opacity" Value="0.93"/>
-                                            </Trigger>
-                                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                                <Setter TargetName="HeaderFocusRing" Property="BorderBrush" Value="#AAFFFFFF"/>
                                             </Trigger>
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>
