@@ -748,16 +748,30 @@ public sealed class Iec61850MonitorDevice : ObservableObject
             .ThenBy(signal => signal.Name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        // Stable WPF row lifetime is an architectural invariant: report,
-        // navigation, and repeated verification updates must never Reset the
-        // entire operator-action grid when the selected membership is unchanged.
-        // Keep the same SignalDefinition objects (the control state authority),
-        // and reconcile only actual membership/order changes. This small
-        // operator command list deliberately uses granular notifications rather
-        // than the bulk Reset policy appropriate for high-frequency reports.
+        // Common case: verification/report/navigation changed data, not the
+        // selected DataObject membership or its order. O(N) identity check,
+        // zero WPF collection events, zero row recycling and checkbox flicker.
+        if (CommandSignals.Count == selected.Length)
+        {
+            var same = true;
+            for (var index = 0; index < selected.Length; index++)
+            {
+                if (ReferenceEquals(CommandSignals[index], selected[index])) continue;
+                same = false;
+                break;
+            }
+            if (same) return;
+        }
+
+        // Reconcile real membership changes by *reference identity* and keep
+        // the original SignalDefinition instances. The set replaces a repeated
+        // O(N^2) selected.Any membership scan; the rare ordering correction
+        // below still emits granular Move/Insert rather than Reset.
+        var membership = new HashSet<SignalDefinition>(selected,
+            ReferenceEqualityComparer.Instance);
         for (var index = CommandSignals.Count - 1; index >= 0; index--)
         {
-            if (!selected.Any(signal => ReferenceEquals(signal, CommandSignals[index])))
+            if (!membership.Contains(CommandSignals[index]))
                 CommandSignals.RemoveAt(index);
         }
 
