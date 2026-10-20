@@ -35,12 +35,13 @@ public static class IedBrowserReadPlan
         ["ST", "MX", "CF", "DC", "SP", "SG", "SE", "EX", "SV", "OR", "BL"],
         StringComparer.OrdinalIgnoreCase);
 
-    // Focused navigation hydration runs without an explicit operator sweep.
-    // Keep its historical bounded FC set, so merely opening XCBR1 does not
-    // start extra substitution, blocking or operation-supervision reads.
-    private static readonly HashSet<string> AutoFocusedFc = new(
-        ["ST", "MX", "CF", "DC", "SP", "SG", "SE", "EX"],
-        StringComparer.OrdinalIgnoreCase);
+    // A passive view may read existing safe FCs, but never implicitly probe
+    // substitution, operation supervision or blocking. One authoritative
+    // readable-FC catalog is shared with explicit operator Read.
+    private static bool RequiresExplicitRead(string? fc)
+        => string.Equals(fc, "SV", StringComparison.OrdinalIgnoreCase) ||
+           string.Equals(fc, "OR", StringComparison.OrdinalIgnoreCase) ||
+           string.Equals(fc, "BL", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// FC CO denotes command parameters, not scalar MMS Read targets.
@@ -161,7 +162,7 @@ public static class IedBrowserReadPlan
         // Do not publish another reader's result as though this association
         // observed it. Existing Report/MMS Read evidence is always reused.
         var ordered = metadata.Concat(candidates)
-            .Where(target => AutoFocusedFc.Contains(target.FunctionalConstraint))
+            .Where(target => !RequiresExplicitRead(target.FunctionalConstraint))
             .Where(target => !ledger.TryGet(target.Reference,
                 target.FunctionalConstraint, out _))
             // Failed targets must not monopolize a subsequent bounded SGCB
