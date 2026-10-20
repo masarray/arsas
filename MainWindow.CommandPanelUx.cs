@@ -335,6 +335,15 @@ public partial class MainWindow
         }
     }
 
+    private void ResetControlPreloadAttempts(Iec61850MonitorDevice device)
+    {
+        // The cache belongs to one association, not to the persisted device ID.
+        // Reconnect must re-prove typed ctlModel and CDC on the new session.
+        var prefix = device.DeviceId + "|";
+        _controlModelPreloadAttempts.RemoveWhere(key =>
+            key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+    }
+
     private static string ControlModelAttemptKey(Iec61850MonitorDevice device, SignalDefinition signal)
         => $"{device.DeviceId}|{Iec61850ControlIdentity.Normalize(signal.ObjectReference)}";
 
