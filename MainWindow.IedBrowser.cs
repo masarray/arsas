@@ -389,8 +389,13 @@ public partial class MainWindow
             ReferenceEquals(_iedBrowserRenderedPage, currentPage) &&
             currentPage?.Payload is LiveIedLogicalNodeModel
                 ? _iedBrowserSelectedDoReference : null;
+        // SV/OR/BL are passive state reads, never automatic navigation probes.
+        // Admit them only from exact current model inventory after the user
+        // presses Read DO / Read LN / Read All. No control writes or inference.
         var targets = IedBrowserReadPlan.Build(
-            model, currentPage, readAll, selectedDo);
+            model, currentPage, readAll, selectedDo,
+            includeExplicitStateFc: !automatic &&
+                ReferenceEquals(model, device.LiveDiscoveryModel));
         if (!automatic && !readAll && selectedDo is null &&
             currentPage?.Kind == "LN")
             targets = IedBrowserReadPlan.PrioritizeExplicitLn(targets);
@@ -1058,9 +1063,8 @@ public partial class MainWindow
                     row.Value = IedBrowserReadPlan.UnobservedValue(
                         row.FunctionalConstraint);
                     row.ObservationSource = "";
-                    row.ObservationTooltip = row.FunctionalConstraint == "CO"
-                        ? "FC CO: command parameters are not scalar MMS Read targets. Use the explicit controlled Signal Testing workflow."
-                        : "";
+                    row.ObservationTooltip = IedBrowserReadPlan.UnobservedExplanation(
+                        row.FunctionalConstraint);
                 }
                 continue;
             }

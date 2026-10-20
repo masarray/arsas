@@ -30,6 +30,12 @@ public static class IedBrowserReadPlan
 
     private static readonly HashSet<string> ReadableFc = new(
         ["ST", "MX", "CF", "DC", "SP", "SG", "SE", "EX"], StringComparer.OrdinalIgnoreCase);
+    // SV/OR/BL can expose read-only substitution/operation/blocking state.
+    // Only an operator-triggered explicit Read may request these exact
+    // discovered leaves. Automatic focused hydration deliberately excludes
+    // them to avoid extra MMS traffic or hidden control-plane probing.
+    private static readonly HashSet<string> ExplicitStateFc = new(
+        ["SV", "OR", "BL"], StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// FC CO denotes command parameters, not scalar MMS Read targets.
@@ -37,20 +43,42 @@ public static class IedBrowserReadPlan
     /// during FAT; no control operation is implied by Browser navigation.
     /// </summary>
     public static string UnobservedValue(string? functionalConstraint)
-        => string.Equals(functionalConstraint, "CO", StringComparison.OrdinalIgnoreCase)
-            ? "Control only"
-            : "Not read";
+    {
+        var fc = (functionalConstraint ?? string.Empty).Trim().ToUpperInvariant();
+        if (fc == "CO") return "Control only";
+        // These are legitimate IEC functional constraints but are deliberately
+        // outside the Browser's model-verified scalar read scope. Calling them
+        // "Not read" suggests that a queued Read was missed.
+        if (ExplicitStateFc.Contains(fc)) return "Not read";
+        if (fc is "RP" or "BR" or "LG" or "GO" or "GS")
+            return "Outside read scope";
+        return "Not read";
+    }
+
+    public static string UnobservedExplanation(string? functionalConstraint)
+    {
+        var fc = (functionalConstraint ?? string.Empty).Trim().ToUpperInvariant();
+        if (fc == "CO")
+            return "FC CO contains command parameters. Browser Read never operates controls.";
+        if (ExplicitStateFc.Contains(fc))
+            return $"FC {fc}: no value observed yet. Use explicit Read LN/DO or Read All for an exact model-verified MMS Read; automatic navigation does not request this FC.";
+        if (fc is "RP" or "BR" or "LG" or "GO" or "GS")
+            return $"FC {fc} is present in the discovered model but is not in the verified scalar MMS Read plan. No Read attempt was scheduled for this attribute; this is not an IED Read failure.";
+        return string.Empty;
+    }
 
     public static IReadOnlyList<IedBrowserReadTarget> Build(
         LiveIedModelDiscoveryDocument? model, IedBrowserTreeRow? page,
-        bool readAll, string? selectedDoReference = null)
+        bool readAll, string? selectedDoReference = null,
+        bool includeExplicitStateFc = false)
     {
         if (model is null) return Array.Empty<IedBrowserReadTarget>();
         var schema = new IedBrowserSchemaIndex(model);
         var all = model.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
             .SelectMany(ln => ln.DataObjects)
             .SelectMany(obj => obj.Attributes)
-            .Where(a => ReadableFc.Contains(a.FunctionalConstraint))
+            .Where(a => ReadableFc.Contains(a.FunctionalConstraint) ||
+                includeExplicitStateFc && ExplicitStateFc.Contains(a.FunctionalConstraint))
             .ToArray();
 
         IEnumerable<LiveIedDataAttributeModel> selected = all;
@@ -96,7 +124,8 @@ public static class IedBrowserReadPlan
             };
         }
 
-        var attributes = selected.Where(a => ReadableFc.Contains(a.FunctionalConstraint))
+        var attributes = selected.Where(a => ReadableFc.Contains(a.FunctionalConstraint) ||
+            includeExplicitStateFc && ExplicitStateFc.Contains(a.FunctionalConstraint))
             .Where(a => !string.IsNullOrWhiteSpace(a.MmsReference))
             .Select(a => new IedBrowserReadTarget(
                 a.MmsReference, a.FunctionalConstraint,
