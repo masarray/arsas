@@ -2,6 +2,7 @@ name: Smart Discovery Field Capture Build
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - "*.cs"
       - "**/*.cs"
@@ -54,9 +55,15 @@ jobs:
 
   build-smart-capture:
     needs: [manual-regression]
+    # PRs already receive the canonical Build ARSAS portable + native proof.
+    # Extra Field Capture packaging/smoke is an explicit diagnostic request,
+    # not automatic work for every .cs/.xaml change. Keep the same check
+    # name (skipped status) and preserve complete workflow_dispatch.
     if: >-
       ${{
         always() &&
+        (github.event_name == 'workflow_dispatch' ||
+         contains(github.event.pull_request.labels.*.name, 'ci-field-capture')) &&
         (github.event_name != 'workflow_dispatch' ||
          needs.manual-regression.result == 'success')
       }}
