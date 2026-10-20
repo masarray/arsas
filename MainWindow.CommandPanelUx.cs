@@ -117,23 +117,34 @@ public partial class MainWindow
         }
 
         grid.LoadingRow += CommandGrid_LoadingRow;
+        // Loaded can fire after the DataGrid has already generated its first
+        // containers. Attach the initial realized rows once; future recycled
+        // rows use LoadingRow. No periodic scan of the window or other tabs.
+        foreach (var row in FindVisualChildren<DataGridRow>(grid))
+            AttachCommandRow(row);
     }
 
     private void CommandGrid_LoadingRow(object? sender, DataGridRowEventArgs e)
+        => AttachCommandRow(e.Row);
+
+    private void AttachCommandRow(DataGridRow row)
     {
-        // With recycling, a row container can acquire a different
-        // SignalDefinition. Loaded is raised for each realization, but the
-        // handler is installed only once for the container lifetime.
-        if (_configuredCommandRows.TryGetValue(e.Row, out _))
+        if (_configuredCommandRows.TryGetValue(row, out _))
             return;
-        _configuredCommandRows.Add(e.Row, new Marker());
-        e.Row.Loaded += CommandGridRow_Loaded;
+        _configuredCommandRows.Add(row, new Marker());
+        row.Loaded += CommandGridRow_Loaded;
+        if (row.IsLoaded)
+            ApplyCommandRowVisuals(row);
     }
 
     private void CommandGridRow_Loaded(object sender, RoutedEventArgs e)
     {
-        if (sender is not DataGridRow row)
-            return;
+        if (sender is DataGridRow row)
+            ApplyCommandRowVisuals(row);
+    }
+
+    private void ApplyCommandRowVisuals(DataGridRow row)
+    {
         if (row.DataContext is SignalDefinition signal)
             EnsureDefaultControlSafetyChecks(signal);
         foreach (var button in FindVisualChildren<Button>(row))
