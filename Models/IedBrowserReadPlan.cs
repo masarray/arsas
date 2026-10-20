@@ -37,9 +37,26 @@ public static class IedBrowserReadPlan
     /// during FAT; no control operation is implied by Browser navigation.
     /// </summary>
     public static string UnobservedValue(string? functionalConstraint)
-        => string.Equals(functionalConstraint, "CO", StringComparison.OrdinalIgnoreCase)
-            ? "Control only"
-            : "Not read";
+    {
+        var fc = (functionalConstraint ?? string.Empty).Trim().ToUpperInvariant();
+        if (fc == "CO") return "Control only";
+        // These are legitimate IEC functional constraints but are deliberately
+        // outside the Browser's model-verified scalar read scope. Calling them
+        // "Not read" suggests that a queued Read was missed.
+        if (fc is "SV" or "OR" or "BL" or "RP" or "BR" or "LG" or "GO" or "GS")
+            return "Outside read scope";
+        return "Not read";
+    }
+
+    public static string UnobservedExplanation(string? functionalConstraint)
+    {
+        var fc = (functionalConstraint ?? string.Empty).Trim().ToUpperInvariant();
+        if (fc == "CO")
+            return "FC CO contains command parameters. Browser Read never operates controls.";
+        if (fc is "SV" or "OR" or "BL" or "RP" or "BR" or "LG" or "GO" or "GS")
+            return $"FC {fc} is present in the discovered model but is not in the verified scalar MMS Read plan. No Read attempt was scheduled for this attribute; this is not an IED Read failure.";
+        return string.Empty;
+    }
 
     public static IReadOnlyList<IedBrowserReadTarget> Build(
         LiveIedModelDiscoveryDocument? model, IedBrowserTreeRow? page,
