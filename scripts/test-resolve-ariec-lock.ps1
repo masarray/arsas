@@ -190,6 +190,18 @@ try {
     $wrongTypedReadPhysical.p0CTypedReadTrial.mainlinePromotionForbidden = $false
     Assert-Rejects $wrongTypedReadPhysical 'physical-tested'
 
+    foreach ($field in @('physicalQualificationRequired', 'mainlinePromotionForbidden',
+                         'controlChecksUnchanged', 'controlTimeoutsUnchanged', 'preservesTypedReadAuthority')) {
+        $invalidSuccessor = New-TrackedP10Fixture
+        $invalidSuccessor.controlReportIsolationTrial.$field = $false
+        Assert-Rejects $invalidSuccessor 'physical-tested'
+    }
+    foreach ($field in @('baseEngineCommit', 'exactCommit')) {
+        $invalidSuccessor = New-TrackedP10Fixture
+        $invalidSuccessor.controlReportIsolationTrial.$field = ('f' * 40)
+        Assert-Rejects $invalidSuccessor 'physical-tested'
+    }
+
     Write-Host "CI-P1 immutable engine resolver: $checks synthetic cases PASS."
 }
 finally {

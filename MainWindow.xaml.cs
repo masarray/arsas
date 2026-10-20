@@ -1414,7 +1414,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // when there really are more than five actionable control objects.
         ResizeCommandDockForVerifiedControls();
         if (SelectedDevice != null)
-            await RefreshControlValuesAsync(SelectedDevice, force: true);
+            await RefreshControlValuesAsync(SelectedDevice, force: false);
     }
 
     private void CommandPanel_Collapsed(object sender, RoutedEventArgs e)
@@ -1451,8 +1451,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         // Never gate inspection on an operable-only UI projection.
         var candidates = Iec61850ControlIdentity.DistinctSelected(device.Signals)
-            .Where(signal => force || !signal.ControlModelResolved ||
-                             signal.ControlCurrentValue == "-")
+            .Where(signal => Iec61850ControlIdentity.NeedsInspection(signal, force))
             .ToArray();
         if (candidates.Length == 0)
         {
@@ -1463,10 +1462,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         using var throttle = new SemaphoreSlim(3, 3);
         await Task.WhenAll(candidates.Select(async signal =>
         {
-            await throttle.WaitAsync(_applicationCancellation.Token);
+            // Claim before waiting: another expansion/refresh must not enqueue
+            // the same target while this batch is waiting for its local slot.
             signal.ControlInspectionBusy = true;
+            var entered = false;
             try
             {
+                await throttle.WaitAsync(_applicationCancellation.Token);
+                entered = true;
                 var capabilities = await _runtime.InspectControlAsync(
                     device.DeviceId,
                     signal,
@@ -1500,7 +1503,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             finally
             {
                 signal.ControlInspectionBusy = false;
-                throttle.Release();
+                if (entered) throttle.Release();
             }
         }));
 

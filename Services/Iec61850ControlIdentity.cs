@@ -34,6 +34,13 @@ public static class Iec61850ControlIdentity
             .Select(group => group.OrderByDescending(s => s.ControlCommandBusy)
                 .ThenByDescending(s => s.ControlConfirmationPending).First()).ToArray();
 
+    // Reopening a view is not a request to invalidate verified live metadata.
+    // Status-only objects legitimately have no operable current-value projection.
+    public static bool NeedsInspection(SignalDefinition signal, bool force)
+        => !signal.ControlInspectionBusy && !signal.ControlCommandBusy &&
+           (force || !signal.ControlModelResolved ||
+            (signal.ControlSupportsOperate && signal.ControlCurrentValue == "-"));
+
     public static SignalDefinition[] InspectionRepresentatives(IEnumerable<SignalDefinition> signals)
         => DistinctSelected(signals).Where(s => !s.ControlModelResolved).ToArray();
 }
