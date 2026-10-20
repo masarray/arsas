@@ -131,7 +131,7 @@ public sealed class P0GBrowserSubstitutionReadAndIedCardProgressTests
         Assert.Equal("ProgressBar", progress.Name.LocalName);
         Assert.Equal("3", (string?)progress.Attribute("Height"));
         Assert.Equal("0", (string?)progress.Attribute("Opacity"));
-        Assert.Contains("BrowserReadProgressPercent", (string?)progress.Attribute("Value"));
+        Assert.Contains("IedCardProgressPercent", (string?)progress.Attribute("Value"));
         var reserved = progress.Parent!;
         Assert.Equal("Grid", reserved.Name.LocalName);
         Assert.Equal("7", (string?)reserved.Attribute("Height"));

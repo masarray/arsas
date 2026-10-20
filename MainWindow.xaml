@@ -377,13 +377,14 @@
                                                             <ContextMenu/>
                                                         </TextBlock.ContextMenu>
                                                     </TextBlock>
-                                                    <!-- Permanent 7px slot: Browser Read never resizes the IED card
-                                                         or overlays its relay icon, IP and action bar. -->
+                                                    <!-- Single permanent 7px slot for explicit discovery/fast-connect
+                                                         and Browser Read. Neither activity covers the IED identity
+                                                         nor changes card geometry or button positions. -->
                                                     <Grid Height="7" Margin="0,3,0,0"
                                                           VerticalAlignment="Center" ClipToBounds="True">
                                                         <ProgressBar x:Name="BrowserReadProgressLine" Height="3"
                                                                      Minimum="0" Maximum="100"
-                                                                     Value="{Binding BrowserReadProgressPercent, Mode=OneWay}"
+                                                                     Value="{Binding IedCardProgressPercent, Mode=OneWay}"
                                                                      Style="{StaticResource DiscoveryProgressBar}"
                                                                      Opacity="0" VerticalAlignment="Center"
                                                                      ToolTip="{Binding BusyStage}"/>
@@ -423,59 +424,8 @@
                                                 <Viewbox Width="14" Height="14"><Path Data="{StaticResource MaterialCloseIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="{StaticResource Danger}"/></Viewbox>
                                             </Button>
 
-                                            <Border x:Name="BusyOverlay" Visibility="Collapsed" Background="#F7FAFEF7" CornerRadius="12"
-                                                    BorderBrush="#B8CEF3" BorderThickness="1" Padding="8,6" Panel.ZIndex="20">
-                                                <Grid Height="56">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="32"/>
-                                                        <ColumnDefinition Width="8"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <Grid Width="28" Height="28" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
-                                                        <Grid.RenderTransform><RotateTransform x:Name="CardSpinnerRotate"/></Grid.RenderTransform>
-                                                        <Canvas Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.88"><Path.RenderTransform><RotateTransform Angle="45" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
-                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.76"><Path.RenderTransform><RotateTransform Angle="90" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
-                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.64"><Path.RenderTransform><RotateTransform Angle="135" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
-                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.52"><Path.RenderTransform><RotateTransform Angle="180" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
-                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.40"><Path.RenderTransform><RotateTransform Angle="225" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
-                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.28"><Path.RenderTransform><RotateTransform Angle="270" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
-                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.18"><Path.RenderTransform><RotateTransform Angle="315" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
-                                                        </Canvas>
-                                                        <Grid.Triggers>
-                                                            <EventTrigger RoutedEvent="FrameworkElement.Loaded">
-                                                                <BeginStoryboard>
-                                                                    <Storyboard RepeatBehavior="Forever">
-                                                                        <DoubleAnimation Storyboard.TargetName="CardSpinnerRotate" Storyboard.TargetProperty="Angle" From="0" To="360" Duration="0:0:0.9"/>
-                                                                    </Storyboard>
-                                                                </BeginStoryboard>
-                                                            </EventTrigger>
-                                                        </Grid.Triggers>
-                                                    </Grid>
-                                                    <Grid Grid.Column="2" VerticalAlignment="Center">
-                                                        <Grid.RowDefinitions>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                        </Grid.RowDefinitions>
-                                                        <TextBlock Text="{Binding BusyTitle}" FontSize="11.8" FontWeight="SemiBold" Foreground="{StaticResource Ink}"
-                                                                   TextTrimming="CharacterEllipsis"/>
-                                                        <TextBlock Grid.Row="1" Text="{Binding BusyStage}" FontSize="10.2" Foreground="{StaticResource Muted}"
-                                                                   TextTrimming="CharacterEllipsis" Margin="0,1,0,0"/>
-                                                        <Grid Grid.Row="2" Margin="0,5,0,0">
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="*"/>
-                                                                <ColumnDefinition Width="Auto"/>
-                                                            </Grid.ColumnDefinitions>
-                                                            <ProgressBar Value="{Binding DiscoveryProgressPercent, Mode=OneWay}" Minimum="0" Maximum="100"
-                                                                         Style="{StaticResource DiscoveryProgressBar}" Height="5" VerticalAlignment="Center"/>
-                                                            <TextBlock Grid.Column="1" Text="{Binding DiscoveryProgressPercentText}" FontSize="9.6" FontWeight="SemiBold"
-                                                                       Foreground="{StaticResource Accent}" Margin="7,0,0,0" VerticalAlignment="Center"/>
-                                                        </Grid>
-                                                    </Grid>
-                                                </Grid>
-                                            </Border>
+                                            <!-- Discovery reuses the IP progress slot; no masking busy card,
+                                                 circular spinner, empty animated card or second progress bar. -->
                                         </Grid>
                                         <DataTemplate.Triggers>
                                             <DataTrigger Binding="{Binding IsMonitoring}" Value="True">
@@ -486,10 +436,10 @@
                                                 <Setter TargetName="MonitorStateText" Property="Text" Value="LIVE"/>
                                                 <Setter TargetName="MonitorStateText" Property="Foreground" Value="{StaticResource Success}"/>
                                             </DataTrigger>
-                                            <DataTrigger Binding="{Binding IsBusy}" Value="True">
-                                                <Setter TargetName="CardContent" Property="Opacity" Value="0.10"/>
-                                                <Setter TargetName="CardContent" Property="IsHitTestVisible" Value="False"/>
-                                                <Setter TargetName="BusyOverlay" Property="Visibility" Value="Visible"/>
+                                            <!-- Each action retains its own CanPlay/CanStop/IsActionEnabled gate.
+                                                 Stop must remain clickable during an in-flight discovery. -->
+                                            <DataTrigger Binding="{Binding IsDiscoveryProgressActive}" Value="True">
+                                                <Setter TargetName="BrowserReadProgressLine" Property="Opacity" Value="1"/>
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding IsBrowserReading}" Value="True">
                                                 <!-- Opacity does not affect measure/arrange: zero card jiggle. -->
