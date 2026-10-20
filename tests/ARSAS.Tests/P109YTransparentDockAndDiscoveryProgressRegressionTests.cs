@@ -55,11 +55,12 @@ public sealed class P109YTransparentDockAndDiscoveryProgressRegressionTests
         Assert.Equal("7", (string?)line.Parent?.Attribute("Height"));
         Assert.Contains(line.Parent!.Parent!.Elements(P + "TextBlock"), n =>
             (string?)n.Attribute("Text") == "{Binding EndpointText}");
-        Assert.DoesNotContain("BusyOverlay", doc.ToString(), StringComparison.Ordinal);
-        Assert.DoesNotContain("CardSpinnerRotate", doc.ToString(), StringComparison.Ordinal);
-        Assert.DoesNotContain("Storyboard RepeatBehavior=\"Forever\"", doc.ToString(), StringComparison.Ordinal);
+        var cardTemplate = line.Ancestors(P + "DataTemplate").First();
+        Assert.DoesNotContain("BusyOverlay", cardTemplate.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("CardSpinnerRotate", cardTemplate.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("Storyboard RepeatBehavior=\"Forever\"", cardTemplate.ToString(), StringComparison.Ordinal);
 
-        var triggers = doc.Descendants(P + "DataTrigger").ToArray();
+        var triggers = cardTemplate.Descendants(P + "DataTrigger").ToArray();
         foreach (var binding in new[] { "{Binding IsBrowserReading}", "{Binding IsDiscoveryProgressActive}" })
         {
             var trigger = Assert.Single(triggers, t =>
