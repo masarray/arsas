@@ -21,8 +21,7 @@ public static class IedBrowserReadEvidenceBundle
         if (Encoding.UTF8.GetByteCount(csv) > 4_194_304)
             throw new ArgumentOutOfRangeException(nameof(csv),
                 "Selected-page evidence exceeded the 4 MiB diagnostic boundary.");
-        var rowCount = Math.Max(0, csv.Split('\n').Length -
-            (csv.EndsWith('\n') ? 2 : 1));
+        var rowCount = CountSelectedTargetRows(csv);
         // Hash the exact UTF-8 bytes written to the CSV ZIP entry, not a normalized copy.
         var csvBytes = new UTF8Encoding(false).GetBytes(csv);
         var csvSha256 = Convert.ToHexString(SHA256.HashData(csvBytes)).ToLowerInvariant();
@@ -57,5 +56,85 @@ public static class IedBrowserReadEvidenceBundle
             }, new JsonSerializerOptions { WriteIndented = true }));
         }
         return buffer.ToArray();
+    }
+
+    /// <summary>
+    /// Count logical CSV records, not physical lines: quoted diagnostic values
+    /// may legally contain newlines. Refuse malformed quoting and more than
+    /// 4096 selected targets rather than publishing a misleading manifest.
+    /// The first CSV record is the header, not an observation.
+    /// </summary>
+    private static int CountSelectedTargetRows(string csv)
+    {
+        if (csv.Length == 0) return 0;
+        var records = 0;
+        var inQuotes = false;
+        var afterQuote = false;
+        var atFieldStart = true;
+        var recordHasContent = false;
+
+        for (var i = 0; i < csv.Length; i++)
+        {
+            var c = csv[i];
+            if (inQuotes)
+            {
+                if (c == '"')
+                {
+                    if (i + 1 < csv.Length && csv[i + 1] == '"')
+                        i++; // Escaped CSV quote belongs to the same field.
+                    else
+                    {
+                        inQuotes = false;
+                        afterQuote = true;
+                    }
+                }
+                continue;
+            }
+
+            if (c is '\r' or '\n')
+            {
+                if (!recordHasContent)
+                    throw new FormatException("Evidence CSV contains an empty record.");
+                records++;
+                if (records > 4097)
+                    throw new ArgumentOutOfRangeException(nameof(csv),
+                        "Selected-page evidence exceeds 4096 CSV target records.");
+                if (c == '\r' && i + 1 < csv.Length && csv[i + 1] == '\n')
+                    i++;
+                atFieldStart = true;
+                afterQuote = false;
+                recordHasContent = false;
+                continue;
+            }
+
+            if (afterQuote)
+            {
+                if (c != ',')
+                    throw new FormatException("Evidence CSV has unexpected data after a quoted field.");
+                atFieldStart = true;
+                afterQuote = false;
+                recordHasContent = true;
+                continue;
+            }
+
+            if (c == '"')
+            {
+                if (!atFieldStart)
+                    throw new FormatException("Evidence CSV has an unexpected quote in an unquoted field.");
+                inQuotes = true;
+                atFieldStart = false;
+            }
+            else
+                atFieldStart = c == ',';
+            recordHasContent = true;
+        }
+
+        if (inQuotes)
+            throw new FormatException("Evidence CSV has an unterminated quoted field.");
+        if (recordHasContent) records++;
+        if (records > 4097)
+            throw new ArgumentOutOfRangeException(nameof(csv),
+                "Selected-page evidence exceeds 4096 CSV target records.");
+        return Math.Max(0, records - 1);
     }
 }
