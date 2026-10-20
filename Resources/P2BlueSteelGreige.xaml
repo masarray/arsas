@@ -507,7 +507,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ListBoxItem">
-                    <Grid>
+                    <Grid SnapsToDevicePixels="True" UseLayoutRounding="True">
                         <!-- One card silhouette: the selection accent is painted ON the
                              left card edge, never in a detached 5px gutter. -->
                         <Border x:Name="Card"
@@ -562,7 +562,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ListBoxItem">
-                    <Grid>
+                    <Grid SnapsToDevicePixels="True" UseLayoutRounding="True">
                         <!-- One card silhouette: the selection accent is painted ON the
                              left card edge, never in a detached 5px gutter. -->
                         <Border x:Name="IedCard"
