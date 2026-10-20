@@ -6,7 +6,7 @@ function Test-P0GSclEditionTrial {
     if ($null -eq $trial) { return $false }
 
     . (Join-Path $PSScriptRoot 'test-p0-c-typed-read-trial.ps1')
-    $parent = $Lock | ConvertTo-Json -Depth 100 | ConvertFrom-Json -Depth 100
+    $parent = $Lock | ConvertTo-Json -Depth 100 | ConvertFrom-Json
     $parent.commit = 'ba21d882f67de22c10d3155b449aac77aa8b4899'
     $parent.sourcePullRequest = 181
     if (-not (Test-P0CTypedReadTrial -Lock $parent)) { return $false }
