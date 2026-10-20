@@ -16,7 +16,6 @@ public sealed class P109UStableCommandProjectionTests
         {
             Name = reference[(reference.LastIndexOf('.') + 1)..],
             ObjectReference = reference,
-            LogicalNode = reference.Split('/')[1].Split('.')[0],
             FunctionalConstraint = "CO",
             IsSelected = true,
             IsControlSignal = true,
@@ -70,7 +69,7 @@ public sealed class P109UStableCommandProjectionTests
 
         Assert.Single(device.CommandSignals);
         Assert.Same(second, device.CommandSignals[0]);
-        Assert.Equal([NotifyCollectionChangedAction.Remove], events);
+        Assert.Equal(new[] { NotifyCollectionChangedAction.Remove }, events);
 
         // Fresh live-typed authority is mandatory before the control can return.
         first.AcceptVerifiedLiveControlCdc("DPC");
