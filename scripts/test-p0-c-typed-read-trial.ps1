@@ -2,6 +2,34 @@
 # No physical promotion, silent source fallback, or engine wildcard pins.
 function Test-P0CTypedReadTrial {
     param([Parameter(Mandatory = $true)]$Lock)
+    # Stage-attributed P0-C successor: exact trial SHA only, qualified by
+    # 1182 Windows engine regressions. Preserve the pre-existing 400ms negative
+    # LastApplError observation gate; there is NO faster control qualification.
+    # Validate the full immutable ancestry recursively through #183 -> #181
+    # -> #179 instead of weakening the SCL/R10 historical guard.
+    if ([string]$Lock.commit -ceq '9c7cb40364023a7b217e5ec31ab3105ba90142eb') {
+        $successor = $Lock.p0CStageObservationTrial
+        if ($null -eq $successor -or
+            [int]$Lock.sourcePullRequest -ne 184 -or
+            [string]$successor.status -cne 'engine-ci-success-consumer-ci-pending-not-physical' -or
+            [string]$successor.baseEngineCommit -cne 'c85d4e20db722bd0c2729f2533b323b13d3ef735' -or
+            [string]$successor.exactCommit -cne [string]$Lock.commit -or
+            [int]$successor.enginePullRequest -ne 184 -or
+            [int]$successor.engineCiOnlyPullRequest -ne 185 -or
+            [long]$successor.engineCiRun -ne 39505819831 -or
+            [int]$successor.engineTestsPassed -ne 1182 -or
+            [int]$successor.consumerIntegrationPullRequest -ne 655 -or
+            -not [bool]$successor.sbo400msSafetyGatePreserved -or
+            -not [bool]$successor.negativeAndDelayedLastApplErrorRegression -or
+            -not [bool]$successor.noUnqualifiedImmediateOperate -or
+            -not [bool]$successor.physicalLatencyQualificationRequired -or
+            -not [bool]$successor.mainlinePromotionForbidden) { return $false }
+        $parent = $Lock | ConvertTo-Json -Depth 100 | ConvertFrom-Json
+        $parent.commit = $successor.baseEngineCommit
+        $parent.sourcePullRequest = 183
+        return (Test-P0CTypedReadTrial -Lock $parent)
+    }
+
     # Explicit, immutable code-only successor; revalidate every historical P0-C
     # invariant against its original pin rather than relabeling it as accepted.
     if ([string]$Lock.commit -ceq 'c85d4e20db722bd0c2729f2533b323b13d3ef735') {
