@@ -20,6 +20,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     private bool _isStopping;
     private bool _isMonitoring;
     private bool _isBrowserReading;
+    private double _browserReadProgressPercent;
     private bool _isActive;
     private bool _hasReportStream;
     private bool _isDemo;
@@ -392,7 +393,22 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     public bool IsBrowserReading
     {
         get => _isBrowserReading;
-        set => Set(ref _isBrowserReading, value);
+        set
+        {
+            // Every explicit or bounded focused sweep starts at zero, without
+            // resetting discovery telemetry or reallocating a UI overlay.
+            if (value && !_isBrowserReading)
+                BrowserReadProgressPercent = 0d;
+            Set(ref _isBrowserReading, value);
+        }
+    }
+
+    // Presentation-only Browser Read progress, isolated from discovery.
+    // The IED card reserves its thin progress slot even while hidden.
+    public double BrowserReadProgressPercent
+    {
+        get => _browserReadProgressPercent;
+        private set => Set(ref _browserReadProgressPercent, Math.Clamp(value, 0d, 100d));
     }
 
     public bool IsMonitoring
@@ -484,12 +500,16 @@ public sealed class Iec61850MonitorDevice : ObservableObject
 
     public void ApplyBrowserReadProgress(int completed, int total)
     {
-        if (total <= 0) return;
+        if (total <= 0 || !IsBrowserReading) return;
         var processed = Math.Clamp(completed, 0, total);
+        var percent = Math.Round(100d * processed / total, 0,
+            MidpointRounding.AwayFromZero);
+        // Thousands of leaf Read results must not trigger thousands of WPF
+        // property notifications. One update per integer percent plus final.
+        if (BrowserReadProgressPercent == percent && processed != total) return;
+        BrowserReadProgressPercent = percent;
         BusyStage = $"Read-only MMS values · {processed:N0} / {total:N0}";
-        _discoveryProgressTargetPercent = 100d * processed / total;
         DiscoveryProgressStepText = $"Value {processed:N0} of {total:N0}";
-        DiscoveryProgressPercentText = $"{DiscoveryProgressPercent:0}%";
     }
 
     public void ResetDiscoveryProgress(
