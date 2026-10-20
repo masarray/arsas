@@ -11,8 +11,59 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  pr-scope:
+    # No checkout or Windows runner. The GitHub API supplies only file names;
+    # unknown/too-large/unavailable comparisons always require full CI.
+    name: Classify documentation-only PR (fail closed)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      needs_windows: ${{ steps.files.outputs.needs_windows }}
+    steps:
+      - id: files
+        name: Decide whether canonical Windows proof is required
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let full = true;
+            try {
+              const changed = await github.paginate(github.rest.pulls.listFiles, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                per_page: 100
+              });
+              // GitHub's PR-files endpoint is limited to 3000 files.
+              // An empty or truncated result can never authorize a skip.
+              if (changed.length > 0 && changed.length < 3000) {
+                const documentationOnly = changed.every(({filename}) =>
+                  filename === 'README.md' ||
+                  (filename.startsWith('docs/') &&
+                   filename.endsWith('.md') &&
+                   filename !== 'docs/INTEROPERABILITY_REFERENCE_CONTRACT.md')
+                );
+                full = !documentationOnly;
+              }
+              core.info(`PR files=${changed.length}; canonical Windows required=${full}`);
+            } catch (error) {
+              core.warning(`PR files unavailable: ${error.message}; requiring full Windows CI`);
+            }
+            core.setOutput('needs_windows', full ? 'true' : 'false');
+
   build-windows:
     name: Build, test, validate and package Windows application
+    needs: [pr-scope]
+    # Push/manual always run. Only positively classified pure documentation
+    # skips the expensive Windows job; any error/unknown change runs full CI.
+    if: >-
+      ${{
+        always() &&
+        (github.event_name != 'pull_request' ||
+         needs.pr-scope.outputs.needs_windows == 'true')
+      }}
     runs-on: windows-latest
     steps:
       - name: Checkout exact triggering ARSAS revision
