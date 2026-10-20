@@ -47,8 +47,8 @@ public sealed class P0DReadEvidenceBundleTests
     [Fact]
     public void ManifestHashMatchesArchivedPayload_AndDetectsModifiedCsv()
     {
-        const string csv = "CanonicalReference,FC,LedgerState\\r\\n" +
-            "LAB/LLN0.Mod.origin.orIdent,ST,OBSERVED\\r\\n";
+        const string csv = "CanonicalReference,FC,LedgerState\r\n" +
+            "LAB/LLN0.Mod.origin.orIdent,ST,OBSERVED\r\n";
         var archiveBytes = IedBrowserReadEvidenceBundle.Build(
             csv, "app", "engine", 7, DateTimeOffset.UnixEpoch);
         using var archive = new ZipArchive(new MemoryStream(archiveBytes), ZipArchiveMode.Read);
