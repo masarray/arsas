@@ -111,6 +111,23 @@ public sealed class IedBrowserSchemaIndex
                     _declaredDoublePointValues.Add(Key(reference, fc));
                     _declaredDoublePointValues.Add(Key(owner, fc));
                 }
+                // SV.subVal on a DPC object has the SAME two-bit Dbpos
+                // semantics as ST.stVal. The MMS type inventory can label it
+                // Check/bit-string; admission comes from exact IEC DPC object
+                // identity and its verified ST status declaration, not a
+                // name-only or first-child guess.
+                if (fc == "SV" && relative == "subVal" &&
+                    (string.Equals(obj.InferredCdc, "DPC", StringComparison.OrdinalIgnoreCase) ||
+                     ((string.IsNullOrWhiteSpace(obj.InferredCdc) ||
+                       string.Equals(obj.InferredCdc, "Unknown",
+                           StringComparison.OrdinalIgnoreCase)) &&
+                      IsStandardSwitchPosition(owner) &&
+                      obj.Attributes.Any(a =>
+                          string.Equals(a.FunctionalConstraint, "ST", StringComparison.OrdinalIgnoreCase) &&
+                          IedBrowserLiveValues.CanonicalReference(a.MmsReference)
+                              .Equals(owner + ".stVal", StringComparison.Ordinal)))))
+                    _declaredDoublePointValues.Add(Key(reference, fc));
+
                 // A structured DO such as PPV contains CDC subobjects
                 // phsAB/phsBC/phsCA, each with its own q/t. Index their
                 // exact declared parent path instead of dropping the nested
