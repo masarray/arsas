@@ -3419,9 +3419,11 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         foreach (var candidate in points)
         {
             var candidateCanonical = CanonicalDataReference(candidate.IecReference);
-            if (!candidateCanonical.Equals(canonical, StringComparison.OrdinalIgnoreCase) &&
-                !candidateCanonical.StartsWith(canonical + ".", StringComparison.OrdinalIgnoreCase) &&
-                !canonical.StartsWith(candidateCanonical + ".", StringComparison.OrdinalIgnoreCase))
+            // Prefix ancestry does NOT prove a phase's scalar identity:
+            // one selected phsA under a three-phase parent is still ambiguous
+            // in the IED schema. ARIEC's typed structured projection must emit
+            // the exact semantic leaf; a parent cannot borrow its value.
+            if (!candidateCanonical.Equals(canonical, StringComparison.OrdinalIgnoreCase))
                 continue;
 
             if (unique is not null && !ReferenceEquals(unique, candidate))
