@@ -757,6 +757,14 @@
             <Setter Property="BorderBrush" Value="#CDD8E5"/>
             <Setter Property="MinWidth" Value="56"/>
         </Style>
+        <!-- ctlModel commissioning is a distinct read/configure action, NOT an
+             Operate/SBO command. Compiled style owns its gear and caption for
+             every virtualized/recycled row; no Loaded-time visual-tree scan. -->
+        <Style x:Key="CommandDockCtlModelButton" TargetType="Button" BasedOn="{StaticResource CommandDockSoftButton}">
+            <Setter Property="ContentTemplate" Value="{StaticResource MaterialSettingsAction}"/>
+            <Setter Property="MinWidth" Value="88"/>
+            <Setter Property="Padding" Value="8,3"/>
+        </Style>
         <Style x:Key="CommandOpenButton" TargetType="Button" BasedOn="{StaticResource CommandActionButtonBase}">
             <Setter Property="Background" Value="{StaticResource CommandOpenGradient}"/>
             <Setter Property="BorderBrush" Value="#69D2A1"/>
