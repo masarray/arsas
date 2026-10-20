@@ -20,6 +20,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     private bool _isStopping;
     private bool _isMonitoring;
     private bool _isBrowserReading;
+    private bool _discoveryProgressActive;
     private double _browserReadProgressPercent;
     private bool _isActive;
     private bool _hasReportStream;
@@ -373,8 +374,16 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         get => _isBusy;
         set
         {
+            // Only ResetDiscoveryProgress arms the under-IP discovery line.
+            // Other busy operations (e.g. Stop) must not replay a stale 100% bar.
+            if (!value)
+                _discoveryProgressActive = false;
             if (Set(ref _isBusy, value))
+            {
                 RefreshComputed();
+                Raise(nameof(IsDiscoveryProgressActive));
+                Raise(nameof(IedCardProgressPercent));
+            }
         }
     }
 
@@ -408,8 +417,23 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     public double BrowserReadProgressPercent
     {
         get => _browserReadProgressPercent;
-        private set => Set(ref _browserReadProgressPercent, Math.Clamp(value, 0d, 100d));
+        private set
+        {
+            if (Set(ref _browserReadProgressPercent, Math.Clamp(value, 0d, 100d)))
+                Raise(nameof(IedCardProgressPercent));
+        }
     }
+
+    // The fixed under-IP line is one presentation of TWO existing progress
+    // authorities, not another progress counter or independent timer.
+    // Discovery wins while in flight; Browser Read resumes otherwise.
+    [JsonIgnore]
+    public bool IsDiscoveryProgressActive => _discoveryProgressActive && IsBusy;
+
+    [JsonIgnore]
+    public double IedCardProgressPercent => IsDiscoveryProgressActive
+        ? DiscoveryProgressPercent
+        : BrowserReadProgressPercent;
 
     public bool IsMonitoring
     {
@@ -483,7 +507,11 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     public double DiscoveryProgressPercent
     {
         get => _discoveryProgressPercent;
-        private set => Set(ref _discoveryProgressPercent, Math.Clamp(value, 0d, 100d));
+        private set
+        {
+            if (Set(ref _discoveryProgressPercent, Math.Clamp(value, 0d, 100d)))
+                Raise(nameof(IedCardProgressPercent));
+        }
     }
 
     public string DiscoveryProgressStepText
@@ -516,6 +544,9 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         string message = "Preparing IEC 61850 session…",
         string title = "Discovering IED")
     {
+        _discoveryProgressActive = true;
+        Raise(nameof(IsDiscoveryProgressActive));
+        Raise(nameof(IedCardProgressPercent));
         BusyTitle = title;
         BusyStage = message;
         _discoveryProgressTargetPercent = 0d;
