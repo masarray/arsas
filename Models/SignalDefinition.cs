@@ -302,7 +302,9 @@ public class SignalDefinition : ObservableObject
         set
         {
             var normalized = value?.Trim() ?? string.Empty;
-            UpdateControlModelFromEvidence(normalized, updateDisplay: true);
+            // Human-facing diagnostics are NEVER a typed ctlModel proof.
+            // Only the live descriptor/probe and explicit model lifecycle
+            // may publish ControlModelKind or command permissions.
             normalized = NormalizeControlResultText(normalized);
             Set(ref _controlLastResult, normalized);
         }
