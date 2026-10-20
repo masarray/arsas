@@ -8,6 +8,10 @@ namespace ArIED61850Tester.Models;
 public sealed class Iec61850ReportQualityRouteIndex
 {
     private readonly Dictionary<string, IReadOnlyList<Iec61850MonitorPoint>> _points;
+    // Bounded diagnostics only. Incorrect inventory hints cannot veto an
+    // exact model-declared owner nor redirect quality to another owner.
+    public int ConflictingHintCount { get; }
+    public IReadOnlyList<string> ConflictingHintSamples { get; }
 
     public Iec61850ReportQualityRouteIndex(
         IedBrowserSchemaIndex schema, IEnumerable<Iec61850MonitorPoint> points)
@@ -16,19 +20,29 @@ public sealed class Iec61850ReportQualityRouteIndex
         ArgumentNullException.ThrowIfNull(points);
         var indexed = new Dictionary<string, List<Iec61850MonitorPoint>>(
             StringComparer.Ordinal);
+        var conflictingHints = 0;
+        var samples = new List<string>(capacity: 3);
         foreach (var point in points)
         {
             if (string.IsNullOrWhiteSpace(point.FunctionalConstraint) ||
                 !schema.TryGetQualityCompanion(
                     point.IecReference, point.FunctionalConstraint, out var qRef))
                 continue;
-            // An independently supplied point companion identity must NOT
-            // override a different exact live-model quality declaration.
+            // ARIEC's explicit live-model q/FC declaration is the SSOT.
+            // Inventory hints can become stale when the selected signal is
+            // projected from a nested CDC (TapChg.valWTr.posVal) or a
+            // report DataSet. Record the conflict, but never permit a hint
+            // to redirect a proven q value or erase a valid route.
             if (!string.IsNullOrWhiteSpace(point.QualityReference) &&
                 !string.Equals(
                     IedBrowserLiveValues.CanonicalReference(point.QualityReference),
                     qRef, StringComparison.Ordinal))
-                continue;
+            {
+                conflictingHints++;
+                if (samples.Count < 3)
+                    samples.Add(point.IecReference + " [" + point.FunctionalConstraint +
+                        "]: inventory=" + point.QualityReference + ", model=" + qRef);
+            }
             var key = Key(qRef, point.FunctionalConstraint);
             if (!indexed.TryGetValue(key, out var targets))
                 indexed[key] = targets = [];
@@ -39,6 +53,8 @@ public sealed class Iec61850ReportQualityRouteIndex
             pair => pair.Key,
             pair => (IReadOnlyList<Iec61850MonitorPoint>)pair.Value.ToArray(),
             StringComparer.Ordinal);
+        ConflictingHintCount = conflictingHints;
+        ConflictingHintSamples = samples.ToArray();
     }
 
     public IReadOnlyList<Iec61850MonitorPoint> FindExact(
