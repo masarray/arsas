@@ -199,6 +199,17 @@ public partial class MainWindow
         if (_configuredCommandButtons.TryGetValue(button, out _))
             return;
 
+        // Position Open/Close have an intentional typed preflight in XAML:
+        // ControlCanInspectPosition permits a *read-only* inspection before
+        // a control has received verified CDC evidence. Do not overwrite its
+        // IsEnabled binding with ControlSupportsOperate (that would disable
+        // the first-click preflight and create a dead control row).
+        if (content is "Open" or "Close")
+        {
+            _configuredCommandButtons.Add(button, new Marker());
+            return;
+        }
+
         var enabledBinding = new MultiBinding
         {
             Converter = CommandButtonEnabledConverter.Instance,
