@@ -114,7 +114,8 @@ public sealed class P109QCommandDockCommissioningRegressionTests
         Assert.Contains("<StackPanel Margin=\"0,0\">", xaml);
         Assert.DoesNotContain("<StackPanel Margin=\"0,0\" ToolTip=\"{Binding ControlInspectionEvidence}\"", xaml);
         Assert.Contains("ScrollViewer.VerticalScrollBarVisibility=\"Auto\"", xaml);
-        Assert.Contains("Grid.Column=\"1\" Content=\"Model\"", xaml);
+        Assert.Contains("Grid.Column=\"1\" Content=\"ctlModel\"", xaml);
+        Assert.Contains("Style=\"{StaticResource CommandDockCtlModelButton}\"", xaml);
         Assert.Contains("Click=\"ControlDetails_Click\"", xaml);
     }
 
