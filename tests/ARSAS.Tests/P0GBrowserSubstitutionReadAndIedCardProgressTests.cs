@@ -166,6 +166,20 @@ public sealed class P0GBrowserSubstitutionReadAndIedCardProgressTests
         Assert.Equal(100d, device.BrowserReadProgressPercent);
     }
 
+    [Fact]
+    public void ReadProgressFollowsOwningAssociationWhenOperatorSelectsAnotherIed()
+    {
+        var source = File.ReadAllText(FindFile("MainWindow.IedBrowser.cs"));
+        var callback = source.Split(
+            "var readProgress = new Progress<IedBrowserReadProgress>(p =>",
+            StringSplitOptions.None)[1].Split(
+            "if (device.IsMonitoring)", StringSplitOptions.None)[0];
+        Assert.Contains("sourceDevice.LiveValues.Association == readAssociation", callback);
+        Assert.Contains("ReferenceEquals(_iedBrowserReadOperation, cts)", callback);
+        Assert.DoesNotContain("ReferenceEquals(SelectedDevice, sourceDevice)", callback);
+        Assert.Contains("sourceDevice.ApplyBrowserReadProgress", callback);
+    }
+
     private static string FindFile(string name)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
