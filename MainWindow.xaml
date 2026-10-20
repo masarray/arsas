@@ -382,8 +382,8 @@
                                                          Browser reads never cover the card with BusyOverlay. -->
                                                     <Grid Height="5" Margin="6,4,6,0" ClipToBounds="True"
                                                           ToolTip="{Binding BusyStage}">
-                                                        <Border Height="3" VerticalAlignment="Center"
-                                                                CornerRadius="2" Background="#E4EBF5"/>
+                                                        <Border x:Name="BrowserCardReadTrack" Height="3" VerticalAlignment="Center"
+                                                                CornerRadius="2" Background="#E4EBF5" Visibility="Hidden"/>
                                                         <ProgressBar x:Name="BrowserCardReadProgress"
                                                                      Value="{Binding DiscoveryProgressPercent, Mode=OneWay}"
                                                                      Minimum="0" Maximum="100" Height="3"
@@ -495,6 +495,7 @@
                                                 <Setter TargetName="BusyOverlay" Property="Visibility" Value="Visible"/>
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding IsBrowserReading}" Value="True">
+                                                <Setter TargetName="BrowserCardReadTrack" Property="Visibility" Value="Visible"/>
                                                 <Setter TargetName="BrowserCardReadProgress" Property="Visibility" Value="Visible"/>
                                             </DataTrigger>
                                         </DataTemplate.Triggers>
