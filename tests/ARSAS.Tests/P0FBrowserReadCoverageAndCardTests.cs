@@ -33,11 +33,7 @@ public sealed class P0FBrowserReadCoverageAndCardTests
                 LogicalNodes = [ln]
             }]
         };
-        var page = new IedBrowserTreeRow
-        {
-            Kind = "LN",
-            Payload = ln
-        };
+        var page = new IedBrowserTreeRow("model/ln/XCBR1", "XCBR1", "LN", 1, ln);
         var plan = IedBrowserReadPlan.Build(model, page, readAll: false);
         Assert.Equal(8, plan.Count);
         Assert.All(new[] { "SV", "OR", "BL" },
