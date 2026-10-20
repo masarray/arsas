@@ -231,6 +231,52 @@ jobs:
         self.assertIn("cancel-in-progress: false", block)
         self.assertNotIn("github.ref", block)
 
+    def test_p4_docs_only_pr_preflight_preserves_fail_closed_build_authority(self):
+        """Docs may skip one Windows job; code, engine, CI, missing API and
+        main/manual must still retain canonical exact-SHA package authority."""
+        repo = Path(__file__).resolve().parents[1]
+        source = (repo / ".github/workflows/build.yml").read_text(encoding="utf-8")
+        self.assertIn("  push:\\n    branches: [ main ]", source)
+        self.assertIn("  workflow_dispatch:", source)
+        self.assertIn("  pr-scope:", source)
+        self.assertIn("uses: actions/github-script@v7", source)
+        self.assertIn("github.paginate(github.rest.pulls.listFiles", source)
+        self.assertIn("pull-requests: read", source)
+        self.assertIn("changed.length > 0 && changed.length < 3000", source)
+        self.assertIn("filename === 'README.md'", source)
+        self.assertIn("filename.startsWith('docs/')", source)
+        self.assertIn("filename.endsWith('.md')", source)
+        self.assertIn("filename !== 'docs/INTEROPERABILITY_REFERENCE_CONTRACT.md'", source)
+        self.assertIn("catch (error)", source)
+        self.assertIn("core.setOutput('needs_windows', full ? 'true' : 'false')", source)
+        self.assertIn("needs.pr-scope.outputs.needs_windows == 'true'", source)
+        self.assertIn("github.event_name != 'pull_request'", source)
+        self.assertIn("always() &&", source)
+        self.assertEqual(source.count("  build-windows:\\n"), 1)
+        self.assertIn("name: Build, test, validate and package Windows application", source)
+        self.assertIn("ref: ${{ github.sha }}", source)
+        self.assertIn("ARSAS-win-x64-portable-single-exe", source)
+
+    def test_p4_field_capture_is_opt_in_but_manual_gate_is_intact(self):
+        repo = Path(__file__).resolve().parents[1]
+        source = (repo / ".github/workflows/smart-discovery-capture-build.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("types: [opened, synchronize, reopened, labeled]", source)
+        self.assertIn("  workflow_dispatch:", source)
+        self.assertIn("contains(github.event.pull_request.labels.*.name, 'ci-field-capture')",
+                      source)
+        self.assertIn("github.event_name == 'workflow_dispatch'", source)
+        self.assertIn("needs.manual-regression.result == 'success'", source)
+        self.assertIn("  manual-regression:", source)
+        self.assertIn("shadow_mode: true", source)
+        self.assertIn("  build-smart-capture:", source)
+        self.assertIn("name: Build smart-discovery portable field capture", source)
+        self.assertIn("require-native-ctest-proof", source)
+        self.assertIn("Smoke test portable executable", source)
+        self.assertIn("Upload smart field-capture build", source)
+        self.assertIn("cancel-in-progress: true", source)
+
     def test_budget_rejects_new_duplicate_build_cost(self):
         self.write(
             ".github/workflows/build.yml",
