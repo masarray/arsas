@@ -88,7 +88,11 @@ public sealed class IedBrowserReadResultInboxTests
         var summary = normalized.IndexOf("Read finished ·", StringComparison.Ordinal);
         Assert.True(finishedProducers >= 0 && finalDrain > finishedProducers &&
                     catalogFence > finalDrain && summary > catalogFence);
-        Assert.Contains("IedBrowserReadCompletionAccounting.Classify(", normalized);
+        // SGCB and ordinary LN/DO reads share one bounded classification
+        // pass; the older Classify() API still delegates to this summary.
+        Assert.Contains("IedBrowserReadCompletionAccounting.Summarize(", normalized);
+        Assert.Contains("coverage.Gaps", normalized);
+        Assert.Contains("kind == IedBrowserReadAbsenceKind.Failed", normalized);
         Assert.Contains("deferred/unverified", normalized);
         Assert.Contains("sourceDevice.LiveValues.Association != readAssociation", source);
     }
