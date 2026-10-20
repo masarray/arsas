@@ -24,7 +24,7 @@ public sealed class P109TControlInspectionPriorityRegressionTests
         Assert.Contains("_controlRefreshInProgress.Add(device)", refresh);
         Assert.Contains("_controlRefreshInProgress.Remove(device)", refresh);
         Assert.Contains("foreach (var signal in candidates)", refresh);
-        Assert.Contains("await Dispatcher.Yield(DispatcherPriority.Background);", refresh);
+        Assert.Contains("await System.Windows.Threading.Dispatcher.Yield(DispatcherPriority.Background);", refresh);
         Assert.Contains("device.CommandSignals.Any(active => active.ControlCommandBusy)", refresh);
         Assert.Contains("Iec61850ControlIdentity.NeedsInspection(signal, force)", refresh);
         Assert.Contains("signal.ControlInspectionBusy = true;", refresh);
