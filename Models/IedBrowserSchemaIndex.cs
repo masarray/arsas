@@ -111,6 +111,23 @@ public sealed class IedBrowserSchemaIndex
                     _declaredDoublePointValues.Add(Key(reference, fc));
                     _declaredDoublePointValues.Add(Key(owner, fc));
                 }
+                // SV.subVal on a DPC object has the SAME two-bit Dbpos
+                // semantics as ST.stVal. The MMS type inventory can label it
+                // Check/bit-string; admission comes from exact IEC DPC object
+                // identity and its verified ST status declaration, not a
+                // name-only or first-child guess.
+                if (fc == "SV" && relative == "subVal" &&
+                    (string.Equals(obj.InferredCdc, "DPC", StringComparison.OrdinalIgnoreCase) ||
+                     ((string.IsNullOrWhiteSpace(obj.InferredCdc) ||
+                       string.Equals(obj.InferredCdc, "Unknown",
+                           StringComparison.OrdinalIgnoreCase)) &&
+                      IsStandardSwitchPosition(owner) &&
+                      obj.Attributes.Any(a =>
+                          string.Equals(a.FunctionalConstraint, "ST", StringComparison.OrdinalIgnoreCase) &&
+                          IedBrowserLiveValues.CanonicalReference(a.MmsReference)
+                              .Equals(owner + ".stVal", StringComparison.Ordinal)))))
+                    _declaredDoublePointValues.Add(Key(reference, fc));
+
                 // A structured DO such as PPV contains CDC subobjects
                 // phsAB/phsBC/phsCA, each with its own q/t. Index their
                 // exact declared parent path instead of dropping the nested
@@ -316,16 +333,18 @@ public sealed class IedBrowserSchemaIndex
     }
 
     /// <summary>
-    /// True only for the exact model-proven DPC process stVal (or its
-    /// declaring DO) and FC=ST. A report's text is never typing authority.
-    /// Use solely for operator presentation; the canonical ledger remains raw.
+    /// True only for exact model-proven DPC process leaves: ST.stVal
+    /// (or its parent DO), and the separately indexed SV.subVal. SV
+    /// admission never implies ST authority or vice versa. All other FCs,
+    /// untyped bit strings, and arbitrary vendor leaves fail closed.
     /// </summary>
     public bool IsDeclaredDoublePointValue(string? reference, string? fc)
     {
-        if (NormalizeFc(fc) != "ST") return false;
+        var constraint = NormalizeFc(fc);
+        if (constraint is not ("ST" or "SV")) return false;
         var identity = IedBrowserLiveValues.CanonicalReference(reference);
         return identity.Length > 0 &&
-            _declaredDoublePointValues.Contains(Key(identity, "ST"));
+            _declaredDoublePointValues.Contains(Key(identity, constraint));
     }
 
     /// <summary>

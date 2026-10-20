@@ -58,6 +58,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         // Immutable engineering authority shared across observed report frames.
         // Rebuilt only if the owner changes its SCL/discovery model object.
         public IedBrowserSchemaIndex? BrowserSchema { get; set; }
+        // Model-only metadata index; never an independent quality/value cache.
+        public IedBrowserSchemaIndex? ReportQualityRoutingSchema { get; set; }
+        public Iec61850ReportQualityRouteIndex? ReportQualityRouting { get; set; }
         // Captured on association acceptance; old receive pumps cannot publish
         // into a newer connection even if the IED identity is the same.
         public long BrowserObservationAssociation { get; set; }
@@ -838,6 +841,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.ActiveReportPlans.Clear();
         session.BrowserActiveRcbs.Clear();
         session.BrowserSchema = null;
+        session.ReportQualityRoutingSchema = null;
+        session.ReportQualityRouting = null;
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
         session.ReportReferenceIndex.Clear();
@@ -1986,6 +1991,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                         ? null : new IedBrowserSchemaIndex(evidenceModel);
                 var evidenceSchema = session.BrowserSchema;
                 if (evidenceSchema is not null)
+                {
+                    if (!ReferenceEquals(session.ReportQualityRoutingSchema, evidenceSchema))
+                    {
+                        session.ReportQualityRouting = new Iec61850ReportQualityRouteIndex(
+                            evidenceSchema, session.Points.Values);
+                        session.ReportQualityRoutingSchema = evidenceSchema;
+                    }
                     foreach (var evidence in slice.BrowserRawEvidence)
                     {
                         if (!evidenceSchema.TryResolveReportFc(plan.DataSetReference,
@@ -2012,10 +2024,33 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                         if (evidence.QualityBits is { } quality &&
                             evidenceSchema.TryGetQualityCompanion(
                                 evidence.CarrierReference, evidenceFc, out var qRef))
-                            session.Device.LiveValues.PublishForAssociation(
+                        {
+                            // Use only typed q from the current routed Report,
+                            // with exact schema FC and live association. Never
+                            // manufacture "Good" from a successful value read.
+                            var accepted = session.Device.LiveValues.PublishForAssociation(
                                 session.BrowserObservationAssociation,
                                 qRef, evidenceFc, quality.Summary, "", "",
                                 "Report quality · raw MMS", qualityEvidence: quality);
+                            if (accepted && session.ReportQualityRouting is { } routing)
+                            {
+                                foreach (var selected in routing.FindExact(qRef, evidenceFc))
+                                {
+                                    if (!session.States.TryGetValue(selected.PointKey, out var state) ||
+                                        !state.HasValue || !state.ReportTrafficSeen)
+                                        continue;
+                                    var verifiedQuality = NormalizeQuality(quality.Summary);
+                                    if (string.Equals(state.Quality, verifiedQuality,
+                                            StringComparison.OrdinalIgnoreCase))
+                                        continue;
+                                    ApplyValueUpdate(
+                                        session, selected, state.Value, verifiedQuality,
+                                        state.DeviceTimestamp, state.SourceMode, state.Reason,
+                                        DateTime.UtcNow, state.Status, trustReportEdge: false,
+                                        hasProcessValue: false);
+                                }
+                            }
+                        }
                         if (evidence.TimeBits is { IsDecoded: true, HasWireProvenance: true } time &&
                             evidenceSchema.TryGetTimestampCompanion(
                                 evidence.CarrierReference, evidenceFc, out var tRef))
@@ -2024,6 +2059,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                                 tRef, evidenceFc, time.EngineeringUtc, "", "",
                                 "Report timestamp · raw MMS", utcTimeEvidence: time);
                     }
+                }
             }
 
             var verifiedReportPointKeys = slice.Updates
@@ -2614,6 +2650,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.ActiveReportPlans.Clear();
         session.BrowserActiveRcbs.Clear();
         session.BrowserSchema = null;
+        session.ReportQualityRoutingSchema = null;
+        session.ReportQualityRouting = null;
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
         session.ReportStreams.Clear();
@@ -2942,6 +2980,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.ActiveReportPlans.Clear();
         session.BrowserActiveRcbs.Clear();
         session.BrowserSchema = null;
+        session.ReportQualityRoutingSchema = null;
+        session.ReportQualityRouting = null;
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
         session.StaticReportProjection.Reset();
