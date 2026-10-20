@@ -1997,6 +1997,14 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                         session.ReportQualityRouting = new Iec61850ReportQualityRouteIndex(
                             evidenceSchema, session.Points.Values);
                         session.ReportQualityRoutingSchema = evidenceSchema;
+                        if (session.ReportQualityRouting.ConflictingHintCount > 0)
+                            Log("WARN", session.Device.Name,
+                                "REPORT_Q_HINT_CONFLICT: " +
+                                session.ReportQualityRouting.ConflictingHintCount +
+                                " inventory quality-reference hint(s) differ from exact " +
+                                "model-declared q/FC. Only the schema-owning q can update " +
+                                "selected process quality; no external q is borrowed. " +
+                                string.Join("; ", session.ReportQualityRouting.ConflictingHintSamples));
                     }
                     foreach (var evidence in slice.BrowserRawEvidence)
                     {

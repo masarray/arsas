@@ -15,6 +15,9 @@ public sealed class IedBrowserSchemaIndex
     private readonly Dictionary<string, string> _primaryLeaves =
         new(StringComparer.Ordinal);
     private readonly HashSet<string> _dataObjects = new(StringComparer.Ordinal);
+    // Exact model + FC process carriers that may receive a model-owned Report q.
+    // A prefix-compatible undeclared vendor child is NOT a quality consumer.
+    private readonly HashSet<string> _qualityRouteValueCarriers = new(StringComparer.Ordinal);
     // Schema-only DPC stVal/DO identities, computed once on model replacement.
     // Never classify arbitrary numeric enums or a name-only Pos as Dbpos.
     private readonly HashSet<string> _declaredDoublePointValues = new(StringComparer.Ordinal);
@@ -76,6 +79,18 @@ public sealed class IedBrowserSchemaIndex
                     !reference.StartsWith(owner + ".", StringComparison.Ordinal))
                     continue;
                 var relative = reference[(owner.Length + 1)..];
+                // Strictly model-declared identities only: q/t carry their own
+                // evidence, and service/control leaves are not process signals.
+                // Include the declared DO as a Report FCD carrier for this FC,
+                // while preserving strict exact-leaf admission for FCDA points.
+                if (relative is not ("q" or "t" or "subQ") &&
+                    !relative.EndsWith(".q", StringComparison.Ordinal) &&
+                    !relative.EndsWith(".t", StringComparison.Ordinal) &&
+                    fc is not ("CO" or "SE"))
+                {
+                    _qualityRouteValueCarriers.Add(Key(reference, fc));
+                    _qualityRouteValueCarriers.Add(Key(owner, fc));
+                }
                 if (fc == "ST" && relative == "stVal" &&
                     string.Equals(lnClass, "XCBR", StringComparison.Ordinal) &&
                     string.Equals(obj.Name, "CBOpCap", StringComparison.Ordinal) &&
@@ -362,6 +377,19 @@ public sealed class IedBrowserSchemaIndex
     /// </summary>
     public bool IsDeclaredDataObject(string? reference)
         => _dataObjects.Contains(IedBrowserLiveValues.CanonicalReference(reference));
+
+    /// <summary>
+    /// Quality may update a selected process value only if its DO or exact DA
+    /// carrier is declared in the SAME schema and FC as the quality owner.
+    /// Excludes derived name-only descendants and standalone q/t objects.
+    /// </summary>
+    public bool IsDeclaredQualityRouteValueCarrier(string? reference, string? fc)
+    {
+        var identity = IedBrowserLiveValues.CanonicalReference(reference);
+        var constraint = NormalizeFc(fc);
+        return identity.Length > 0 && constraint.Length > 0 &&
+            _qualityRouteValueCarriers.Contains(Key(identity, constraint));
+    }
 
     /// <summary>
     /// A structured Report carrier may be an exact nested CDC container,
