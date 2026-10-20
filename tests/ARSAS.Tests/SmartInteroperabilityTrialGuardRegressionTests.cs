@@ -127,9 +127,8 @@ public sealed class SmartInteroperabilityTrialGuardRegressionTests
         var typedReadTrial = root.GetProperty("p0CTypedReadTrial");
         Assert.Equal(rcbTrial.GetProperty("exactCommit").GetString(),
             typedReadTrial.GetProperty("baseEngineCommit").GetString());
-        Assert.Equal(typedReadTrial.GetProperty("exactCommit").GetString(),
-            root.GetProperty("commit").GetString());
-        Assert.Equal(181, root.GetProperty("sourcePullRequest").GetInt32());
+        P0GEngineLockEvidenceAssert.AssertAuthorizedPinnedEngine(
+            root, typedReadTrial);
         Assert.True(typedReadTrial.GetProperty("strictInvokeId").GetBoolean());
         Assert.True(typedReadTrial.GetProperty("strictAccessOrdinal").GetBoolean());
         Assert.True(typedReadTrial.GetProperty("physicalQualificationRequired").GetBoolean());
