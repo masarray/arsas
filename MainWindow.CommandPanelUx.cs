@@ -79,7 +79,8 @@ public partial class MainWindow
     private readonly HashSet<string> _controlModelPreloadAttempts = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _controlModelPreloadGate = new(1, 1);
 
-    private DispatcherTimer? _commandPanelUxTimer;
+    private readonly HashSet<DataGrid> _configuredCommandGrids = new();
+    private readonly ConditionalWeakTable<DataGridRow, Marker> _configuredCommandRows = new();
     private Button? _pressedTactileButton;
     private bool _commandPanelUxInstalled;
 
@@ -96,53 +97,46 @@ public partial class MainWindow
             new MouseButtonEventHandler(TactileButton_PreviewMouseLeftButtonUp), true);
 
         Deactivated += (_, _) => ReleasePressedTactileButton();
-        Closed += (_, _) => _commandPanelUxTimer?.Stop();
 
-        _commandPanelUxTimer = new DispatcherTimer(DispatcherPriority.Background)
-        {
-            Interval = TimeSpan.FromMilliseconds(2500)
-        };
-        _commandPanelUxTimer.Tick += CommandPanelUxTimer_Tick;
-        _commandPanelUxTimer.Start();
-
-        ApplyCommandPanelVisualTweaks();
+        // A workspace navigation or 2.5-second timer is not an IEC 61850
+        // control lifecycle event. Initialize once and react only to an
+        // actual row becoming realized or selected IED changing.
         _ = PreloadControlModelsAsync();
     }
 
-    private async void CommandPanelUxTimer_Tick(object? sender, EventArgs e)
+    private void InstallCommandGridBehavior(DataGrid? grid)
     {
-        ApplyCommandPanelVisualTweaks();
-        await PreloadControlModelsAsync();
-    }
-
-    private void ApplyCommandPanelVisualTweaks()
-    {
-        // Only attach stable bindings to realized controls. Do not mutate row heights,
-        // columns, or child visibility after the Expander has painted; that was the
-        // source of the first-open layout flicker.
-        var commandGrid = FindVisualChildren<DataGrid>(this).FirstOrDefault(IsCommandDataGrid);
-        if (commandGrid == null)
+        if (grid == null || !_configuredCommandGrids.Add(grid))
             return;
 
-        foreach (var column in commandGrid.Columns)
+        foreach (var column in grid.Columns)
         {
-            if ((column.Header?.ToString() ?? string.Empty)
-                .Equals("Control model", StringComparison.OrdinalIgnoreCase))
-            {
+            if (string.Equals(column.Header?.ToString(), "Control model", StringComparison.OrdinalIgnoreCase))
                 ConfigureControlModelColumn(column);
-            }
         }
 
-        foreach (var button in FindVisualChildren<Button>(commandGrid))
-            ConfigureCommandPanelButton(button);
+        grid.LoadingRow += CommandGrid_LoadingRow;
     }
 
-    private static bool IsCommandDataGrid(DataGrid grid)
+    private void CommandGrid_LoadingRow(object? sender, DataGridRowEventArgs e)
     {
-        var headers = grid.Columns
-            .Select(column => column.Header?.ToString() ?? string.Empty)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return headers.Contains("Control model") && headers.Contains("CDC / Type") && headers.Contains("Control");
+        // With recycling, a row container can acquire a different
+        // SignalDefinition. Loaded is raised for each realization, but the
+        // handler is installed only once for the container lifetime.
+        if (_configuredCommandRows.TryGetValue(e.Row, out _))
+            return;
+        _configuredCommandRows.Add(e.Row, new Marker());
+        e.Row.Loaded += CommandGridRow_Loaded;
+    }
+
+    private void CommandGridRow_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not DataGridRow row)
+            return;
+        if (row.DataContext is SignalDefinition signal)
+            EnsureDefaultControlSafetyChecks(signal);
+        foreach (var button in FindVisualChildren<Button>(row))
+            ConfigureCommandPanelButton(button);
     }
 
     private static void ConfigureControlModelColumn(DataGridColumn column)
@@ -283,15 +277,18 @@ public partial class MainWindow
                     .ToArray();
 
                 if (candidates.Length == 0)
-                {
-                    device.RefreshCommandSignalProjection();
                     continue;
-                }
 
-                using var throttle = new SemaphoreSlim(1, 1);
-                await Task.WhenAll(candidates.Select(async signal =>
+                foreach (var signal in candidates)
                 {
-                    await throttle.WaitAsync(_applicationCancellation.Token);
+                    // A single MMS association already serializes all reads.
+                    // Never build a parallel queue of pending inspections.
+                    await Dispatcher.Yield(DispatcherPriority.Background);
+                    if (!device.IsConnected || _applicationCancellation.IsCancellationRequested ||
+                        device.Signals.Any(candidate => candidate.ControlCommandBusy))
+                        break;
+                    if (signal.ControlModelResolved || signal.ControlInspectionBusy || signal.ControlCommandBusy)
+                        continue;
                     signal.ControlInspectionBusy = true;
                     try
                     {
@@ -317,14 +314,16 @@ public partial class MainWindow
                         // SignalDefinition parses ctlModel evidence from this message. In
                         // particular, ctlModel=StatusOnly resolves the row as read-only.
                         if (!signal.ControlCommandBusy)
+                        {
+                            // Diagnostic prose must never grant or infer ctlModel.
                             signal.ControlLastResult = $"Control model unavailable: {ex.Message}";
+                        }
                     }
                     finally
                     {
                         signal.ControlInspectionBusy = false;
-                        throttle.Release();
                     }
-                }));
+                }
 
                 device.RefreshCommandSignalProjection();
                 RebuildControlFeedbackIndex(device);
