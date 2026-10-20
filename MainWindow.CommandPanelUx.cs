@@ -215,11 +215,12 @@ public partial class MainWindow
         // a control has received verified CDC evidence. Do not overwrite its
         // IsEnabled binding with ControlSupportsOperate (that would disable
         // the first-click preflight and create a dead control row).
-        if (content is "Open" or "Close" or "Model")
+        if (content is "Open" or "Close")
         {
-            // Open/Close retain their typed preflight; Model retains the
-            // connected-session read/write commissioning gate, even when
-            // ctlModel=0 and physical Operate must remain disabled.
+            // Position actions retain the typed preflight defined in XAML.
+            // ctlModel is NOT a command action; its dedicated XAML style
+            // owns the persistent glyph, and its session-bound Enabled state
+            // is never rewritten here.
             _configuredCommandButtons.Add(button, new Marker());
             return;
         }
