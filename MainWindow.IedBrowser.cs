@@ -1058,9 +1058,8 @@ public partial class MainWindow
                     row.Value = IedBrowserReadPlan.UnobservedValue(
                         row.FunctionalConstraint);
                     row.ObservationSource = "";
-                    row.ObservationTooltip = row.FunctionalConstraint == "CO"
-                        ? "FC CO: command parameters are not scalar MMS Read targets. Use the explicit controlled Signal Testing workflow."
-                        : "";
+                    row.ObservationTooltip = IedBrowserReadPlan.UnobservedExplanation(
+                        row.FunctionalConstraint);
                 }
                 continue;
             }
