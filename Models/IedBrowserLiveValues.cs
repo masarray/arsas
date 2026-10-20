@@ -151,8 +151,16 @@ public sealed class IedBrowserLiveValues
     private static bool IsQualityReference(string key)
     {
         var fcIndex = key.LastIndexOf('|');
-        return fcIndex > 2 && key.AsSpan(0, fcIndex).EndsWith(
-            ".q".AsSpan(), StringComparison.Ordinal);
+        if (fcIndex <= 2) return false;
+        var reference = key.AsSpan(0, fcIndex);
+        if (reference.EndsWith(".q".AsSpan(), StringComparison.Ordinal))
+            return true;
+        // IEC substitution quality has a distinct SV.subQ leaf. Its raw
+        // 13-bit payload must remain available to the SAME typed quality
+        // presenter used by ST.q; SV.subVal is only two-bit Dbpos and must
+        // never be decoded as quality. Wrong FC or width stays unverified.
+        return key.AsSpan(fcIndex + 1).SequenceEqual("SV".AsSpan()) &&
+               reference.EndsWith(".subQ".AsSpan(), StringComparison.Ordinal);
     }
 
     private static bool IsTimeReference(string key)
