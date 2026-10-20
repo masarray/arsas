@@ -46,7 +46,14 @@ public sealed class P0FReportStreamIdentityTests
         for (var i = 0; i < 4; i++)
             Iec61850ReportContinuityInspector.Observe(state, metadataOnly, buffered: true);
         for (ulong sq = 1; sq <= 12; sq++)
-            Iec61850ReportContinuityInspector.Observe(state, decoded with { SequenceNumber = sq }, buffered: true);
+            Iec61850ReportContinuityInspector.Observe(
+                state, new NativeReportFrameMetadata
+                {
+                    ReportControlReference = decoded.ReportControlReference,
+                    DataSetReference = decoded.DataSetReference,
+                    ReportId = decoded.ReportId,
+                    SequenceNumber = sq
+                }, buffered: true);
 
         var snapshot = Iec61850ReportContinuityInspector.Snapshot(
             new Dictionary<string, Iec61850ReportContinuityState> { [key] = state },
