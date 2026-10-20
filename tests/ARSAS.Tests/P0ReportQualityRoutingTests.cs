@@ -128,4 +128,51 @@ public sealed class P0ReportQualityRoutingTests
         Assert.Empty(second.FindExact("LD/ATCC1.TapChg.q", "ST"));
         Assert.Single(second.FindExact("LD/CSWI1.Pos.q", "ST"));
     }
+
+    [Fact]
+    public void UndeclaredVendorLeafAndOwnQualityLeafCannotBorrowParentQuality()
+    {
+        var owner = "LD/ATCC1.TapChg";
+        var bogus = Point(owner + ".vendorValue");
+        var ownQuality = Point(owner + ".q");
+        var correct = Point(owner + ".valWTr.posVal");
+        var schema = Schema();
+        Assert.False(schema.IsDeclaredQualityRouteValueCarrier(
+            bogus.IecReference, "ST"));
+        Assert.False(schema.IsDeclaredQualityRouteValueCarrier(
+            ownQuality.IecReference, "ST"));
+        Assert.True(schema.IsDeclaredQualityRouteValueCarrier(
+            correct.IecReference, "ST"));
+
+        var routes = new Iec61850ReportQualityRouteIndex(
+            schema, [bogus, ownQuality, correct]);
+        Assert.Same(correct, Assert.Single(routes.FindExact(owner + ".q", "ST")));
+        Assert.Empty(routes.FindExact(owner + ".q", "SV"));
+    }
+
+    [Fact]
+    public void UnrelatedFunctionalConstraintCannotBeAdmittedByExactModelName()
+    {
+        var schema = Schema();
+        Assert.False(schema.IsDeclaredQualityRouteValueCarrier(
+            "LD/ATCC1.TapChg.valWTr.posVal", "SV"));
+        Assert.False(schema.IsDeclaredQualityRouteValueCarrier(
+            "LD/ATCC1.TapChg.valWTr.posVal", "CO"));
+        Assert.False(schema.IsDeclaredQualityRouteValueCarrier(
+            "LD/ATCC10.TapChg.valWTr.posVal", "ST"));
+        Assert.False(schema.IsDeclaredQualityRouteValueCarrier(
+            "LD/atcc1.TapChg.valWTr.posVal", "ST"));
+    }
+
+    [Fact]
+    public void ConflictSamplesHardBoundWhenSourceReferenceIsVeryLong()
+    {
+        var extremelyLong = new string('X', 10000);
+        var source = Point("LD/ATCC1.TapChg.valWTr.posVal", extremelyLong);
+        var routes = new Iec61850ReportQualityRouteIndex(Schema(), [source]);
+        Assert.Equal(1, routes.ConflictingHintCount);
+        Assert.Single(routes.FindExact("LD/ATCC1.TapChg.q", "ST"));
+        Assert.All(routes.ConflictingHintSamples, item =>
+            Assert.InRange(item.Length, 1, 700));
+    }
 }
