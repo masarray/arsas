@@ -110,8 +110,9 @@ public sealed class P109AAZivCommandAndGoCbCardTests
         var models = Read("Models/MonitorModels.cs");
         Assert.Contains("DistinctSelected(Signals)",models,StringComparison.Ordinal);
         Assert.DoesNotContain("DistinctOperable(Signals)",models,StringComparison.Ordinal);
-        Assert.Contains("if (content is \"Open\" or \"Close\" or \"Model\")",ux,StringComparison.Ordinal);
-        Assert.Contains("Content=\"Model\"",xaml,StringComparison.Ordinal);
+        Assert.Contains("if (content is \"Open\" or \"Close\")",ux,StringComparison.Ordinal);
+        Assert.Contains("Content=\"ctlModel\"",xaml,StringComparison.Ordinal);
+        Assert.Contains("Style=\"{StaticResource CommandDockCtlModelButton}\"",xaml,StringComparison.Ordinal);
         Assert.Contains("IsEnabled=\"{Binding ControlSupportsOperate}\"",xaml,StringComparison.Ordinal);
         Assert.Contains("hasGoose ? CapabilityState.Available : CapabilityState.Unavailable",cap,StringComparison.Ordinal);
         Assert.Contains("var hasGoose = device.HasGooseControlBlock;",cap,StringComparison.Ordinal);
