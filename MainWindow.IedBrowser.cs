@@ -605,8 +605,10 @@ public partial class MainWindow
                 _iedBrowserReadFailureEvidence = new IedBrowserReadFailureEvidence(sourceDevice);
             var readProgress = new Progress<IedBrowserReadProgress>(p =>
             {
+                // Progress belongs to the device that owns this read flight,
+                // not whichever IED card the operator happens to select now.
+                // The flight token and association still fence late callbacks.
                 if (ReferenceEquals(_iedBrowserReadOperation, cts) &&
-                    ReferenceEquals(SelectedDevice, sourceDevice) &&
                     !cts.IsCancellationRequested &&
                     sourceDevice.LiveValues.Association == readAssociation)
                     sourceDevice.ApplyBrowserReadProgress(p.Completed, p.Total);

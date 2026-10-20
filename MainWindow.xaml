@@ -377,6 +377,17 @@
                                                             <ContextMenu/>
                                                         </TextBlock.ContextMenu>
                                                     </TextBlock>
+                                                    <!-- Permanent 7px slot: Browser Read never resizes the IED card
+                                                         or overlays its relay icon, IP and action bar. -->
+                                                    <Grid Height="7" Margin="0,3,0,0"
+                                                          VerticalAlignment="Center" ClipToBounds="True">
+                                                        <ProgressBar x:Name="BrowserReadProgressLine" Height="3"
+                                                                     Minimum="0" Maximum="100"
+                                                                     Value="{Binding BrowserReadProgressPercent, Mode=OneWay}"
+                                                                     Style="{StaticResource DiscoveryProgressBar}"
+                                                                     Opacity="0" VerticalAlignment="Center"
+                                                                     ToolTip="{Binding BusyStage}"/>
+                                                    </Grid>
                                                 </StackPanel>
                                       <!-- Adaptive five-slot action bar. It spans the card and reserves the relay-icon area so Play/Stop never clip. -->
                                       <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="62,4,1,0" Panel.ZIndex="10">
@@ -481,7 +492,8 @@
                                                 <Setter TargetName="BusyOverlay" Property="Visibility" Value="Visible"/>
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding IsBrowserReading}" Value="True">
-                                                <Setter TargetName="BusyOverlay" Property="Visibility" Value="Visible"/>
+                                                <!-- Opacity does not affect measure/arrange: zero card jiggle. -->
+                                                <Setter TargetName="BrowserReadProgressLine" Property="Opacity" Value="1"/>
                                             </DataTrigger>
                                         </DataTemplate.Triggers>
                                     </DataTemplate>
