@@ -20,7 +20,7 @@ Physical SIEBCU/CSWI4 samples show SBOw service 5–7ms + *post-response applica
 
 ## Field limitations and required gates
 
-- User's actual 57-row XCBR1 CSV: 41 observed; 15 without MMS attempt evidence; 1 failed scalar projection. Four `Pos.subEna/subVal/subQ/subID` SV leaves were **not attempted**, rather than server-rejected. Read actual XCBR1 LN/DO explicitly, record exact app+engine SHA, planned FCs, typed GVA responses, invoke/partial-failure evidence, per-IED ledger and UI. Independent IEDScout only confirms comparator values.
+- User's actual 57-row XCBR1 CSV: 41 observed; 15 without MMS attempt evidence; 1 failed scalar projection. Four `Pos.subEna/subVal/subQ/subID` SV leaves were **not attempted**, rather than server-rejected. Read actual XCBR1 LN/DO explicitly, record exact app+engine SHA, planned FCs, typed GVA responses, invoke/partial-failure evidence, per-IED ledger and UI. A separately observed client display supplies comparison data only; it is not a source of protocol code.
 - `SumSwARs.units.multiplier` returned no scalar in application evidence without raw GVA; classify as unresolved read/projection, not a confirmed server refusal.
 - Report anomalies: 52 received BRCB frames, 13 sequence irregularities, BufOvfl=1, EntryID absent. Never infer lost SOE or continuity completion without synchronized wire capture.
 - User's endpoint `192.16.1.192` is also assigned to the Windows host's `KM_Test` adapter; do not label a same-host simulator observation as physical relay.
