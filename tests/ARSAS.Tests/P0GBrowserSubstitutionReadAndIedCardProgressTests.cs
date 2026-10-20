@@ -16,7 +16,9 @@ public sealed class P0GBrowserSubstitutionReadAndIedCardProgressTests
         FunctionalConstraint = fc,
         MmsReference = wireKnown
             ? LnRef + "$" + fc + "$" + doName + "$" + leaf : "",
-        SclBType = fc == "OR" ? "Boolean" : fc == "SV" ? "Boolean" : "Boolean",
+        SclBType = leaf == "subVal" ? "Dbpos" :
+            leaf == "subQ" ? "Quality" :
+            leaf == "tOpOk" ? "Timestamp" : "Boolean",
         TypeDiscoveryStatus = "Exact"
     };
 
@@ -86,6 +88,25 @@ public sealed class P0GBrowserSubstitutionReadAndIedCardProgressTests
             target.Reference.Contains("notVerified", StringComparison.Ordinal));
         var ordered = IedBrowserReadPlan.PrioritizeExplicitLn(selected);
         Assert.Equal(selected.Count, ordered.Count);
+    }
+
+    [Fact]
+    public void ExplicitReadAllKeepsModelTypesAndDoesNotAdmitSclOnlyOrControl()
+    {
+        var (model, page) = XcbrPage();
+        var all = IedBrowserReadPlan.Build(model, page, readAll: true);
+        Assert.Contains(all, target =>
+            target.Reference == LnRef + "$SV$Pos$subVal" &&
+            target.FunctionalConstraint == "SV" &&
+            target.DataType == "Dbpos");
+        Assert.Contains(all, target =>
+            target.Reference == LnRef + "$SV$Pos$subQ" &&
+            target.DataType == "Quality");
+        Assert.Contains(all, target => target.FunctionalConstraint == "OR");
+        Assert.Contains(all, target => target.FunctionalConstraint == "BL");
+        Assert.DoesNotContain(all, target =>
+            target.FunctionalConstraint == "CO" ||
+            target.Reference.Contains("notVerified", StringComparison.Ordinal));
     }
 
     [Fact]
