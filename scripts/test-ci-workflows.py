@@ -236,7 +236,7 @@ jobs:
         main/manual must still retain canonical exact-SHA package authority."""
         repo = Path(__file__).resolve().parents[1]
         source = (repo / ".github/workflows/build.yml").read_text(encoding="utf-8")
-        self.assertIn("  push:\\n    branches: [ main ]", source)
+        self.assertIn("  push:\n    branches: [ main ]", source)
         self.assertIn("  workflow_dispatch:", source)
         self.assertIn("  pr-scope:", source)
         self.assertIn("uses: actions/github-script@v7", source)
@@ -252,7 +252,7 @@ jobs:
         self.assertIn("needs.pr-scope.outputs.needs_windows == 'true'", source)
         self.assertIn("github.event_name != 'pull_request'", source)
         self.assertIn("always() &&", source)
-        self.assertEqual(source.count("  build-windows:\\n"), 1)
+        self.assertEqual(source.count("  build-windows:\n"), 1)
         self.assertIn("name: Build, test, validate and package Windows application", source)
         self.assertIn("ref: ${{ github.sha }}", source)
         self.assertIn("ARSAS-win-x64-portable-single-exe", source)
