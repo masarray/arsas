@@ -4360,6 +4360,25 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
 
     private Iec61850ReadValue? ProjectReadValue(ArMms.MmsDataValue? value, string dataType, string readReference, string requestedReference)
     {
+        // A successful, *typed* MMS OCTET STRING of length zero is a
+        // legitimate observation, not a missing Read or an "unavailable"
+        // scalar. This matters for optional origin.orIdent attributes.
+        // Do not apply to VisibleString, Unknown BER or malformed responses.
+        if (value?.Kind == ArMms.MmsDataKind.OctetString &&
+            value.RawValue.Count == 0 &&
+            (dataType.StartsWith("Octet", StringComparison.OrdinalIgnoreCase) ||
+             dataType.Equals("OctetString", StringComparison.OrdinalIgnoreCase)))
+        {
+            return new Iec61850ReadValue
+            {
+                Value = "Empty OCTET STRING (0 bytes)",
+                DisplayValue = "Empty OCTET STRING (0 bytes)",
+                SourceReference = requestedReference,
+                ReadReference = readReference,
+                Projection = "typed-empty-octet-string"
+            };
+        }
+
         // Explicit object-level DataSet members must be projected before generic
         // first-scalar semantic binding. Otherwise a three-phase THD object collapses
         // to phase A and loses the B/C values carried by the same MMS structure.
