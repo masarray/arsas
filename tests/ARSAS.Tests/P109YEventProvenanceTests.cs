@@ -6,8 +6,8 @@ namespace ARSAS.Tests;
 public sealed class P109YEventProvenanceTests
 {
     [Theory]
-    [InlineData("data-change", "Static DataSet: StaticBrcb", "Spontaneous", "BRCB")]
-    [InlineData("dchg", "Static DataSet: StaticUrcb", "Spontaneous", "URCB")]
+    [InlineData("data-change", "Static DataSet: StaticBrcb", "Data change", "BRCB")]
+    [InlineData("dchg", "Static DataSet: StaticUrcb", "Data change", "URCB")]
     [InlineData("quality-change", "Static DataSet: StaticBrcb", "Quality", "BRCB")]
     [InlineData("dupd", "Static DataSet: StaticBrcb", "Data update", "BRCB")]
     [InlineData("general-interrogation", "Static DataSet: StaticBrcb", "GI", "BRCB")]
@@ -32,7 +32,7 @@ public sealed class P109YEventProvenanceTests
             SourceMode = "Static DataSet: StaticBrcb",
             Reason = "data-change"
         };
-        Assert.Equal("Spontaneous", plainBrcb.EventCause);
+        Assert.Equal("Data change", plainBrcb.EventCause);
         var verified = new Iec61850EventEntry
         {
             SourceMode = plainBrcb.SourceMode,
@@ -53,7 +53,7 @@ public sealed class P109YEventProvenanceTests
             ReportId = "urcbA01",
             ReportControlReference = "BCUGELD/LLN0$RP$Unbuffer01"
         };
-        Assert.Equal("Spontaneous", entry.EventCause);
+        Assert.Equal("Data change", entry.EventCause);
         Assert.Equal("Unbuffer01", entry.AcquisitionShort);
         Assert.Equal("urcbA01", entry.ReportId);
         Assert.Equal("BCUGELD/LLN0$RP$Unbuffer01", entry.ReportControlReference);

@@ -24,7 +24,10 @@ public static class Iec61850EventOriginPolicy
         // another optional trigger accompanies them.
         if (Includes("general-interrogation", "gi")) return "GI";
         if (Includes("integrity", "intg")) return "Integrity";
-        if (Includes("data-change", "dchg")) return "Spontaneous";
+        // dchg is the IEC ReasonForInclusion, not proof that an event was
+        // unbuffered or "spontaneous" on the wire. The RCB acquisition lane
+        // and verified buffered replay are separate evidence dimensions.
+        if (Includes("data-change", "dchg")) return "Data change";
         if (Includes("quality-change", "qchg")) return "Quality";
         if (Includes("data-update", "dupd")) return "Data update";
 

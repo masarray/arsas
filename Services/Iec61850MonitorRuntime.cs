@@ -2093,6 +2093,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 };
                 session.ReportStreams[streamKey] = state;
             }
+            else if (string.IsNullOrWhiteSpace(state.ReportId) &&
+                     !string.IsNullOrWhiteSpace(frame.ReportId))
+            {
+                // A later decoded frame can complete an unknown earlier RptID.
+                // It cannot establish another independent BRCB stream.
+                state.ReportId = frame.ReportId;
+            }
 
             // IEC 61850-7-2 evidence analysis only: each exact RCB has isolated
             // report continuity state. We never discard, rewrite or reorder decoded
@@ -2115,12 +2122,18 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     session.ContinuityUntrackedStreams);
     }
 
-    private static string BuildReportStreamKey(ReportControlPlan plan, NativeReportFrameMetadata frame)
+    internal static string BuildReportStreamKey(ReportControlPlan plan, NativeReportFrameMetadata frame)
     {
-        var rcb = string.IsNullOrWhiteSpace(frame.ReportControlReference) ? plan.ReportControlReference : frame.ReportControlReference;
-        var reportId = string.IsNullOrWhiteSpace(frame.ReportId) ? "-" : frame.ReportId;
-        var dataSet = string.IsNullOrWhiteSpace(frame.DataSetReference) ? plan.DataSetReference : frame.DataSetReference;
-        return $"{NormalizeReference(rcb)}|{NormalizeReference(reportId)}|{NormalizeReference(dataSet)}";
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(frame);
+        var rcb = string.IsNullOrWhiteSpace(frame.ReportControlReference)
+            ? plan.ReportControlReference : frame.ReportControlReference;
+        var dataSet = string.IsNullOrWhiteSpace(frame.DataSetReference)
+            ? plan.DataSetReference : frame.DataSetReference;
+        // The actual RCB and canonical DataSet identify this continuity era.
+        // A missing or alternate RptID does not create another physical RCB.
+        // Different DataSets remain separate and cannot borrow SqNum history.
+        return $"{NormalizeReference(rcb)}|{NormalizeReference(dataSet)}";
     }
 
     private static string ReportName(string actualReference, string plannedReference)

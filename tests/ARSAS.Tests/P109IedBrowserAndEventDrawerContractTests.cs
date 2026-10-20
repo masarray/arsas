@@ -57,7 +57,7 @@ public sealed class P109IedBrowserAndEventDrawerContractTests
     {
         var expected = new Dictionary<string,string>
         {
-            ["dchg"] = "Spontaneous", ["gi"] = "GI",
+            ["dchg"] = "Data change", ["gi"] = "GI",
             ["integrity"] = "Integrity", ["qchg"] = "Quality",
             ["dupd"] = "Data update"
         };
@@ -65,7 +65,7 @@ public sealed class P109IedBrowserAndEventDrawerContractTests
             Assert.Equal(entry.Value, Iec61850EventOriginPolicy.Cause(entry.Key, "Static DataSet: StaticBrcb"));
         Assert.Equal("Poll", Iec61850EventOriginPolicy.Cause("dchg", "MMS Polling"));
         Assert.Equal("State change", Iec61850EventOriginPolicy.Cause("", "Static DataSet: StaticBrcb"));
-        Assert.Equal("Spontaneous", Iec61850EventOriginPolicy.Cause("dchg", "BRCB", false));
+        Assert.Equal("Data change", Iec61850EventOriginPolicy.Cause("dchg", "BRCB", false));
         Assert.Equal("Buffer", Iec61850EventOriginPolicy.Cause("dchg", "BRCB", true));
     }
 
