@@ -108,10 +108,24 @@ public static class IedBrowserReadPlan
             };
         }
 
+        // Page payloads can outlive a discovery/association change. Never turn
+        // their detached DA objects into MMS targets merely because they contain
+        // a plausible reference. Resolve every selection back through THIS live
+        // model's exact MMS reference and FC, and use the model's declared type.
+        // Duplicate identities in the model are ambiguous and fail closed.
+        var authorized = all
+            .Where(a => !string.IsNullOrWhiteSpace(a.MmsReference))
+            .GroupBy(a => (a.MmsReference, Fc: a.FunctionalConstraint.ToUpperInvariant()))
+            .Where(group => group.Count() == 1)
+            .ToDictionary(group => group.Key, group => group.Single());
+
         var attributes = selected.Where(a => ReadableFc.Contains(a.FunctionalConstraint))
             .Where(a => !string.IsNullOrWhiteSpace(a.MmsReference))
+            .Select(a => authorized.GetValueOrDefault(
+                (a.MmsReference, a.FunctionalConstraint.ToUpperInvariant())))
+            .Where(a => a is not null)
             .Select(a => new IedBrowserReadTarget(
-                a.MmsReference, a.FunctionalConstraint,
+                a!.MmsReference, a.FunctionalConstraint,
                 string.IsNullOrWhiteSpace(a.SclBType) ? a.MmsType : a.SclBType));
         // Exact, model-inventory-proven control state is an additional
         // read-only projection. It is never added to cyclic or Read All scans.
