@@ -182,6 +182,23 @@ internal static class Iec61850ReportContinuityInspector
     private const int AnomalyChronologyLimit = 8;
 
     /// <summary>
+    /// One concrete RCB owns its sequence history within this association.
+    /// Optional RptID/DataSet aliases do NOT identify independent streams.
+    /// </summary>
+    internal static string StreamKey(string? plannedRcb, NativeReportFrameMetadata frame)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+        var rcb = string.IsNullOrWhiteSpace(frame.ReportControlReference)
+            ? plannedRcb : frame.ReportControlReference;
+        return (rcb ?? string.Empty).Trim().Replace('$', '.')
+            .Replace("..", ".").ToLowerInvariant();
+    }
+
+    private static string CanonicalDataSet(string? reference)
+        => (reference ?? string.Empty).Trim().Replace('$', '.')
+            .Replace("..", ".");
+
+    /// <summary>
     /// A gap/backward move is an OBSERVED discontinuity, not proof of a specific
     /// lost event: resubscription, replay, server restart and report queueing may
     /// be relevant. Do not mistake a GI or a new EntryID for a validated reset.
@@ -225,6 +242,23 @@ internal static class Iec61850ReportContinuityInspector
         {
             (findings ??= new List<string>(2)).Add(message);
             if (state.AnomalyFindings < long.MaxValue) state.AnomalyFindings++;
+        }
+
+        // Optional metadata variations cannot create another independent RCB.
+        if (!string.IsNullOrWhiteSpace(frame.ReportId))
+        {
+            if (!string.IsNullOrWhiteSpace(state.ReportId) &&
+                !string.Equals(state.ReportId, frame.ReportId, StringComparison.Ordinal))
+                Warn("RptID changed under the same RCB; continuity must be requalified");
+            state.ReportId = frame.ReportId;
+        }
+        if (!string.IsNullOrWhiteSpace(frame.DataSetReference))
+        {
+            if (!string.IsNullOrWhiteSpace(state.DataSetReference) &&
+                !string.Equals(CanonicalDataSet(state.DataSetReference),
+                    CanonicalDataSet(frame.DataSetReference), StringComparison.OrdinalIgnoreCase))
+                Warn("DataSet changed under the same RCB; schema and continuity must be requalified");
+            state.DataSetReference = frame.DataSetReference;
         }
 
         var priorEntryIdPresent = !string.IsNullOrEmpty(state.LastEntryIdHex);
