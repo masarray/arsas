@@ -341,7 +341,7 @@
     "engineCiOnlyPullRequest": 185,
     "engineCiRun": 39505819831,
     "engineTestsPassed": 1182,
-    "consumerIntegrationPullRequest": 653,
+    "consumerIntegrationPullRequest": 655,
     "sbo400msSafetyGatePreserved": true,
     "negativeAndDelayedLastApplErrorRegression": true,
     "noUnqualifiedImmediateOperate": true,
