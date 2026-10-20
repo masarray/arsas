@@ -40,6 +40,70 @@ public sealed class P0DReadCompletionAccountingTests
     }
 
     [Fact]
+    public void SgcbFocusedChunk_DoesNotConflateQueuedUnknownWithNeverScheduled()
+    {
+        var declared = new[] {
+            Target("vendor", "SG"),
+            Target("swRev", "SG"),
+            Target("d", "SG"),
+            Target("configRev", "SG"),
+            Target("swRev", "SE")
+        };
+        var scheduled = new[] {declared[0], declared[1], declared[2]};
+        var coverage = IedBrowserReadCompletionAccounting.Summarize(
+            declared, scheduled,
+            target => target.Reference == declared[0].Reference ||
+                      target.Reference == declared[4].Reference,
+            target => target.Reference == declared[2].Reference);
+
+        Assert.Equal(5, coverage.ConsideredTargets);
+        Assert.Equal(2, coverage.ObservedTargets);
+        Assert.Equal(1, coverage.TerminalFailures);
+        Assert.False(coverage.Truncated);
+        Assert.Equal(2, coverage.Gaps.Count);
+        Assert.Equal(declared[1], coverage.Gaps[0].Target);
+        Assert.Equal(IedBrowserDeferredReadKind.TerminalResultUnverified,
+            coverage.Gaps[0].Kind);
+        Assert.Equal(declared[3], coverage.Gaps[1].Target);
+        Assert.Equal(IedBrowserDeferredReadKind.NotScheduled,
+            coverage.Gaps[1].Kind);
+        // The SG target must never borrow the same-name SE observation.
+        Assert.DoesNotContain(coverage.Gaps, gap =>
+            gap.Target.FunctionalConstraint == "SE");
+    }
+
+    [Fact]
+    public void InterruptedQueuedRead_IsNotATerminalAccessResultFailure()
+    {
+        var requested = Target("setMag", "SG");
+        var summary = IedBrowserReadCompletionAccounting.Summarize(
+            [requested], [requested],
+            _ => false,
+            // An interrupted response has NO confirmed terminal wire result.
+            _ => false);
+        Assert.Equal(0, summary.TerminalFailures);
+        Assert.Equal(IedBrowserDeferredReadKind.TerminalResultUnverified,
+            Assert.Single(summary.Gaps).Kind);
+    }
+
+    [Fact]
+    public void SummaryBoundsAllEvidenceAndDoesNotExecuteBeyondScope()
+    {
+        var targets = Enumerable.Range(0, 8)
+            .Select(i => Target("attr" + i, "SG")).ToArray();
+        var called = 0;
+        var summary = IedBrowserReadCompletionAccounting.Summarize(
+            targets, targets,
+            _ => { called++; return false; }, _ => false, maxTargets: 3);
+        Assert.Equal(3, called);
+        Assert.Equal(3, summary.ConsideredTargets);
+        Assert.True(summary.Truncated);
+        Assert.Equal(3, summary.Gaps.Count);
+        Assert.All(summary.Gaps,
+            gap => Assert.Equal(IedBrowserDeferredReadKind.TerminalResultUnverified, gap.Kind));
+    }
+
+    [Fact]
     public void CaseSensitiveIecReference_AndBoundedPageCannotBorrowSiblingEvidence()
     {
         var correct = Target("swRev");

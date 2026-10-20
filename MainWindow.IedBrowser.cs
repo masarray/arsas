@@ -636,28 +636,32 @@ public partial class MainWindow
                 // both cases as deferred/unknown, never as an IED AccessDenied.
                 // Only the current explicit scope is accounted; metadata,
                 // companion reads and unrelated model pages are excluded.
+                // Ledger truth, exact FC absence and the bounded queue must
+                // be classified once, identically for LN/DO/DataSet and SGCB.
+                // An Interrupted Read is NOT a confirmed terminal MMS failure.
+                bool IsObserved(IedBrowserReadTarget target)
+                    => sourceDevice.LiveValues.TryGet(
+                        target.Reference, target.FunctionalConstraint, out var value) &&
+                       !value.IsStale && value.Association == readAssociation;
+                bool HasTerminalFailure(IedBrowserReadTarget target)
+                {
+                    if (_iedBrowserReadFailureEvidence is not { } evidence)
+                        return false;
+                    return evidence.TryGet(sourceDevice, target.Reference, "",
+                               target.FunctionalConstraint, out _, out var kind) &&
+                           kind == IedBrowserReadAbsenceKind.Failed;
+                }
+
                 if (!readAll && currentPage?.Kind is "LN" or "DO" or "DA" or "DataSet" &&
                     configRequest is null && companionRequest is null &&
                     !reportUnitRequest)
                 {
                     var declaredSelection = IedBrowserReadPlan.Build(
                         model, currentPage, readAll: false, selectedDoReference: selectedDo);
-                    bool IsObserved(IedBrowserReadTarget target)
-                        => sourceDevice.LiveValues.TryGet(
-                            target.Reference, target.FunctionalConstraint, out var value) &&
-                           !value.IsStale && value.Association == readAssociation;
-                    bool HasTerminalFailure(IedBrowserReadTarget target)
-                    {
-                        if (_iedBrowserReadFailureEvidence is not { } evidence)
-                            return false;
-                        return evidence.TryGet(sourceDevice, target.Reference, "",
-                                   target.FunctionalConstraint, out _, out var kind) &&
-                               kind != IedBrowserReadAbsenceKind.Deferred;
-                    }
-                    var gaps = IedBrowserReadCompletionAccounting.Classify(
+                    var coverage = IedBrowserReadCompletionAccounting.Summarize(
                         declaredSelection, targets, IsObserved, HasTerminalFailure);
-                    unverifiedReadTargets = gaps.Count;
-                    foreach (var gap in gaps)
+                    unverifiedReadTargets = coverage.Gaps.Count;
+                    foreach (var gap in coverage.Gaps)
                         _iedBrowserReadFailureEvidence?.RecordDeferred(gap.Target,
                             gap.Kind == IedBrowserDeferredReadKind.NotScheduled
                                 ? "Not scheduled in this bounded selected-object Read."
@@ -666,38 +670,26 @@ public partial class MainWindow
 
                 if (!readAll && currentPage?.Kind == "SGCB")
                 {
-                    // The completed 32-target focused chunk is NOT the total
-                    // model inventory. Expose the accounted deferred remainder,
-                    // including leaves never scheduled for MMS on this selection.
+                    // SGCB uses the SAME exact-target accounting as LN/DO:
+                    // 'queued' is not 'wire attempted', and one completed chunk
+                    // is never represented as the whole setting-group inventory.
                     var declared = IedBrowserReadPlan.Build(model, currentPage, readAll: false);
-                    var observed = 0;
-                    var unavailable = 0;
-                    foreach (var target in declared)
-                    {
-                        if (sourceDevice.LiveValues.TryGet(target.Reference,
-                                target.FunctionalConstraint, out var present) &&
-                            !present.IsStale && present.Association == readAssociation)
-                        {
-                            observed++;
-                            continue;
-                        }
-                        if (_iedBrowserReadFailureEvidence?.TryGet(
-                                sourceDevice, target.Reference, "",
-                                target.FunctionalConstraint, out _, out var kind) == true &&
-                            kind != IedBrowserReadAbsenceKind.Deferred)
-                        {
-                            unavailable++;
-                            continue;
-                        }
-                        _iedBrowserReadFailureEvidence?.RecordDeferred(target,
-                            "Not yet scheduled within the bounded selected SGCB read; " +
-                            "use explicit Read to request all verified SG leaves.");
-                    }
-                    var deferred = Math.Max(0, declared.Count - observed - unavailable);
+                    var coverage = IedBrowserReadCompletionAccounting.Summarize(
+                        declared, targets, IsObserved, HasTerminalFailure);
+                    unverifiedReadTargets = coverage.Gaps.Count;
+                    foreach (var gap in coverage.Gaps)
+                        _iedBrowserReadFailureEvidence?.RecordDeferred(gap.Target,
+                            gap.Kind == IedBrowserDeferredReadKind.NotScheduled
+                                ? "Not scheduled in this bounded selected SGCB Read; " +
+                                  "use explicit Read for remaining verified SG leaves."
+                                : "SGCB Read queued but no terminal result for this exact FC; " +
+                                  "on-wire attempt unverified.");
                     IedBrowserSubtitle.Text =
                         $"SGCB focused batch · {successes:N0}/{targets.Count:N0} received · " +
-                        $"{observed:N0}/{declared.Count:N0} observed · " +
-                        $"{unavailable:N0} unavailable · {deferred:N0} deferred";
+                        $"{coverage.ObservedTargets:N0}/{coverage.ConsideredTargets:N0} observed · " +
+                        $"{coverage.TerminalFailures:N0} read failed · " +
+                        $"{coverage.Gaps.Count:N0} deferred/unverified" +
+                        (coverage.Truncated ? " · bounded evidence scope" : "");
                 }
                 else
                     IedBrowserSubtitle.Text =
