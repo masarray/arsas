@@ -692,15 +692,19 @@
                             </Border>
 
                             <Expander x:Name="CommandPanelExpander" Grid.Row="1" Margin="0,10,0,0" IsExpanded="False"
+                                      Style="{StaticResource CommandDockTransparentHeaderExpander}"
                                       VerticalAlignment="Stretch" Expanded="CommandPanel_Expanded" Collapsed="CommandPanel_Collapsed">
                                 <Expander.Header>
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <Border Width="28" Height="28" CornerRadius="9" Background="#E7F0FF" BorderBrush="#C9DBF7" BorderThickness="1" Margin="0,0,9,0">
-                                            <Viewbox Width="15" Height="15" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                <Path Data="{StaticResource OperatorCommandDockPowerIcon}" Style="{StaticResource MaterialIconGlyph}"/>
-                                            </Viewbox>
-                                        </Border>
-                                        <TextBlock Text="IED Command Panel" FontSize="13.6" FontWeight="SemiBold" Foreground="{StaticResource Ink}" VerticalAlignment="Center"/>
+                                        <!-- Power is header iconography, not a second control or a raised card.
+                                             The entire transparent header remains the one keyboard/mouse toggle. -->
+                                        <Viewbox Width="19" Height="19" Margin="0,0,7,0"
+                                                 HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <Path Data="{StaticResource OperatorCommandDockPowerIcon}"
+                                                  Fill="White" Stretch="Uniform"/>
+                                        </Viewbox>
+                                        <TextBlock Text="IED Command Panel" FontSize="13.6" FontWeight="SemiBold"
+                                                   Foreground="White" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Expander.Header>
                                 <Border Style="{StaticResource WorkspaceCard}" Background="{StaticResource CommandPanelSurface}" Padding="6" BorderBrush="#BFD0E5">
