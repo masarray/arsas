@@ -1,4 +1,5 @@
 using AR.Iec61850.Discovery;
+using System.Runtime.CompilerServices;
 
 namespace ArIED61850Tester.Models;
 
@@ -27,6 +28,54 @@ public static class IedBrowserReadPlan
                 IedBrowserReadSelectionKind.GooseInspectionRequiresSubscriber,
             _ => IedBrowserReadSelectionKind.FcAttributes
         };
+
+    // Per-canonical-model compiled READ-ONLY admission catalog. A completed
+    // LiveDiscoveryModel is a frozen per-association snapshot; reconnect creates
+    // a new model object. Weak keys release all index memory when that snapshot
+    // is replaced. This is an index of model metadata, NOT a value cache.
+    private sealed class CompiledCatalog
+    {
+        internal IedBrowserSchemaIndex Schema { get; }
+        internal LiveIedDataAttributeModel[] Attributes { get; }
+        internal Dictionary<(string Reference, string Fc), LiveIedDataAttributeModel>
+            Authorized { get; }
+
+        internal CompiledCatalog(LiveIedModelDiscoveryDocument model)
+        {
+            Schema = new IedBrowserSchemaIndex(model);
+            Attributes = model.LogicalDevices
+                .SelectMany(ld => ld.LogicalNodes)
+                .SelectMany(ln => ln.DataObjects)
+                .SelectMany(obj => obj.Attributes)
+                .Where(a => ReadableFc.Contains(a.FunctionalConstraint))
+                .ToArray();
+            // Exact wire reference + FC. A duplicate declaration makes that
+            // identity ambiguous; never grant first-inventory wins authority.
+            Authorized = Attributes
+                .Where(a => !string.IsNullOrWhiteSpace(a.MmsReference))
+                .GroupBy(a => (a.MmsReference, Fc: a.FunctionalConstraint.ToUpperInvariant()))
+                .Where(group => group.Count() == 1)
+                .ToDictionary(group => group.Key, group => group.Single());
+        }
+    }
+
+    private static readonly ConditionalWeakTable<LiveIedModelDiscoveryDocument,
+        CompiledCatalog> Compiled = new();
+
+    /// <summary>
+    /// Describe exactly the FC namespaces admitted for THIS explicit read;
+    /// the result is plan metadata, never an inferred network observation.
+    /// </summary>
+    public static string DescribeScheduledFunctionalConstraints(
+        IReadOnlyList<IedBrowserReadTarget> targets)
+    {
+        ArgumentNullException.ThrowIfNull(targets);
+        return targets.Count == 0 ? "none" : string.Join(", ",
+            targets.GroupBy(t => (t.FunctionalConstraint ?? "").Trim().ToUpperInvariant())
+                .OrderBy(group => group.Key, StringComparer.Ordinal)
+                .Select(group => group.Key + ":" + group.Count().ToString(
+                    System.Globalization.CultureInfo.InvariantCulture)));
+    }
 
     // The live MMS model may declare status-only substitution (SV), operation
     // supervision (OR), and blocking (BL) leaves. They are safe to *read*
@@ -58,12 +107,9 @@ public static class IedBrowserReadPlan
         bool readAll, string? selectedDoReference = null)
     {
         if (model is null) return Array.Empty<IedBrowserReadTarget>();
-        var schema = new IedBrowserSchemaIndex(model);
-        var all = model.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
-            .SelectMany(ln => ln.DataObjects)
-            .SelectMany(obj => obj.Attributes)
-            .Where(a => ReadableFc.Contains(a.FunctionalConstraint))
-            .ToArray();
+        var compiled = Compiled.GetValue(model, static m => new CompiledCatalog(m));
+        var schema = compiled.Schema;
+        var all = compiled.Attributes;
 
         IEnumerable<LiveIedDataAttributeModel> selected = all;
         if (!readAll)
@@ -113,11 +159,7 @@ public static class IedBrowserReadPlan
         // a plausible reference. Resolve every selection back through THIS live
         // model's exact MMS reference and FC, and use the model's declared type.
         // Duplicate identities in the model are ambiguous and fail closed.
-        var authorized = all
-            .Where(a => !string.IsNullOrWhiteSpace(a.MmsReference))
-            .GroupBy(a => (a.MmsReference, Fc: a.FunctionalConstraint.ToUpperInvariant()))
-            .Where(group => group.Count() == 1)
-            .ToDictionary(group => group.Key, group => group.Single());
+        var authorized = compiled.Authorized;
 
         var attributes = selected.Where(a => ReadableFc.Contains(a.FunctionalConstraint))
             .Where(a => !string.IsNullOrWhiteSpace(a.MmsReference))
