@@ -36,18 +36,10 @@ public partial class MainWindow
         public bool ApplyingDockState { get; set; }
         public bool SuppressDockStateCapture { get; set; }
 
-        // P0 defaults: command-centric views open the dock, observational views do not.
-        // A user's manual expand/collapse choice is then retained per workspace for the
-        // remainder of the session.
-        public Dictionary<int, bool> DockExpandedByWorkspace { get; } = new()
-        {
-            [0] = true,   // IEC 61850 Explorer
-            [1] = false,  // Live Monitor
-            [2] = true,   // Event Log
-            [3] = false,  // Alarm
-            [4] = false,  // GOOSE Subscriber
-            [5] = false   // Diagnostics
-        };
+        // The Command Dock is ONE shared visual instance, not a per-tab child.
+        // Preserve its user-chosen expansion state across navigation. Replaying
+        // different per-tab defaults repeatedly unloaded/reloaded command rows.
+        public bool DockExpanded { get; set; } = true;
     }
 
     [ModuleInitializer]
@@ -389,18 +381,20 @@ public partial class MainWindow
         if (state == null || state.ApplyingDockState || state.SuppressDockStateCapture)
             return;
 
-        state.DockExpandedByWorkspace[MainTabs.SelectedIndex] = expanded;
+        state.DockExpanded = expanded;
     }
 
     private void ApplyP0CommandDockState(PersistentWorkbenchState state, int workspaceIndex)
     {
-        if (!state.DockExpandedByWorkspace.TryGetValue(workspaceIndex, out var expanded))
-            expanded = false;
+        // Navigation is read-only to dock state. No WPF unload/reload or
+        // implicit expanded-event MMS inspection on tab change.
+        if (CommandPanelExpander.IsExpanded == state.DockExpanded)
+            return;
 
         state.ApplyingDockState = true;
         try
         {
-            CommandPanelExpander.IsExpanded = expanded;
+            CommandPanelExpander.IsExpanded = state.DockExpanded;
         }
         finally
         {

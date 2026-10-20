@@ -78,8 +78,10 @@ public partial class MainWindow
     private readonly ConditionalWeakTable<SignalDefinition, Marker> _controlSafetyDefaultsApplied = new();
     private readonly HashSet<string> _controlModelPreloadAttempts = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _controlModelPreloadGate = new(1, 1);
+    private bool _controlModelPreloadPending;
 
-    private DispatcherTimer? _commandPanelUxTimer;
+    private readonly HashSet<DataGrid> _configuredCommandGrids = new();
+    private readonly ConditionalWeakTable<DataGridRow, Marker> _configuredCommandRows = new();
     private Button? _pressedTactileButton;
     private bool _commandPanelUxInstalled;
 
@@ -96,53 +98,57 @@ public partial class MainWindow
             new MouseButtonEventHandler(TactileButton_PreviewMouseLeftButtonUp), true);
 
         Deactivated += (_, _) => ReleasePressedTactileButton();
-        Closed += (_, _) => _commandPanelUxTimer?.Stop();
 
-        _commandPanelUxTimer = new DispatcherTimer(DispatcherPriority.Background)
-        {
-            Interval = TimeSpan.FromMilliseconds(2500)
-        };
-        _commandPanelUxTimer.Tick += CommandPanelUxTimer_Tick;
-        _commandPanelUxTimer.Start();
-
-        ApplyCommandPanelVisualTweaks();
+        // A workspace navigation or 2.5-second timer is not an IEC 61850
+        // control lifecycle event. Initialize once and react only to an
+        // actual row becoming realized or selected IED changing.
         _ = PreloadControlModelsAsync();
     }
 
-    private async void CommandPanelUxTimer_Tick(object? sender, EventArgs e)
+    private void InstallCommandGridBehavior(DataGrid? grid)
     {
-        ApplyCommandPanelVisualTweaks();
-        await PreloadControlModelsAsync();
-    }
-
-    private void ApplyCommandPanelVisualTweaks()
-    {
-        // Only attach stable bindings to realized controls. Do not mutate row heights,
-        // columns, or child visibility after the Expander has painted; that was the
-        // source of the first-open layout flicker.
-        var commandGrid = FindVisualChildren<DataGrid>(this).FirstOrDefault(IsCommandDataGrid);
-        if (commandGrid == null)
+        if (grid == null || !_configuredCommandGrids.Add(grid))
             return;
 
-        foreach (var column in commandGrid.Columns)
+        foreach (var column in grid.Columns)
         {
-            if ((column.Header?.ToString() ?? string.Empty)
-                .Equals("Control model", StringComparison.OrdinalIgnoreCase))
-            {
+            if (string.Equals(column.Header?.ToString(), "Control model", StringComparison.OrdinalIgnoreCase))
                 ConfigureControlModelColumn(column);
-            }
         }
 
-        foreach (var button in FindVisualChildren<Button>(commandGrid))
-            ConfigureCommandPanelButton(button);
+        grid.LoadingRow += CommandGrid_LoadingRow;
+        // Loaded can fire after the DataGrid has already generated its first
+        // containers. Attach the initial realized rows once; future recycled
+        // rows use LoadingRow. No periodic scan of the window or other tabs.
+        foreach (var row in FindVisualChildren<DataGridRow>(grid))
+            AttachCommandRow(row);
     }
 
-    private static bool IsCommandDataGrid(DataGrid grid)
+    private void CommandGrid_LoadingRow(object? sender, DataGridRowEventArgs e)
+        => AttachCommandRow(e.Row);
+
+    private void AttachCommandRow(DataGridRow row)
     {
-        var headers = grid.Columns
-            .Select(column => column.Header?.ToString() ?? string.Empty)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return headers.Contains("Control model") && headers.Contains("CDC / Type") && headers.Contains("Control");
+        if (_configuredCommandRows.TryGetValue(row, out _))
+            return;
+        _configuredCommandRows.Add(row, new Marker());
+        row.Loaded += CommandGridRow_Loaded;
+        if (row.IsLoaded)
+            ApplyCommandRowVisuals(row);
+    }
+
+    private void CommandGridRow_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is DataGridRow row)
+            ApplyCommandRowVisuals(row);
+    }
+
+    private void ApplyCommandRowVisuals(DataGridRow row)
+    {
+        if (row.DataContext is SignalDefinition signal)
+            EnsureDefaultControlSafetyChecks(signal);
+        foreach (var button in FindVisualChildren<Button>(row))
+            ConfigureCommandPanelButton(button);
     }
 
     private static void ConfigureControlModelColumn(DataGridColumn column)
@@ -204,6 +210,17 @@ public partial class MainWindow
         if (_configuredCommandButtons.TryGetValue(button, out _))
             return;
 
+        // Position Open/Close have an intentional typed preflight in XAML:
+        // ControlCanInspectPosition permits a *read-only* inspection before
+        // a control has received verified CDC evidence. Do not overwrite its
+        // IsEnabled binding with ControlSupportsOperate (that would disable
+        // the first-click preflight and create a dead control row).
+        if (content is "Open" or "Close")
+        {
+            _configuredCommandButtons.Add(button, new Marker());
+            return;
+        }
+
         var enabledBinding = new MultiBinding
         {
             Converter = CommandButtonEnabledConverter.Instance,
@@ -263,11 +280,19 @@ public partial class MainWindow
     private async Task PreloadControlModelsAsync()
     {
         if (!await _controlModelPreloadGate.WaitAsync(0))
+        {
+            // Connection/selection changes during an active sweep require a
+            // second pass, not a competing MMS read queue or a dropped event.
+            _controlModelPreloadPending = true;
             return;
+        }
 
         try
         {
-            foreach (var device in Devices.Where(device => device.IsConnected && device.SelectedControlSignalCount > 0))
+            do
+            {
+                _controlModelPreloadPending = false;
+                foreach (var device in Devices.Where(device => device.IsConnected && device.SelectedControlSignalCount > 0))
             {
                 foreach (var signal in device.Signals.Where(signal => signal.IsSelected && signal.IsValidControlObject))
                     EnsureDefaultControlSafetyChecks(signal);
@@ -278,20 +303,26 @@ public partial class MainWindow
                     continue;
 
                 // Cache aliases of the same DataObject share one ctlModel probe.
-                var candidates = Iec61850ControlIdentity.InspectionRepresentatives(device.Signals)
-                    .Where(signal => _controlModelPreloadAttempts.Add(ControlModelAttemptKey(device, signal)))
-                    .ToArray();
+                var candidates = Iec61850ControlIdentity.InspectionRepresentatives(device.Signals);
 
                 if (candidates.Length == 0)
-                {
-                    device.RefreshCommandSignalProjection();
                     continue;
-                }
 
-                using var throttle = new SemaphoreSlim(1, 1);
-                await Task.WhenAll(candidates.Select(async signal =>
+                foreach (var signal in candidates)
                 {
-                    await throttle.WaitAsync(_applicationCancellation.Token);
+                    // A single MMS association already serializes all reads.
+                    // Never build a parallel queue of pending inspections.
+                    await Dispatcher.Yield(DispatcherPriority.Background);
+                    if (!device.IsConnected || _applicationCancellation.IsCancellationRequested ||
+                        device.Signals.Any(candidate => candidate.ControlCommandBusy))
+                        break;
+                    if (signal.ControlModelResolved || signal.ControlInspectionBusy || signal.ControlCommandBusy)
+                        continue;
+                    // Do not reserve a later target before it is actually
+                    // admitted; if a command interrupts the sweep, remaining
+                    // objects can still be inspected on the next real event.
+                    if (!_controlModelPreloadAttempts.Add(ControlModelAttemptKey(device, signal)))
+                        continue;
                     signal.ControlInspectionBusy = true;
                     try
                     {
@@ -317,23 +348,36 @@ public partial class MainWindow
                         // SignalDefinition parses ctlModel evidence from this message. In
                         // particular, ctlModel=StatusOnly resolves the row as read-only.
                         if (!signal.ControlCommandBusy)
+                        {
+                            // Diagnostic prose must never grant or infer ctlModel.
                             signal.ControlLastResult = $"Control model unavailable: {ex.Message}";
+                        }
                     }
                     finally
                     {
                         signal.ControlInspectionBusy = false;
-                        throttle.Release();
                     }
-                }));
+                }
 
-                device.RefreshCommandSignalProjection();
-                RebuildControlFeedbackIndex(device);
+                    device.RefreshCommandSignalProjection();
+                    RebuildControlFeedbackIndex(device);
+                }
             }
+            while (_controlModelPreloadPending && !_applicationCancellation.IsCancellationRequested);
         }
         finally
         {
             _controlModelPreloadGate.Release();
         }
+    }
+
+    private void ResetControlPreloadAttempts(Iec61850MonitorDevice device)
+    {
+        // The cache belongs to one association, not to the persisted device ID.
+        // Reconnect must re-prove typed ctlModel and CDC on the new session.
+        var prefix = device.DeviceId + "|";
+        _controlModelPreloadAttempts.RemoveWhere(key =>
+            key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string ControlModelAttemptKey(Iec61850MonitorDevice device, SignalDefinition signal)

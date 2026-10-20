@@ -302,7 +302,9 @@ public class SignalDefinition : ObservableObject
         set
         {
             var normalized = value?.Trim() ?? string.Empty;
-            UpdateControlModelFromEvidence(normalized, updateDisplay: true);
+            // Human-facing diagnostics are NEVER a typed ctlModel proof.
+            // Only the live descriptor/probe and explicit model lifecycle
+            // may publish ControlModelKind or command permissions.
             normalized = NormalizeControlResultText(normalized);
             Set(ref _controlLastResult, normalized);
         }
@@ -316,6 +318,7 @@ public class SignalDefinition : ObservableObject
                 return;
             Raise(nameof(ControlIsBusy));
             Raise(nameof(ControlCanInspectPosition));
+            Raise(nameof(ControlCanConfirm));
         }
     }
 
@@ -345,7 +348,7 @@ public class SignalDefinition : ObservableObject
     public string ControlPendingAction => _controlPendingAction;
     public string ControlPendingConfirmationLabel =>
         string.IsNullOrWhiteSpace(_controlPendingAction) ? "Confirm command" : $"Confirm {_controlPendingAction}";
-    public bool ControlCanConfirm => _controlConfirmationPending && ControlSupportsOperate && !ControlCommandBusy;
+    public bool ControlCanConfirm => _controlConfirmationPending && ControlSupportsOperate && !ControlCommandBusy && !ControlInspectionBusy;
 
     public bool TryStageControlConfirmation(string requestedValue, string actionLabel, out string rejectionReason)
     {
@@ -361,6 +364,11 @@ public class SignalDefinition : ObservableObject
             if (_controlCommandBusy)
             {
                 rejectionReason = "another command already owns this control object";
+                return false;
+            }
+            if (_controlInspectionBusy)
+            {
+                rejectionReason = "the control model is being verified; no command is admitted until inspection completes";
                 return false;
             }
             if (string.IsNullOrWhiteSpace(normalizedValue) || string.IsNullOrWhiteSpace(normalizedAction))
@@ -405,6 +413,12 @@ public class SignalDefinition : ObservableObject
                 rejectionReason = "another command already owns this control object";
                 return false;
             }
+            if (_controlInspectionBusy)
+            {
+                claim = null;
+                rejectionReason = "the control model is being verified; no command is admitted until inspection completes";
+                return false;
+            }
             if (string.IsNullOrWhiteSpace(_controlPendingValue))
             {
                 claim = null;
@@ -446,6 +460,12 @@ public class SignalDefinition : ObservableObject
             {
                 claim = null;
                 rejectionReason = "another command already owns this control object";
+                return false;
+            }
+            if (_controlInspectionBusy)
+            {
+                claim = null;
+                rejectionReason = "the control model is being verified; no command is admitted until inspection completes";
                 return false;
             }
             if (string.IsNullOrWhiteSpace(normalizedValue))

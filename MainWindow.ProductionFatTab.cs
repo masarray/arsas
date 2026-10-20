@@ -184,7 +184,7 @@ public partial class MainWindow
         surface.DataContext = window;
         NativeFatTab.Content = surface;
         if (_persistentWorkbench != null)
-            _persistentWorkbench.DockExpandedByWorkspace[NativeFatWorkspaceIndex] = true;
+            _persistentWorkbench.DockExpanded = true;
 
         window.Closed -= ProductionFatWindow_Closed;
         window.Closed += ProductionFatWindow_Closed;

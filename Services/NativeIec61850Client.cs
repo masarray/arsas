@@ -1231,6 +1231,15 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         {
             return await InspectControlCoreAsync(signal, cancellationToken).ConfigureAwait(false);
         }
+        catch
+        {
+            // A failed/aborted inspection cannot leave the prior association
+            // proof available to stage a later command. Preserve the old row
+            // while the read is in flight, but fail closed on an actual error.
+            signal.ClearLiveControlAuthority();
+            signal.ControlModelText = "Auto-detect";
+            throw;
+        }
         finally
         {
             _controlCommandGate.Release();
@@ -1254,8 +1263,10 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             // Another engineering client may have changed CF ctlModel since the
             // previous inspection; cached control sessions are not authoritative.
             signal.ClearControlConfirmation();
-            signal.ClearLiveControlAuthority();
-            signal.ControlModelText = "Auto-detect";
+            // Do not publish a transient Unverified/Auto-detect row while the
+            // fresh typed descriptor is still being read. The native command
+            // gate keeps Operate behind this inspection; UI marks inspection
+            // busy. Revoke or replace the proof only on final result.
             await InvalidateCachedControlSessionAsync(signal.ObjectReference).ConfigureAwait(false);
             control = await GetOrOpenControlSessionAsync(signal, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
@@ -1269,7 +1280,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                     _session, signal.ObjectReference, cancellationToken),
                 cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
-            signal.ControlSemanticVerified = false;
+            signal.ClearLiveControlAuthority();
             signal.ControlModelText = probe.Decoded
                 ? FriendlyControlModel(probe.ControlModel)
                 : "Unknown";
@@ -1343,16 +1354,22 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         var modelText = FriendlyControlModel(descriptor.ControlModel);
         var valueType = MapControlValueType(descriptor, effectiveCdc);
 
+        // Atomic visual publication boundary: after ALL awaited descriptor
+        // and status reads have finished, install one complete typed proof.
+        // A changed CDC cannot reuse the previous association's verified CDC.
+        signal.ClearLiveControlAuthority();
         if (semantic.IsCommandSafe)
             signal.AcceptVerifiedLiveControlCdc(effectiveCdc);
         else
             signal.ControlCdc = effectiveCdc;
-        signal.ControlSemanticVerified = semantic.IsCommandSafe;
         signal.ControlValueType = valueType;
         signal.ControlCurrentValue = currentValue;
         signal.ControlStatusReference = statusReference;
         signal.ControlModelReference = $"{descriptor.ObjectReference}.ctlModel";
         signal.ControlModelText = modelText;
+        // Publish operability last; a partial inspection never authorizes
+        // a user action. Native Operate still validates its own descriptor.
+        signal.ControlSemanticVerified = semantic.IsCommandSafe && descriptor.IsOperationallyReady;
         signal.ControlInspectionEvidence =
             $"{descriptor.ObjectReference}.ctlModel | {modelText} | " +
             $"typedCdc={descriptor.Cdc}, effectiveCdc={effectiveCdc}, " +

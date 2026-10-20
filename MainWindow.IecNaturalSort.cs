@@ -21,7 +21,12 @@ public partial class MainWindow
         => AttachIecNaturalGridSort(sender as DataGrid, IecNaturalLiveMonitorSort.Instance);
 
     private void CommandGrid_Loaded(object sender, RoutedEventArgs e)
-        => AttachIecNaturalGridSort(sender as DataGrid, IecNaturalCommandSort.Instance);
+    {
+        if (sender is not DataGrid grid)
+            return;
+        InstallCommandGridBehavior(grid);
+        AttachIecNaturalGridSort(grid, IecNaturalCommandSort.Instance);
+    }
 
     private void GlobalLiveGrid_Loaded(object sender, RoutedEventArgs e)
         => AttachIecNaturalGridSort(sender as DataGrid, IecNaturalGlobalMonitorSort.Instance);

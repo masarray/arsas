@@ -927,6 +927,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!EnsureSclEndpointBinding(device)) return false;
 
         RememberCurrentSelectionForReconnect(device);
+        ResetControlPreloadAttempts(device);
         RemoveDevicePoints(device.DeviceId);
         device.Points.Clear();
         device.RefreshComputed();
@@ -978,6 +979,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             }
 
             var restoredCount = RestoreSignalSelection(device);
+            // Real discovery/selection change: one read-only preflight, never
+            // periodic work triggered by tab navigation.
+            _ = PreloadControlModelsAsync();
             device.RefreshComputed();
             RaiseWorkspaceCounts();
             SetStatus($"{device.Name}: discovery complete, {device.SignalCount} readable signal(s), {restoredCount} saved selection(s) restored.");
@@ -1119,6 +1123,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             }
 
             device.RecountSelectedSignals();
+            _ = PreloadControlModelsAsync();
             await WaitForDiscoveryProgressAnimationAsync(device, TimeSpan.FromMilliseconds(900));
             RaiseWorkspaceCounts();
             if (device.HasSclDesignModel)
@@ -1266,10 +1271,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             SynchronizeAllEngineeringSelectionsToFat(device);
             SaveSignalSelectionMemory(device);
+            _ = PreloadControlModelsAsync();
             device.RefreshComputed();
             RebuildControlFeedbackIndex(device);
-            if (CommandPanelExpander?.IsExpanded == true && device.IsConnected)
-                _ = RefreshControlValuesAsync(device);
+            // A tab/Expander is not a reason for an extra MMS read. The
+            // one-shot preload above examines newly selected unresolved roots.
             RaiseWorkspaceCounts();
 
             if (device.SelectedLiveSignalCount == 0)
@@ -1410,13 +1416,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         await OpenSignalSelectionWizardAsync(device);
     }
 
-    private async void CommandPanel_Expanded(object sender, RoutedEventArgs e)
+    private void CommandPanel_Expanded(object sender, RoutedEventArgs e)
     {
-        // Compact for a handful of verified controls; grow with the window
-        // when there really are more than five actionable control objects.
+        // This is a layout event, NOT an MMS discovery/inspection request.
+        // The command model is preloaded on real association/selection changes.
+        // A manual Refresh values remains available for explicit readback.
         ResizeCommandDockForVerifiedControls();
-        if (SelectedDevice != null)
-            await RefreshControlValuesAsync(SelectedDevice, force: false);
     }
 
     private void CommandPanel_Collapsed(object sender, RoutedEventArgs e)
@@ -2377,8 +2382,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         SetStatus($"{device.Name}: monitoring paused; last observed values are not live.");
     }
 
-    private static void ResetControlReadinessForNewAssociation(Iec61850MonitorDevice device)
+    private void ResetControlReadinessForNewAssociation(Iec61850MonitorDevice device)
     {
+        ResetControlPreloadAttempts(device);
         foreach (var signal in device.Signals.Where(s => s.IsValidControlObject))
         {
             signal.ClearControlConfirmation();
