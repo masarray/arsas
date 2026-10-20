@@ -79,3 +79,26 @@ This is an architectural first step, **NOT** full implementation of proof-commit
 ## 6. Cross-workstream boundaries
 
 Command PRs #635 -> #638 -> this PR own the Command Dock and native control performance investigation; ARIEC PR #183 owns service-stage evidence. Leaf PR #636 owns SV/OR/BL Browser read, selected-only read admission and fixed IED-card progress. This model draft touches `Models/MonitorModels.cs`, which is **also modified by PR #636 in a different area**. Integration must apply both hunks intentionally on current merged head; no branch overwrite or premature release.
+
+---
+
+## Implementation phase B/C evidence — 2026-10-20 (draft branch)
+
+This section records actual source changes stacked on P0-U (PR #640). It does not claim physical FAT or proof of low-latency CommandTermination.
+
+- **Event-driven WPF**: deleted the 2.5-second Command Panel UI timer and full-window periodic visual-tree scan; `CommandGrid_Loaded` installs one grid behavior and `LoadingRow` + row `Loaded` initializes realized controls (including virtualized/recycled rows).
+- **Real lifecycle triggers**: preload is requested from actual full discovery, fast reconnect, and accepted selection, **not** tab switching or Expander events. A single gate merges concurrent requests into a follow-up pass. Each target is marked attempted only at admission, not before an interrupted sweep. New MMS associations explicitly invalidate the attempt ledger.
+- **Dock lifetime**: a single persistent Expander retains its user-chosen expanded state across workspace tabs. Navigation does not rebuild/clear model or initiate MMS reads. FAT can explicitly request expanded dock.
+- **Typed verification boundary**: `InspectControlCoreAsync` no longer revokes typed metadata *before* asynchronous MMS calls; it commits the newly inspected descriptor/status only after completed reads, and fail-closes on inspection failure. The existing native `_controlCommandGate` serializes against Operate. An unsuccessful read revokes control permissions, and a changed CDC cannot inherit an old verified CDC. No cached protocol truth has been invented in WPF.
+- **Diagnostic text isolation**: `ControlLastResult` no longer parses free-form text for a control model and cannot enable/disable actions by text coincidence; explicit `ControlModelText`/typed semantic verification remains authoritative. Import/SCL alone still cannot set `ControlSemanticVerified`.
+- **Regression**: P109W covers zero periodic refresh, one-grid event hookup, tab preservation, lifecycle preload triggers, typed proof post-read publication, and no authority changes from diagnostic prose. P109U covers no-change zero DataGrid Reset and selective membership removal.
+
+### Concurrency and safety qualifiers
+
+The native transport and command single-flight, command serial gate, IED ctlModel, origin, interlock, synchrocheck, Test, SBOw, Operate, CommandTermination, and confirmed feedback are unchanged. The UI may show an already verified row while a read-only inspection is underway; the inspector marks that row busy and the native command gate does not permit concurrent Operate. Actual failed inspection invalidates the proof. This is not an opt-in speculative authorization.
+
+Timing of the *IED* remains unproven. Engine draft #183 reports local service timing and post-response waiting, which still needs on-wire correlation. Do not compare one client's service acceptance timestamp to another client's final process feedback and call it a faster IED.
+
+### Integration gates
+
+This branch is a dependent draft on PR #640 -> #638 -> #635. Browser leaf/progress PR #636 must be integrated semantically, preserving its own `Models/MonitorModels.cs` changes. Run exact head Windows CI, full regresions, 100+ tab transitions and repeated connect/disconnect, then physical IED FAT. No main merge or public release until evidence.
