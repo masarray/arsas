@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -22,6 +23,9 @@ public static class IedBrowserReadEvidenceBundle
                 "Selected-page evidence exceeded the 4 MiB diagnostic boundary.");
         var rowCount = Math.Max(0, csv.Split('\n').Length -
             (csv.EndsWith('\n') ? 2 : 1));
+        // Hash the exact UTF-8 bytes written to the CSV ZIP entry, not a normalized copy.
+        var csvBytes = new UTF8Encoding(false).GetBytes(csv);
+        var csvSha256 = Convert.ToHexString(SHA256.HashData(csvBytes)).ToLowerInvariant();
         using var buffer = new MemoryStream();
         using (var archive = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
         {
@@ -41,6 +45,7 @@ public static class IedBrowserReadEvidenceBundle
                 EngineVersion = engineVersion,
                 Association = association,
                 SelectedTargetRows = rowCount,
+                ReadEvidenceCsvSha256 = csvSha256,
                 WireGvaStatus = "NOT_CAPTURED",
                 WireInvokeStatus = "NOT_CAPTURED",
                 UiProjectionStatus = "NOT_MEASURED",
