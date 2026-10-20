@@ -381,7 +381,9 @@ public static class IedBrowserStructuredDetails
                 : Array.Empty<IedBrowserPolarPlan>();
             // q/t and alternate instantaneous leaves are not blockers for a
             // model-proven normal engineering value. No first child wins.
-            var scalarLeaf = name is "q" or "t" ? null :
+            var isQualityLeaf = name == "q" ||
+                (name == "subQ" && group.Key.Fc == "SV");
+            var scalarLeaf = isQualityLeaf || name == "t" ? null :
                 ChooseEngineeringLeaf(descendants.Select(x => (
                     Reference: IedBrowserLiveValues.CanonicalReference(x.attr.MmsReference),
                     Relative: string.Join(".", x.parts.Skip(pathIndex + 1)))));
@@ -389,8 +391,8 @@ public static class IedBrowserStructuredDetails
             if (descendants.Length > 0)
                 children = () => BuildAt(
                     descendants, pathIndex + 1, depth + 1, allowVector);
-            else if (name is "q" or "t" && hasDirect)
-                children = () => name == "q"
+            else if ((isQualityLeaf || name == "t") && hasDirect)
+                children = () => isQualityLeaf
                     ? QualityChildren(depth + 1, attr.MmsReference, attr.FunctionalConstraint)
                     : TimeChildren(depth + 1, attr.MmsReference, attr.FunctionalConstraint);
 
@@ -428,7 +430,7 @@ public static class IedBrowserStructuredDetails
                         Reference: IedBrowserLiveValues.CanonicalReference(x.attr.MmsReference),
                         Relative: string.Join(".", x.parts.Skip(pathIndex + 1)))),
                         attr.FunctionalConstraint),
-                EvidenceKind = hasDirect && name == "q" ? "Quality" :
+                EvidenceKind = hasDirect && isQualityLeaf ? "Quality" :
                     hasDirect && name == "t" ? "Timestamp" : "",
                 FunctionalConstraint = groupArray.All(x =>
                     string.Equals(x.attr.FunctionalConstraint, attr.FunctionalConstraint,
