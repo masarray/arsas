@@ -74,6 +74,41 @@ public sealed class P109ABCtlModelGlyphAndVendorNeutralCatalogTests
     }
 
     [Fact]
+    public void HundredsOfUnchangedControlsNeedNoResetMoveOrReplaceNotifications()
+    {
+        var device = new Iec61850MonitorDevice();
+        var selected = Enumerable.Range(1, 240).Select(i => new SignalDefinition
+        {
+            Name = "Pos",
+            ObjectReference = $"LD0/CSWI{i}.Pos",
+            FunctionalConstraint = "CO",
+            IsControlSignal = true,
+            IsSelected = true,
+            ControlCdc = "DPC",
+            ControlModelText = "Status only"
+        }).ToArray();
+        device.Signals.ReplaceAll(selected);
+        device.RecountSelectedSignals();
+        Assert.Equal(selected.Length, device.CommandSignals.Count);
+        var frozen = device.CommandSignals.ToArray();
+        var notifications = new List<NotifyCollectionChangedAction>();
+        device.CommandSignals.CollectionChanged += (_, e) => notifications.Add(e.Action);
+
+        // No IED I/O. Repeated model verification and tab revisits must be
+        // an identity-only fast path with stable WPF container lifetime.
+        for (var attempt = 0; attempt < 40; attempt++)
+            device.RefreshCommandSignalProjection();
+        Assert.Empty(notifications);
+        Assert.True(frozen.SequenceEqual(device.CommandSignals, ReferenceEqualityComparer.Instance));
+
+        selected[3].IsSelected = false;
+        device.RecountSelectedSignals();
+        Assert.DoesNotContain(selected[3], device.CommandSignals);
+        Assert.DoesNotContain(NotifyCollectionChangedAction.Reset, notifications);
+        Assert.Equal(239, device.CommandSignals.Count);
+    }
+
+    [Fact]
     public void VendorIndependentSelectedRootsRemainStableWhileWritePermissionChanges()
     {
         var devices = new[]
