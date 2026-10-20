@@ -1479,7 +1479,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 // Input/confirmation has priority over the next diagnostic
                 // read. Never place another inspection behind an active
                 // operator command on this association.
-                await Dispatcher.Yield(DispatcherPriority.Background);
+                await System.Windows.Threading.Dispatcher.Yield(DispatcherPriority.Background);
                 if (!device.IsConnected || _applicationCancellation.IsCancellationRequested ||
                     device.CommandSignals.Any(active => active.ControlCommandBusy))
                     break;
