@@ -17,7 +17,10 @@ public sealed class P109SRefreshControlDescriptorRegressionTests
         signal.ControlInspectionBusy = true;
         Assert.False(Iec61850ControlIdentity.NeedsInspection(signal, true));
         signal.ControlInspectionBusy = false;
-        signal.ControlCommandBusy = true;
+        signal.ControlModelText = "Direct Operate (DO) • Normal security";
+        signal.AcceptVerifiedLiveControlCdc("DPC");
+        signal.ControlSemanticVerified = true;
+        Assert.True(signal.TryBeginDirectControlCommand("Close", "Close", out _, out _));
         Assert.False(Iec61850ControlIdentity.NeedsInspection(signal, true));
     }
 
