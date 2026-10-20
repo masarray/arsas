@@ -320,5 +320,17 @@
     "readOnly": true,
     "physicalQualificationRequired": true,
     "mainlinePromotionForbidden": true
+  },
+  "controlReportIsolationTrial": {
+    "status": "code-trial-not-physical",
+    "baseEngineCommit": "ba21d882f67de22c10d3155b449aac77aa8b4899",
+    "exactCommit": "c85d4e20db722bd0c2729f2533b323b13d3ef735",
+    "enginePullRequest": 183,
+    "consumerPullRequest": 635,
+    "physicalQualificationRequired": true,
+    "mainlinePromotionForbidden": true,
+    "controlChecksUnchanged": true,
+    "controlTimeoutsUnchanged": true,
+    "preservesTypedReadAuthority": true
   }
 }

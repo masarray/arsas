@@ -2,6 +2,28 @@
 # No physical promotion, silent source fallback, or engine wildcard pins.
 function Test-P0CTypedReadTrial {
     param([Parameter(Mandatory = $true)]$Lock)
+    # Explicit, immutable code-only successor; revalidate every historical P0-C
+    # invariant against its original pin rather than relabeling it as accepted.
+    if ([string]$Lock.commit -ceq 'c85d4e20db722bd0c2729f2533b323b13d3ef735') {
+        $successor = $Lock.controlReportIsolationTrial
+        if ($null -eq $successor -or
+            [int]$Lock.sourcePullRequest -ne 183 -or
+            [string]$successor.status -cne 'code-trial-not-physical' -or
+            [string]$successor.baseEngineCommit -cne 'ba21d882f67de22c10d3155b449aac77aa8b4899' -or
+            [string]$successor.exactCommit -cne $Lock.commit -or
+            [int]$successor.enginePullRequest -ne 183 -or
+            [int]$successor.consumerPullRequest -ne 635 -or
+            -not [bool]$successor.physicalQualificationRequired -or
+            -not [bool]$successor.mainlinePromotionForbidden -or
+            -not [bool]$successor.controlChecksUnchanged -or
+            -not [bool]$successor.controlTimeoutsUnchanged -or
+            -not [bool]$successor.preservesTypedReadAuthority) { return $false }
+        $original = $Lock | ConvertTo-Json -Depth 100 | ConvertFrom-Json
+        $original.commit = $successor.baseEngineCommit
+        $original.sourcePullRequest = 181
+        return (Test-P0CTypedReadTrial -Lock $original)
+    }
+
     $trial = $Lock.p0CTypedReadTrial
     if ($null -eq $trial) { return $false }
 

@@ -483,9 +483,18 @@ public sealed class CanonicalLiveSclExportRegressionTests
         var typedReadTrial = root.GetProperty("p0CTypedReadTrial");
         Assert.Equal(rcbTrial.GetProperty("exactCommit").GetString(),
             typedReadTrial.GetProperty("baseEngineCommit").GetString());
+        var controlTrial = root.GetProperty("controlReportIsolationTrial");
         Assert.Equal(typedReadTrial.GetProperty("exactCommit").GetString(),
+            controlTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal("c85d4e20db722bd0c2729f2533b323b13d3ef735",
+            controlTrial.GetProperty("exactCommit").GetString());
+        Assert.Equal(controlTrial.GetProperty("exactCommit").GetString(),
             root.GetProperty("commit").GetString());
-        Assert.Equal(181, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(183, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.True(controlTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(controlTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
+        Assert.True(controlTrial.GetProperty("controlChecksUnchanged").GetBoolean());
+        Assert.True(controlTrial.GetProperty("controlTimeoutsUnchanged").GetBoolean());
         Assert.True(typedReadTrial.GetProperty("strictInvokeId").GetBoolean());
         Assert.True(typedReadTrial.GetProperty("strictAccessOrdinal").GetBoolean());
         Assert.True(typedReadTrial.GetProperty("physicalQualificationRequired").GetBoolean());
