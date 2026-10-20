@@ -377,6 +377,19 @@
                                                             <ContextMenu/>
                                                         </TextBlock.ContextMenu>
                                                     </TextBlock>
+                                                    <!-- Permanent 6px lane: Read progress changes opacity, never card geometry. -->
+                                                    <Grid Height="6" Margin="8,5,8,0" ClipToBounds="True"
+                                                          ToolTip="{Binding BusyStage}">
+                                                        <Border Height="3" VerticalAlignment="Center"
+                                                                CornerRadius="2" Background="#DCE6F2"/>
+                                                        <ProgressBar x:Name="IedCardBrowserReadProgress"
+                                                                     Height="3" VerticalAlignment="Center"
+                                                                     Minimum="0" Maximum="100"
+                                                                     Value="{Binding DiscoveryProgressPercent, Mode=OneWay}"
+                                                                     Style="{StaticResource DiscoveryProgressBar}"
+                                                                     Opacity="0"
+                                                                     IsHitTestVisible="False"/>
+                                                    </Grid>
                                                 </StackPanel>
                                       <!-- Adaptive five-slot action bar. It spans the card and reserves the relay-icon area so Play/Stop never clip. -->
                                       <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="62,4,1,0" Panel.ZIndex="10">
@@ -481,7 +494,9 @@
                                                 <Setter TargetName="BusyOverlay" Property="Visibility" Value="Visible"/>
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding IsBrowserReading}" Value="True">
-                                                <Setter TargetName="BusyOverlay" Property="Visibility" Value="Visible"/>
+                                                <!-- Browser MMS Read leaves live card/actions visible; only
+                                                     the fixed-height progress lane illuminates. -->
+                                                <Setter TargetName="IedCardBrowserReadProgress" Property="Opacity" Value="1"/>
                                             </DataTrigger>
                                         </DataTemplate.Triggers>
                                     </DataTemplate>
