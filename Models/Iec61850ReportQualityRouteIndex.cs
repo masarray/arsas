@@ -27,6 +27,8 @@ public sealed class Iec61850ReportQualityRouteIndex
         foreach (var point in points)
         {
             if (string.IsNullOrWhiteSpace(point.FunctionalConstraint) ||
+                !schema.IsDeclaredQualityRouteValueCarrier(
+                    point.IecReference, point.FunctionalConstraint) ||
                 !schema.TryGetQualityCompanion(
                     point.IecReference, point.FunctionalConstraint, out var qRef))
                 continue;
