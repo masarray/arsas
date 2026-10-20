@@ -2521,7 +2521,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         foreach (var device in Devices)
         {
-            if (device.IsBusy || device.IsBrowserReading)
+            // Discovery owns its own local easing; Browser Read already supplies
+            // direct throttled percentages and must not advance stale discovery.
+            if (device.IsDiscoveryProgressActive)
                 device.AdvanceDiscoveryProgressAnimation();
         }
     }
