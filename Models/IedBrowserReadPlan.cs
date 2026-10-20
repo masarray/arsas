@@ -29,7 +29,7 @@ public static class IedBrowserReadPlan
         };
 
     private static readonly HashSet<string> ReadableFc = new(
-        ["ST", "MX", "CF", "DC", "SP", "SG", "SE", "EX"], StringComparer.OrdinalIgnoreCase);
+        ["ST", "MX", "CF", "DC", "SP", "SG", "SE", "EX", "SV", "OR", "BL"], StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// FC CO denotes command parameters, not scalar MMS Read targets.
