@@ -1143,6 +1143,9 @@ public partial class MainWindow
                 display = IedBrowserStandardStatusPresentation.Format(
                     observedReference, row.FunctionalConstraint, display,
                     _iedBrowserValueSchemaIndex);
+                display = IedBrowserDoublePointPresentation.FormatSubstitutionQuality(
+                    display, observedReference, row.FunctionalConstraint,
+                    _iedBrowserValueSchemaIndex);
                 // The exact verified SCL EnumType is the only authority
                 // for vendor read-only SP/SG ordinal symbols (including
                 // PTOC setCharact curves). SSOT retains raw MMS evidence.
