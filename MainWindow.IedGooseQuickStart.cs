@@ -88,13 +88,22 @@ public partial class MainWindow
                 Child = icon
             }
         };
+        // Same device authority as the visible GOOSE capability pill.
+        // The binding updates after live discovery/reconnect without polling.
+        button.SetBinding(UIElement.IsEnabledProperty,
+            new System.Windows.Data.Binding(nameof(Iec61850MonitorDevice.HasGooseControlBlock))
+            {
+                Source = device,
+                Mode = System.Windows.Data.BindingMode.OneWay
+            });
         button.Click += IedGooseQuickStart_Click;
         actionGrid.Children.Add(button);
     }
 
     private void IedGooseQuickStart_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { CommandParameter: Iec61850MonitorDevice device })
+        if (sender is Button { CommandParameter: Iec61850MonitorDevice device } &&
+            device.HasGooseControlBlock)
             OpenIedGooseSubscriber(device);
     }
 
@@ -106,6 +115,8 @@ public partial class MainWindow
     /// </summary>
     internal void OpenIedGooseSubscriber(Iec61850MonitorDevice device)
     {
+        if (!device.HasGooseControlBlock)
+            return;
         SelectedDevice = device;
         _pendingIedGooseAutoStart = null;
         MainTabs.SelectedIndex = GooseSubscriberTabIndex;
