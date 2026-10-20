@@ -70,14 +70,13 @@ public sealed class P109YTransparentDockAndDiscoveryProgressRegressionTests
                 (string?)n.Attribute("Property") == "Opacity" &&
                 (string?)n.Attribute("Value") == "1");
         }
-        var busy = Assert.Single(triggers, t =>
+        // Stop remains pre-emptive while discovering. Never block all card
+        // clicks with an opaque overlay or set IsHitTestVisible=False globally.
+        Assert.DoesNotContain(triggers, t =>
             (string?)t.Attribute("Binding") == "{Binding IsBusy}");
-        Assert.DoesNotContain(busy.Elements(P + "Setter"), n =>
-            (string?)n.Attribute("Property") == "Opacity");
-        Assert.Contains(busy.Elements(P + "Setter"), n =>
+        Assert.DoesNotContain(cardTemplate.Descendants(P + "Setter"), n =>
             (string?)n.Attribute("TargetName") == "CardContent" &&
-            (string?)n.Attribute("Property") == "IsHitTestVisible" &&
-            (string?)n.Attribute("Value") == "False");
+            (string?)n.Attribute("Property") == "IsHitTestVisible");
     }
 
     [Fact]
