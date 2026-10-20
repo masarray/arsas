@@ -2062,7 +2062,19 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         const int maxTrackedStreams = 64;
         foreach (var frame in slice.ReportFrames)
         {
-            var streamKey = BuildReportStreamKey(plan, frame);
+            var streamKey = Iec61850ReportContinuityInspector.StreamKey(
+                plan.ReportControlReference, frame);
+            // A missing RCB identity cannot be used to prove a stream; do not
+            // invent one from an optional RptID/DataSet spelling.
+            if (streamKey.Length == 0)
+            {
+                if (session.ContinuityUntrackedStreams < int.MaxValue)
+                    session.ContinuityUntrackedStreams++;
+                if (session.ContinuityUntrackedStreams == 1)
+                    Log("WARN", session.Device.Name,
+                        "Report has no exact RCB identity; continuity evidence is untracked.");
+                continue;
+            }
             if (!session.ReportStreams.TryGetValue(streamKey, out var state))
             {
                 if (session.ReportStreams.Count >= maxTrackedStreams)
@@ -2113,14 +2125,6 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     session.ReportStreams,
                     session.ContinuityProcessUpdatesSeen,
                     session.ContinuityUntrackedStreams);
-    }
-
-    private static string BuildReportStreamKey(ReportControlPlan plan, NativeReportFrameMetadata frame)
-    {
-        var rcb = string.IsNullOrWhiteSpace(frame.ReportControlReference) ? plan.ReportControlReference : frame.ReportControlReference;
-        var reportId = string.IsNullOrWhiteSpace(frame.ReportId) ? "-" : frame.ReportId;
-        var dataSet = string.IsNullOrWhiteSpace(frame.DataSetReference) ? plan.DataSetReference : frame.DataSetReference;
-        return $"{NormalizeReference(rcb)}|{NormalizeReference(reportId)}|{NormalizeReference(dataSet)}";
     }
 
     private static string ReportName(string actualReference, string plannedReference)
