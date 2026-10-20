@@ -695,7 +695,39 @@ public sealed class Iec61850MonitorDevice : ObservableObject
             .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
             .ThenBy(signal => signal.Name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        CommandSignals.ReplaceAll(selected);
+
+        // Stable WPF row lifetime is an architectural invariant: report,
+        // navigation, and repeated verification updates must never Reset the
+        // entire operator-action grid when the verified membership is unchanged.
+        // Keep the same SignalDefinition objects (the control state authority),
+        // and reconcile only actual membership/order changes. This small
+        // operator command list deliberately uses granular notifications rather
+        // than the bulk Reset policy appropriate for high-frequency reports.
+        for (var index = CommandSignals.Count - 1; index >= 0; index--)
+        {
+            if (!selected.Any(signal => ReferenceEquals(signal, CommandSignals[index])))
+                CommandSignals.RemoveAt(index);
+        }
+
+        for (var index = 0; index < selected.Length; index++)
+        {
+            if (index < CommandSignals.Count && ReferenceEquals(CommandSignals[index], selected[index]))
+                continue;
+
+            var existingIndex = -1;
+            for (var search = index + 1; search < CommandSignals.Count; search++)
+            {
+                if (!ReferenceEquals(CommandSignals[search], selected[index]))
+                    continue;
+                existingIndex = search;
+                break;
+            }
+
+            if (existingIndex >= 0)
+                CommandSignals.Move(existingIndex, index);
+            else
+                CommandSignals.Insert(index, selected[index]);
+        }
     }
 
     public void RefreshComputed()
