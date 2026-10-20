@@ -8,7 +8,18 @@ public sealed class P109SRefreshControlDescriptorRegressionTests
     [Fact]
     public void ReopeningDockDoesNotReprobeVerifiedStatusOnlyOrBusyControls()
     {
-        var signal = new SignalDefinition { ControlCurrentValue = "-" };
+        // A semantic CDC cannot be validated on a free-floating test row.
+        // Use a real CO DataObject identity; otherwise the production safety
+        // contract correctly rejects AcceptVerifiedLiveControlCdc().
+        var signal = new SignalDefinition
+        {
+            ObjectReference = "LD0/CSWI1.Pos",
+            Name = "CSWI1.Pos",
+            FunctionalConstraint = "CO",
+            IsControlSignal = true,
+            IsSelected = true,
+            ControlCurrentValue = "-"
+        };
         Assert.True(Iec61850ControlIdentity.NeedsInspection(signal, false));
         signal.ControlModelText = "Status only";
         Assert.True(signal.ControlModelResolved);
