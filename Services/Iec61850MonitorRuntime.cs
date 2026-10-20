@@ -64,6 +64,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         public List<ReportControlPlan> ActiveReportPlanOrder { get; } = new();
         public Dictionary<string, string> PointPlanIds { get; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, Iec61850MonitorPoint> ReportReferenceIndex { get; } = new(StringComparer.OrdinalIgnoreCase);
+        // Alias collisions are never resolved by first-insertion order. Lifetime
+        // matches the report reference index and the current association.
+        public HashSet<string> AmbiguousReportReferenceKeys { get; } = new(StringComparer.OrdinalIgnoreCase);
         public PriorityQueue<string, long> PollQueue { get; } = new();
         public Dictionary<string, Iec61850ReportContinuityState> ReportStreams { get; } = new(StringComparer.OrdinalIgnoreCase);
         // Active association only: exact ARIEC write-step outcomes for each
@@ -838,6 +841,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
         session.ReportReferenceIndex.Clear();
+        session.AmbiguousReportReferenceKeys.Clear();
         session.PollQueue.Clear();
         session.ReportStreams.Clear();
         session.ReportActivationByPlanId.Clear();
@@ -2958,6 +2962,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             session.Points.Clear();
             session.States.Clear();
             session.ReportReferenceIndex.Clear();
+            session.AmbiguousReportReferenceKeys.Clear();
         }
     }
 
@@ -3351,35 +3356,81 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     private static void IndexPointReference(DeviceSession session, Iec61850MonitorPoint point)
     {
         foreach (var key in GetReferenceKeys(point.IecReference))
-            session.ReportReferenceIndex.TryAdd(key, point);
+            AddReportReferenceCandidate(
+                session.ReportReferenceIndex, session.AmbiguousReportReferenceKeys, key, point);
     }
 
-    private static Iec61850MonitorPoint? FindPointForReportReference(DeviceSession session, string reference)
+    // One association-scoped index only. When two distinct selected points
+    // claim a canonical reference, neither may own its Report value.
+    internal static void AddReportReferenceCandidate(
+        IDictionary<string, Iec61850MonitorPoint> index,
+        ISet<string> ambiguousKeys,
+        string key,
+        Iec61850MonitorPoint candidate)
+    {
+        if (ambiguousKeys.Contains(key))
+            return;
+        if (index.TryGetValue(key, out var prior))
+        {
+            if (!ReferenceEquals(prior, candidate))
+            {
+                index.Remove(key);
+                ambiguousKeys.Add(key);
+            }
+            return;
+        }
+        index.Add(key, candidate);
+    }
+
+    private static Iec61850MonitorPoint? FindPointForReportReference(
+        DeviceSession session, string reference)
     {
         foreach (var key in GetReferenceKeys(reference))
         {
+            if (session.AmbiguousReportReferenceKeys.Contains(key))
+                continue;
             if (session.ReportReferenceIndex.TryGetValue(key, out var indexed))
                 return indexed;
         }
 
-        // Rare vendor projection fallback. Cache the resolved alias so subsequent report
-        // events do not scan every monitored point again.
-        var canonical = CanonicalDataReference(reference);
-        var point = session.Points.Values.FirstOrDefault(candidate =>
-        {
-            var candidateCanonical = CanonicalDataReference(candidate.IecReference);
-            return candidateCanonical.Equals(canonical, StringComparison.OrdinalIgnoreCase) ||
-                   candidateCanonical.StartsWith(canonical + ".", StringComparison.OrdinalIgnoreCase) ||
-                   canonical.StartsWith(candidateCanonical + ".", StringComparison.OrdinalIgnoreCase);
-        });
-
+        // Nonexact aliases occur on some older report projections. Never
+        // select the first child of a structured parent (e.g. phase A), or
+        // overwrite an existing alias. Only a unique selected point may own
+        // the alias; otherwise its Report observation remains unrouted.
+        var point = FindUniqueReportReferenceFallback(session.Points.Values, reference);
         if (point != null)
         {
             foreach (var key in GetReferenceKeys(reference))
-                session.ReportReferenceIndex[key] = point;
+                AddReportReferenceCandidate(
+                    session.ReportReferenceIndex, session.AmbiguousReportReferenceKeys,
+                    key, point);
         }
-
         return point;
+    }
+
+    internal static Iec61850MonitorPoint? FindUniqueReportReferenceFallback(
+        IEnumerable<Iec61850MonitorPoint> points, string reference)
+    {
+        var canonical = CanonicalDataReference(reference);
+        if (string.IsNullOrWhiteSpace(canonical))
+            return null;
+
+        Iec61850MonitorPoint? unique = null;
+        foreach (var candidate in points)
+        {
+            var candidateCanonical = CanonicalDataReference(candidate.IecReference);
+            // Prefix ancestry does NOT prove a phase's scalar identity:
+            // one selected phsA under a three-phase parent is still ambiguous
+            // in the IED schema. ARIEC's typed structured projection must emit
+            // the exact semantic leaf; a parent cannot borrow its value.
+            if (!candidateCanonical.Equals(canonical, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (unique is not null && !ReferenceEquals(unique, candidate))
+                return null; // Ambiguous phase/child/FC — fail closed.
+            unique = candidate;
+        }
+        return unique;
     }
 
     private static IReadOnlyList<Iec61850MonitorPoint> ResolveCoveredPoints(
