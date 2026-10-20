@@ -37,6 +37,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly Dictionary<string, DateTime> _reportPulseUntil = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> _pointHighlightUntil = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<SignalDefinition>> _controlFeedbackIndex = new(StringComparer.OrdinalIgnoreCase);
+    // UI-only scheduling ownership; never a second control/session authority.
+    private readonly HashSet<Iec61850MonitorDevice> _controlRefreshInProgress = new();
     private readonly DispatcherTimer _uiFlushTimer;
     private readonly DispatcherTimer _progressAnimationTimer;
     // One timer per window: concurrent negative command results replace the
@@ -1449,70 +1451,95 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!device.IsConnected)
             return;
 
-        // Never gate inspection on an operable-only UI projection.
-        var candidates = Iec61850ControlIdentity.DistinctSelected(device.Signals)
-            .Where(signal => Iec61850ControlIdentity.NeedsInspection(signal, force))
-            .ToArray();
-        if (candidates.Length == 0)
+        // The native runtime serializes inspection and Operate on one
+        // _controlCommandGate. Enqueuing three parallel UI inspections cannot
+        // improve MMS throughput, but places extra reads ahead of user control.
+        // One refresh owner per device; do not create another inspection queue.
+        if (!_controlRefreshInProgress.Add(device))
         {
-            RebuildControlFeedbackIndex(device);
+            if (force && ReferenceEquals(SelectedDevice, device))
+                SetStatus($"{device.Name}: control inspection is already running; retry Refresh once it completes.");
             return;
         }
 
-        using var throttle = new SemaphoreSlim(3, 3);
-        await Task.WhenAll(candidates.Select(async signal =>
+        try
         {
-            // Claim before waiting: another expansion/refresh must not enqueue
-            // the same target while this batch is waiting for its local slot.
-            signal.ControlInspectionBusy = true;
-            var entered = false;
-            try
+            var candidates = Iec61850ControlIdentity.DistinctSelected(device.Signals)
+                .Where(signal => Iec61850ControlIdentity.NeedsInspection(signal, force))
+                .ToArray();
+            if (candidates.Length == 0)
             {
-                await throttle.WaitAsync(_applicationCancellation.Token);
-                entered = true;
-                var capabilities = await _runtime.InspectControlAsync(
-                    device.DeviceId,
-                    signal,
-                    _applicationCancellation.Token);
-                if (!signal.ControlCommandBusy)
-                {
-                    signal.ControlCurrentValue = capabilities.CurrentValue;
-                    signal.ControlInspectionEvidence =
-                        $"{capabilities.ControlModelReference} | {capabilities.ControlModelText} | " +
-                        $"{capabilities.EngineControlServiceStatus} | {capabilities.DiscoveryEvidence}";
-                    signal.ControlLastResult = capabilities.EngineControlServiceStatus;
-                    if (!capabilities.SupportsOperate)
-                        AddLog("INFO", device.Name,
-                            $"Read-only control inspection {signal.ObjectReference}: " +
-                            signal.ControlInspectionEvidence);
-                }
+                RebuildControlFeedbackIndex(device);
+                return;
             }
-            catch (OperationCanceledException)
-            {
-                // Application shutdown or device removal.
-            }
-            catch (Exception ex)
-            {
-                if (!signal.ControlCommandBusy)
-                {
-                    signal.ControlInspectionEvidence =
-                        $"{signal.ObjectReference}: inspection failed; {ex.GetType().Name}: {ex.Message}";
-                    signal.ControlLastResult = $"Status read failed: {ex.Message}";
-                }
-            }
-            finally
-            {
-                signal.ControlInspectionBusy = false;
-                if (entered) throttle.Release();
-            }
-        }));
 
-        device.RefreshCommandSignalProjection();
-        RebuildControlFeedbackIndex(device);
-        if (ReferenceEquals(SelectedDevice, device))
-            ResizeCommandDockForVerifiedControls();
-        TryAutoExpandCommandPanelOnce(device);
-        SetStatus($"{device.Name}: refreshed {candidates.Length} control value(s).");
+            var completed = 0;
+            foreach (var signal in candidates)
+            {
+                // Input/confirmation has priority over the next diagnostic
+                // read. Never place another inspection behind an active
+                // operator command on this association.
+                await Dispatcher.Yield(DispatcherPriority.Background);
+                if (!device.IsConnected || _applicationCancellation.IsCancellationRequested ||
+                    device.CommandSignals.Any(active => active.ControlCommandBusy))
+                    break;
+                if (!Iec61850ControlIdentity.NeedsInspection(signal, force))
+                    continue;
+
+                signal.ControlInspectionBusy = true;
+                try
+                {
+                    var capabilities = await _runtime.InspectControlAsync(
+                        device.DeviceId,
+                        signal,
+                        _applicationCancellation.Token);
+                    if (!signal.ControlCommandBusy)
+                    {
+                        signal.ControlCurrentValue = capabilities.CurrentValue;
+                        signal.ControlInspectionEvidence =
+                            $"{capabilities.ControlModelReference} | {capabilities.ControlModelText} | " +
+                            $"{capabilities.EngineControlServiceStatus} | {capabilities.DiscoveryEvidence}";
+                        signal.ControlLastResult = capabilities.EngineControlServiceStatus;
+                        if (!capabilities.SupportsOperate)
+                            AddLog("INFO", device.Name,
+                                $"Read-only control inspection {signal.ObjectReference}: " +
+                                signal.ControlInspectionEvidence);
+                    }
+                    completed++;
+                }
+                catch (OperationCanceledException)
+                {
+                    // Application shutdown or device removal.
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    if (!signal.ControlCommandBusy)
+                    {
+                        signal.ControlInspectionEvidence =
+                            $"{signal.ObjectReference}: inspection failed; {ex.GetType().Name}: {ex.Message}";
+                        signal.ControlLastResult = $"Status read failed: {ex.Message}";
+                    }
+                }
+                finally
+                {
+                    signal.ControlInspectionBusy = false;
+                }
+            }
+
+            device.RefreshCommandSignalProjection();
+            RebuildControlFeedbackIndex(device);
+            if (ReferenceEquals(SelectedDevice, device))
+            {
+                ResizeCommandDockForVerifiedControls();
+                SetStatus($"{device.Name}: completed {completed}/{candidates.Length} control inspection(s).");
+            }
+            TryAutoExpandCommandPanelOnce(device);
+        }
+        finally
+        {
+            _controlRefreshInProgress.Remove(device);
+        }
     }
 
     private bool RejectCommandWhenIedFlightUnavailable(
