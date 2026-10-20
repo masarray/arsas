@@ -607,12 +607,16 @@
                                         </Border>
                                     </Grid>
 
-                                    <DataGrid Grid.Row="2" ItemsSource="{Binding SelectedDevice.Points}" IsReadOnly="True"
+                                    <DataGrid x:Name="ExplorerLiveValuesGrid" Grid.Row="2"
+                                              ItemsSource="{Binding SelectedDevice.Points}" IsReadOnly="True"
                                               Loaded="ExplorerLiveGrid_Loaded"
                                               Style="{StaticResource ModernDataGrid}" FrozenColumnCount="2"
+                                              MinHeight="0" VerticalAlignment="Stretch"
                                               EnableRowVirtualization="True" EnableColumnVirtualization="True"
                                               VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
-                                              ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                                              ScrollViewer.CanContentScroll="True"
+                                              ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                              ScrollViewer.HorizontalScrollBarVisibility="Auto">
                                         <DataGrid.RowStyle>
                                             <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
                                                 <Style.Triggers>
