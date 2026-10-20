@@ -35,6 +35,8 @@ public sealed class P109ZIntegratedIedSelectionCardRegressionTests
             (string?)x.Attribute(X + "Key") == resourceKey);
         var template = style.Descendants(P + "ControlTemplate").Single();
         var root = template.Elements(P + "Grid").Single();
+        Assert.Equal("True", (string?)root.Attribute("SnapsToDevicePixels"));
+        Assert.Equal("True", (string?)root.Attribute("UseLayoutRounding"));
         var layers = root.Elements(P + "Border").ToArray();
 
         Assert.Equal(2, layers.Length);
