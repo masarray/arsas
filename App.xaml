@@ -273,7 +273,10 @@
         <!-- Operator-supplied glyphs. Wireless geometry remains GOOSE-specific. -->
         <Geometry x:Key="OperatorIecTopologyIcon">M600-160v-80H440v-200h-80v80H80v-240h280v80h80v-200h160v-80h280v240H600v-80h-80v320h80v-80h280v240H600Zm80-80h120v-80H680v80ZM160-440h120v-80H160v80Zm520-200h120v-80H680v80Zm0 400v-80 80ZM280-440v-80 80Zm400-200v-80 80Z</Geometry>
         <Geometry x:Key="OperatorDiagnosticsIcon">M80-600v-120q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v220h-80v-220H160v120H80Zm200 320q-11 0-21-5.5T244-302l-69-138H80v-80h120q11 0 21 5.5t15 16.5l44 88 124-248q5-10 15-15t21-5q11 0 21 5t15 15l67 134q-18 11-34.5 23T478-474l-38-76-124 248q-5 11-15 16.5t-21 5.5Zm147 120H160q-33 0-56.5-23.5T80-240v-120h80v120h243q3 21 9 41t15 39Zm53-320Zm58.5 341.5Q480-197 480-280t58.5-141.5Q597-480 680-480t141.5 58.5Q880-363 880-280t-58.5 141.5Q763-80 680-80t-141.5-58.5ZM688-260l91-91-28-28-91 91 28 28Z</Geometry>
-        <Geometry x:Key="OperatorCommandDockPowerIcon">M451.5-491.5Q440-503 440-520v-320q0-17 11.5-28.5T480-880q17 0 28.5 11.5T520-840v320q0 17-11.5 28.5T480-480q-17 0-28.5-11.5Zm-112 343q-65.5-28.5-114-77t-77-114Q120-405 120-480q0-61 20-118.5T198-704q11-14 28-13.5t30 13.5q11 11 10 27t-11 30q-27 36-41 79t-14 88q0 117 81.5 198.5T480-200q117 0 198.5-81.5T760-480q0-46-13.5-89.5T704-649q-10-13-11-28.5t10-26.5q12-12 29-12.5t28 12.5q39 48 59.5 105T840-480q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-120q-75 0-140.5-28.5Z</Geometry>
+        <Geometry x:Key="OperatorCommandDockPowerIcon">M324-111.5Q251-143 197-197t-85.5-127Q80-397 80-480t31.5-156Q143-709 197-763t127-85.5Q397-880 480-880t156 31.5Q709-817 763-763t85.5 127Q880-563 880-480t-31.5 156Q817-251 763-197t-127 85.5Q563-80 480-80t-156-31.5ZM707-253q93-93 93-227t-93-227q-93-93-227-93t-227 93q-93 93-93 227t93 227q93 93 227 93t227-93Zm-57-57q70-70 70-170 0-51-19-94.5T650-650l-57 57q22 22 34.5 51t12.5 62q0 66-47 113t-113 47q-66 0-113-47t-47-113q0-33 12.5-62t34.5-51l-57-57q-32 32-51 75.5T240-480q0 100 70 170t170 70q100 0 170-70ZM440-480h80v-240h-80v240Zm40 0Z</Geometry>
+        <!-- Source contours from operator SVGs (native WPF Geometry; no bitmap or runtime conversion). -->
+        <Geometry x:Key="OperatorCommandDockChevronDownIcon">m480-340 180-180-57-56-123 123-123-123-57 56 180 180Zm0 260q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z</Geometry>
+        <Geometry x:Key="OperatorCommandDockChevronUpIcon">m357-384 123-123 123 123 57-56-180-180-180 180 57 56ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z</Geometry>
         <!-- GOOSE wireless indicator remains unchanged. -->
         <Geometry x:Key="OperatorIecWirelessIcon">M280-200q-33 0-56.5-23.5T200-280v-400q0-33 23.5-56.5T280-760h400q33 0 56.5 23.5T760-680v400q0 33-23.5 56.5T680-200H280Zm0 80h400q66 0 113-47t47-113v-400q0-66-47-113t-113-47H280q-66 0-113 47t-47 113v400q0 66 47 113t113 47Zm11-379-55-55q42-51 108.5-78.5T480-660q67 0 134 27.5T723-554l-55 55q-35-38-83.5-59.5T480-580q-56 0-104.5 21.5T291-499Zm114 114-57-57q26-28 60.5-43t72.5-15q38 0 71.5 15t59.5 43l-56 57q-14-15-34.5-25T480-420q-21 0-41 10t-34 25Zm46.5 93.5Q440-303 440-320t11.5-28.5Q463-360 480-360t28.5 11.5Q520-337 520-320t-11.5 28.5Q497-280 480-280t-28.5-11.5ZM480-480Z</Geometry>
         <Geometry x:Key="OperatorLiveMonitorIcon">M308.5-411.5Q320-423 320-440t-11.5-28.5Q297-480 280-480t-28.5 11.5Q240-457 240-440t11.5 28.5Q263-400 280-400t28.5-11.5Zm0-160Q320-583 320-600t-11.5-28.5Q297-640 280-640t-28.5 11.5Q240-617 240-600t11.5 28.5Q263-560 280-560t28.5-11.5ZM360-400h360v-80H360v80Zm0-160h360v-80H360v80Zm-40 440v-80H160q-33 0-56.5-23.5T80-280v-480q0-33 23.5-56.5T160-840h640q33 0 56.5 23.5T880-760v480q0 33-23.5 56.5T800-200H640v80H320ZM160-280h640v-480H160v480Zm0 0v-480 480Z</Geometry>
@@ -671,6 +674,80 @@
             <Setter Property="BorderBrush" Value="{StaticResource CommandLowerStroke}"/>
             <Setter Property="Foreground" Value="{StaticResource CommandLowerInk}"/>
             <Setter Property="MinWidth" Value="56"/>
+        </Style>
+
+        <!-- P0 UI-only override: preserve the original Expander instance, handlers, data grid,
+             and content. The native chevron chrome is replaced by the exact operator SVG glyphs. -->
+        <Style x:Key="CommandDockTransparentHeaderExpander" TargetType="{x:Type Expander}">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Expander}">
+                        <Grid Background="Transparent" SnapsToDevicePixels="True">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <ToggleButton x:Name="CommandDockHeaderToggle" Grid.Row="0"
+                                          Content="{TemplateBinding Header}"
+                                          Background="Transparent" BorderBrush="Transparent" BorderThickness="0"
+                                          Padding="0" Cursor="Hand" Focusable="True"
+                                          AutomationProperties.Name="Expand or collapse Command Dock"
+                                          IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                                        <Border x:Name="HeaderFocusRing" Background="Transparent"
+                                                BorderBrush="Transparent" BorderThickness="1" CornerRadius="4">
+                                            <Grid Background="Transparent" MinHeight="28">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="25"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Grid Grid.Column="0" Width="19" Height="19"
+                                                      HorizontalAlignment="Left" VerticalAlignment="Center">
+                                                    <Viewbox x:Name="ChevronCollapsed" Width="19" Height="19">
+                                                        <Path Data="{StaticResource OperatorCommandDockChevronDownIcon}"
+                                                              Fill="White" Stretch="Uniform"/>
+                                                    </Viewbox>
+                                                    <Viewbox x:Name="ChevronExpanded" Width="19" Height="19"
+                                                             Visibility="Collapsed">
+                                                        <Path Data="{StaticResource OperatorCommandDockChevronUpIcon}"
+                                                              Fill="White" Stretch="Uniform"/>
+                                                    </Viewbox>
+                                                </Grid>
+                                                <ContentPresenter Grid.Column="1" ContentSource="Content"
+                                                                  HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="ChevronCollapsed" Property="Visibility" Value="Collapsed"/>
+                                                <Setter TargetName="ChevronExpanded" Property="Visibility" Value="Visible"/>
+                                            </Trigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Opacity" Value="0.93"/>
+                                            </Trigger>
+                                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                                <Setter TargetName="HeaderFocusRing" Property="BorderBrush" Value="#AAFFFFFF"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <ContentPresenter x:Name="CommandDockContentHost" Grid.Row="1"
+                                              ContentSource="Content" Visibility="Collapsed"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsExpanded" Value="True">
+                                <Setter TargetName="CommandDockContentHost" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style x:Key="CommandDockPrimaryButton" TargetType="Button" BasedOn="{StaticResource CommandActionButtonBase}">

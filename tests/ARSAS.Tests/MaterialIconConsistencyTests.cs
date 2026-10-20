@@ -53,7 +53,7 @@ public sealed class MaterialIconConsistencyTests
         {
             ("OperatorIecTopologyIcon", "M600-160v-80"),
             ("OperatorDiagnosticsIcon", "M80-600v-120"),
-            ("OperatorCommandDockPowerIcon", "M451.5-491.5")
+            ("OperatorCommandDockPowerIcon", "M324-111.5")
         })
         {
             var entry = Assert.Single(app.Descendants(P + "Geometry"), g =>
@@ -61,6 +61,19 @@ public sealed class MaterialIconConsistencyTests
             Assert.StartsWith(prefix, entry.Value);
             Assert.False(Geometry.Parse(entry.Value).Bounds.IsEmpty);
         }
+        // Phase 1 freezes the complete up/down icons supplied by the operator.
+        // They must remain valid nonempty WPF paths at any display DPI.
+        foreach (var key in new[]
+        {
+            "OperatorCommandDockChevronDownIcon",
+            "OperatorCommandDockChevronUpIcon"
+        })
+        {
+            var entry = Assert.Single(app.Descendants(P + "Geometry"), g =>
+                (string?)g.Attribute(X + "Key") == key);
+            Assert.False(Geometry.Parse(entry.Value).Bounds.IsEmpty);
+        }
+
         var command = Assert.Single(xaml.Descendants(P + "Expander"),
             x => (string?)x.Attribute(X + "Name") == "CommandPanelExpander");
         Assert.Equal("{StaticResource OperatorCommandDockPowerIcon}",
