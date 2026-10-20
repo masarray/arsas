@@ -55,7 +55,8 @@ public sealed class P109WCommandDockLifecycleArchitectureTests
         Assert.DoesNotContain("_commandPanelUxTimer", ux, StringComparison.Ordinal);
         Assert.DoesNotContain("CommandPanelUxTimer_Tick", ux, StringComparison.Ordinal);
         Assert.Contains("grid.LoadingRow += CommandGrid_LoadingRow;", ux, StringComparison.Ordinal);
-        Assert.Contains("e.Row.Loaded += CommandGridRow_Loaded;", ux, StringComparison.Ordinal);
+        Assert.Contains("row.Loaded += CommandGridRow_Loaded;", ux, StringComparison.Ordinal);
+        Assert.Contains("foreach (var row in FindVisualChildren<DataGridRow>(grid))", ux, StringComparison.Ordinal);
         Assert.Contains("_configuredCommandRows.TryGetValue", ux, StringComparison.Ordinal);
         Assert.Contains("EnsureDefaultControlSafetyChecks(signal)", ux, StringComparison.Ordinal);
         Assert.Contains("InstallCommandGridBehavior(grid);", natural, StringComparison.Ordinal);
