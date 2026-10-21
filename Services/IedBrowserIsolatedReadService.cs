@@ -43,6 +43,11 @@ public static class IedBrowserIsolatedReadService
             var successful = 0;
             var sgRootFlight = new IedBrowserSgRootReadFlight(
                 client, targets, verifiedRootScope);
+            // One association-scoped flight, only used AFTER a scalar Read
+            // is genuinely unresolved; positive/negative parent probes are
+            // memoized once per exact DO+FC, never per every child.
+            var doReadFlight = new IedBrowserTypedDoReadFlight(
+                client, verifiedRootScope ?? targets);
             for (var i = 0; i < targets.Count; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -89,10 +94,24 @@ public static class IedBrowserIsolatedReadService
                         successful++;
                     }
                     else
-                        values.Report(new IedBrowserReadResult(target, "", "", "",
-                            IedBrowserRejectedScalarEvidence.Explain(raw, reason,
-                                target.DataType, target.FunctionalConstraint,
-                                client.LastErrorMessage)));
+                    {
+                        // Some IEDs expose ST/SE as an ordered DO structure
+                        // but reject or cannot decode its individual MMS leaf.
+                        // Never guess a missing value: only publish the exact
+                        // child proved by a separate GVA+Read of that DO.
+                        var verifiedParent = await doReadFlight.TryReadAsync(
+                            target, cancellationToken).ConfigureAwait(false);
+                        if (verifiedParent is not null)
+                        {
+                            values.Report(verifiedParent);
+                            successful++;
+                        }
+                        else
+                            values.Report(new IedBrowserReadResult(target, "", "", "",
+                                IedBrowserRejectedScalarEvidence.Explain(raw, reason,
+                                    target.DataType, target.FunctionalConstraint,
+                                    client.LastErrorMessage)));
+                    }
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
