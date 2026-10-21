@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "9c7cb40364023a7b217e5ec31ab3105ba90142eb",
-  "sourcePullRequest": 184,
-  "purpose": "P0-C stage-attributed SBOw asynchronous-error observation trial on engine #183 ancestry; delayed rejection regression code-qualified; no performance or physical acceptance yet.",
+  "commit": "4ed76ccd11b763dcd847395f6ef45273db3f5c9c",
+  "sourcePullRequest": 187,
+  "purpose": "P0-C follow-up read-only client-side per-invoke TPKT-send/confirmed-response/decode timing on exact engine #184 ancestry; Windows CI only, no physical latency acceptance.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
@@ -345,6 +345,23 @@
     "sbo400msSafetyGatePreserved": true,
     "negativeAndDelayedLastApplErrorRegression": true,
     "noUnqualifiedImmediateOperate": true,
+    "physicalLatencyQualificationRequired": true,
+    "mainlinePromotionForbidden": true
+  },
+  "p0CSboServiceTimingTrial": {
+    "status": "exact-engine-windows-ci-success-consumer-ci-pending-no-field-latency-claim",
+    "enginePullRequest": 187,
+    "engineCiOnlyPullRequest": 188,
+    "engineCiRun": 39593661449,
+    "baseEngineCommit": "9c7cb40364023a7b217e5ec31ab3105ba90142eb",
+    "exactCommit": "4ed76ccd11b763dcd847395f6ef45273db3f5c9c",
+    "capturePerInvokeTiming": true,
+    "tcpSendAndConfirmedResponseSeparated": true,
+    "mmsDecodeSeparated": true,
+    "serviceWaitNotPureNetworkRtt": true,
+    "sbo400msSafetyGatePreserved": true,
+    "positiveAndNegativeCommandTerminationPreserved": true,
+    "noAddedMmsOperations": true,
     "physicalLatencyQualificationRequired": true,
     "mainlinePromotionForbidden": true
   }
