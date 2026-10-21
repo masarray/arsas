@@ -258,4 +258,133 @@ public sealed class M217TypedDoublePointLiveModelTests
         Assert.DoesNotContain(rows, row => row.Name == "subVal [SV]" &&
             row.EvidenceKind == "Quality");
     }
+
+    private static LiveIedDataObjectModel RawTwoBitStatusModel(
+        string owner, string cdc = "", bool hasQ = true,
+        string mmsType = "Check", string fc = "ST")
+    {
+        var leaf = new LiveIedDataAttributeModel
+        {
+            ObjectReference = owner,
+            AttributePath = owner[(owner.LastIndexOf('.') + 1)..] + ".stVal",
+            MmsReference = owner[..owner.IndexOf('.')] + "$" + fc + "$" +
+                owner[(owner.IndexOf('.') + 1)..].Replace('.', '$') + "$stVal",
+            FunctionalConstraint = fc,
+            SclBType = "Check",
+            MmsType = mmsType,
+            TypeSource = "LiveTypeSpecification"
+        };
+        var quality = new LiveIedDataAttributeModel
+        {
+            ObjectReference = owner,
+            AttributePath = owner[(owner.LastIndexOf('.') + 1)..] + ".q",
+            MmsReference = owner[..owner.IndexOf('.')] + "$ST$" +
+                owner[(owner.IndexOf('.') + 1)..].Replace('.', '$') + "$q",
+            FunctionalConstraint = "ST",
+            SclBType = "Check",
+            MmsType = "Check",
+            TypeSource = "LiveTypeSpecification"
+        };
+        return new LiveIedDataObjectModel
+        {
+            Reference = owner,
+            Name = owner[(owner.LastIndexOf('.') + 1)..],
+            InferredCdc = cdc,
+            Attributes = hasQ ? [leaf, quality] : [leaf]
+        };
+    }
+
+    [Theory]
+    [InlineData("bits(00, unused=6)", "Intermediate [00]")]
+    [InlineData("bits(40, unused=6)", "Open [01]")]
+    [InlineData("bits(80, unused=6)", "Close [10]")]
+    [InlineData("bits(C0, unused=6)", "Bad state [11]")]
+    public void UnknownCdcWithExactTwoBitMmsStValAndQ_PresentsIECStatusOnAnyIED(
+        string raw, string expected)
+    {
+        foreach (var owner in new[] {
+            "ZIVAVRLD1/ATCC1.ParOp",
+            "SIEBCUCTRL/XCBR1.ParOp",
+            "OTHERLD1/VENDOR1.CustomStatus" })
+        {
+            var schema = Index(RawTwoBitStatusModel(owner));
+            Assert.True(schema.IsTwoBitStatusCandidate(owner + ".stVal", "ST"));
+            Assert.Equal(expected, IedBrowserDoublePointPresentation.Format(
+                raw, owner + ".stVal", owner, "ST", schema));
+            var ledger = new IedBrowserLiveValues();
+            var association = ledger.BeginAssociation();
+            Assert.True(ledger.PublishForAssociation(
+                association, owner + ".stVal", "ST",
+                raw, "", "", "MMS Read"));
+            Assert.True(ledger.TryGet(owner + ".stVal", "ST", out var evidence));
+            Assert.Equal(raw, evidence.Value);
+        }
+    }
+
+    [Theory]
+    [InlineData("bits(00,unused=3)")]
+    [InlineData("bits(0000,unused=3)")]
+    [InlineData("bits(00,unused=5)")]
+    [InlineData("bits(01,unused=6)")]
+    [InlineData("bits(41,unused=6)")]
+    [InlineData("prefix bits(00,unused=6)")]
+    [InlineData("bits(00,unused=6) suffix")]
+    [InlineData("2")]
+    [InlineData("False")]
+    [InlineData("open")]
+    public void UnknownCdcStatusRejectsWrongWireWidthPaddingOrUnverifiedText(
+        string raw)
+    {
+        var owner = "LD/VENDOR1.ParOp";
+        var schema = Index(RawTwoBitStatusModel(owner));
+        Assert.Equal(raw, IedBrowserDoublePointPresentation.Format(
+            raw, owner + ".stVal", owner, "ST", schema));
+    }
+
+    [Theory]
+    [InlineData("SPS", "ST", "Check", true)]
+    [InlineData("ENS", "ST", "Check", true)]
+    [InlineData("Boolean", "ST", "Check", true)]
+    [InlineData("", "MX", "Check", true)]
+    [InlineData("", "ST", "Enum", true)]
+    [InlineData("", "ST", "Check", false)]
+    public void UnknownCdcProofNeverOverridesContradictoryTypeOrMissingQuality(
+        string cdc, string fc, string mmsType, bool hasQuality)
+    {
+        var owner = "LD/VENDOR1.ParOp";
+        var schema = Index(RawTwoBitStatusModel(
+            owner, cdc, hasQuality, mmsType, fc));
+        Assert.False(schema.IsTwoBitStatusCandidate(owner + ".stVal", fc));
+        Assert.Equal("bits(40,unused=6)", IedBrowserDoublePointPresentation.Format(
+            "bits(40,unused=6)", owner + ".stVal", owner,
+            fc, schema));
+    }
+
+    [Fact]
+    public void RawTwoBitStatusNeverTurnsThirteenBitQualityOrVendorDcIntoDbpos()
+    {
+        var owner = "LD/ATCC1.ParOp";
+        var schema = Index(RawTwoBitStatusModel(owner));
+        Assert.False(schema.IsTwoBitStatusCandidate(owner + ".q", "ST"));
+        Assert.False(schema.IsTwoBitStatusCandidate(owner + ".stVal", "SV"));
+        Assert.False(schema.IsTwoBitStatusCandidate("LD/ATCC1.ParOpX.stVal", "ST"));
+        Assert.Equal("bits(0000,unused=3)", IedBrowserDoublePointPresentation.Format(
+            "bits(0000,unused=3)", owner + ".q", owner + ".q", "ST", schema));
+        Assert.Equal("bits(40,unused=6)", IedBrowserDoublePointPresentation.Format(
+            "bits(40,unused=6)", owner + ".stVal", owner, "CF", schema));
+    }
+
+    [Fact]
+    public void TwoBitWireDecoderRejectsMalformedPaddingAndNonBitString()
+    {
+        foreach (var wrong in new[] {
+            "bits(01,unused=6)", "bits(41,unused=6)", "bits(80,unused=0)",
+            "bits(80,unused=7)", "bits(0000,unused=3)", "false", "1",
+            "bits(40,unused=6) trash" })
+            Assert.False(Iec61850ValueFormatter.TryNormalizeTwoBitWireStatus(
+                wrong, out _), wrong);
+        Assert.True(Iec61850ValueFormatter.TryNormalizeTwoBitWireStatus(
+            "bits(80, unused=6)", out var code));
+        Assert.Equal(2, code);
+    }
 }
