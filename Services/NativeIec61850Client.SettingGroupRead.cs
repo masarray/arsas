@@ -23,6 +23,7 @@ public sealed partial class NativeIec61850Client
         if (slash <= 0 || slash >= root.Length - 1 ||
             !(root.EndsWith("$SG0", StringComparison.Ordinal) ||
               root.EndsWith("$SP0", StringComparison.Ordinal) ||
+              root.EndsWith("$SE0", StringComparison.Ordinal) ||
               root.EndsWith("$CF0", StringComparison.Ordinal) ||
               root.EndsWith("$DC0", StringComparison.Ordinal) ||
               root.EndsWith("$EX0", StringComparison.Ordinal)))
