@@ -160,19 +160,21 @@ public sealed class M217DRcbAssociationAndAnalogFcParityTests
     }
 
     [Fact]
-    public void OccupiedRcbHasEvidenceGlyphButUnknownIsNotPaintedAsAvailable()
+    public void OccupancyCanBeExplainedWithoutInventingRemoteRptEna()
     {
         var row = new RcbExportRow { Reference = "LD/LLN0.RP.urcb01" };
         var node = new IedBrowserTreeRow("reports/rcb/" + row.Reference,
             row.Name, "RCB", 3, row);
-        Assert.Equal("?", node.RcbUsageGlyph);
+        Assert.Equal(System.Windows.Visibility.Collapsed, node.RcbEnabledVisibility);
         Assert.Contains("unknown", node.RcbUsageTooltip, StringComparison.OrdinalIgnoreCase);
         row.Availability = MmsRcbOperationalAvailability.InUse;
-        Assert.Equal("◆", node.RcbUsageGlyph);
+        Assert.Contains("another client", node.RcbUsageTooltip);
+        Assert.Equal(System.Windows.Visibility.Collapsed, node.RcbEnabledVisibility);
         row.Availability = MmsRcbOperationalAvailability.UsedByCaller;
-        Assert.Equal("●", node.RcbUsageGlyph);
+        Assert.Contains("Active", node.RcbUsageTooltip);
+        Assert.Equal(System.Windows.Visibility.Collapsed, node.RcbEnabledVisibility);
         row.Availability = MmsRcbOperationalAvailability.Available;
-        Assert.Equal("", node.RcbUsageGlyph);
+        Assert.Equal(System.Windows.Visibility.Collapsed, node.RcbEnabledVisibility);
     }
 
     [Fact]
