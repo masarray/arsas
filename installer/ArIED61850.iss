@@ -64,8 +64,15 @@ WizardResizable=no
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
+; Preview installs into Program Files and must never silently fall back to
+; a current-user token when upgrading an existing protected installation.
+#ifndef SmvPreviewBuild
 PrivilegesRequiredOverridesAllowed=dialog
+#endif
+; Let Restart Manager close applications cleanly before any file replacement.
+; Do not force-kill arbitrary processes with unsaved engineering work.
 CloseApplications=yes
+CloseApplicationsFilter=*.exe,*.dll,*.chm
 RestartApplications=no
 AllowNoIcons=yes
 UsePreviousAppDir=yes
@@ -80,7 +87,14 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
 
 [Files]
+#ifdef SmvPreviewBuild
+; A still-loaded .NET framework/private DLL must be queued for replacement
+; on Windows restart rather than presenting Retry / Skip / Cancel mid-upgrade.
+; This requires elevation and must never be used for shared system DLLs.
+Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs restartreplace
+#else
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+#endif
 
 [Icons]
 Name: "{autoprograms}\{#AppShortcut}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExeName}"
@@ -90,6 +104,37 @@ Name: "{autodesktop}\{#AppShortcut}"; Filename: "{app}\{#AppExeName}"; WorkingDi
 Filename: "{app}\{#AppExeName}"; Description: "Launch ARSAS"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
 
 [Code]
+#ifdef SmvPreviewBuild
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ProbePath: String;
+begin
+  Result := '';
+  { Check protected/upgraded folders BEFORE writing hundreds of files. }
+  if not DirExists(ExpandConstant('{app}')) then
+    Exit;
+
+  ProbePath := ExpandConstant('{app}\.arsas-installer-access-check.tmp');
+  if not SaveStringToFile(ProbePath, 'ARSAS installation access check', False) then
+  begin
+    Result :=
+      'Windows cannot update the existing ARSAS SMV Preview folder.' + #13#10 +
+      'The installer needs administrator access to that folder.' + #13#10 +
+      'No application files were replaced. Please ask your computer administrator to check access permissions.';
+    Log('SMART_UPGRADE_PREFLIGHT: failed write probe in ' + ExpandConstant('{app}'));
+    Exit;
+  end;
+  if not DeleteFile(ProbePath) then
+  begin
+    Result := 'Windows cannot update the existing ARSAS SMV Preview folder. ' +
+      'A protected file prevented the pre-installation access check.';
+    Log('SMART_UPGRADE_PREFLIGHT: failed to remove write probe');
+    Exit;
+  end;
+  Log('SMART_UPGRADE_PREFLIGHT: existing installation folder is writable');
+end;
+#endif
+
 function IsNpcapInstalled: Boolean;
 begin
   Result :=

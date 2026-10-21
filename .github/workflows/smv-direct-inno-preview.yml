@@ -123,9 +123,23 @@ jobs:
         run: |
           $exe = ".\ArIED61850Tester\dist\ARSAS-$env:SMV_VERSION-win-x64-setup.exe"
           if (-not (Test-Path $exe -PathType Leaf)) { throw 'Installer missing.' }
-          $target = Join-Path $env:RUNNER_TEMP 'arsas-smv-installed'
-          $install = Start-Process -FilePath $exe -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/CURRENTUSER',"/DIR=$target") -Wait -PassThru
-          if ($install.ExitCode -ne 0) { throw "Silent install failed: $($install.ExitCode)." }
+          # Reproduce the actual customer upgrade location and UAC mode.
+          # A protected Program Files folder exposes issues missed by RUNNER_TEMP.
+          $target = Join-Path $env:ProgramFiles 'ARSAS-SMV-Preview-CI'
+          $params = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/CLOSEAPPLICATIONS',"/DIR=$target")
+          $install = Start-Process -FilePath $exe -ArgumentList $params -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Protected-folder install failed: $($install.ExitCode)." }
+          $accessibility = Join-Path $target 'Accessibility.dll'
+          if (-not (Test-Path $accessibility -PathType Leaf)) { throw 'Required Accessibility.dll missing.' }
+          $expectedAccessibility = (Get-FileHash $accessibility -Algorithm SHA256).Hash
+          # Reproduce a prior/partially replaced DLL, then verify an actual
+          # in-place upgrade restores tested bytes without manual Skip/Retry.
+          [System.IO.File]::WriteAllBytes($accessibility, [byte[]](65,82,83,65,83,45,79,76,68,45,68,76,76))
+          $upgrade = Start-Process -FilePath $exe -ArgumentList $params -Wait -PassThru
+          if ($upgrade.ExitCode -ne 0) { throw "In-place Program Files upgrade failed: $($upgrade.ExitCode)." }
+          $actualAccessibility = (Get-FileHash $accessibility -Algorithm SHA256).Hash
+          if ($actualAccessibility -ne $expectedAccessibility) { throw 'Upgrade did not repair the existing Accessibility.dll.' }
+          Write-Host 'SMART_INNO_UPGRADE_PASS: Protected Program Files upgrade restored exact Accessibility.dll bytes.'
           foreach ($file in @('ARSAS.exe','AR.Iec61850.Transports.Npcap.dll','SharpPcap.dll','PacketDotNet.dll','Tools\ArdIrec\ardirec_bridge.dll')) {
             if (-not (Test-Path (Join-Path $target $file) -PathType Leaf)) { throw "Installed runtime missing: $file" }
           }
