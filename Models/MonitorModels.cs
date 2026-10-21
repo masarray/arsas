@@ -888,6 +888,11 @@ public sealed class Iec61850MonitorPoint : ObservableObject
             var signal = SignalName ?? string.Empty;
             var reference = IecReference ?? string.Empty;
             var slash = reference.IndexOf('/');
+            // IEC 61850 vector member identity is part of the operator-facing
+            // name, not only the wire reference. Keep PhsA/PhsBC visible even
+            // when the generic signal title is simply "A" or "PPV".
+            signal = ArIED61850Tester.Models.IoTesting.IoSignalDisplayName.Format(
+                signal, reference);
             if (slash < 0)
                 return signal;
 
