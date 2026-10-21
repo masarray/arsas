@@ -106,7 +106,7 @@ public sealed class P105StaticParityUniqueCoverageTests
     [Theory]
     [InlineData("BCUGEF650/CSWI1.Pos.stVal", "CSWI Pos", "CSWI1 Pos")]
     [InlineData("BCUGEF650/CSWI16.Pos.stVal", "CSWI Pos", "CSWI16 Pos")]
-    [InlineData("BCUGEF650/MMXU1.A.phsA.cVal.mag.f", "MMXU A", "MMXU1 A")]
+    [InlineData("BCUGEF650/MMXU1.A.phsA.cVal.mag.f", "MMXU A", "MMXU1 A PhsA")]
     [InlineData("BCUGEF650/CSWI1.Pos.stVal", "CSWI1 Pos", "CSWI1 Pos")]
     [InlineData("not-a-logical-node", "Equipment status", "Equipment status")]
     public void ExplorerSignalLabel_UsesExactLnInstanceWithoutChangingMmsReference(
