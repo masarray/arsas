@@ -35,7 +35,7 @@ public static class IedBrowserRcbEnabledPresentation
 
     public static bool TryVerifiedTrue(IedBrowserLiveValues ledger,
         RcbExportRow? row, IReadOnlyDictionary<string, IedBrowserReadTarget> targets,
-        bool connected, out string tooltip)
+        bool connected, out string tooltip, DateTime minObservedUtc = default)
     {
         tooltip = "";
         if (!connected || ledger.IsOffline || row is null) return false;
@@ -47,6 +47,7 @@ public static class IedBrowserRcbEnabledPresentation
                 out var observed, preferReport: false) ||
             observed.IsStale ||
             observed.Association != ledger.Association ||
+            observed.ObservedUtc < minObservedUtc ||
             !string.Equals(observed.Source, "MMS Read", StringComparison.Ordinal) ||
             !bool.TryParse(observed.Value, out var enabled) || !enabled)
             return false;
