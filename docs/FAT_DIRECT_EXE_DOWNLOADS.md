@@ -8,7 +8,7 @@ Published GitHub **Release assets**, by contrast, give direct binary URLs ending
 
 ## Proposed safe workflow
 
-\`.github/workflows/fat-direct-exe.yml\` is a **manual-only, opt-in** preview publisher. It has no push, tag, PR, or workflow_run trigger. It can only be dispatched after the infrastructure file exists on the default branch and after the owner has explicitly approved **public non-production distribution**. Do not merge any unfinished P0 application/engine changes merely to install this infrastructure. An optional GitHub Environment named \`fat-preview-publication\` can require a human reviewer.
+\`.github/workflows/fat-direct-exe.yml\` is a **manual-only, opt-in** preview publisher. Pull requests may run only **read-only offline verifier tests**, with `contents: read`; the privileged publishing job has **no push, tag, PR, or workflow_run publishing trigger** and is gated to a manual dispatch on the default branch. It can only be dispatched after the infrastructure file exists on the default branch and after the owner has explicitly approved **public non-production distribution**. Do not merge any unfinished P0 application/engine changes merely to install this infrastructure. An optional GitHub Environment named \`fat-preview-publication\` can require a human reviewer.
 
 Required inputs:
 - \`tested_sha\`: exact qualified 40-char candidate source commit.
