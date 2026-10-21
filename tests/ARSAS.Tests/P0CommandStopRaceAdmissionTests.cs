@@ -74,24 +74,16 @@ public sealed class P0CommandStopRaceAdmissionTests
     }
 
     [Fact]
-    public void DistinctIeds_OwnIndependentAdmissionAndStopLanes()
+    public async Task DistinctIeds_OwnIndependentAdmissionAndStopLanes()
     {
-        using var ignored = new CancellationTokenSource();
         // Slot isolation is the foundation for an unrelated IED remaining
         // responsive when another IED is discovering or stopping.
-        var runtime = new Iec61850MonitorRuntime();
-        try
-        {
-            var first = Slot(runtime, "ied-1");
-            var second = Slot(runtime, "ied-2");
-            Assert.NotSame(first, second);
-            Assert.NotSame(Gate(first, "OperationGate"), Gate(second, "OperationGate"));
-            Assert.NotSame(Gate(first, "StopGate"), Gate(second, "StopGate"));
-        }
-        finally
-        {
-            runtime.DisposeAsync().AsTask().GetAwaiter().GetResult();
-        }
+        await using var runtime = new Iec61850MonitorRuntime();
+        var first = Slot(runtime, "ied-1");
+        var second = Slot(runtime, "ied-2");
+        Assert.NotSame(first, second);
+        Assert.NotSame(Gate(first, "OperationGate"), Gate(second, "OperationGate"));
+        Assert.NotSame(Gate(first, "StopGate"), Gate(second, "StopGate"));
     }
 
     private static object Slot(Iec61850MonitorRuntime runtime, string deviceId)
