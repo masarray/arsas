@@ -34,6 +34,8 @@ public sealed class SmvSmartInstallerUpgradeTests
         var ci = Read(".github/workflows/smv-direct-inno-preview.yml");
         Assert.Contains("Join-Path $env:ProgramFiles 'ARSAS-SMV-Preview-CI'", ci);
         Assert.DoesNotContain("'/CURRENTUSER'", ci);
+        Assert.Contains("$dirArgument = '/DIR=\"' + $target + '\"'", ci);
+        Assert.Contains("Silent install did not use requested Program Files directory", ci);
         Assert.Contains("WriteAllBytes($repairPath", ci);
         Assert.Contains("Seeded a legacy Accessibility.dll", ci);
         Assert.Contains("SMART_INNO_UPGRADE_PASS", ci);

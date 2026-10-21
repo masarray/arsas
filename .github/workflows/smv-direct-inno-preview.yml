@@ -126,9 +126,15 @@ jobs:
           # Reproduce the actual customer upgrade location and UAC mode.
           # A protected Program Files folder exposes issues missed by RUNNER_TEMP.
           $target = Join-Path $env:ProgramFiles 'ARSAS-SMV-Preview-CI'
-          $params = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/CLOSEAPPLICATIONS',"/DIR=$target")
+          # Start-Process joins argument elements: embed quotes inside /DIR so
+          # "C:\Program Files\..." reaches Inno Setup as exactly ONE parameter.
+          $dirArgument = '/DIR="' + $target + '"'
+          $params = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/CLOSEAPPLICATIONS',$dirArgument)
           $install = Start-Process -FilePath $exe -ArgumentList $params -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Protected-folder install failed: $($install.ExitCode)." }
+          if (-not (Test-Path (Join-Path $target 'ARSAS.exe') -PathType Leaf)) {
+            throw "Silent install did not use requested Program Files directory: $target"
+          }
           # Existing releases may include Accessibility.dll, while later releases
           # do not. Test the exact shipped bytes of a real private DLL.
           $legacyAccessibility = Join-Path $target 'Accessibility.dll'
