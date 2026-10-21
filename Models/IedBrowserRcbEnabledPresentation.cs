@@ -49,6 +49,7 @@ public static class IedBrowserRcbEnabledPresentation
             observed.Association != ledger.Association ||
             observed.ObservedUtc < minObservedUtc ||
             !string.Equals(observed.Source, "MMS Read", StringComparison.Ordinal) ||
+            observed.TypedBoolean is not true ||
             !bool.TryParse(observed.Value, out var enabled) || !enabled)
             return false;
 
