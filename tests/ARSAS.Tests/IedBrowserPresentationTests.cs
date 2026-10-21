@@ -715,11 +715,14 @@ public sealed class IedBrowserPresentationTests
         var b = new IedBrowserTreeRow("b", buffered.Name, "RCB", 3, buffered);
         var u = new IedBrowserTreeRow("u", unbuffered.Name, "RCB", 3, unbuffered);
         Assert.NotSame(b.GlyphBrush, u.GlyphBrush);
-        Assert.Equal("?", b.RcbUsageGlyph); // Unknown, not proven available
+        Assert.Equal(System.Windows.Visibility.Collapsed, b.RcbEnabledVisibility);
         buffered.Availability = AR.Iec61850.Mms.MmsRcbOperationalAvailability.UsedByCaller;
         unbuffered.Availability = AR.Iec61850.Mms.MmsRcbOperationalAvailability.InUse;
-        Assert.Equal("●", b.RcbUsageGlyph);
-        Assert.Equal("◆", u.RcbUsageGlyph);
+        // Distinct ownership badges are no proof that MMS RptEna was read true.
+        Assert.Equal(System.Windows.Visibility.Collapsed, b.RcbEnabledVisibility);
+        Assert.Equal(System.Windows.Visibility.Collapsed, u.RcbEnabledVisibility);
+        Assert.Contains("Active", b.RcbUsageTooltip);
+        Assert.Contains("another client", u.RcbUsageTooltip);
     }
 
     [Fact]
