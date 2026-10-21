@@ -158,6 +158,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         string deviceId,
         Iec61850ControlCommandRequest request,
         CancellationToken cancellationToken)
+        // An IEC command cannot silently queue behind a bulk discovery,
+        // browser Read All or lifecycle operation. If the single association
+        // is busy, fail locally before a wire write; NEVER bypass its IO gate.
         => RunDeviceOperationAsync(
             deviceId,
             cancellationToken,
@@ -175,7 +178,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 {
                     ClearActiveCommandExpectations(expectationKeys);
                 }
-            });
+            }, rejectIfBusy: true);
 
     public HybridReportPhysicalValidationSnapshot CaptureHybridReportPhysicalValidation(string deviceId)
         => _inner.CaptureHybridReportPhysicalValidation(deviceId);
@@ -540,13 +543,25 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     private async Task<T> RunDeviceOperationAsync<T>(
         string? deviceId,
         CancellationToken cancellationToken,
-        Func<CancellationToken, Task<T>> operation)
+        Func<CancellationToken, Task<T>> operation,
+        bool rejectIfBusy = false)
     {
         ThrowIfDisposing();
         ArgumentNullException.ThrowIfNull(operation);
 
         var slot = GetSlot(deviceId);
-        await slot.OperationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        if (rejectIfBusy)
+        {
+            // Strict non-blocking admission prevents apparent commands that
+            // wait unseen behind slow reads. The only correct alternative to
+            // owning the MMS association is an explicit local BUSY result.
+            if (!await slot.OperationGate.WaitAsync(0, cancellationToken)
+                    .ConfigureAwait(false))
+                throw new InvalidOperationException(
+                    "IED MMS association busy: command NOT SENT. Finish/cancel the current operation and retry.");
+        }
+        else
+            await slot.OperationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         CancellationTokenSource? linkedCancellation = null;
         long generation = 0;
