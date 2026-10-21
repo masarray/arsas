@@ -53,7 +53,8 @@ public static class IedBrowserVerifiedDoProjection
         MmsDataValue? data, IReadOnlyList<IedBrowserReadTarget> verifiedTargets)
     {
         if (type is null || data is null ||
-            type.MmsType != "structure" || data.Kind != MmsDataKind.Structure ||
+            !string.Equals(type.MmsType, "structure", StringComparison.OrdinalIgnoreCase) ||
+            data.Kind != MmsDataKind.Structure ||
             type.Children.Count is < 1 or > 128 ||
             type.Children.Count != data.Children.Count ||
             verifiedTargets.Count is < 1 or > 128)
