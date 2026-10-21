@@ -885,8 +885,11 @@ public sealed class Iec61850MonitorPoint : ObservableObject
     {
         get
         {
-            var signal = SignalName ?? string.Empty;
             var reference = IecReference ?? string.Empty;
+            // The Explorer column binds ExplorerSignalName (NOT SignalName).
+            // Apply the shared IEC phase owner before preserving LN instance
+            // disambiguation. Raw MMS identity and user signal name stay intact.
+            var signal = IoTesting.IoSignalDisplayName.Format(SignalName, reference);
             var slash = reference.IndexOf('/');
             if (slash < 0)
                 return signal;
