@@ -61,6 +61,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         // Model-only metadata index; never an independent quality/value cache.
         public IedBrowserSchemaIndex? ReportQualityRoutingSchema { get; set; }
         public Iec61850ReportQualityRouteIndex? ReportQualityRouting { get; set; }
+        // 0=not logged, 1=initial triage logged, 2=first proven q join logged.
+        // At most two summaries per association; no per-frame logging.
+        public int ReportCompanionTriageStage { get; set; }
         // Captured on association acceptance; old receive pumps cannot publish
         // into a newer connection even if the IED identity is the same.
         public long BrowserObservationAssociation { get; set; }
@@ -843,6 +846,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.BrowserSchema = null;
         session.ReportQualityRoutingSchema = null;
         session.ReportQualityRouting = null;
+        session.ReportCompanionTriageStage = 0;
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
         session.ReportReferenceIndex.Clear();
@@ -1933,12 +1937,55 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     ? BuildPlanAcquisitionLabel(plan, plan.Status.Contains("Dynamic", StringComparison.OrdinalIgnoreCase))
                     : state.AcquisitionLabel;
 
+                // A real typed q/t may have arrived in a PREVIOUS Report
+                // slice before this process leaf. Reuse only that association's
+                // independently observed raw companion, once the exact schema
+                // proves this process carrier owns it. The UI projection will
+                // read the merged canonical process record, never this local
+                // variable alone. No extra MMS I/O or per-model scan.
+                string? priorVerifiedQuality = null;
+                string? priorVerifiedTimestamp = null;
+                if (update.HasValue && schema != null &&
+                    schema.IsDeclaredQualityRouteValueCarrier(
+                        point.IecReference, point.FunctionalConstraint))
+                {
+                    if (schema.TryGetQualityCompanion(
+                            point.IecReference, point.FunctionalConstraint, out var priorQRef) &&
+                        session.Device.LiveValues.TryGet(
+                            priorQRef, point.FunctionalConstraint, out var priorQ) &&
+                        priorQ.Association == session.BrowserObservationAssociation &&
+                        !priorQ.IsStale &&
+                        priorQ.Source.StartsWith("Report", StringComparison.Ordinal) &&
+                        priorQ.QualityBits is { } priorBits &&
+                        session.Device.LiveValues.MergeVerifiedReportCompanionForAssociation(
+                            session.BrowserObservationAssociation,
+                            point.IecReference, point.FunctionalConstraint,
+                            qualityEvidence: priorBits))
+                        priorVerifiedQuality = priorBits.Summary;
+
+                    if (schema.TryGetTimestampCompanion(
+                            point.IecReference, point.FunctionalConstraint, out var priorTRef) &&
+                        session.Device.LiveValues.TryGet(
+                            priorTRef, point.FunctionalConstraint, out var priorT) &&
+                        priorT.Association == session.BrowserObservationAssociation &&
+                        !priorT.IsStale &&
+                        priorT.Source.StartsWith("Report", StringComparison.Ordinal) &&
+                        priorT.TimeBits is { IsDecoded: true, HasWireProvenance: true } priorTime &&
+                        session.Device.LiveValues.MergeVerifiedReportCompanionForAssociation(
+                            session.BrowserObservationAssociation,
+                            point.IecReference, point.FunctionalConstraint,
+                            timeEvidence: priorTime))
+                        priorVerifiedTimestamp = priorTime.EngineeringUtc;
+                }
+
                 var reportQuality = update.HasQuality && IsUsefulProcessField(update.Quality)
                     ? NormalizeQuality(update.Quality)
-                    : state.HasValue ? state.Quality : "Pending / q not supplied";
+                    : priorVerifiedQuality ??
+                      (state.HasValue ? state.Quality : "Pending / q not supplied");
                 var reportTimestamp = update.HasTimestamp && IsUsefulProcessField(update.Timestamp)
                     ? update.Timestamp
-                    : state.HasValue ? state.DeviceTimestamp : "-";
+                    : priorVerifiedTimestamp ??
+                      (state.HasValue ? state.DeviceTimestamp : "-");
 
                 ApplyValueUpdate(
                     session,
@@ -1982,6 +2029,12 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             // flattened process-value updates. Publish AFTER normalized updates
             // so "good"/display-date text never erases proven bit fields.
             // This path performs no Read, MMS polling, RCB write or GI.
+            var rawQSeen = 0;
+            var rawTSeen = 0;
+            var qLedgerAccepted = 0;
+            var qOwnersFound = 0;
+            var qCanonicalMerged = 0;
+            var tCanonicalMerged = 0;
             if (slice.BrowserRawEvidence.Count > 0)
             {
                 var evidenceModel = session.Device.SclWorkspace?.DesignModel ??
@@ -2008,6 +2061,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     }
                     foreach (var evidence in slice.BrowserRawEvidence)
                     {
+                        if (evidence.QualityBits is not null) rawQSeen++;
+                        if (evidence.TimeBits is not null) rawTSeen++;
                         if (!evidenceSchema.TryResolveReportFc(plan.DataSetReference,
                                 evidence.CarrierReference, out var evidenceFc) ||
                             !string.Equals(evidenceFc, evidence.FunctionalConstraint,
@@ -2040,13 +2095,29 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                                 session.BrowserObservationAssociation,
                                 qRef, evidenceFc, quality.Summary, "", "",
                                 "Report quality · raw MMS", qualityEvidence: quality);
+                            if (accepted) qLedgerAccepted++;
                             if (accepted && session.ReportQualityRouting is { } routing)
                             {
-                                foreach (var selected in routing.FindExact(qRef, evidenceFc))
+                                var ownerPoints = routing.FindExact(qRef, evidenceFc);
+                                qOwnersFound += ownerPoints.Count;
+                                foreach (var selected in ownerPoints)
                                 {
                                     if (!session.States.TryGetValue(selected.PointKey, out var state) ||
                                         !state.HasValue || !state.ReportTrafficSeen)
                                         continue;
+                                    // The WPF canonical projector reads the
+                                    // process Report channel, NOT the separate
+                                    // raw q leaf and NOT the runtime snapshot.
+                                    // Merge the validated companion into that
+                                    // very process observation before emitting
+                                    // a metadata-only point notification.
+                                    if (!session.Device.LiveValues.MergeVerifiedReportCompanionForAssociation(
+                                            session.BrowserObservationAssociation,
+                                            selected.IecReference,
+                                            selected.FunctionalConstraint,
+                                            qualityEvidence: quality))
+                                        continue;
+                                    qCanonicalMerged++;
                                     var verifiedQuality = NormalizeQuality(quality.Summary);
                                     if (string.Equals(state.Quality, verifiedQuality,
                                             StringComparison.OrdinalIgnoreCase))
@@ -2062,12 +2133,57 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                         if (evidence.TimeBits is { IsDecoded: true, HasWireProvenance: true } time &&
                             evidenceSchema.TryGetTimestampCompanion(
                                 evidence.CarrierReference, evidenceFc, out var tRef))
-                            session.Device.LiveValues.PublishForAssociation(
+                        {
+                            var accepted = session.Device.LiveValues.PublishForAssociation(
                                 session.BrowserObservationAssociation,
                                 tRef, evidenceFc, time.EngineeringUtc, "", "",
                                 "Report timestamp · raw MMS", utcTimeEvidence: time);
+                            if (accepted && session.ReportQualityRouting is { } routing)
+                            {
+                                foreach (var selected in routing.FindTimestampExact(tRef, evidenceFc))
+                                {
+                                    if (!session.States.TryGetValue(selected.PointKey, out var state) ||
+                                        !state.HasValue || !state.ReportTrafficSeen)
+                                        continue;
+                                    if (!session.Device.LiveValues.MergeVerifiedReportCompanionForAssociation(
+                                            session.BrowserObservationAssociation,
+                                            selected.IecReference, selected.FunctionalConstraint,
+                                            timeEvidence: time))
+                                        continue;
+                                    tCanonicalMerged++;
+                                    if (string.Equals(state.DeviceTimestamp, time.EngineeringUtc,
+                                            StringComparison.Ordinal))
+                                        continue;
+                                    ApplyValueUpdate(
+                                        session, selected, state.Value, state.Quality,
+                                        time.EngineeringUtc, state.SourceMode, state.Reason,
+                                        DateTime.UtcNow, state.Status, trustReportEdge: false,
+                                        hasProcessValue: false);
+                                }
+                            }
+                        }
                     }
                 }
+            }
+
+            // One bounded diagnostic after first routed Report ingress; a
+            // second only if a later batch finally proves a canonical q join.
+            // This distinguishes missing typed wire extraction, FC/schema
+            // rejection, missing selected owner, and UI/SSOT merge failure.
+            // It never changes values, RCB state, or sends MMS traffic.
+            if (slice.ReportCount > 0 &&
+                (session.ReportCompanionTriageStage == 0 ||
+                 (session.ReportCompanionTriageStage == 1 &&
+                  qCanonicalMerged > 0)))
+            {
+                Log("INFO", session.Device.Name,
+                    "REPORT_COMPANION_TRIAGE: " +
+                    $"frames={slice.ReportCount}, typedRawQ={rawQSeen}, " +
+                    $"typedRawT={rawTSeen}, qLedgerAccepted={qLedgerAccepted}, " +
+                    $"qOwners={qOwnersFound}, processQJoined={qCanonicalMerged}, " +
+                    $"processTJoined={tCanonicalMerged}; " +
+                    "counts describe this received slice, never infer missing wire q/t.");
+                session.ReportCompanionTriageStage = qCanonicalMerged > 0 ? 2 : 1;
             }
 
             var verifiedReportPointKeys = slice.Updates
@@ -2660,6 +2776,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.BrowserSchema = null;
         session.ReportQualityRoutingSchema = null;
         session.ReportQualityRouting = null;
+        session.ReportCompanionTriageStage = 0;
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
         session.ReportStreams.Clear();
@@ -2990,6 +3107,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         session.BrowserSchema = null;
         session.ReportQualityRoutingSchema = null;
         session.ReportQualityRouting = null;
+        session.ReportCompanionTriageStage = 0;
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
         session.StaticReportProjection.Reset();

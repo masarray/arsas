@@ -104,6 +104,52 @@ public sealed class IedBrowserLiveValues
         => TryPublish(reference, fc, value, quality, timestamp, source, association,
             utcTimeEvidence, qualityEvidence);
 
+    /// <summary>
+    /// Atomically attach a verified, exact-model-owned q or t Report companion
+    /// to the SAME existing canonical process Report observation. This is a
+    /// metadata-only revision: never generates a process observation, changes
+    /// the raw value, upgrades a Read to Report, or borrows another FC/IED.
+    /// The raw q/t leaf remains independently in this ledger for audit.
+    /// Ownership is proven by the caller's exact schema/association route.
+    /// </summary>
+    public bool MergeVerifiedReportCompanionForAssociation(
+        long association, string processReference, string fc,
+        MmsQualityEvidence? qualityEvidence = null,
+        Iec61850UtcTimeEvidence? timeEvidence = null)
+    {
+        if (string.IsNullOrWhiteSpace(processReference) ||
+            string.IsNullOrWhiteSpace(fc) ||
+            (qualityEvidence is null) == (timeEvidence is null) ||
+            (timeEvidence is not null &&
+             (!timeEvidence.IsDecoded || !timeEvidence.HasWireProvenance)))
+            return false;
+
+        var key = Key(processReference, fc);
+        lock (_gate)
+        {
+            if (_offline || association == 0 || association != _association ||
+                !_values.TryGetValue(key, out var channels) ||
+                channels.Report is not { } prior ||
+                prior.Association != association ||
+                !prior.Source.StartsWith("Report", StringComparison.Ordinal))
+                return false;
+
+            var updated = prior with
+            {
+                Quality = qualityEvidence is null ? prior.Quality : qualityEvidence.Summary,
+                DeviceTimestamp = timeEvidence is null
+                    ? prior.DeviceTimestamp : timeEvidence.EngineeringUtc,
+                QualityBits = qualityEvidence ?? prior.QualityBits,
+                TimeBits = timeEvidence ?? prior.TimeBits,
+                ObservedUtc = DateTime.UtcNow,
+                Revision = _version + 1
+            };
+            _values[key] = channels with { Report = updated };
+            _version++;
+            return true;
+        }
+    }
+
     private bool TryPublish(string reference, string fc, string? value, string? quality,
         string? timestamp, string source, long? expectedAssociation,
         Iec61850UtcTimeEvidence? utcTimeEvidence,
@@ -131,15 +177,38 @@ public sealed class IedBrowserLiveValues
             // especially typed q/t evidence from the original MMS bytes.
             if (onlyIfNoReport && channels.Report is not null)
                 return false;
-            var observed = new IedBrowserObservedValue(value.Trim(), quality ?? "",
-                timestamp ?? "", source, DateTime.UtcNow, _version + 1, _association,
+            // Report process members often omit unchanged q/t. A previous
+            // typed companion in this SAME association remains the latest
+            // real evidence until replaced; a new value-only Report must not
+            // revert the canonical process row to Unknown / no timestamp.
+            // There is no cross-association carry: BeginAssociation clears all.
+            var previousReport = isReport && source == "Report"
+                ? channels.Report : null;
+            var suppliedQuality = !string.IsNullOrWhiteSpace(quality) &&
+                quality is not ("Unknown" or "Pending / q not supplied" or
+                    "Unavailable / q not supplied");
+            var suppliedTimestamp = !string.IsNullOrWhiteSpace(timestamp) &&
+                timestamp != "-";
+            var observed = new IedBrowserObservedValue(value.Trim(),
+                suppliedQuality ? quality! : previousReport?.Quality ?? quality ?? "",
+                suppliedTimestamp ? timestamp! :
+                    previousReport?.DeviceTimestamp ?? timestamp ?? "",
+                source, DateTime.UtcNow, _version + 1, _association,
                 QualityBits: IsQualityReference(key)
                     ? qualityEvidence ?? (MmsQualityDecoder.TryDecodeRendered(value,
                         out var decodedQuality) ? decodedQuality : null)
-                    : null,
+                    : !suppliedQuality ||
+                      string.Equals(quality, previousReport?.Quality,
+                          StringComparison.OrdinalIgnoreCase)
+                        ? previousReport?.QualityBits
+                        : null,
                 TimeBits: IsTimeReference(key) &&
                     utcTimeEvidence is { IsDecoded: true, HasWireProvenance: true }
-                        ? utcTimeEvidence : null);
+                        ? utcTimeEvidence
+                        : !suppliedTimestamp ||
+                          string.Equals(timestamp, previousReport?.DeviceTimestamp,
+                              StringComparison.Ordinal)
+                            ? previousReport?.TimeBits : null);
             _values[key] = isReport
                 ? channels with { Report = observed }
                 : channels with { Read = observed };
