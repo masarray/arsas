@@ -116,9 +116,6 @@ public partial class MainWindow
     private void OpenSmvWorkspaceForDevice(Iec61850MonitorDevice device)
     {
         SelectedDevice = device;
-        if (SmvWorkspaceStatus is not null)
-            SmvWorkspaceStatus.Text =
-                "SMV capture for " + device.Name + " · existing verified viewer";
 
         if (_activeSmvViewerWindow is { IsLoaded: true } existing)
         {

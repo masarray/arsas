@@ -249,8 +249,8 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
             var currentKey = Volatile.Read(ref _selectedKey);
             _selectingProgrammatically = true;
             Streams.Clear();
-            foreach (var summary in update.Streams)
-                Streams.Add(summary);
+            foreach (var discovered in update.Streams)
+                Streams.Add(discovered);
             _selectingProgrammatically = false;
             Notify(nameof(StreamCountText));
 
