@@ -141,7 +141,7 @@ public partial class SmvViewerWindow
             if (direction.Length < 2)
                 continue;
 
-            var brush = WaveformBrushes[vector.ChannelIndex % WaveformBrushes.Length];
+            var brush = WaveformBrushes[Math.Max(0, vector.ChannelIndex - 1) % WaveformBrushes.Length];
             RawPhasorCanvas.Children.Add(new Line
             {
                 X1 = center.X, Y1 = center.Y, X2 = tip.X, Y2 = tip.Y,

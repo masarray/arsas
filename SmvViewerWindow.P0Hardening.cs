@@ -59,7 +59,7 @@ public partial class SmvViewerWindow
 
     private void P0SnapshotChannels_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (_p0AssessmentScheduled || _p0RejectingSnapshot)
+        if (_liveCaptureRunning || _p0AssessmentScheduled || _p0RejectingSnapshot)
             return;
 
         _p0AssessmentScheduled = true;
@@ -72,6 +72,8 @@ public partial class SmvViewerWindow
 
     private void ApplyP0SnapshotAssessment()
     {
+        if (_liveCaptureRunning)
+            return;
         var result = _snapshot;
         if (result is null)
         {

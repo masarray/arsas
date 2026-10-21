@@ -74,12 +74,19 @@
                             <ComboBoxItem Content="60 Hz" Tag="60"/>
                         </ComboBox>
                     </StackPanel>
-                    <Button x:Name="CaptureButton" Grid.Column="4" Content="Capture 2 cycles"
-                            Width="132" Height="32" VerticalAlignment="Bottom"
-                            Style="{StaticResource SoftButton}" Click="Capture_Click"/>
-                    <Button x:Name="CancelButton" Grid.Column="6" Content="Cancel"
-                            Width="76" Height="32" VerticalAlignment="Bottom" IsEnabled="False"
-                            Style="{StaticResource SoftButton}" Click="Cancel_Click"/>
+                    <StackPanel Grid.Column="4" Grid.ColumnSpan="3"
+                                Orientation="Horizontal" VerticalAlignment="Bottom">
+                        <Button x:Name="LiveButton" Content="Live monitor" Width="106" Height="32"
+                                Margin="0,0,5,0" Style="{StaticResource SoftButton}" Click="StartLive_Click"
+                                ToolTip="Start one passive continuous Npcap capture on the selected adapter."/>
+                        <Button x:Name="StopLiveButton" Content="Stop" Width="56" Height="32"
+                                Margin="0,0,8,0" Style="{StaticResource SoftButton}"
+                                IsEnabled="False" Click="StopLive_Click"/>
+                        <Button x:Name="CaptureButton" Content="Capture 2 cycles" Width="132" Height="32"
+                                Margin="0,0,5,0" Style="{StaticResource SoftButton}" Click="Capture_Click"/>
+                        <Button x:Name="CancelButton" Content="Cancel" Width="65" Height="32"
+                                IsEnabled="False" Style="{StaticResource SoftButton}" Click="Cancel_Click"/>
+                    </StackPanel>
                     <StackPanel Grid.Column="8" VerticalAlignment="Bottom">
                         <TextBlock Text="{Binding CaptureStatusText}" FontSize="10.5"
                                    Foreground="{StaticResource Muted}" TextWrapping="Wrap" MaxHeight="33"/>
@@ -119,7 +126,6 @@
                             <DataGrid x:Name="StreamGrid" Grid.Row="2"
                                       ItemsSource="{Binding Streams}"
                                       SelectedItem="{Binding SelectedStream, Mode=TwoWay}"
-                                      IsEnabled="{Binding IsEnabled, ElementName=CaptureButton}"
                                       SelectionChanged="P0StreamGrid_SelectionChanged"
                                       AutoGenerateColumns="False" IsReadOnly="True"
                                       CanUserAddRows="False" CanUserDeleteRows="False"
@@ -278,6 +284,9 @@
                                     <Setter Property="IsEnabled" Value="False"/>
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding IsEvidenceExportBusy}" Value="True">
+                                    <Setter Property="IsEnabled" Value="False"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding HasLivePresentation}" Value="True">
                                     <Setter Property="IsEnabled" Value="False"/>
                                 </DataTrigger>
                             </Style.Triggers>

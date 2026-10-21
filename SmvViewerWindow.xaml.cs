@@ -122,6 +122,7 @@ public partial class SmvViewerWindow : Window, INotifyPropertyChanged
             Raise();
             Raise(nameof(SelectedStreamDetail));
             ResetSnapshotPresentation();
+            OnLiveSelectedStreamChanged();
         }
     }
 
@@ -165,6 +166,7 @@ public partial class SmvViewerWindow : Window, INotifyPropertyChanged
             return;
         }
 
+        HasLivePresentation = false;
         var frequency = ReadSelectedFrequency();
         var appId = TryParseAppId(SelectedStream.AppId, out var parsedAppId) ? parsedAppId : null;
         var request = new SmvSnapshotRequest
@@ -289,10 +291,11 @@ public partial class SmvViewerWindow : Window, INotifyPropertyChanged
 
     private void SetCaptureState(bool capturing)
     {
-        CaptureButton.IsEnabled = !capturing && AdapterOptions.Count > 0;
+        CaptureButton.IsEnabled = !capturing && !_liveCaptureRunning && AdapterOptions.Count > 0;
+        LiveButton.IsEnabled = !capturing && !_liveCaptureRunning && AdapterOptions.Count > 0;
         CancelButton.IsEnabled = capturing;
-        AdapterCombo.IsEnabled = !capturing;
-        FrequencyCombo.IsEnabled = !capturing;
+        AdapterCombo.IsEnabled = !capturing && !_liveCaptureRunning;
+        FrequencyCombo.IsEnabled = !capturing && !_liveCaptureRunning;
         if (!capturing)
             SnapshotProgress.IsIndeterminate = false;
     }
@@ -534,6 +537,8 @@ public partial class SmvViewerWindow : Window, INotifyPropertyChanged
         _captureCancellation?.Cancel();
         _captureCancellation?.Dispose();
         _captureCancellation = null;
+        _liveCancellation?.Cancel();
+        _liveFreshnessTimer?.Stop();
     }
 
     private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
@@ -552,6 +557,7 @@ public partial class SmvViewerWindow : Window, INotifyPropertyChanged
 public sealed class SmvStreamRow
 {
     public string Source { get; init; } = string.Empty;
+    public string LiveKey { get; init; } = string.Empty;
     public string ControlReference { get; init; } = string.Empty;
     public string StreamId { get; init; } = string.Empty;
     public string DataSetReference { get; init; } = string.Empty;
