@@ -928,7 +928,8 @@ public partial class MainWindow
         // Right list objects can be visible while left LD/LN folders stay lazy.
         foreach (var detail in _iedBrowserDetails.Rows)
         {
-            if (detail.NavigateTo is not { Payload: RcbExportRow rcb } node)
+            if (detail.NavigateTo is not IedBrowserTreeRow node ||
+                node.Payload is not RcbExportRow rcb)
                 continue;
             var verified = IedBrowserRcbEnabledPresentation.TryVerifiedTrue(
                 device.LiveValues, rcb, targets, connected, out var tooltip);
