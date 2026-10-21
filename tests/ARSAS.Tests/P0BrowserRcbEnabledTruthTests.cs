@@ -44,6 +44,11 @@ public sealed class P0BrowserRcbEnabledTruthTests
             ledger, row, targets, true, out var tooltip));
         Assert.Contains("RptEna: true", tooltip);
         Assert.Contains("verified MMS Read", tooltip);
+        // Once Stop/activation changes the RCB state, an older successful
+        // read is only history; no new read-back means no live enabled icon.
+        Assert.False(IedBrowserRcbEnabledPresentation.TryVerifiedTrue(
+            ledger, row, targets, true, out _,
+            minObservedUtc: DateTime.UtcNow.AddSeconds(1)));
 
         Assert.False(IedBrowserRcbEnabledPresentation.TryVerifiedTrue(
             ledger, Rcb(Other), targets, true, out _));
