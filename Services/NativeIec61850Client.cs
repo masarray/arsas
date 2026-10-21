@@ -1406,7 +1406,15 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         Iec61850ControlCommandRequest request,
         CancellationToken cancellationToken)
     {
-        await _controlCommandGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        // This is the final per-association command admission gate, shared
+        // with live control inspection and ctlModel configuration. The UI
+        // facade's own nonqueue gate cannot prove that this native gate is
+        // free: never hide a pending Operate behind a long inspection.
+        // A rejected admission has NOT sent an MMS Select/Operate.
+        if (!await _controlCommandGate.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+            throw new InvalidOperationException(
+                "IEC 61850 command NOT SENT: this MMS association is busy inspecting, " +
+                "configuring, or executing another control. Retry after it completes.");
         try
         {
             return await ExecuteControlCoreAsync(request, cancellationToken).ConfigureAwait(false);
