@@ -246,6 +246,11 @@ public sealed record IedBrowserDetailRow(
     // Exact whole IEC DO for an operator's explicit Read choice. Unlike
     // ValueReference, never points to an arbitrary preferred scalar leaf.
     public string ReadObjectReference { get; init; } = "";
+    // Immutable, strictly scoped child references from THIS exact IEC DO.
+    // Only for a non-scalar parent: a bounded read-only presence indicator,
+    // not a fabricated parent value and not a second observation registry.
+    public IReadOnlyList<IedBrowserReadTarget> ParentObservedChildCandidates { get; init; } =
+        Array.Empty<IedBrowserReadTarget>();
     // IEC DataSet position, not a live value; only a validated frame can populate it.
     public int GooseSlot { get; init; } = -1;
     public string GooseReference { get; init; } = "";
