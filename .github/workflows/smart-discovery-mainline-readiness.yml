@@ -119,6 +119,8 @@ jobs:
           $p0BRcbTrialValid = Test-P0BRcbPlannerTrial -Lock $lock
           . .\scripts\test-p0-c-typed-read-trial.ps1
           $p0CTypedReadTrialValid = Test-P0CTypedReadTrial -Lock $lock
+          . .\scripts\test-p0-siebcu-window-rcb-trial.ps1
+          $p0SiebcuWindowRcbTrialValid = Test-P0SiebcuWindowRcbTrial -Lock $lock
           $trial = $lock.smartInteroperabilityCodeTrial
           $serverAt = $lock.sclServerAtTrial
           $closure = $lock.datasetFirstDiscoveryTrial
@@ -170,7 +172,7 @@ jobs:
                       $lock.commit -eq $p10.exactCommit -and
                       [int]$lock.sourcePullRequest -eq 161
 
-          if ($originalTrial -or $serverAtTrial -or $datasetTrial -or $p10Trial -or $coreRoutingTrialValid -or $m217KTrialValid -or $p0AIdentityTrialValid -or $p0BRcbTrialValid -or $p0CTypedReadTrialValid) {
+          if ($originalTrial -or $serverAtTrial -or $datasetTrial -or $p10Trial -or $coreRoutingTrialValid -or $m217KTrialValid -or $p0AIdentityTrialValid -or $p0BRcbTrialValid -or $p0CTypedReadTrialValid -or $p0SiebcuWindowRcbTrialValid) {
             if (-not $historicalTrialValid -or
                 $lock.ref -ne 'main') {
               throw 'Stacked trial identity or ancestor authority is inconsistent.'

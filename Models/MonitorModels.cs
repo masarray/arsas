@@ -885,8 +885,18 @@ public sealed class Iec61850MonitorPoint : ObservableObject
     {
         get
         {
-            var signal = SignalName ?? string.Empty;
             var reference = IecReference ?? string.Empty;
+            // The Explorer column binds ExplorerSignalName, not SignalName.
+            // The IEC phase owner is essential for A.phsA and PPV.phsBC;
+            // preserve the existing LN instance/Pos presentation for nonphase
+            // objects. Raw IEC reference and binding keys are never rewritten.
+            var signal = SignalName ?? string.Empty;
+            // Existing engineering labels such as "MMXU A" already carry
+            // their own context; keep the older exact LN-instance disambiguator
+            // for those rows. Short DO labels need the missing phase owner.
+            if (IoTesting.IoSignalDisplayName.HasPhaseContext(reference) &&
+                !signal.Contains(' ') && !signal.Contains('·'))
+                return IoTesting.IoSignalDisplayName.Format(signal, reference);
             var slash = reference.IndexOf('/');
             if (slash < 0)
                 return signal;

@@ -12,6 +12,12 @@ public static partial class IoSignalDisplayName
     [GeneratedRegex(@"(?:^|[.$/])phs(?<phase>AB|BC|CA|A|B|C)(?:$|[.$/])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex PhaseToken();
 
+    // One shared phase detector keeps Explorer's legacy per-LN instance
+    // labels unchanged for ordinary Pos/Mod/Health signals.
+    public static bool HasPhaseContext(string? iecReference)
+        => !string.IsNullOrWhiteSpace(iecReference) &&
+            PhaseToken().IsMatch(iecReference);
+
     public static string Format(string? signalName, string? iecReference)
     {
         var name = string.IsNullOrWhiteSpace(signalName) ? "Signal" : signalName.Trim();

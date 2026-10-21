@@ -139,9 +139,25 @@ public sealed class SmartInteroperabilityTrialGuardRegressionTests
             stageTrial.GetProperty("baseEngineCommit").GetString());
         Assert.Equal("9c7cb40364023a7b217e5ec31ab3105ba90142eb",
             stageTrial.GetProperty("exactCommit").GetString());
+        // The immutable #184 SBOw trial is now the parent of an exact
+        // code-only read-only discovery trial; do not relabel #184 as #186.
+        var windowTrial = root.GetProperty("p0SiebcuDiscoveryWindowTrial");
         Assert.Equal(stageTrial.GetProperty("exactCommit").GetString(),
+            windowTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal("d095b3ac9bdf6687f7ab9407f7e28eca9c168c94",
+            windowTrial.GetProperty("exactCommit").GetString());
+        Assert.Equal(windowTrial.GetProperty("exactCommit").GetString(),
             root.GetProperty("commit").GetString());
-        Assert.Equal(184, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(186, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(186, windowTrial.GetProperty("enginePullRequest").GetInt32());
+        Assert.Equal("engine-ci-success-consumer-ci-pending-not-physical",
+            windowTrial.GetProperty("status").GetString());
+        Assert.True(windowTrial.GetProperty("readOnlyRcbEnrichment").GetBoolean());
+        Assert.True(windowTrial.GetProperty("negotiatedWindowRequired").GetBoolean());
+        Assert.True(windowTrial.GetProperty("perRcbSequentialFallbackRequired").GetBoolean());
+        Assert.True(windowTrial.GetProperty("noControlOrRcbWrites").GetBoolean());
+        Assert.True(windowTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(windowTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
         Assert.Equal(184, stageTrial.GetProperty("enginePullRequest").GetInt32());
         Assert.Equal(185, stageTrial.GetProperty("engineCiOnlyPullRequest").GetInt32());
         Assert.Equal(1182, stageTrial.GetProperty("engineTestsPassed").GetInt32());

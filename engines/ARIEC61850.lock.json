@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "9c7cb40364023a7b217e5ec31ab3105ba90142eb",
-  "sourcePullRequest": 184,
-  "purpose": "P0-C stage-attributed SBOw asynchronous-error observation trial on engine #183 ancestry; delayed rejection regression code-qualified; no performance or physical acceptance yet.",
+  "commit": "d095b3ac9bdf6687f7ab9407f7e28eca9c168c94",
+  "sourcePullRequest": 186,
+  "purpose": "P0 SIEBCU code-trial: window-bounded independent RCB read-only enrichment on exact engine #184 control ancestry; CI-only until physical discovery and control FAT.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
@@ -347,5 +347,22 @@
     "noUnqualifiedImmediateOperate": true,
     "physicalLatencyQualificationRequired": true,
     "mainlinePromotionForbidden": true
+  },
+  "p0SiebcuDiscoveryWindowTrial": {
+    "status": "engine-ci-success-consumer-ci-pending-not-physical",
+    "enginePullRequest": 186,
+    "consumerPullRequest": 663,
+    "baseEngineCommit": "9c7cb40364023a7b217e5ec31ab3105ba90142eb",
+    "exactCommit": "d095b3ac9bdf6687f7ab9407f7e28eca9c168c94",
+    "engineCiRun": 39555379120,
+    "negotiatedWindowRequired": true,
+    "readOnlyRcbEnrichment": true,
+    "perRcbSequentialFallbackRequired": true,
+    "noNewMmsRequestScope": true,
+    "noControlOrRcbWrites": true,
+    "noDynamicDatasetMutation": true,
+    "noAdditionalAssociation": true,
+    "mainlinePromotionForbidden": true,
+    "physicalQualificationRequired": true
   }
 }
