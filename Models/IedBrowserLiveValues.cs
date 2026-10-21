@@ -197,10 +197,18 @@ public sealed class IedBrowserLiveValues
                 QualityBits: IsQualityReference(key)
                     ? qualityEvidence ?? (MmsQualityDecoder.TryDecodeRendered(value,
                         out var decodedQuality) ? decodedQuality : null)
-                    : previousReport?.QualityBits,
+                    : !suppliedQuality ||
+                      string.Equals(quality, previousReport?.Quality,
+                          StringComparison.OrdinalIgnoreCase)
+                        ? previousReport?.QualityBits
+                        : null,
                 TimeBits: IsTimeReference(key) &&
                     utcTimeEvidence is { IsDecoded: true, HasWireProvenance: true }
-                        ? utcTimeEvidence : previousReport?.TimeBits);
+                        ? utcTimeEvidence
+                        : !suppliedTimestamp ||
+                          string.Equals(timestamp, previousReport?.DeviceTimestamp,
+                              StringComparison.Ordinal)
+                            ? previousReport?.TimeBits : null);
             _values[key] = isReport
                 ? channels with { Report = observed }
                 : channels with { Read = observed };
