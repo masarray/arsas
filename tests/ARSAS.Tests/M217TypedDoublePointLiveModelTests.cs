@@ -383,6 +383,8 @@ public sealed class M217TypedDoublePointLiveModelTests
             "bits(40,unused=6) trash" })
             Assert.False(Iec61850ValueFormatter.TryNormalizeTwoBitWireStatus(
                 wrong, out _), wrong);
+        Assert.False(Iec61850ValueFormatter.TryNormalizeTwoBitWireStatus(
+            new string(' ', 100000) + "bits(80, unused=6)", out _));
         Assert.True(Iec61850ValueFormatter.TryNormalizeTwoBitWireStatus(
             "bits(80, unused=6)", out var code));
         Assert.Equal(2, code);
