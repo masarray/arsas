@@ -152,4 +152,34 @@ public sealed class P0CanonicalReportCompanionSsoTests
         Assert.Equal("Invalid", process.Quality);
         Assert.Equal("6", process.Value);
     }
+
+    [Fact]
+    public void QualityBeforeProcessValueRemainsRawUntilExactProcessReportExists()
+    {
+        var ledger = new IedBrowserLiveValues();
+        var assoc = ledger.BeginAssociation();
+        var q = Quality(0);
+        // A typed q Report may precede the selected process member across
+        // receive slices; it cannot create an independent process value.
+        Assert.True(ledger.PublishForAssociation(assoc, Q, "ST",
+            "bits(0000,unused=3)", "", "", "Report quality · raw MMS",
+            qualityEvidence: q));
+        Assert.False(ledger.MergeVerifiedReportCompanionForAssociation(
+            assoc, Tap, "ST", qualityEvidence: q));
+        Assert.False(ledger.TryGet(Tap, "ST", out _));
+
+        // Later exact, independent process ingress admits the existing typed
+        // q into that process record, without changing raw q or borrowing FC.
+        Assert.True(ledger.PublishForAssociation(assoc, Tap, "ST",
+            "6", "", "", "Report"));
+        Assert.True(ledger.TryGet(Q, "ST", out var observedQ));
+        Assert.Equal(assoc, observedQ.Association);
+        Assert.NotNull(observedQ.QualityBits);
+        Assert.Equal("Report quality · raw MMS", observedQ.Source);
+        Assert.True(ledger.MergeVerifiedReportCompanionForAssociation(
+            assoc, Tap, "ST", qualityEvidence: observedQ.QualityBits));
+        Assert.True(ledger.TryGet(Tap, "ST", out var process));
+        Assert.Equal("Good", process.Quality);
+        Assert.Equal("6", process.Value);
+    }
 }
