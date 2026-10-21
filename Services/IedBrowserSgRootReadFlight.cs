@@ -146,7 +146,7 @@ internal sealed class IedBrowserSgRootReadFlight
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(
                     cancellationToken);
                 timeout.CancelAfter(TimeSpan.FromSeconds(5));
-                if (IedBrowserSgRootProjection.CanReadRoot(siblings.Length))
+                if (IedBrowserSgRootProjection.CanReadRoot(siblings.Count))
                     read = await _client.ReadVerifiedSgRootAsync(
                         root, siblings, timeout.Token).ConfigureAwait(false);
             }
