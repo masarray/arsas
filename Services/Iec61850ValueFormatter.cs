@@ -197,6 +197,7 @@ public static class Iec61850ValueFormatter
     private static bool IsDbposDataType(string dataType)
         => dataType.Equals("Dbpos", StringComparison.OrdinalIgnoreCase) ||
            dataType.Equals("DPC", StringComparison.OrdinalIgnoreCase) ||
+           dataType.Equals("DPS", StringComparison.OrdinalIgnoreCase) ||
            dataType.Equals("DoublePointStatus", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsNumericDataType(string dataType)
