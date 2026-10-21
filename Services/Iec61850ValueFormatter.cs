@@ -222,7 +222,9 @@ public static class Iec61850ValueFormatter
     public static bool TryNormalizeTwoBitWireStatus(string? text, out int code)
     {
         code = 0;
-        if (string.IsNullOrWhiteSpace(text)) return false;
+        // Raw IED presentation can be malformed or adversarial. The canonical
+        // two-bit renderer is a few dozen characters, so bound regex work.
+        if (string.IsNullOrWhiteSpace(text) || text.Length > 64) return false;
         var rendered = Regex.Match(
             text,
             @"^\s*bits\(\s*(?:0x)?([0-9a-f]{2})\s*,\s*unused\s*=\s*6\s*\)\s*$",
