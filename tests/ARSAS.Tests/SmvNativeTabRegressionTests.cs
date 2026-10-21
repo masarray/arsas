@@ -15,11 +15,15 @@ public sealed class SmvNativeTabRegressionTests
         Assert.DoesNotContain("Select an IED in Device Explorer to launch", host);
         Assert.DoesNotContain("Open SMV Capture", host);
         foreach (var control in new[] { "AdapterCombo", "StartButton", "StopButton", "StreamList",
-                                        "WaveformCanvas", "PhasorCanvas", "Measurements" })
+                                        "WaveformView", "PhasorView", "Measurements" })
             Assert.Contains(control, inline);
         Assert.Contains("private readonly SmvLiveCaptureService _service = new();", code);
         Assert.Contains("new SmvSnapshotCaptureService().ListAdapters()", code);
         Assert.Contains("Volatile.Read(ref _selectedKey)", code);
+        Assert.Contains("SmvDigSubPresentationAdapter.BuildWaveform(snapshot)", code);
+        Assert.Contains("SmvDigSubPresentationAdapter.RelativeMeasurements(vectors)", code);
+        Assert.DoesNotContain("private void DrawWaveform()", code);
+        Assert.DoesNotContain("private void DrawPhasors()", code);
         Assert.Contains("MainTabs.SelectedIndex = EngineeringNavigationRoute.SmvWorkspaceIndex", quick);
     }
 
