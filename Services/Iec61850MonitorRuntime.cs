@@ -1937,12 +1937,55 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     ? BuildPlanAcquisitionLabel(plan, plan.Status.Contains("Dynamic", StringComparison.OrdinalIgnoreCase))
                     : state.AcquisitionLabel;
 
+                // A real typed q/t may have arrived in a PREVIOUS Report
+                // slice before this process leaf. Reuse only that association's
+                // independently observed raw companion, once the exact schema
+                // proves this process carrier owns it. The UI projection will
+                // read the merged canonical process record, never this local
+                // variable alone. No extra MMS I/O or per-model scan.
+                string? priorVerifiedQuality = null;
+                string? priorVerifiedTimestamp = null;
+                if (update.HasValue && schema != null &&
+                    schema.IsDeclaredQualityRouteValueCarrier(
+                        point.IecReference, point.FunctionalConstraint))
+                {
+                    if (schema.TryGetQualityCompanion(
+                            point.IecReference, point.FunctionalConstraint, out var priorQRef) &&
+                        session.Device.LiveValues.TryGet(
+                            priorQRef, point.FunctionalConstraint, out var priorQ) &&
+                        priorQ.Association == session.BrowserObservationAssociation &&
+                        !priorQ.IsStale &&
+                        priorQ.Source.StartsWith("Report", StringComparison.Ordinal) &&
+                        priorQ.QualityBits is { } priorBits &&
+                        session.Device.LiveValues.MergeVerifiedReportCompanionForAssociation(
+                            session.BrowserObservationAssociation,
+                            point.IecReference, point.FunctionalConstraint,
+                            qualityEvidence: priorBits))
+                        priorVerifiedQuality = priorBits.Summary;
+
+                    if (schema.TryGetTimestampCompanion(
+                            point.IecReference, point.FunctionalConstraint, out var priorTRef) &&
+                        session.Device.LiveValues.TryGet(
+                            priorTRef, point.FunctionalConstraint, out var priorT) &&
+                        priorT.Association == session.BrowserObservationAssociation &&
+                        !priorT.IsStale &&
+                        priorT.Source.StartsWith("Report", StringComparison.Ordinal) &&
+                        priorT.TimeBits is { IsDecoded: true, HasWireProvenance: true } priorTime &&
+                        session.Device.LiveValues.MergeVerifiedReportCompanionForAssociation(
+                            session.BrowserObservationAssociation,
+                            point.IecReference, point.FunctionalConstraint,
+                            timeEvidence: priorTime))
+                        priorVerifiedTimestamp = priorTime.EngineeringUtc;
+                }
+
                 var reportQuality = update.HasQuality && IsUsefulProcessField(update.Quality)
                     ? NormalizeQuality(update.Quality)
-                    : state.HasValue ? state.Quality : "Pending / q not supplied";
+                    : priorVerifiedQuality ??
+                      (state.HasValue ? state.Quality : "Pending / q not supplied");
                 var reportTimestamp = update.HasTimestamp && IsUsefulProcessField(update.Timestamp)
                     ? update.Timestamp
-                    : state.HasValue ? state.DeviceTimestamp : "-";
+                    : priorVerifiedTimestamp ??
+                      (state.HasValue ? state.DeviceTimestamp : "-");
 
                 ApplyValueUpdate(
                     session,
