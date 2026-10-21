@@ -12,7 +12,8 @@ public sealed record IedBrowserObservedValue(
     string Value, string Quality, string DeviceTimestamp, string Source, DateTime ObservedUtc,
     long Revision = 0, long Association = 0, bool IsStale = false,
     MmsQualityEvidence? QualityBits = null,
-    Iec61850UtcTimeEvidence? TimeBits = null);
+    Iec61850UtcTimeEvidence? TimeBits = null,
+    bool? TypedBoolean = null);
 
 internal sealed record IedBrowserObservationChannels(
     IedBrowserObservedValue? Report = null,
@@ -100,9 +101,10 @@ public sealed class IedBrowserLiveValues
     public bool PublishForAssociation(long association, string reference, string fc,
         string? value, string? quality, string? timestamp, string source,
         Iec61850UtcTimeEvidence? utcTimeEvidence = null,
-        MmsQualityEvidence? qualityEvidence = null)
+        MmsQualityEvidence? qualityEvidence = null,
+        bool? typedBoolean = null)
         => TryPublish(reference, fc, value, quality, timestamp, source, association,
-            utcTimeEvidence, qualityEvidence);
+            utcTimeEvidence, qualityEvidence, typedBoolean: typedBoolean);
 
     /// <summary>
     /// Atomically attach a verified, exact-model-owned q or t Report companion
@@ -153,7 +155,8 @@ public sealed class IedBrowserLiveValues
     private bool TryPublish(string reference, string fc, string? value, string? quality,
         string? timestamp, string source, long? expectedAssociation,
         Iec61850UtcTimeEvidence? utcTimeEvidence,
-        MmsQualityEvidence? qualityEvidence, bool onlyIfNoReport = false)
+        MmsQualityEvidence? qualityEvidence, bool onlyIfNoReport = false,
+        bool? typedBoolean = null)
     {
         if (string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(fc) ||
             string.IsNullOrWhiteSpace(value) ||
@@ -208,7 +211,8 @@ public sealed class IedBrowserLiveValues
                         : !suppliedTimestamp ||
                           string.Equals(timestamp, previousReport?.DeviceTimestamp,
                               StringComparison.Ordinal)
-                            ? previousReport?.TimeBits : null);
+                            ? previousReport?.TimeBits : null,
+                TypedBoolean: typedBoolean);
             _values[key] = isReport
                 ? channels with { Report = observed }
                 : channels with { Read = observed };
@@ -345,5 +349,6 @@ public sealed record IedBrowserReadResult(
     IedBrowserReadTarget Target, string Value, string Quality,
     string DeviceTimestamp, string Error,
     Iec61850UtcTimeEvidence? UtcTimeEvidence = null,
-    MmsQualityEvidence? QualityEvidence = null);
+    MmsQualityEvidence? QualityEvidence = null,
+    bool? TypedBoolean = null);
 public sealed record IedBrowserReadProgress(int Completed, int Total);
