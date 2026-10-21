@@ -714,7 +714,7 @@
                                                             </DataTemplate>
                                                         </DataGridTemplateColumn.CellTemplate>
                                                     </DataGridTemplateColumn>
-                                                    <DataGridTemplateColumn Header="Control" Width="1.55*" MinWidth="245">
+                                                    <DataGridTemplateColumn Header="Control" Width="1.55*" MinWidth="260">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
                                                                 <StackPanel Margin="0,0">
@@ -740,10 +740,10 @@
                                                                             </StackPanel.Style>
                                                                             <Button Content="Open" Tag="{Binding}" CommandParameter="Open [01]" Click="ControlStageAction_Click"
                                                                                     Style="{StaticResource CommandOpenButton}" Margin="0,0,7,0"
-                                                                                    IsEnabled="{Binding ControlCanInspectPosition}" Height="29" MinHeight="29" Padding="10,3"/>
+                                                                                    Width="72" MinWidth="72" HorizontalAlignment="Left" IsEnabled="{Binding ControlCanInspectPosition}" Height="29" MinHeight="29" Padding="10,3"/>
                                                                             <Button Content="Close" Tag="{Binding}" CommandParameter="Closed [10]" Click="ControlStageAction_Click"
                                                                                     Style="{StaticResource CommandCloseButton}" Margin="0,0,7,0"
-                                                                                    IsEnabled="{Binding ControlCanInspectPosition}" Height="29" MinHeight="29" Padding="10,3"/>
+                                                                                    Width="72" MinWidth="72" HorizontalAlignment="Left" IsEnabled="{Binding ControlCanInspectPosition}" Height="29" MinHeight="29" Padding="10,3"/>
                                                                         </StackPanel>
 
                                                                         <StackPanel Orientation="Horizontal">
@@ -762,7 +762,7 @@
                                                                             </StackPanel.Style>
                                                                             <Button Content="{Binding ControlPendingConfirmationLabel}" Tag="{Binding}" Click="ControlConfirmAction_Click"
                                                                                     Style="{StaticResource CommandConfirmButton}"
-                                                                                    IsEnabled="{Binding ControlCanConfirm}" Margin="0,0,7,0" Height="29" MinHeight="29" Padding="10,3"/>
+                                                                                    Width="108" MinWidth="108" HorizontalAlignment="Left" IsEnabled="{Binding ControlCanConfirm}" Margin="0,0,7,0" Height="29" MinHeight="29" Padding="10,3"/>
                                                                             <Button Content="Cancel" Tag="{Binding}" Click="ControlCancelAction_Click"
                                                                                     Style="{StaticResource CommandDockSoftButton}" Height="29" MinHeight="29" Padding="10,3"/>
                                                                         </StackPanel>
@@ -1808,11 +1808,12 @@
                                 </StackPanel>
                             </Border>
                             <Border Grid.Column="1" BorderBrush="#E4EAF2" BorderThickness="0,0,0,1" Padding="8,2">
-                                <DockPanel LastChildFill="True">
+                                <Grid ClipToBounds="True">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="0"/><ColumnDefinition Width="176"/></Grid.ColumnDefinitions>
                                     <!-- Channel label is shown only for a real Report/Read
                                          observation; engineering schema alone cannot color
                                          an unevaluated signal as measured/healthy. -->
-                                    <TextBlock DockPanel.Dock="Right" Text="{Binding ObservationSource}"
+                                    <TextBlock Grid.Column="1" Text="{Binding ObservationSource}" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" ToolTip="{Binding ObservationTooltip}"
                                                FontSize="9.8"
                                                Foreground="#4B6B94" Margin="10,0,0,0"
                                                VerticalAlignment="Center">
@@ -1827,10 +1828,10 @@
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
-                                    <TextBlock Text="{Binding Value}"
+                                    <TextBlock Grid.Column="0" Text="{Binding Value}" ToolTip="{Binding Value}"
                                                FontSize="11.2" Foreground="#344860"
                                                TextTrimming="CharacterEllipsis"/>
-                                </DockPanel>
+                                </Grid>
                             </Border>
                         </Grid>
                     </DataTemplate>
@@ -2137,6 +2138,9 @@
                                 <Grid Grid.Row="1">
                                 <ListView x:Name="IedBrowserDetailList"
                                           SelectionMode="Single"
+                                          ClipToBounds="True"
+                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                          ScrollViewer.VerticalScrollBarVisibility="Auto"
                                           AlternationCount="2"
                                           BorderBrush="#CBD7E4" BorderThickness="1"
                                           Background="White" HorizontalContentAlignment="Stretch"
