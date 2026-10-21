@@ -198,7 +198,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 {
                     values.Report(new IedBrowserReadResult(target, accepted,
                         rich?.Quality ?? "", rich?.DeviceTimestamp ?? "", "",
-                        rich?.UtcTimeEvidence, rich?.QualityEvidence));
+                        rich?.UtcTimeEvidence, rich?.QualityEvidence,
+                        rich?.Value is bool typed ? typed : null));
                     succeeded++;
                 }
                 else
