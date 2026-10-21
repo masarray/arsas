@@ -67,11 +67,13 @@ public sealed class M214OperatorNavigationRoutingTests
     }
 
     [Fact]
-    public void SmvNav_ReusesExistingDeviceViewer_NotAnotherDecoderOrPoller()
+    public void SmvNav_UsesEmbeddedWireFirstViewer_AndPreservesIEDQuickWorkflow()
     {
         var source = File.ReadAllText(Find("MainWindow.IedSmvQuickStart.cs"));
-        Assert.Contains("OpenSmvWorkspaceForDevice(device);", source);
-        Assert.Contains("SmvViewerWindow(device)", source);
+        var main = File.ReadAllText(Find("MainWindow.xaml"));
+        Assert.Contains("ActivateSelectedSmvWorkspace();", source);
+        Assert.Contains("<views:SmvInlineViewer x:Name=\"MainSmvViewer\"/>", main);
+        Assert.Contains("SmvViewerWindow(device)", source); // Legacy explicit IED snapshot path remains available.
         Assert.Contains("EnableFastWorkflow(adapter, routeDetail)", source);
         Assert.DoesNotContain("new MmsClientSession", source);
     }

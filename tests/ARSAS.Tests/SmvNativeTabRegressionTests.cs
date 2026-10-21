@@ -17,7 +17,7 @@ public sealed class SmvNativeTabRegressionTests
         foreach (var control in new[] { "AdapterCombo", "StartButton", "StopButton", "StreamList",
                                         "WaveformCanvas", "PhasorCanvas", "Measurements" })
             Assert.Contains(control, inline);
-        Assert.Contains("new SmvLiveCaptureService()", code);
+        Assert.Contains("private readonly SmvLiveCaptureService _service = new();", code);
         Assert.Contains("new SmvSnapshotCaptureService().ListAdapters()", code);
         Assert.Contains("Volatile.Read(ref _selectedKey)", code);
         Assert.Contains("MainTabs.SelectedIndex = EngineeringNavigationRoute.SmvWorkspaceIndex", quick);
