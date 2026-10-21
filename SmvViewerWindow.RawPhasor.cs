@@ -31,8 +31,7 @@ public partial class SmvViewerWindow
         try
         {
             var vectors = await Task.Run(() => SmvRawVectorMath.Analyze(snapshot));
-            if (generation != _rawVectorAnalysisGeneration ||
-                !ReferenceEquals(snapshot, _snapshot) || !IsLoaded)
+            if (!IsCurrentRawVectorOwner(snapshot, generation))
                 return;
             foreach (var vector in vectors)
                 RawVectorRows.Add(vector);
@@ -44,13 +43,29 @@ public partial class SmvViewerWindow
         }
         catch (Exception ex)
         {
-            if (generation != _rawVectorAnalysisGeneration ||
-                !ReferenceEquals(snapshot, _snapshot) || !IsLoaded)
+            if (!IsCurrentRawVectorOwner(snapshot, generation))
                 return;
             RawVectorRows.Clear();
             RawVectorStatusText = $"Raw phasor analysis unavailable: {ex.Message}";
             RenderRawPhasor();
         }
+    }
+
+    private bool IsCurrentRawVectorOwner(SmvSnapshotResult snapshot, int generation)
+    {
+        if (generation != _rawVectorAnalysisGeneration ||
+            !ReferenceEquals(snapshot, _snapshot) || !IsLoaded)
+            return false;
+
+        // P0 capture-selection identity remains the authority, even if analysis
+        // finishes before its scheduled evidence assessment.
+        return _p0CaptureSelection is null ||
+            (SelectedStream is not null && _p0CaptureSelection.Matches(
+                SelectedStream.ControlReference,
+                SelectedStream.StreamId,
+                SelectedStream.DataSetReference,
+                SelectedStream.AppId,
+                SelectedStream.DestinationMac));
     }
 
     private void ResetRawVectorPresentation()
