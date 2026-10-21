@@ -86,6 +86,33 @@ public sealed class P0CommandStopRaceAdmissionTests
         Assert.NotSame(Gate(first, "StopGate"), Gate(second, "StopGate"));
     }
 
+    [Fact]
+    public void QuickCommandDock_ClassifiesLocalBusyBeforeGenericFailure()
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        string? source = null;
+        while (current is not null)
+        {
+            var filename = Path.Combine(current.FullName, "MainWindow.xaml.cs");
+            if (File.Exists(filename))
+            {
+                source = File.ReadAllText(filename);
+                break;
+            }
+            current = current.Parent;
+        }
+        Assert.NotNull(source);
+
+        var specific = source.IndexOf(
+            "ex.Message.Contains(\\"command NOT SENT\\"", StringComparison.Ordinal);
+        var generic = source.IndexOf(
+            "signal.ControlLastResult = $\\"Command failed:", StringComparison.Ordinal);
+        Assert.True(specific >= 0 && generic > specific,
+            "A facade-local NOT SENT must be classified before the generic failure popup.");
+        Assert.Contains("CONTROL_UI_NOT_SENT:", source, StringComparison.Ordinal);
+        Assert.Contains("Iec61850ControlShout.FromLocalRejection(", source, StringComparison.Ordinal);
+    }
+
     private static object Slot(UiRuntime runtime, string deviceId)
     {
         var method = typeof(UiRuntime).GetMethod(
