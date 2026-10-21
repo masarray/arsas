@@ -178,8 +178,12 @@ public partial class SmvViewerWindow
             if (Streams.Any(row => row.LiveKey.Equals(summary.Key, StringComparison.Ordinal)))
                 continue;
 
+            // An SCL definition must not silently bind the first publisher when
+            // two physical sources advertise the same APPID/svID/destination.
             var matches = Streams.Where(row => row.LiveKey.Length == 0 &&
-                MatchesConfiguredStream(row, summary)).Take(2).ToArray();
+                MatchesConfiguredStream(row, summary) &&
+                update.Streams.Count(peer => MatchesConfiguredStream(row, peer)) == 1)
+                .Take(2).ToArray();
             var matched = matches.Length == 1 ? matches[0] : null;
             var row = new SmvStreamRow
             {

@@ -63,6 +63,28 @@ public sealed class SmvLiveCaptureTests
     }
 
     [Fact]
+    public void IdenticalAppIdAndSvId_FromDifferentEthernetSourcesStayIndependent()
+    {
+        var catalog = new SmvLiveStreamCatalog(Options);
+        for (var i = 0; i < 160; i++)
+        {
+            catalog.Receive(Frame("MU_COLLIDE", 0x4000, i, i,
+                source: "02:00:00:00:00:01"), DateTimeOffset.UtcNow);
+            catalog.Receive(Frame("MU_COLLIDE", 0x4000, i, -i,
+                source: "02:00:00:00:00:02"), DateTimeOffset.UtcNow);
+        }
+        var streams = catalog.Publish(null, DateTimeOffset.UtcNow).Streams;
+        Assert.Equal(2, streams.Count);
+        Assert.NotEqual(streams[0].Key, streams[1].Key);
+        var a = Assert.IsType<SmvSnapshotResult>(
+            catalog.Publish(streams[0].Key, DateTimeOffset.UtcNow).SelectedSnapshot);
+        var b = Assert.IsType<SmvSnapshotResult>(
+            catalog.Publish(streams[1].Key, DateTimeOffset.UtcNow).SelectedSnapshot);
+        Assert.NotEqual(a.SourceMac, b.SourceMac);
+        Assert.Equal(-a.Channels[0].Samples[80], b.Channels[0].Samples[80]);
+    }
+
+    [Fact]
     public void UnresolvedTimebaseNeverProducesSyntheticSamples()
     {
         var catalog = new SmvLiveStreamCatalog(Options);
@@ -89,7 +111,8 @@ public sealed class SmvLiveCaptureTests
         Assert.Contains("SelectedStream.LiveKey", code, StringComparison.Ordinal);
     }
 
-    private static SampledValuesFrame Frame(string svId, ushort appId, int counter, int value, bool declaredRate = true)
+    private static SampledValuesFrame Frame(string svId, ushort appId, int counter, int value, bool declaredRate = true,
+        string source = "02:00:00:00:00:01")
     {
         var bytes = new byte[8];
         BinaryPrimitives.WriteInt32BigEndian(bytes.AsSpan(0, 4), value);
@@ -102,7 +125,7 @@ public sealed class SmvLiveCaptureTests
         };
         return new SampledValuesFrame
         {
-            Source = MacAddress.Parse("02:00:00:00:00:01"),
+            Source = MacAddress.Parse(source),
             Destination = MacAddress.Parse("01:0C:CD:04:00:01"),
             AppId = appId,
             Pdu = new SampledValuesPdu { Asdus = [asdu] }
