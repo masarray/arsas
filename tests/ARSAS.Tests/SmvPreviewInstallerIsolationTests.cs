@@ -15,6 +15,8 @@ public sealed class SmvPreviewInstallerIsolationTests
         Assert.Contains("AppShortcut", iss, StringComparison.Ordinal);
         Assert.Contains("/DSmvPreviewBuild=1", script, StringComparison.Ordinal);
         Assert.Contains("-smvpreview", script, StringComparison.Ordinal);
+        Assert.Contains("& $InnoCompiler @arguments", script, StringComparison.Ordinal);
+        Assert.Contains("Inno Setup compilation failed", script, StringComparison.Ordinal);
     }
 
     private static string Read(string relative)

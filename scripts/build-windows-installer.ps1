@@ -189,21 +189,9 @@ $arguments = @(
     $installerDefinition
 )
 
-# Preview builds are always isolated from stable Windows installs. The normal
-# release has the original AppId and upgrade behavior unchanged.
-if ($normalizedVersion -match '-smvpreview\.[0-9a-f]{12}
-if ($LASTEXITCODE -ne 0) {
-    throw "Inno Setup compilation failed with exit code $LASTEXITCODE."
-}
-if (-not (Test-Path $expectedInstaller -PathType Leaf)) {
-    throw "Inno Setup completed without producing the expected installer: $expectedInstaller"
-}
-
-$hash = Get-FileHash -Path $expectedInstaller -Algorithm SHA256
-Write-Host "==> Installer: $expectedInstaller"
-Write-Host "==> SHA256: $($hash.Hash)"
-Write-Output $expectedInstaller
-) {
+# Preview builds are isolated from stable ARSAS; the normal installer
+# retains its existing AppId and standard upgrade behavior.
+if ($normalizedVersion -match '-smvpreview\.[0-9a-f]{12}$') {
     $arguments = @("/DSmvPreviewBuild=1") + $arguments
 }
 & $InnoCompiler @arguments

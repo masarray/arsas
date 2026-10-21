@@ -51,6 +51,14 @@ jobs:
       - name: Enforce source and license boundaries
         run: .\ArIED61850Tester\scripts\verify-source-clean.ps1
 
+      - name: Validate Inno packaging PowerShell syntax before expensive build
+        run: |
+          $tokens = $null
+          $errors = $null
+          $scriptPath = (Resolve-Path .\ArIED61850Tester\scripts\build-windows-installer.ps1).Path
+          [System.Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) { throw ("Invalid installer PowerShell syntax: " + ($errors | ForEach-Object Message | Out-String)) }
+
       - name: Checkout pinned independent engines
         run: |
           git clone --quiet --filter=blob:none --no-checkout https://github.com/masarray/ARIEC61850.git ARIEC61850
