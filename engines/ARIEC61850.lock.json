@@ -349,7 +349,7 @@
     "mainlinePromotionForbidden": true
   },
   "p0SiebcuDiscoveryWindowTrial": {
-    "status": "engine-ci-running-consumer-ci-pending-not-physical",
+    "status": "engine-ci-success-consumer-ci-pending-not-physical",
     "enginePullRequest": 186,
     "consumerPullRequest": 663,
     "baseEngineCommit": "9c7cb40364023a7b217e5ec31ab3105ba90142eb",
