@@ -199,9 +199,9 @@ public partial class SmvViewerWindow
             if (matched is not null)
             {
                 var index = Streams.IndexOf(matched);
-                var selected = ReferenceEquals(SelectedStream, matched);
+                var wasSelected = ReferenceEquals(SelectedStream, matched);
                 Streams[index] = row;
-                if (selected)
+                if (wasSelected)
                     SelectedStream = row;
             }
             else
