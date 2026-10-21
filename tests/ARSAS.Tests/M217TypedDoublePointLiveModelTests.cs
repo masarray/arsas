@@ -387,4 +387,23 @@ public sealed class M217TypedDoublePointLiveModelTests
             "bits(80, unused=6)", out var code));
         Assert.Equal(2, code);
     }
+
+    [Theory]
+    [InlineData("DPC")]
+    [InlineData("DPS")]
+    public void ExplicitIecDoublePointCdcUsesSameGlobalStatusVocabulary(
+        string cdc)
+    {
+        var owner = "LD/VENDOR1.Status";
+        var schema = Index(RawTwoBitStatusModel(owner, cdc, hasQ: false));
+        Assert.True(schema.IsDeclaredDoublePointValue(owner + ".stVal", "ST"));
+        Assert.Equal("Intermediate [00]", IedBrowserDoublePointPresentation.Format(
+            "bits(00, unused=6)", owner + ".stVal", owner, "ST", schema));
+        Assert.Equal("Open [01]", Iec61850ValueFormatter.FormatReportProcessValue(
+            "bits(40, unused=6)", cdc, "", "Status", owner + ".stVal"));
+        Assert.Equal("Close [10]", Iec61850ValueFormatter.FormatReportProcessValue(
+            "bits(80, unused=6)", cdc, "", "Status", owner + ".stVal"));
+        Assert.Equal("Bad state [11]", IedBrowserDoublePointPresentation.Format(
+            "bits(C0, unused=6)", owner + ".stVal", owner, "ST", schema));
+    }
 }
