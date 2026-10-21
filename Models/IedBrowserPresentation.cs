@@ -48,14 +48,26 @@ public sealed class IedBrowserTreeRow : ObservableObject
         ? report.Buffered ? System.Windows.Media.Brushes.SeaGreen
             : System.Windows.Media.Brushes.RoyalBlue
         : System.Windows.Media.Brushes.SteelBlue;
-    public string RcbUsageGlyph => Payload is RcbExportRow report
-        ? report.Availability switch
-        {
-            AR.Iec61850.Mms.MmsRcbOperationalAvailability.UsedByCaller => "●",
-            AR.Iec61850.Mms.MmsRcbOperationalAvailability.InUse => "◆",
-            AR.Iec61850.Mms.MmsRcbOperationalAvailability.Unknown => "?",
-            _ => ""
-        } : "";
+    // UI-only display state. This flag is re-derived from the current-IED
+    // LiveValues ledger; it is never used as an MMS/process state store.
+    private bool _rcbEnabledVerified;
+    private string _rcbEnabledTooltip = "";
+    public Visibility RcbEnabledVisibility => Payload is RcbExportRow && _rcbEnabledVerified
+        ? Visibility.Visible : Visibility.Collapsed;
+    public string RcbEnabledTooltip => _rcbEnabledTooltip;
+
+    public void SetRcbEnabled(bool verified, string tooltip)
+    {
+        if (Payload is not RcbExportRow) return;
+        tooltip = verified ? tooltip : "";
+        if (_rcbEnabledVerified == verified &&
+            string.Equals(_rcbEnabledTooltip, tooltip, StringComparison.Ordinal))
+            return;
+        _rcbEnabledVerified = verified;
+        _rcbEnabledTooltip = tooltip;
+        Raise(nameof(RcbEnabledVisibility));
+        Raise(nameof(RcbEnabledTooltip));
+    }
     public string RcbUsageTooltip => Payload is RcbExportRow report
         ? report.Availability switch
         {
@@ -74,7 +86,6 @@ public sealed class IedBrowserTreeRow : ObservableObject
     public void RefreshRcbUsage()
     {
         if (Payload is not RcbExportRow) return;
-        Raise(nameof(RcbUsageGlyph));
         Raise(nameof(RcbUsageTooltip));
     }
 
@@ -263,7 +274,8 @@ public sealed record IedBrowserDetailRow(
     public string Glyph => NavigateTo?.Glyph ?? (IsDataObject ? "DO" : Kind == "Data" ? "DA" : "");
     public System.Windows.Media.Brush GlyphBrush => NavigateTo?.GlyphBrush ??
         System.Windows.Media.Brushes.SteelBlue;
-    public string RcbUsageGlyph => NavigateTo?.RcbUsageGlyph ?? "";
+    public Visibility RcbEnabledVisibility => NavigateTo?.RcbEnabledVisibility ?? Visibility.Collapsed;
+    public string RcbEnabledTooltip => NavigateTo?.RcbEnabledTooltip ?? "";
     public string RcbUsageTooltip => NavigateTo?.RcbUsageTooltip ?? "";
 
     /// <summary>Mirror the same RCB node's active state in the right list.</summary>
@@ -271,7 +283,9 @@ public sealed record IedBrowserDetailRow(
     {
         if (NavigateTo?.Payload is not RcbExportRow rcb) return;
         PropertyChanged?.Invoke(this,
-            new PropertyChangedEventArgs(nameof(RcbUsageGlyph)));
+            new PropertyChangedEventArgs(nameof(RcbEnabledVisibility)));
+        PropertyChanged?.Invoke(this,
+            new PropertyChangedEventArgs(nameof(RcbEnabledTooltip)));
         PropertyChanged?.Invoke(this,
             new PropertyChangedEventArgs(nameof(RcbUsageTooltip)));
         if (Kind == "Object") Value = rcb.StatusText;
