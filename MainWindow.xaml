@@ -11,6 +11,8 @@
         TextOptions.TextHintingMode="Fixed"
         Icon="Assets/app-icon.ico" Closing="Window_Closing" PreviewKeyDown="MainWindow_PreviewKeyDown">
     <Window.Resources>
+        <!-- Exact operator-supplied circular unlocked-padlock vector; no font glyph. -->
+        <Geometry x:Key="BrowserRcbEnabledIconGeometry">M380-320h200q25 0 42.5-17.5T640-380v-120q0-25-17.5-42.5T580-560v-60q0-42-29-71t-71-29q-42 0-71 29t-29 71h60q0-17 11.5-28.5T480-660q17 0 28.5 11.5T520-620v60H380q-25 0-42.5 17.5T320-500v120q0 25 17.5 42.5T380-320ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T197-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z</Geometry>
         <!-- Preserve compact columns; hover reveals the complete list of
              distinct active RCB names when more than one reports a signal. -->
         <Style x:Key="RcbAcquisitionTextStyle" TargetType="{x:Type TextBlock}">
@@ -1867,7 +1869,6 @@
                                     <ColumnDefinition Width="32"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="23"/>
                                 </Grid.ColumnDefinitions>
                                 <Border Grid.Column="0" Background="{Binding GlyphBrush}" CornerRadius="2"
                                         Height="16" Width="23" VerticalAlignment="Center">
@@ -1896,10 +1897,37 @@
                                 <TextBlock Grid.Column="2" Text="{Binding Value}" ToolTip="{Binding Value}"
                                            FontSize="10.5" Foreground="#63768A" Margin="10,0,0,0"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="3" Text="{Binding RcbUsageGlyph}"
-                                           Foreground="#B98506" FontSize="13"
-                                           ToolTip="{Binding RcbUsageTooltip}"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                    <!-- Only RCB rows have a compact fixed name/icon slot. -->
+                    <DataTemplate x:Key="BrowserRcbObjectRow">
+                        <Border MinHeight="23" BorderBrush="#E0E7EF" BorderThickness="0,0,0,1"
+                                Background="Transparent">
+                            <Grid Margin="7,1,7,1">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="32"/>
+                                    <ColumnDefinition Width="200"/>
+                                    <ColumnDefinition Width="24"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Background="{Binding GlyphBrush}"
+                                        CornerRadius="2" Height="16" Width="23"
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Glyph}" FontSize="9"
+                                               Foreground="White" FontWeight="SemiBold"
+                                               TextAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <TextBlock Grid.Column="1" Text="{Binding Name}"
+                                           ToolTip="{Binding Name}" FontSize="11.2"
+                                           Foreground="#273C55" TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center"/>
+                                <Path Grid.Column="2" Data="{StaticResource BrowserRcbEnabledIconGeometry}"
+                                      Width="16" Height="16" Stretch="Uniform"
+                                      Fill="#277455" VerticalAlignment="Center"
+                                      HorizontalAlignment="Center"
+                                      Visibility="{Binding RcbEnabledVisibility}"
+                                      ToolTip="{Binding RcbEnabledTooltip}"/>
                             </Grid>
                         </Border>
                     </DataTemplate>
@@ -1921,6 +1949,9 @@
                             </DataTrigger>
                             <DataTrigger Binding="{Binding Kind}" Value="Object">
                                 <Setter Property="ContentTemplate" Value="{StaticResource BrowserObjectRow}"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding NavigateTo.Kind}" Value="RCB">
+                                <Setter Property="ContentTemplate" Value="{StaticResource BrowserRcbObjectRow}"/>
                             </DataTrigger>
                             <DataTrigger Binding="{Binding Kind}" Value="FlagGroup">
                                 <Setter Property="ContentTemplate" Value="{StaticResource BrowserFlagGroupRow}"/>
@@ -2054,8 +2085,9 @@
                                                             <ColumnDefinition Width="Auto"/>
                                                             <ColumnDefinition Width="17"/>
                                                             <ColumnDefinition Width="34"/>
-                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="150"/>
                                                             <ColumnDefinition Width="18"/>
+                                                            <ColumnDefinition Width="*"/>
                                                         </Grid.ColumnDefinitions>
                                                         <Border Width="{Binding IndentWidth}"/>
                                                         <Button Grid.Column="1" Tag="{Binding}" Content="{Binding ToggleGlyph}"
@@ -2071,13 +2103,15 @@
                                                                        FontSize="9" FontWeight="SemiBold"
                                                                        TextAlignment="Center" VerticalAlignment="Center"/>
                                                         </Border>
-                                                        <TextBlock Grid.Column="3" Text="{Binding Title}"
+                                                        <TextBlock Grid.Column="3" Text="{Binding Title}" ToolTip="{Binding Title}"
                                                                    TextTrimming="CharacterEllipsis"
                                                                    Foreground="#243B54" VerticalAlignment="Center"/>
-                                                        <TextBlock Grid.Column="4" Text="{Binding RcbUsageGlyph}"
-                                                                   Foreground="#B98506" FontSize="13"
-                                                                   ToolTip="{Binding RcbUsageTooltip}"
-                                                                   VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                        <Path Grid.Column="4" Data="{StaticResource BrowserRcbEnabledIconGeometry}"
+                                                              Width="15" Height="15" Stretch="Uniform"
+                                                              Fill="#277455" VerticalAlignment="Center"
+                                                              HorizontalAlignment="Center"
+                                                              Visibility="{Binding RcbEnabledVisibility}"
+                                                              ToolTip="{Binding RcbEnabledTooltip}"/>
                                                     </Grid>
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
