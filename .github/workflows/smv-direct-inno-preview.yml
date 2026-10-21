@@ -146,8 +146,9 @@ jobs:
           @{sourceSha=$env:GITHUB_SHA;engineSha=$env:ARIEC_SHA;ardirecSha=$env:ARDIREC_SHA;installer=$name;installerSha256=$sha256;installedSmokePassed=$true;channel='engineering-preview'} | ConvertTo-Json | Set-Content $provenance -Encoding utf8
           $notes = Join-Path $dist 'SMV-PREVIEW-NOTES.md'
           @("# ARSAS SMV Preview $env:SMV_VERSION",'','Direct Inno Setup EXE, without any workflow ZIP artifact.','Windows build, ARSAS regression, engine check, native CTest, silent install, bridge validation and uninstall passed.','Raw SMV channels are not calibrated voltage/current. Physical merging-unit acceptance remains pending.','Npcap must be installed separately. Authenticode signing is not asserted.',"Source: $env:GITHUB_SHA","SHA256: $sha256") | Set-Content $notes -Encoding utf8
-          gh release view $env:SMV_TAG --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -eq 0) { throw "Immutable release already exists: $env:SMV_TAG" }
+          # gh release create refuses to create a second release with an existing
+          # tag. Do not probe a missing release with a failing native CLI command:
+          # Windows PowerShell 5.1 treats its stderr as a terminating error.
           gh release create $env:SMV_TAG $exe $sums $provenance --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "ARSAS SMV Preview $env:SMV_VERSION" --notes-file $notes --prerelease --latest=false
           if ($LASTEXITCODE -ne 0) { throw 'Direct release upload failed.' }
           $verified = gh release view $env:SMV_TAG --repo $env:GITHUB_REPOSITORY --json tagName,isPrerelease,assets | ConvertFrom-Json
