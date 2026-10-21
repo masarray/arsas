@@ -1,14 +1,15 @@
 <UserControl x:Class="ArIED61850Tester.Views.SmvInlineViewer"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             Background="Transparent" Loaded="Viewer_Loaded" Unloaded="Viewer_Unloaded">
+             xmlns:dig="clr-namespace:ProcessBus.App.Wpf.Controls"
+             Background="#071625" Loaded="Viewer_Loaded" Unloaded="Viewer_Unloaded">
     <UserControl.Resources>
         <Style x:Key="SvPane" TargetType="Border">
-            <Setter Property="Background" Value="#FBFDFF"/>
-            <Setter Property="BorderBrush" Value="#DAE4F0"/>
+            <Setter Property="Background" Value="#0C1B2B"/>
+            <Setter Property="BorderBrush" Value="#1B344F"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="9"/>
-            <Setter Property="Padding" Value="9"/>
+            <Setter Property="CornerRadius" Value="7"/>
+            <Setter Property="Padding" Value="8"/>
         </Style>
     </UserControl.Resources>
     <Grid>
@@ -33,8 +34,8 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="Sampled Values" FontSize="14" FontWeight="SemiBold" Foreground="#233B58"/>
-                    <TextBlock Text="IEC 61850-9-2 · passive Ethernet" FontSize="10" Foreground="#667E98"/>
+                    <TextBlock Text="Sampled Values" FontSize="14" FontWeight="SemiBold" Foreground="#E3F2FF"/>
+                    <TextBlock Text="IEC 61850-9-2 · passive Ethernet" FontSize="10" Foreground="#8DA8C3"/>
                 </StackPanel>
                 <ComboBox x:Name="AdapterCombo" Grid.Column="2" Height="32" VerticalAlignment="Center"
                           ItemsSource="{Binding Adapters}" DisplayMemberPath="DisplayText"
@@ -52,7 +53,7 @@
                         Background="#176BBA" Foreground="White" BorderBrush="#176BBA"
                         Click="Start_Click" ToolTip="Start raw SV sniff without an IED or SCL."/>
                 <Button x:Name="StopButton" Grid.Column="10" Content="■ Stop" MinWidth="72" Height="32"
-                        IsEnabled="False" Click="Stop_Click" Background="#F2F5F9" BorderBrush="#D7DFEA"/>
+                        IsEnabled="False" Click="Stop_Click" Background="#152B42" Foreground="#D9EFFF" BorderBrush="#31516F"/>
             </Grid>
         </Border>
 
@@ -62,11 +63,11 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="205" MinWidth="170"/>
+                <ColumnDefinition Width="215" MinWidth="170"/>
                 <ColumnDefinition Width="7"/>
-                <ColumnDefinition Width="1.2*" MinWidth="270"/>
+                <ColumnDefinition Width="1.25*" MinWidth="290"/>
                 <ColumnDefinition Width="7"/>
-                <ColumnDefinition Width="0.95*" MinWidth="270"/>
+                <ColumnDefinition Width="1.0*" MinWidth="295"/>
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" Style="{StaticResource SvPane}">
@@ -79,13 +80,13 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <DockPanel>
-                        <TextBlock Text="SV Streams" FontSize="12" FontWeight="SemiBold" Foreground="#243C59"/>
-                        <TextBlock Text="{Binding StreamCountText}" FontSize="10" Foreground="#4A77A7"
+                        <TextBlock Text="SV Streams" FontSize="12" FontWeight="SemiBold" Foreground="#E3F2FF"/>
+                        <TextBlock Text="{Binding StreamCountText}" FontSize="10" Foreground="#7DC3FE"
                                    HorizontalAlignment="Right" DockPanel.Dock="Right"/>
                     </DockPanel>
                     <DataGrid x:Name="StreamList" Grid.Row="2" ItemsSource="{Binding Streams}"
                               SelectionChanged="Stream_SelectionChanged" AutoGenerateColumns="False" IsReadOnly="True"
-                              HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                              HeadersVisibility="Column" GridLinesVisibility="Horizontal" Background="#0C1B2B" Foreground="#D9EFFF" BorderBrush="#31516F"
                               RowHeaderWidth="0" CanUserAddRows="False" CanUserDeleteRows="False"
                               BorderThickness="0" EnableRowVirtualization="True"
                               SelectionMode="Single" FontSize="10.5">
@@ -95,38 +96,63 @@
                         </DataGrid.Columns>
                     </DataGrid>
                     <TextBlock Grid.Row="4" Text="{Binding StreamDetail}" FontSize="10"
-                               Foreground="#526987" TextWrapping="Wrap"
+                               Foreground="#A7B8CB" TextWrapping="Wrap"
                                ToolTip="{Binding StreamDetail}"/>
                 </Grid>
             </Border>
 
-            <Border Grid.Column="2" Style="{StaticResource SvPane}">
+            <Border Grid.Column="2" Style="{StaticResource SvPane}" Padding="7">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="5"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="5"/>
                         <RowDefinition Height="*"/>
-                        <RowDefinition Height="6"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <DockPanel>
-                        <TextBlock Text="Waveforms" FontSize="12" FontWeight="SemiBold" Foreground="#243C59"/>
-                        <TextBlock Text="RAW INT32 · 2 cycles" FontSize="10" Foreground="#6A819E"
+                    <DockPanel Margin="4,3,4,0">
+                        <TextBlock Text="Waveforms" FontSize="12" FontWeight="SemiBold" Foreground="#E3F2FF"/>
+                        <TextBlock Text="RAW INT32 · counter anchored" FontSize="10" Foreground="#86A9C7"
                                    HorizontalAlignment="Right" DockPanel.Dock="Right"/>
                     </DockPanel>
-                    <Canvas x:Name="WaveformCanvas" Grid.Row="2" Background="#F7FAFF"
-                            ClipToBounds="True" SizeChanged="Waveform_Resized"/>
-                    <TextBlock Grid.Row="4" Text="{Binding WaveformStatus}" FontSize="10"
-                               Foreground="#536E90" TextTrimming="CharacterEllipsis"
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="5,3,0,1">
+                        <TextBlock Foreground="#A7B8CB" FontSize="10" VerticalAlignment="Center" Text="Show" Margin="0,0,5,0"/>
+                        <ComboBox x:Name="ShowModeCombo" Width="83" Height="26" SelectedIndex="0"
+                                  SelectionChanged="WaveformOptionsChanged" FontSize="10">
+                            <ComboBoxItem Content="Both"/>
+                            <ComboBoxItem Content="Voltage"/>
+                            <ComboBoxItem Content="Current"/>
+                        </ComboBox>
+                        <TextBlock Foreground="#A7B8CB" FontSize="10" VerticalAlignment="Center" Text="Layout" Margin="10,0,5,0"/>
+                        <ComboBox x:Name="LayoutModeCombo" Width="76" Height="26" SelectedIndex="0"
+                                  SelectionChanged="WaveformOptionsChanged" FontSize="10">
+                            <ComboBoxItem Content="Overlay"/>
+                            <ComboBoxItem Content="Stacked"/>
+                        </ComboBox>
+                        <TextBlock Foreground="#A7B8CB" FontSize="10" VerticalAlignment="Center" Text="Scale" Margin="10,0,5,0"/>
+                        <ComboBox x:Name="ScaleModeCombo" Width="105" Height="26" SelectedIndex="0"
+                                  SelectionChanged="WaveformOptionsChanged" FontSize="10">
+                            <ComboBoxItem Content="Auto Peak Hold"/>
+                            <ComboBoxItem Content="Auto"/>
+                        </ComboBox>
+                    </StackPanel>
+                    <dig:WaveformPanelControl x:Name="WaveformView" Grid.Row="4"
+                            Snapshot="{Binding CurrentWaveform}" StreamKey="{Binding CurrentStreamKey}"
+                            IsStreamLive="{Binding IsLiveSnapshot}" TimebaseMode="2 cycles"
+                            VoltageScale="Auto Peak Hold" CurrentScale="Auto Peak Hold"
+                            ShowMode="Both" LayoutMode="Overlay" MarkersEnabled="True"/>
+                    <TextBlock Grid.Row="5" Text="{Binding WaveformStatus}" Margin="4,4,4,0"
+                               FontSize="10" Foreground="#9BB9D4" TextTrimming="CharacterEllipsis"
                                ToolTip="{Binding WaveformStatus}"/>
                 </Grid>
             </Border>
 
             <Grid Grid.Column="4">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="1.08*" MinHeight="170"/>
+                    <RowDefinition Height="1.30*" MinHeight="210"/>
                     <RowDefinition Height="7"/>
-                    <RowDefinition Height="0.92*" MinHeight="145"/>
+                    <RowDefinition Height="0.70*" MinHeight="155"/>
                 </Grid.RowDefinitions>
                 <Border Grid.Row="0" Style="{StaticResource SvPane}">
                     <Grid>
@@ -134,9 +160,10 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
-                        <TextBlock Text="Phasors" FontSize="12" FontWeight="SemiBold" Foreground="#243C59"/>
-                        <Canvas x:Name="PhasorCanvas" Grid.Row="1" SizeChanged="Phasor_Resized"
-                                Background="#F7FAFF" ClipToBounds="True"/>
+                        <TextBlock Text="Phasors" FontSize="12" FontWeight="SemiBold" Foreground="#E3F2FF"/>
+                        <dig:PhasorDiagramControl x:Name="PhasorView" Grid.Row="1"
+                                ItemsSource="{Binding CurrentPhasors}"
+                                IsStreamLive="{Binding IsLiveSnapshot}"/>
                     </Grid>
                 </Border>
                 <Border Grid.Row="2" Style="{StaticResource SvPane}">
@@ -147,14 +174,14 @@
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
                         <DockPanel>
-                            <TextBlock Text="Measurements" FontSize="12" FontWeight="SemiBold" Foreground="#243C59"/>
-                            <TextBlock Text="raw counts, not V / A" FontSize="9.6" Foreground="#6A819E"
+                            <TextBlock Text="Measurements" FontSize="12" FontWeight="SemiBold" Foreground="#E3F2FF"/>
+                            <TextBlock Text="relative phase · raw counts" FontSize="9.6" Foreground="#9CB1C6"
                                        HorizontalAlignment="Right" DockPanel.Dock="Right"/>
                         </DockPanel>
                         <DataGrid Grid.Row="2" ItemsSource="{Binding Measurements}" IsReadOnly="True"
                                   AutoGenerateColumns="False" RowHeaderWidth="0" HeadersVisibility="Column"
                                   CanUserAddRows="False" CanUserDeleteRows="False" EnableRowVirtualization="True"
-                                  GridLinesVisibility="Horizontal" BorderThickness="0" FontSize="10">
+                                  GridLinesVisibility="Horizontal" BorderThickness="0" FontSize="10" Background="#0C1B2B" Foreground="#D9EFFF">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Channel" Binding="{Binding Label}" Width="*"/>
                                 <DataGridTextColumn Header="RMS" Binding="{Binding RmsText}" Width="66"/>
@@ -166,9 +193,9 @@
                 </Border>
             </Grid>
             <Border Grid.Row="1" Grid.ColumnSpan="5" Margin="0,7,0,0"
-                    Background="#EAF3FF" BorderBrush="#D3E4F7" BorderThickness="1"
+                    Background="#102A41" BorderBrush="#254563" BorderThickness="1"
                     CornerRadius="7" Padding="9,6">
-                <TextBlock Text="{Binding CaptureStatus}" FontSize="10.7" Foreground="#355A82"
+                <TextBlock Text="{Binding CaptureStatus}" FontSize="10.7" Foreground="#C0D7EF"
                            TextTrimming="CharacterEllipsis" ToolTip="{Binding CaptureStatus}"/>
             </Border>
         </Grid>
