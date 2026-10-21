@@ -495,9 +495,27 @@ public sealed class CanonicalLiveSclExportRegressionTests
             stageTrial.GetProperty("baseEngineCommit").GetString());
         Assert.Equal("9c7cb40364023a7b217e5ec31ab3105ba90142eb",
             stageTrial.GetProperty("exactCommit").GetString());
+        // Telemetry-only #187 is descended exactly from #184. Preserve
+        // the historical SBOw negative-error and 400ms guard proofs.
+        var serviceTiming = root.GetProperty("p0CSboServiceTimingTrial");
         Assert.Equal(stageTrial.GetProperty("exactCommit").GetString(),
+            serviceTiming.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal("4ed76ccd11b763dcd847395f6ef45273db3f5c9c",
+            serviceTiming.GetProperty("exactCommit").GetString());
+        Assert.Equal(serviceTiming.GetProperty("exactCommit").GetString(),
             root.GetProperty("commit").GetString());
-        Assert.Equal(184, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(187, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(187, serviceTiming.GetProperty("enginePullRequest").GetInt32());
+        Assert.Equal(188, serviceTiming.GetProperty("engineCiOnlyPullRequest").GetInt32());
+        Assert.True(serviceTiming.GetProperty("capturePerInvokeTiming").GetBoolean());
+        Assert.True(serviceTiming.GetProperty("tcpSendAndConfirmedResponseSeparated").GetBoolean());
+        Assert.True(serviceTiming.GetProperty("mmsDecodeSeparated").GetBoolean());
+        Assert.True(serviceTiming.GetProperty("serviceWaitNotPureNetworkRtt").GetBoolean());
+        Assert.True(serviceTiming.GetProperty("sbo400msSafetyGatePreserved").GetBoolean());
+        Assert.True(serviceTiming.GetProperty("positiveAndNegativeCommandTerminationPreserved").GetBoolean());
+        Assert.True(serviceTiming.GetProperty("noAddedMmsOperations").GetBoolean());
+        Assert.True(serviceTiming.GetProperty("physicalLatencyQualificationRequired").GetBoolean());
+        Assert.True(serviceTiming.GetProperty("mainlinePromotionForbidden").GetBoolean());
         Assert.Equal(184, stageTrial.GetProperty("enginePullRequest").GetInt32());
         Assert.Equal(185, stageTrial.GetProperty("engineCiOnlyPullRequest").GetInt32());
         Assert.Equal(1182, stageTrial.GetProperty("engineTestsPassed").GetInt32());
