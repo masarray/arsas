@@ -440,7 +440,8 @@ public sealed class WaveformPanelControl : FrameworkElement
     {
         // A raw-count voltage lane is still the voltage lane. Its history
         // must not share the current lane auto-range, nor adopt fixed A/V scales.
-        var isVoltage = string.Equals(lane.Title, "Voltage", StringComparison.OrdinalIgnoreCase);
+        var isVoltage = string.Equals(lane.Title, "Voltage", StringComparison.OrdinalIgnoreCase) ||
+                        lane.Title.StartsWith("RAW Ch1", StringComparison.OrdinalIgnoreCase);
         ResetLaneScaleWhenUnitsChange(isVoltage, lane.Unit);
         var hasPhysicalUnits = string.Equals(lane.Unit, isVoltage ? "V" : "A", StringComparison.OrdinalIgnoreCase);
         var scaleText = isVoltage ? VoltageScale : CurrentScale;
