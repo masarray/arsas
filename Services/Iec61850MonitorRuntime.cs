@@ -2047,6 +2047,18 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                                     if (!session.States.TryGetValue(selected.PointKey, out var state) ||
                                         !state.HasValue || !state.ReportTrafficSeen)
                                         continue;
+                                    // The WPF canonical projector reads the
+                                    // process Report channel, NOT the separate
+                                    // raw q leaf and NOT the runtime snapshot.
+                                    // Merge the validated companion into that
+                                    // very process observation before emitting
+                                    // a metadata-only point notification.
+                                    if (!session.Device.LiveValues.MergeVerifiedReportCompanionForAssociation(
+                                            session.BrowserObservationAssociation,
+                                            selected.IecReference,
+                                            selected.FunctionalConstraint,
+                                            qualityEvidence: quality))
+                                        continue;
                                     var verifiedQuality = NormalizeQuality(quality.Summary);
                                     if (string.Equals(state.Quality, verifiedQuality,
                                             StringComparison.OrdinalIgnoreCase))
@@ -2062,10 +2074,34 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                         if (evidence.TimeBits is { IsDecoded: true, HasWireProvenance: true } time &&
                             evidenceSchema.TryGetTimestampCompanion(
                                 evidence.CarrierReference, evidenceFc, out var tRef))
-                            session.Device.LiveValues.PublishForAssociation(
+                        {
+                            var accepted = session.Device.LiveValues.PublishForAssociation(
                                 session.BrowserObservationAssociation,
                                 tRef, evidenceFc, time.EngineeringUtc, "", "",
                                 "Report timestamp · raw MMS", utcTimeEvidence: time);
+                            if (accepted && session.ReportQualityRouting is { } routing)
+                            {
+                                foreach (var selected in routing.FindTimestampExact(tRef, evidenceFc))
+                                {
+                                    if (!session.States.TryGetValue(selected.PointKey, out var state) ||
+                                        !state.HasValue || !state.ReportTrafficSeen)
+                                        continue;
+                                    if (!session.Device.LiveValues.MergeVerifiedReportCompanionForAssociation(
+                                            session.BrowserObservationAssociation,
+                                            selected.IecReference, selected.FunctionalConstraint,
+                                            timeEvidence: time))
+                                        continue;
+                                    if (string.Equals(state.DeviceTimestamp, time.EngineeringUtc,
+                                            StringComparison.Ordinal))
+                                        continue;
+                                    ApplyValueUpdate(
+                                        session, selected, state.Value, state.Quality,
+                                        time.EngineeringUtc, state.SourceMode, state.Reason,
+                                        DateTime.UtcNow, state.Status, trustReportEdge: false,
+                                        hasProcessValue: false);
+                                }
+                            }
+                        }
                     }
                 }
             }
