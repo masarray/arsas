@@ -1797,6 +1797,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             SetStatus($"{device.Name}: {signal.Name} command cancelled; verify the final process state.");
         }
         catch (InvalidOperationException ex) when (
+            ex.Message.Contains("command NOT SENT", StringComparison.OrdinalIgnoreCase))
+        {
+            // A rejected local admission is NOT an MMS failure and not an
+            // UNKNOWN process outcome. Surface the precise busy/stop reason
+            // instead of the generic "Command failed" control popup.
+            signal.ControlLastResult = ex.Message;
+            AddLog("WARN", device.Name,
+                $"CONTROL_UI_NOT_SENT: {signal.ObjectReference}; {ex.Message}");
+            SetStatus($"{device.Name}: {signal.Name} — command NOT SENT (IED busy/stopping).");
+            MarkDiagnosticAlert();
+            ShowControlShout(Iec61850ControlShout.FromLocalRejection(
+                ex.Message + " Allow the current IED operation to finish before retrying."));
+        }
+        catch (InvalidOperationException ex) when (
             ex.Message.Contains("control", StringComparison.OrdinalIgnoreCase) &&
             (ex.Message.Contains("in progress", StringComparison.OrdinalIgnoreCase) ||
              ex.Message.Contains("unresolved", StringComparison.OrdinalIgnoreCase)))
