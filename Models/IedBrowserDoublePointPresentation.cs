@@ -15,13 +15,26 @@ public static class IedBrowserDoublePointPresentation
     {
         if (schema is null ||
             ( !string.Equals(fc, "ST", StringComparison.OrdinalIgnoreCase) &&
-              !string.Equals(fc, "SV", StringComparison.OrdinalIgnoreCase)) ||
-            !(schema.IsDeclaredDoublePointValue(selectedReference, fc) ||
-              schema.IsDeclaredDoublePointValue(declaredReference, fc)))
+              !string.Equals(fc, "SV", StringComparison.OrdinalIgnoreCase)))
             return rawDisplay;
 
-        return Iec61850ValueFormatter.FormatReportProcessValue(
-            rawDisplay, "Dbpos", "", "Position", selectedReference);
+        if (schema.IsDeclaredDoublePointValue(selectedReference, fc) ||
+            schema.IsDeclaredDoublePointValue(declaredReference, fc))
+            return Iec61850ValueFormatter.FormatReportProcessValue(
+                rawDisplay, "Dbpos", "", "Position", selectedReference);
+
+        // Native MMS inventory may expose ST.stVal as generic "Check" when
+        // the server supplies no CDC. Require the SAME explicit ST.stVal + q
+        // model declaration and an observed, correctly padded 2-bit wire.
+        // This is NOT applied to 13-bit Quality, arbitrary bitstrings, other
+        // FCs, vendor DC values or explicit contradictory CDC declarations.
+        if ((schema.IsTwoBitStatusCandidate(selectedReference, fc) ||
+             schema.IsTwoBitStatusCandidate(declaredReference, fc)) &&
+            Iec61850ValueFormatter.TryNormalizeTwoBitWireStatus(
+                rawDisplay, out var wireCode))
+            return Iec61850ValueFormatter.FormatOperatorDbpos(wireCode);
+
+        return rawDisplay;
     }
 
     /// <summary>
