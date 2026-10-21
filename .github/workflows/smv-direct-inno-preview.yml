@@ -1,0 +1,158 @@
+name: Direct Inno SMV Preview EXE
+
+# One tested Windows runner; no ZIP artifact upload/download.
+# Trusted, narrowly scoped branch only. Stable release is never modified.
+on:
+  push:
+    branches: [feat/smv-coherent-phasor-layout-20261021]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: smv-inno-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  direct-preview:
+    if: github.repository == 'masarray/arsas' && github.ref == 'refs/heads/feat/smv-coherent-phasor-layout-20261021'
+    runs-on: windows-latest
+    timeout-minutes: 65
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v7
+        with:
+          path: ArIED61850Tester
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate SHA and immutable engine/native locks
+        run: |
+          $actual = (git -C .\ArIED61850Tester rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($actual -ne $env:GITHUB_SHA.ToLowerInvariant()) { throw 'Source SHA mismatch.' }
+          $iec = Get-Content .\ArIED61850Tester\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
+          $native = Get-Content .\ArIED61850Tester\engines\ARDIREC.lock.json -Raw | ConvertFrom-Json
+          if ($iec.repository -ne 'masarray/ARIEC61850' -or $iec.commit -notmatch '^[0-9a-f]{40}$' -or $native.repository -ne 'masarray/ardirec' -or $native.commit -notmatch '^[0-9a-f]{40}$' -or $native.bridge.abi -ne 1 -or $native.bridge.mode -ne 'native-only') { throw 'Engine lock invalid.' }
+          [xml]$props = Get-Content .\ArIED61850Tester\Directory.Build.props -Raw
+          [xml]$project = Get-Content .\ArIED61850Tester\ArIED61850Tester.csproj -Raw
+          $version = [string]$props.Project.PropertyGroup.Version
+          if ($version -notmatch '^\d+\.\d+\.\d+$' -or $version -ne [string]$project.Project.PropertyGroup.Version -or $version -ne (Get-Content .\ArIED61850Tester\VERSION -Raw).Trim()) { throw 'Inconsistent app version.' }
+          $short = $actual.Substring(0,12)
+          "ARSAS_VERSION=$version" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "SMV_VERSION=$version-smvpreview.$short" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "SMV_TAG=smv-preview-$short" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC_SHA=$($iec.commit)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARDIREC_SHA=$($native.commit)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Enforce source and license boundaries
+        run: .\ArIED61850Tester\scripts\verify-source-clean.ps1
+
+      - name: Checkout pinned independent engines
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout https://github.com/masarray/ARIEC61850.git ARIEC61850
+          if ($LASTEXITCODE -ne 0) { throw 'ARIEC clone failed.' }
+          git -C .\ARIEC61850 fetch --quiet --depth 1 origin $env:ARIEC_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'ARIEC pin fetch failed.' }
+          git -C .\ARIEC61850 checkout --quiet --detach $env:ARIEC_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'ARIEC pin checkout failed.' }
+          git clone --quiet --filter=blob:none --no-checkout https://github.com/masarray/ardirec.git ArdIrec
+          if ($LASTEXITCODE -ne 0) { throw 'Native clone failed.' }
+          git -C .\ArdIrec fetch --quiet --depth 1 origin $env:ARDIREC_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'Native pin fetch failed.' }
+          git -C .\ArdIrec checkout --quiet --detach $env:ARDIREC_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'Native pin checkout failed.' }
+          if ((git -C .\ARIEC61850 rev-parse HEAD).Trim() -ne $env:ARIEC_SHA -or (git -C .\ArdIrec rev-parse HEAD).Trim() -ne $env:ARDIREC_SHA) { throw 'Pinned engine revision mismatch.' }
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore, build and test full ARSAS and pinned engine
+        run: |
+          dotnet restore .\ArIED61850Tester\ArIED61850Tester.sln
+          if ($LASTEXITCODE -ne 0) { throw 'Restore failed.' }
+          dotnet build .\ArIED61850Tester\ArIED61850Tester.sln -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'Windows build failed.' }
+          dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'Full application regression failed.' }
+          dotnet test .\ARIEC61850\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --filter 'FullyQualifiedName~TrustedSclIedIdentityMatcherTests|FullyQualifiedName~CanonicalLiveIedSclExporterTests'
+          if ($LASTEXITCODE -ne 0) { throw 'Engine regression failed.' }
+
+      - name: Build and native-test exact pinned ArdIrec bridge
+        run: |
+          $bridge = [string]( & .\ArIED61850Tester\scripts\build-ardirec-bridge.ps1 -ArdIrecSource "$env:GITHUB_WORKSPACE\ArdIrec" -OutputDirectory "$env:RUNNER_TEMP\smv-native" -BuildDirectory "$env:RUNNER_TEMP\smv-native-build" -CTestJunitPath "$env:RUNNER_TEMP\smv-native-ctest.xml" | Select-Object -Last 1 )
+          $bridge = $bridge.Trim()
+          if (-not (Test-Path $bridge -PathType Leaf) -or -not (Test-Path "$env:RUNNER_TEMP\smv-native-ctest.xml")) { throw 'Native bridge or CTest proof missing.' }
+          "ARDIREC_BRIDGE=$bridge" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Publish canonical installer input in same runner
+        run: |
+          & .\ArIED61850Tester\scripts\publish-windows-portable.ps1 -Version $env:ARSAS_VERSION -Runtime win-x64 -SingleFile $false -SelfContained $true -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj" -ArdIrecBridgePath $env:ARDIREC_BRIDGE
+          if ($LASTEXITCODE -ne 0) { throw 'Installer input publish failed.' }
+          $folder = ".\ArIED61850Tester\dist\ARSAS-$env:ARSAS_VERSION-win-x64"
+          $native = Join-Path $folder 'Tools\ArdIrec\ardirec_bridge.dll'
+          if (-not (Test-Path $native) -or (Get-FileHash $native -Algorithm SHA256).Hash -ne (Get-FileHash $env:ARDIREC_BRIDGE -Algorithm SHA256).Hash) { throw 'Packaged native bridge differs from tested bridge.' }
+          if (Test-Path .\ArdIrec\LICENSE) { Copy-Item .\ArdIrec\LICENSE (Join-Path $folder 'Tools\ArdIrec\LICENSE.txt') -Force }
+
+      - name: Ensure Inno Setup 6
+        run: |
+          if (-not (Test-Path 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe')) {
+            choco install innosetup --no-progress --yes
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed.' }
+          }
+
+      - name: Compile tested Inno Setup executable directly (no ZIP)
+        run: |
+          & .\ArIED61850Tester\scripts\build-windows-installer.ps1 -Version $env:SMV_VERSION -Runtime win-x64 -PublishedDirectory "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:ARSAS_VERSION-win-x64" -OutputDirectory "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist" -TestAssemblyPath "$env:GITHUB_WORKSPACE\ArIED61850Tester\tests\ARSAS.Tests\bin\Release\net8.0-windows\ARSAS.Tests.dll" -FixtureCfg "$env:GITHUB_WORKSPACE\ArdIrec\tests\data\minimal_1999.cfg" -LocusFixtureCfg "$env:GITHUB_WORKSPACE\ArdIrec\tests\data\distance_p1.cfg"
+          if ($LASTEXITCODE -ne 0) { throw 'Installer build or pre-package bridge smoke failed.' }
+
+      - name: Silent install, installed-runtime smoke and uninstall
+        run: |
+          $exe = ".\ArIED61850Tester\dist\ARSAS-$env:SMV_VERSION-win-x64-setup.exe"
+          if (-not (Test-Path $exe -PathType Leaf)) { throw 'Installer missing.' }
+          $target = Join-Path $env:RUNNER_TEMP 'arsas-smv-installed'
+          $install = Start-Process -FilePath $exe -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/CURRENTUSER',"/DIR=$target") -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Silent install failed: $($install.ExitCode)." }
+          foreach ($file in @('ARSAS.exe','AR.Iec61850.Transports.Npcap.dll','SharpPcap.dll','PacketDotNet.dll','Tools\ArdIrec\ardirec_bridge.dll')) {
+            if (-not (Test-Path (Join-Path $target $file) -PathType Leaf)) { throw "Installed runtime missing: $file" }
+          }
+          $env:ARSAS_ARDIREC_BRIDGE_PATH = Join-Path $target 'Tools\ArdIrec\ardirec_bridge.dll'
+          $env:ARSAS_NATIVE_COMTRADE_TEST_CFG = "$env:GITHUB_WORKSPACE\ArdIrec\tests\data\minimal_1999.cfg"
+          $env:ARSAS_NATIVE_LOCUS_TEST_CFG = "$env:GITHUB_WORKSPACE\ArdIrec\tests\data\distance_p1.cfg"
+          dotnet vstest ".\ArIED61850Tester\tests\ARSAS.Tests\bin\Release\net8.0-windows\ARSAS.Tests.dll" '--TestCaseFilter:FullyQualifiedName~ArdIrecNativeBridgeIntegrationTests|FullyQualifiedName~ArdIrecLocusNativeSessionIntegrationTests'
+          if ($LASTEXITCODE -ne 0) { throw 'Installed native runtime smoke failed.' }
+          $uninstaller = Join-Path $target 'unins000.exe'
+          if (-not (Test-Path $uninstaller)) { throw 'Uninstaller missing.' }
+          $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "Uninstall failed: $($uninstall.ExitCode)." }
+
+      - name: Publish immutable GitHub prerelease with direct EXE asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $dist = "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist"
+          $exe = Join-Path $dist "ARSAS-$env:SMV_VERSION-win-x64-setup.exe"
+          if (-not (Test-Path $exe -PathType Leaf)) { throw 'Validated installer missing.' }
+          $name = Split-Path $exe -Leaf
+          $sha256 = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $sums = Join-Path $dist 'SHA256SUMS.txt'
+          "$sha256  $name" | Set-Content $sums -Encoding ascii
+          $provenance = Join-Path $dist 'SMV-PREVIEW-PROVENANCE.json'
+          @{sourceSha=$env:GITHUB_SHA;engineSha=$env:ARIEC_SHA;ardirecSha=$env:ARDIREC_SHA;installer=$name;installerSha256=$sha256;installedSmokePassed=$true;channel='engineering-preview'} | ConvertTo-Json | Set-Content $provenance -Encoding utf8
+          $notes = Join-Path $dist 'SMV-PREVIEW-NOTES.md'
+          @("# ARSAS SMV Preview $env:SMV_VERSION",'','Direct Inno Setup EXE, without any workflow ZIP artifact.','Windows build, ARSAS regression, engine check, native CTest, silent install, bridge validation and uninstall passed.','Raw SMV channels are not calibrated voltage/current. Physical merging-unit acceptance remains pending.','Npcap must be installed separately. Authenticode signing is not asserted.',"Source: $env:GITHUB_SHA","SHA256: $sha256") | Set-Content $notes -Encoding utf8
+          gh release view $env:SMV_TAG --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) { throw "Immutable release already exists: $env:SMV_TAG" }
+          gh release create $env:SMV_TAG $exe $sums $provenance --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "ARSAS SMV Preview $env:SMV_VERSION" --notes-file $notes --prerelease --latest=false
+          if ($LASTEXITCODE -ne 0) { throw 'Direct release upload failed.' }
+          $verified = gh release view $env:SMV_TAG --repo $env:GITHUB_REPOSITORY --json tagName,isPrerelease,assets | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or -not $verified.isPrerelease -or $verified.tagName -ne $env:SMV_TAG -or -not ($verified.assets | Where-Object { $_.name -eq $name })) { throw 'Release asset verification failed.' }
+          $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:SMV_TAG/$name"
+          "Direct Inno Setup EXE: $url" | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          "Installer SHA-256: $sha256" | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          Write-Host "DIRECT_INSTALLER_EXE=$url"
