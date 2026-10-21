@@ -119,7 +119,8 @@ public sealed class IedBrowserSchemaIndex
                 // authority for double-point display. Both the precise
                 // process leaf and its own DO row may use this presentation.
                 if (fc == "ST" && relative == "stVal" &&
-                    (string.Equals(obj.InferredCdc, "DPC", StringComparison.OrdinalIgnoreCase) ||
+                    ((string.Equals(obj.InferredCdc, "DPC", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(obj.InferredCdc, "DPS", StringComparison.OrdinalIgnoreCase)) ||
                      string.Equals(attr.SclBType, "Dbpos", StringComparison.OrdinalIgnoreCase) ||
                      string.Equals(attr.SclBType, "DPC", StringComparison.OrdinalIgnoreCase) ||
                      ((string.IsNullOrWhiteSpace(obj.InferredCdc) ||
@@ -161,7 +162,8 @@ public sealed class IedBrowserSchemaIndex
                 // identity and its verified ST status declaration, not a
                 // name-only or first-child guess.
                 if (fc == "SV" && relative == "subVal" &&
-                    (string.Equals(obj.InferredCdc, "DPC", StringComparison.OrdinalIgnoreCase) ||
+                    ((string.Equals(obj.InferredCdc, "DPC", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(obj.InferredCdc, "DPS", StringComparison.OrdinalIgnoreCase)) ||
                      ((string.IsNullOrWhiteSpace(obj.InferredCdc) ||
                        string.Equals(obj.InferredCdc, "Unknown",
                            StringComparison.OrdinalIgnoreCase)) &&
