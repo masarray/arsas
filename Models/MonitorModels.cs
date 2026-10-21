@@ -891,7 +891,11 @@ public sealed class Iec61850MonitorPoint : ObservableObject
             // preserve the existing LN instance/Pos presentation for nonphase
             // objects. Raw IEC reference and binding keys are never rewritten.
             var signal = SignalName ?? string.Empty;
-            if (IoTesting.IoSignalDisplayName.HasPhaseContext(reference))
+            // Existing engineering labels such as "MMXU A" already carry
+            // their own context; keep the older exact LN-instance disambiguator
+            // for those rows. Short DO labels need the missing phase owner.
+            if (IoTesting.IoSignalDisplayName.HasPhaseContext(reference) &&
+                !signal.Contains(' ') && !signal.Contains('·'))
                 return IoTesting.IoSignalDisplayName.Format(signal, reference);
             var slash = reference.IndexOf('/');
             if (slash < 0)
