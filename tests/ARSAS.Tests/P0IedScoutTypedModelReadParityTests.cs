@@ -49,7 +49,7 @@ public sealed class P0IedScoutTypedModelReadParityTests
         var data = MmsDataValue.Structure(new[]
         {
             MmsDataValue.Integer(2),
-            MmsDataValue.BitString(new byte[] { 0, 0 })
+            MmsDataValue.BitString(0, new byte[] { 0, 0 })
         });
         // No guessing: the raw decoded integer may render as an ordinal.
         var observed = IedBrowserVerifiedDoProjection.Project(
