@@ -110,6 +110,9 @@ public static class IedBrowserStructuredDetails
         {
             IsDataObject = true,
             ReadObjectReference = obj.Reference,
+            ParentObservedChildCandidates = hasLeaf
+                ? Array.Empty<IedBrowserReadTarget>()
+                : IedBrowserObservedParentPresentation.BuildCandidates(obj),
             ScalarComponents = scalarComponents,
             NameplateDcReferences = IedBrowserNameplatePresentation.BuildReferences(obj),
             PolarPlan = polarPlan,

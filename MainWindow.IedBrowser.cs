@@ -1050,6 +1050,18 @@ public partial class MainWindow
                     row.ObservationSource = "Discovery snapshot";
                     row.ObservationTooltip = provenance;
                 }
+                else if (IedBrowserObservedParentPresentation.TrySummarize(
+                             row, device.LiveValues, device.IsMonitoring,
+                             out var childSummary, out var childSource,
+                             out var childProvenance))
+                {
+                    // Strictly a presence indicator for a non-scalar IEC DO.
+                    // No claim that every FC/attribute is readable, no made-up
+                    // parent value, no implicit MMS calls or refresh loop.
+                    row.Value = childSummary;
+                    row.ObservationSource = childSource;
+                    row.ObservationTooltip = childProvenance;
+                }
                 else if (TryGetBrowserReadFailure(device, row,
                              out var readFailure, out var absenceKind))
                 {

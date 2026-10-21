@@ -219,9 +219,27 @@ public sealed class IedBrowserSchemaIndex
                      x.Reference == owner + ".setCharact" ||
                      x.Reference == owner + ".setMag" ||
                      x.Reference == owner + ".setMag.f"))
-                .Distinct().Take(2).ToArray();
-            if (settings.Length != 1) return false;
-            leaf = settings[0].Reference;
+                .Distinct().Take(3).ToArray();
+            if (settings.Length == 0 || settings.Length > 2 ||
+                settings.Select(x => x.Fc).Distinct(StringComparer.Ordinal)
+                    .Take(2).Count() != 1)
+                return false;
+
+            // IEC ASG declares setMag (structured analogue setting) and
+            // setMag.f (its scalar) under ONE SG. They are not competing
+            // setting values. Prefer the exact scalar, retaining setMag as
+            // an independently readable child and never using FC=SE edits.
+            // Two unrelated setting scalars, or a mixed SG/SP declaration,
+            // remain ambiguous and must not be picked by enumeration order.
+            if (settings.Length == 2)
+            {
+                if (!settings.Any(x => x.Reference == owner + ".setMag") ||
+                    !settings.Any(x => x.Reference == owner + ".setMag.f"))
+                    return false;
+                leaf = owner + ".setMag.f";
+            }
+            else
+                leaf = settings[0].Reference;
             fc = settings[0].Fc;
             return true;
         }
