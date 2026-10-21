@@ -31,6 +31,9 @@ public partial class MainWindow
     private bool _iedBrowserForceRefresh;
     private Iec61850MonitorDevice? _iedBrowserCachedDevice;
     private long _iedBrowserCachedAssociation = -1;
+    // UI freshness fence only: a monitor/RCB state transition invalidates
+    // previous RptEna display proof without modifying the live-value ledger.
+    private DateTime _iedBrowserRcbEnabledMinReadUtc = DateTime.MinValue;
     private LiveIedModelDiscoveryDocument? _iedBrowserCachedModel;
     private IedBrowserSchemaIndex? _iedBrowserValueSchemaIndex;
     // Immutable EnumType declarations, never a second live-value store.
@@ -932,7 +935,8 @@ public partial class MainWindow
                 node.Payload is not RcbExportRow rcb)
                 continue;
             var verified = IedBrowserRcbEnabledPresentation.TryVerifiedTrue(
-                device.LiveValues, rcb, targets, connected, out var tooltip);
+                device.LiveValues, rcb, targets, connected, out var tooltip,
+                _iedBrowserRcbEnabledMinReadUtc);
             if (node.SetRcbEnabled(verified, tooltip))
                 detail.RefreshRcbUsage();
         }
@@ -940,7 +944,8 @@ public partial class MainWindow
         {
             if (node.Payload is not RcbExportRow rcb) continue;
             var verified = IedBrowserRcbEnabledPresentation.TryVerifiedTrue(
-                device.LiveValues, rcb, targets, connected, out var tooltip);
+                device.LiveValues, rcb, targets, connected, out var tooltip,
+                _iedBrowserRcbEnabledMinReadUtc);
             node.SetRcbEnabled(verified, tooltip);
         }
     }
@@ -962,6 +967,8 @@ public partial class MainWindow
             : 0;
         if (usageChanges > 0)
         {
+            // Runtime ownership changes are not fresh Boolean read-back.
+            _iedBrowserRcbEnabledMinReadUtc = DateTime.UtcNow;
             foreach (var treeRow in _iedBrowserTree.Rows)
                 treeRow.RefreshRcbUsage();
             foreach (var detailRow in _iedBrowserDetails.Rows)
@@ -1733,6 +1740,7 @@ public partial class MainWindow
         _iedBrowserFilesLoading = false;
         _iedBrowserFileCatalog = null;
         _iedBrowserObservedDevice = device;
+        _iedBrowserRcbEnabledMinReadUtc = DateTime.MinValue;
         _iedBrowserSnapshot = null;
         _iedBrowserSnapshotLease = null;
         _iedBrowserFileOwner = device;
@@ -1758,7 +1766,10 @@ public partial class MainWindow
         if (!ReferenceEquals(sender, _iedBrowserObservedDevice))
             return;
         if (e.PropertyName is nameof(Iec61850MonitorDevice.IsMonitoring))
+        {
             _iedBrowserForceRefresh = true;
+            _iedBrowserRcbEnabledMinReadUtc = DateTime.UtcNow;
+        }
 
         // A disconnected/replaced association can never supply "live" inspector values.
         if (_iedBrowserObservedDevice?.IsConnected != true)
