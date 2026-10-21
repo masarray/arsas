@@ -99,7 +99,9 @@ public partial class MainWindow
     public long GooseFrames { get => _gooseFrames; private set { if (Set(ref _gooseFrames, value)) Raise(nameof(GooseCounterText)); } }
     public long GooseOtherFrames { get => _gooseOtherFrames; private set { if (Set(ref _gooseOtherFrames, value)) Raise(nameof(GooseCounterText)); } }
 
-    public bool CanStartGooseSubscriber => !IsGooseCapturing && !GooseActionBusy && SelectedGooseAdapter is not null;
+    // Start remains actionable without an SCL/IED or an adapter already
+    // selected. The click handler explains any missing NIC selection.
+    public bool CanStartGooseSubscriber => !IsGooseCapturing && !GooseActionBusy;
     public bool CanStopGooseSubscriber => IsGooseCapturing && !GooseActionBusy;
     public bool CanRefreshGooseConfiguration => !IsGooseCapturing && !GooseActionBusy;
     public string GooseCaptureStateText => IsGooseCapturing ? "LIVE CAPTURE" : "STOPPED";
@@ -176,8 +178,17 @@ public partial class MainWindow
     private async void StartGooseSubscriber_Click(object sender, RoutedEventArgs e)
     {
         _pendingIedGooseAutoStart = null;
-        if (SelectedGooseAdapter is null || GooseActionBusy || IsGooseCapturing)
+        if (GooseActionBusy || IsGooseCapturing)
             return;
+        if (SelectedGooseAdapter is null)
+        {
+            if (GooseAdapters.Count == 0)
+                RefreshGooseAdapters();
+            GooseStatusText = GooseAdapters.Count == 0
+                ? "No capture adapter detected. Install Npcap, refresh and select an Ethernet adapter."
+                : "Select the Ethernet adapter in the dropdown, then press Start. SCL is not required.";
+            return;
+        }
 
         GooseActionBusy = true;
         try

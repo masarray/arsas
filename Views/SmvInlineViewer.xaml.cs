@@ -48,9 +48,9 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
     public ObservableCollection<SmvRawVectorMeasurement> Measurements { get; } = [];
 
     public string StreamCountText => $"{Streams.Count:N0} detected";
-    public string CaptureStatus { get => _captureStatus; private set => Change(ref _captureStatus, value); }
-    public string WaveformStatus { get => _waveformStatus; private set => Change(ref _waveformStatus, value); }
-    public string StreamDetail { get => _streamDetail; private set => Change(ref _streamDetail, value); }
+    public string CaptureStatus { get => _captureStatus; private set => Change(ref _captureStatus, value, nameof(CaptureStatus)); }
+    public string WaveformStatus { get => _waveformStatus; private set => Change(ref _waveformStatus, value, nameof(WaveformStatus)); }
+    public string StreamDetail { get => _streamDetail; private set => Change(ref _streamDetail, value, nameof(StreamDetail)); }
 
     public SmvInlineViewer()
     {
@@ -494,11 +494,11 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
         }
     }
 
-    private bool Change(ref string field, string next)
+    private bool Change(ref string field, string next, string name)
     {
         if (field == next) return false;
         field = next;
-        Notify(field == _captureStatus ? nameof(CaptureStatus) : field == _waveformStatus ? nameof(WaveformStatus) : nameof(StreamDetail));
+        Notify(name);
         return true;
     }
 
