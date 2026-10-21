@@ -80,6 +80,9 @@ public sealed class P0CanonicalReportCompanionSsoTests
             "7", "Invalid", "", "Report"));
         Assert.True(ledger.TryGet(Tap, "ST", out var explicitBad));
         Assert.Equal("Invalid", explicitBad.Quality);
+        // The new explicit text contradicts an old typed Good. Do not show
+        // stale detail flags under a newer invalid textual label.
+        Assert.Null(explicitBad.QualityBits);
     }
 
     [Fact]
