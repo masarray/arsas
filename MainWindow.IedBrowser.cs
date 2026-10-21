@@ -30,6 +30,7 @@ public partial class MainWindow
     private bool? _iedBrowserRenderedConnected;
     private bool _iedBrowserForceRefresh;
     private Iec61850MonitorDevice? _iedBrowserCachedDevice;
+    private long _iedBrowserCachedAssociation = -1;
     private LiveIedModelDiscoveryDocument? _iedBrowserCachedModel;
     private IedBrowserSchemaIndex? _iedBrowserValueSchemaIndex;
     // Immutable EnumType declarations, never a second live-value store.
@@ -916,6 +917,33 @@ public partial class MainWindow
         return false;
     }
 
+    private void RefreshIedBrowserRcbEnabledIndicators(Iec61850MonitorDevice device)
+    {
+        // One model identity index per coalesced flush; no full-IED MMS probe,
+        // duplicate live state store or per-RCB model inventory scan.
+        var targets = IedBrowserRcbEnabledPresentation.VerifiedTargets(
+            device.LiveDiscoveryModel);
+        var connected = device.IsConnected && !device.LiveValues.IsOffline;
+
+        // Right list objects can be visible while left LD/LN folders stay lazy.
+        foreach (var detail in _iedBrowserDetails.Rows)
+        {
+            if (detail.NavigateTo is not { Payload: RcbExportRow rcb } node)
+                continue;
+            var verified = IedBrowserRcbEnabledPresentation.TryVerifiedTrue(
+                device.LiveValues, rcb, targets, connected, out var tooltip);
+            if (node.SetRcbEnabled(verified, tooltip))
+                detail.RefreshRcbUsage();
+        }
+        foreach (var node in _iedBrowserTree.Rows)
+        {
+            if (node.Payload is not RcbExportRow rcb) continue;
+            var verified = IedBrowserRcbEnabledPresentation.TryVerifiedTrue(
+                device.LiveValues, rcb, targets, connected, out var tooltip);
+            node.SetRcbEnabled(verified, tooltip);
+        }
+    }
+
     private void RefreshIedBrowserVisibleValues()
     {
         if (MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
@@ -939,6 +967,11 @@ public partial class MainWindow
                 detailRow.RefreshRcbUsage();
         }
         var version = device.LiveValues.Version;
+        // RptEna is current-association MMS Read evidence, never RCB occupancy.
+        // Update only current virtual rows when source authority changes.
+        if (usageChanges > 0 || _iedBrowserLastLiveVersion != version ||
+            !ReferenceEquals(_iedBrowserLastCfCanonicalModel, device.LiveCanonicalModel))
+            RefreshIedBrowserRcbEnabledIndicators(device);
         if (_iedBrowserLastLiveVersion == version &&
             ReferenceEquals(_iedBrowserLastCfCanonicalModel, device.LiveCanonicalModel))
         {
@@ -1871,6 +1904,7 @@ public partial class MainWindow
         if (device == null)
         {
             _iedBrowserCachedDevice = null;
+            _iedBrowserCachedAssociation = -1;
             _iedBrowserRenderedPage = null;
             _iedBrowserRenderedConnected = null;
             _iedBrowserNavigation.SelectFromTree(null);
@@ -1913,6 +1947,7 @@ public partial class MainWindow
 
         var changed = _iedBrowserForceRefresh ||
                       !ReferenceEquals(device, _iedBrowserCachedDevice) ||
+                      device.LiveValues.Association != _iedBrowserCachedAssociation ||
                       !ReferenceEquals(model, _iedBrowserCachedModel) ||
                       !ReferenceEquals(_iedBrowserSnapshot, _iedBrowserCachedSnapshot) ||
                       !string.Equals(sourcePath, _iedBrowserCachedSourcePath, StringComparison.Ordinal) ||
@@ -1920,7 +1955,9 @@ public partial class MainWindow
         if (changed)
         {
             _iedBrowserForceRefresh = false;
-            var sameDevice = ReferenceEquals(device, _iedBrowserCachedDevice);
+            var sameDevice = ReferenceEquals(device, _iedBrowserCachedDevice) &&
+                             device.LiveValues.Association == _iedBrowserCachedAssociation &&
+                             ReferenceEquals(model, _iedBrowserCachedModel);
             var priorKey = sameDevice
                 ? (IedBrowserTreeGrid.SelectedItem as IedBrowserTreeRow)?.Key
                 : null;
@@ -1954,6 +1991,7 @@ public partial class MainWindow
                 device.IsConnected && device.IsMonitoring);
             _iedBrowserCachedRcbRows = rcbs;
             _iedBrowserCachedDevice = device;
+            _iedBrowserCachedAssociation = device.LiveValues.Association;
             _iedBrowserCachedModel = model;
             _iedBrowserCachedSnapshot = _iedBrowserSnapshot;
             _iedBrowserCachedSourcePath = sourcePath;
@@ -1963,23 +2001,9 @@ public partial class MainWindow
                 _iedBrowserRemoteFiles, EffectiveSclIedName(device),
                 device.SclWorkspace?.DesignModel);
             _iedBrowserTree.Reset(roots, expandedKeys);
-            // Reports is the familiar entry point; selecting the category shows its
-            // full RCB list on the right. Preserve explicit expansion on same-IED refresh.
-            if (!sameDevice)
-            {
-                var reports = roots.FirstOrDefault(r => r.Key == "category/reports");
-                if (reports is not null)
-                {
-                    _iedBrowserTree.Expand(reports);
-                    var ld = reports.GetChildren().FirstOrDefault();
-                    if (ld is not null)
-                    {
-                        _iedBrowserTree.Expand(ld);
-                        var ln = ld.GetChildren().FirstOrDefault();
-                        if (ln is not null) _iedBrowserTree.Expand(ln);
-                    }
-                }
-            }
+            // Fresh IED/association/model epoch: all six Objects categories
+            // remain collapsed. Selecting Reports fills the right pane
+            // without materializing left LD/LN/RCB descendants.
 
             IedBrowserTreeGrid.ItemsSource = _iedBrowserTree.Rows;
             var selected = priorKey == null ? null : _iedBrowserTree.FindVisible(priorKey);
