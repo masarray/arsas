@@ -391,6 +391,10 @@ public partial class MainWindow
                 ? _iedBrowserSelectedDoReference : null;
         var targets = IedBrowserReadPlan.Build(
             model, currentPage, readAll, selectedDo);
+        // No cardinality cut-off: Read All retains every exact model/FC
+        // target, but expedites verified FC-root coverage before slow leaves.
+        if (readAll && !automatic)
+            targets = IedBrowserReadPlan.PrioritizeExplicitFullRead(targets);
         if (!automatic && !readAll && selectedDo is null &&
             currentPage?.Kind == "LN")
             targets = IedBrowserReadPlan.PrioritizeExplicitLn(targets);
