@@ -90,7 +90,8 @@ public static class IedBrowserIsolatedReadService
                     {
                         values.Report(new IedBrowserReadResult(target, accepted,
                             read?.Quality ?? "", read?.DeviceTimestamp ?? "", "",
-                            read?.UtcTimeEvidence, read?.QualityEvidence));
+                            read?.UtcTimeEvidence, read?.QualityEvidence,
+                            read?.Value is bool typed ? typed : null));
                         successful++;
                     }
                     else
