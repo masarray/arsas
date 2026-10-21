@@ -46,7 +46,12 @@ public sealed class P109TControlInspectionPriorityRegressionTests
         Assert.True(start >= 0);
         var control = end > start ? client[start..end] : client[start..];
 
-        Assert.Contains("_controlCommandGate.WaitAsync(cancellationToken)", control);
+        // Native command dispatch rejects occupied inspection/configuration
+        // instead of silently queuing an eventual Operate behind it.
+        Assert.Contains("_controlCommandGate.WaitAsync(0, cancellationToken)", control);
+        Assert.Contains("command NOT SENT", control);
+        Assert.Contains("_controlCommandGate.Release()", control);
+        Assert.DoesNotContain("_controlCommandGate.WaitAsync(cancellationToken)", control);
         Assert.Contains("InterlockCheck = request.InterlockCheck", control);
         Assert.Contains("SynchroCheck = request.SynchroCheck", control);
         Assert.Contains("AutoSelect = true", control);
