@@ -7,6 +7,7 @@ using System.Windows.Shapes;
 using System.Windows.Threading;
 using ArIED61850Tester.Services;
 using ArIED61850Tester.Models;
+using ProcessBus.Core.Models;
 
 namespace ArIED61850Tester.Views;
 
@@ -46,6 +47,12 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
     public ObservableCollection<GooseAdapterOption> Adapters { get; } = [];
     public ObservableCollection<SmvLiveStreamSummary> Streams { get; } = [];
     public ObservableCollection<SmvRawVectorMeasurement> Measurements { get; } = [];
+
+    // The original DigSub WPF controls repaint immutable models, not packet work.
+    public WaveformSnapshot? CurrentWaveform { get; private set; }
+    public IReadOnlyList<PhasorDisplayItem> CurrentPhasors { get; private set; } = [];
+    public string CurrentStreamKey { get; private set; } = string.Empty;
+    public bool IsLiveSnapshot { get; private set; }
 
     public string StreamCountText => $"{Streams.Count:N0} detected";
     public string CaptureStatus { get => _captureStatus; private set => Change(ref _captureStatus, value, nameof(CaptureStatus)); }
@@ -189,6 +196,8 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
                 StopButton.IsEnabled = false;
                 AdapterCombo.IsEnabled = true;
                 FrequencyCombo.IsEnabled = true;
+                IsLiveSnapshot = false;
+                Notify(nameof(IsLiveSnapshot));
                 WaveformStatus = _visibleSnapshot is null
                     ? "Stopped • no complete continuous window captured."
                     : "HOLD • last valid observed window (raw counts, not calibrated V/A).";
@@ -283,6 +292,8 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
         var age = DateTimeOffset.UtcNow - summary.LastSeen;
         if (age > TimeSpan.FromSeconds(2))
         {
+            IsLiveSnapshot = false;
+            Notify(nameof(IsLiveSnapshot));
             CaptureStatus = $"HOLD • {summary.SvId} stale; no new packets for {age.TotalSeconds:0.0}s.";
             return;
         }
@@ -300,8 +311,11 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
 
         var snapshot = update.SelectedSnapshot;
         _visibleSnapshot = snapshot;
+        IsLiveSnapshot = true;
+        Notify(nameof(IsLiveSnapshot));
         WaveformStatus = $"Received {snapshot.CapturedSamples:N0} coherent samples • {snapshot.SamplesPerCycle} samples/cycle • unscaled INT32";
-        DrawWaveform();
+        CurrentWaveform = SmvDigSubPresentationAdapter.BuildWaveform(snapshot);
+        Notify(nameof(CurrentWaveform));
         BeginAnalysis(snapshot, selectedKey, generation);
     }
 
@@ -315,11 +329,11 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
                 !ReferenceEquals(_visibleSnapshot, snapshot) || !IsLoaded ||
                 selectedKey != Volatile.Read(ref _selectedKey))
                 return;
-            _visibleVectors = vectors;
+            _visibleVectors = SmvDigSubPresentationAdapter.RelativeMeasurements(vectors);
             Measurements.Clear();
-            foreach (var row in vectors)
+            foreach (var row in _visibleVectors)
                 Measurements.Add(row);
-            DrawPhasors();
+            UpdateDigSubPhasors();
         }
         catch (Exception)
         {
@@ -327,7 +341,7 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
                 return;
             _visibleVectors = [];
             Measurements.Clear();
-            DrawPhasors();
+            UpdateDigSubPhasors();
             WaveformStatus = "Raw phasor calculation unavailable; no substitute values shown.";
         }
     }
@@ -357,141 +371,39 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
         _visibleVectors = [];
         Measurements.Clear();
         WaveformStatus = message;
-        WaveformCanvas.Children.Clear();
-        DrawPhasors();
+        CurrentWaveform = null;
+        Notify(nameof(CurrentWaveform));
+        CurrentStreamKey = Volatile.Read(ref _selectedKey) ?? string.Empty;
+        Notify(nameof(CurrentStreamKey));
+        IsLiveSnapshot = false;
+        Notify(nameof(IsLiveSnapshot));
+        UpdateDigSubPhasors();
     }
 
-    private void Waveform_Resized(object sender, SizeChangedEventArgs e) => DrawWaveform();
-    private void Phasor_Resized(object sender, SizeChangedEventArgs e) => DrawPhasors();
-
-    private void DrawWaveform()
+    private void UpdateDigSubPhasors()
     {
-        var canvas = WaveformCanvas;
-        canvas.Children.Clear();
-        var snapshot = _visibleSnapshot;
-        var width = canvas.ActualWidth;
-        var height = canvas.ActualHeight;
-        if (snapshot is null || width < 80 || height < 80)
-            return;
-        for (var k = 1; k < 5; k++)
-        {
-            var y = k * height / 5;
-            canvas.Children.Add(new Line
-            {
-                X1 = 0, X2 = width, Y1 = y, Y2 = y,
-                Stroke = Brushes.LightSteelBlue, StrokeThickness = 0.6,
-                StrokeDashArray = [3, 5]
-            });
-        }
-        var channels = snapshot.Channels.Take(8).ToArray();
-        var bins = Math.Max(64, Math.Min((int)width, 850));
-        for (var lane = 0; lane < channels.Length; lane++)
-        {
-            var samples = channels[lane].Samples;
-            if (samples.Count == 0) continue;
-            var peak = samples.Max(v => Math.Abs(v));
-            if (peak < 1) peak = 1;
-            var geometry = new StreamGeometry();
-            using (var context = geometry.Open())
-            {
-                for (var bin = 0; bin < bins; bin++)
-                {
-                    var from = (int)((long)bin * samples.Count / bins);
-                    var to = Math.Max(from + 1, (int)((long)(bin + 1) * samples.Count / bins));
-                    to = Math.Min(to, samples.Count);
-                    var low = double.PositiveInfinity;
-                    var high = double.NegativeInfinity;
-                    for (var index = from; index < to; index++)
-                    {
-                        var value = samples[index];
-                        if (value < low) low = value;
-                        if (value > high) high = value;
-                    }
-                    var x = bin * width / (bins - 1);
-                    var lowPoint = new Point(x, height / 2 - low / peak * (height * 0.41));
-                    var highPoint = new Point(x, height / 2 - high / peak * (height * 0.41));
-                    if (bin == 0) context.BeginFigure(lowPoint, false, false);
-                    else context.LineTo(lowPoint, true, false);
-                    context.LineTo(highPoint, true, false);
-                }
-            }
-            geometry.Freeze();
-            canvas.Children.Add(new System.Windows.Shapes.Path
-            {
-                Data = geometry,
-                Stroke = ChannelBrushes[lane % ChannelBrushes.Length],
-                StrokeThickness = 1.35,
-                Opacity = 0.93
-            });
-        }
-        for (var lane = 0; lane < channels.Length; lane++)
-        {
-            var caption = new TextBlock
-            {
-                Text = $"● {channels[lane].Label}",
-                FontSize = 10, Foreground = ChannelBrushes[lane % ChannelBrushes.Length],
-                Background = new SolidColorBrush(Color.FromArgb(220, 248, 251, 255))
-            };
-            Canvas.SetLeft(caption, 8 + (lane % 4) * Math.Max(70, width / 4));
-            Canvas.SetTop(caption, 5 + lane / 4 * 17);
-            canvas.Children.Add(caption);
-        }
+        CurrentPhasors = SmvDigSubPresentationAdapter.BuildPhasors(_visibleVectors);
+        Notify(nameof(CurrentPhasors));
     }
 
-    private void DrawPhasors()
+    private void WaveformOptionsChanged(object sender, SelectionChangedEventArgs e)
     {
-        var canvas = PhasorCanvas;
-        canvas.Children.Clear();
-        var width = canvas.ActualWidth;
-        var height = canvas.ActualHeight;
-        if (width < 120 || height < 110)
+        // Controls may raise selection events during InitializeComponent.
+        if (WaveformView is null || ShowModeCombo is null ||
+            LayoutModeCombo is null || ScaleModeCombo is null)
             return;
-        var cx = width / 2;
-        var cy = height / 2;
-        var radius = Math.Max(25, Math.Min(width - 95, height - 30) * 0.46);
-        for (var index = 1; index <= 4; index++)
+        var mode = (ShowModeCombo.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Both";
+        WaveformView.ShowMode = mode switch
         {
-            var r = radius * index / 4;
-            var ellipse = new Ellipse
-            {
-                Width = 2 * r, Height = 2 * r, Stroke = Brushes.LightSteelBlue,
-                StrokeThickness = index == 4 ? 1.1 : 0.65
-            };
-            Canvas.SetLeft(ellipse, cx - r);
-            Canvas.SetTop(ellipse, cy - r);
-            canvas.Children.Add(ellipse);
-        }
-        canvas.Children.Add(new Line { X1 = cx - radius, X2 = cx + radius, Y1 = cy, Y2 = cy, Stroke = Brushes.LightSteelBlue });
-        canvas.Children.Add(new Line { X1 = cx, X2 = cx, Y1 = cy - radius, Y2 = cy + radius, Stroke = Brushes.LightSteelBlue });
-        var vectors = _visibleVectors.Where(v => v.HasFundamental).ToArray();
-        if (vectors.Length == 0)
-        {
-            var notice = new TextBlock { Text = "Waiting for coherent samples", FontSize = 10.5, Foreground = Brushes.SlateGray };
-            Canvas.SetLeft(notice, Math.Max(0, cx - 82));
-            Canvas.SetTop(notice, cy + 8);
-            canvas.Children.Add(notice);
-            return;
-        }
-        var max = Math.Max(1e-9, vectors.Max(v => v.FundamentalRms));
-        foreach (var vector in vectors)
-        {
-            var radians = vector.PhaseDegrees * Math.PI / 180;
-            var distance = radius * vector.FundamentalRms / max;
-            var end = new Point(cx + distance * Math.Cos(radians), cy - distance * Math.Sin(radians));
-            var start = new Point(cx, cy);
-            var d = end - start;
-            if (d.Length <= 3) continue;
-            d.Normalize();
-            var orthogonal = new Vector(-d.Y, d.X);
-            var brush = ChannelBrushes[Math.Max(0, vector.ChannelIndex - 1) % ChannelBrushes.Length];
-            canvas.Children.Add(new Line { X1 = cx, Y1 = cy, X2 = end.X, Y2 = end.Y, Stroke = brush, StrokeThickness = 2 });
-            foreach (var tip in new[] { end - d * 9 + orthogonal * 4, end - d * 9 - orthogonal * 4 })
-                canvas.Children.Add(new Line { X1 = end.X, Y1 = end.Y, X2 = tip.X, Y2 = tip.Y, Stroke = brush, StrokeThickness = 1.6 });
-            var name = new TextBlock { Text = $"Ch {vector.ChannelIndex}", FontSize = 10, Foreground = brush };
-            Canvas.SetLeft(name, Math.Clamp(end.X + 4, 0, Math.Max(0, width - 42)));
-            Canvas.SetTop(name, Math.Clamp(end.Y - 17, 0, Math.Max(0, height - 16)));
-            canvas.Children.Add(name);
-        }
+            "Group A" => "Voltage",
+            "Group B" => "Current",
+            _ => "Both"
+        };
+        WaveformView.LayoutMode =
+            (LayoutModeCombo.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Overlay";
+        var scale = (ScaleModeCombo.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Auto Peak Hold";
+        WaveformView.VoltageScale = scale;
+        WaveformView.CurrentScale = scale;
     }
 
     private bool Change(ref string field, string next, string name)
