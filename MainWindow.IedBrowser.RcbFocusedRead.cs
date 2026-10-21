@@ -64,7 +64,8 @@ public partial class MainWindow
                     device.LiveValues.PublishForAssociation(association,
                         result.Target.Reference, result.Target.FunctionalConstraint,
                         scalar, result.Quality, result.DeviceTimestamp, "MMS Read",
-                        result.UtcTimeEvidence, result.QualityEvidence);
+                        result.UtcTimeEvidence, result.QualityEvidence,
+                        typedBoolean: result.TypedBoolean);
                 });
                 _iedBrowserLastLiveVersion = -1;
                 RefreshIedBrowserVisibleValues();
