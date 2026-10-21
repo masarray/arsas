@@ -111,6 +111,12 @@ public sealed class P0CommandStopRaceAdmissionTests
             "A facade-local NOT SENT must be classified before the generic failure popup.");
         Assert.Contains("CONTROL_UI_NOT_SENT:", source, StringComparison.Ordinal);
         Assert.Contains("Iec61850ControlShout.FromLocalRejection(", source, StringComparison.Ordinal);
+        var dialog = File.ReadAllText(
+            Path.Combine(current!.FullName, "ControlCommandWindow.xaml.cs"));
+        var dialogLocal = dialog.IndexOf("CommandStage = \"Command not sent\"", StringComparison.Ordinal);
+        var dialogGeneric = dialog.IndexOf("CommandStage = \"Command failed\"", StringComparison.Ordinal);
+        Assert.True(dialogLocal >= 0 && dialogGeneric > dialogLocal,
+            "The control dialog must also separate local busy from possible wire failure.");
     }
 
     private static object Slot(UiRuntime runtime, string deviceId)
