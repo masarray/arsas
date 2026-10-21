@@ -1,8 +1,13 @@
 name: Publish direct EXE FAT preview (manual only)
 
-# CI artifact downloads are always ZIP. Only a manually approved
-# non-production GitHub prerelease can provide a direct raw .exe URL.
+# CI artifact downloads are always ZIP. PRs run ONLY read-only tests;
+# publishing a public, non-production GitHub prerelease is manual-only.
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/fat-direct-exe.yml'
+      - 'scripts/verify-fat-direct-exe.py'
+      - 'scripts/test-fat-direct-exe.py'
   workflow_dispatch:
     inputs:
       tested_sha:
@@ -24,7 +29,7 @@ on:
         required: true
 
 permissions:
-  contents: write
+  contents: read
   actions: read
 
 concurrency:
@@ -32,8 +37,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  verifier-tests:
+    name: Reject stale, failed and disguised-fat-build artifacts
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout for safe offline verifier tests
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Run positive and negative direct EXE publication guard tests
+        run: python3 scripts/test-fat-direct-exe.py
+
   preview:
     name: Verify tested PE bytes before manual immutable FAT prerelease
+    permissions:
+      contents: write
+      actions: read
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
