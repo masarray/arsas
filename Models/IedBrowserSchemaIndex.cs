@@ -21,6 +21,10 @@ public sealed class IedBrowserSchemaIndex
     // Schema-only DPC stVal/DO identities, computed once on model replacement.
     // Never classify arbitrary numeric enums or a name-only Pos as Dbpos.
     private readonly HashSet<string> _declaredDoublePointValues = new(StringComparer.Ordinal);
+    // A live model without CDC metadata can still declare a typed IEC ST
+    // status as a two-bit MMS BIT STRING plus its exact same-FC q companion.
+    // Only the *observed* exact two-bit wire value may activate this route.
+    private readonly HashSet<string> _twoBitStatusCandidates = new(StringComparer.Ordinal);
     // Exact, immutable model-verified status enum declarations. No runtime values.
     private readonly Dictionary<string, string> _standardEnumObjects =
         new(StringComparer.Ordinal);
@@ -126,6 +130,31 @@ public sealed class IedBrowserSchemaIndex
                     _declaredDoublePointValues.Add(Key(reference, fc));
                     _declaredDoublePointValues.Add(Key(owner, fc));
                 }
+                // Unknown-CDC, wire-proven two-bit IEC status: the native
+                // discovery's broad "Check" describes BIT STRING, not its
+                // semantic CDC. Require an exact ST.stVal AND ST.q sibling;
+                // never use an explicit contradictory CDC (SPS, ENS, etc.).
+                // Wire width and zero padding are validated by the shared
+                // Dbpos parser *at display time*, not guessed from "Check".
+                if (fc == "ST" && relative == "stVal" &&
+                    (string.IsNullOrWhiteSpace(obj.InferredCdc) ||
+                     string.Equals(obj.InferredCdc, "Unknown",
+                         StringComparison.OrdinalIgnoreCase)) &&
+                    (string.IsNullOrWhiteSpace(attr.SclBType) ||
+                     string.Equals(attr.SclBType, "Check", StringComparison.OrdinalIgnoreCase)) &&
+                    (string.Equals(attr.MmsType, "Check", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(attr.MmsType, "bit-string", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(attr.MmsType, "bitstring", StringComparison.OrdinalIgnoreCase)) &&
+                    obj.Attributes.Any(q =>
+                        NormalizeFc(q.FunctionalConstraint) == "ST" &&
+                        string.Equals(
+                            IedBrowserLiveValues.CanonicalReference(q.MmsReference),
+                            owner + ".q", StringComparison.Ordinal)))
+                {
+                    _twoBitStatusCandidates.Add(Key(reference, "ST"));
+                    _twoBitStatusCandidates.Add(Key(owner, "ST"));
+                }
+
                 // SV.subVal on a DPC object has the SAME two-bit Dbpos
                 // semantics as ST.stVal. The MMS type inventory can label it
                 // Check/bit-string; admission comes from exact IEC DPC object
@@ -378,6 +407,20 @@ public sealed class IedBrowserSchemaIndex
         var identity = IedBrowserLiveValues.CanonicalReference(reference);
         return identity.Length > 0 &&
             _declaredDoublePointValues.Contains(Key(identity, constraint));
+    }
+
+    /// <summary>
+    /// Source-model admission for a status with unknown CDC and an exact
+    /// ST.q sibling. This is NOT a Dbpos assertion: the presenter additionally
+    /// needs an actual correctly padded two-bit MMS status value. No guessed
+    /// semantics from boolean/enum values, two-bit vendor CF fields, or FC=SV.
+    /// </summary>
+    public bool IsTwoBitStatusCandidate(string? reference, string? fc)
+    {
+        if (NormalizeFc(fc) != "ST") return false;
+        var identity = IedBrowserLiveValues.CanonicalReference(reference);
+        return identity.Length > 0 &&
+            _twoBitStatusCandidates.Contains(Key(identity, "ST"));
     }
 
     /// <summary>
