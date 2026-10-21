@@ -106,7 +106,7 @@ public static class IedBrowserSgRootProjection
         return output;
     }
 
-    private static bool IsMatchingPrimitiveType(string mmsType, MmsDataKind kind)
+    internal static bool IsMatchingPrimitiveType(string mmsType, MmsDataKind kind)
         => mmsType.Trim().ToLowerInvariant() switch
         {
             "boolean" => kind == MmsDataKind.Boolean,
