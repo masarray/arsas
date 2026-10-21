@@ -182,4 +182,30 @@ public sealed class P0CanonicalReportCompanionSsoTests
         Assert.Equal("Good", process.Quality);
         Assert.Equal("6", process.Value);
     }
+
+    [Fact]
+    public void TwoDifferentIedsWithIdenticalReferenceAndFcNeverShareCompanionEvidence()
+    {
+        // One canonical ledger per device. Equal IEC references and FC are
+        // NOT cross-IED permissions, even with coincident association numbers.
+        var deviceA = new IedBrowserLiveValues();
+        var deviceB = new IedBrowserLiveValues();
+        var a = deviceA.BeginAssociation();
+        var b = deviceB.BeginAssociation();
+        Assert.Equal(a, b);
+        Assert.True(deviceA.PublishForAssociation(a, Tap, "ST",
+            "6", "", "", "Report"));
+        Assert.True(deviceB.PublishForAssociation(b, Tap, "ST",
+            "12", "", "", "Report"));
+        Assert.True(deviceA.MergeVerifiedReportCompanionForAssociation(
+            a, Tap, "ST", qualityEvidence: Quality(0)));
+        Assert.True(deviceA.TryGet(Tap, "ST", out var known));
+        Assert.True(deviceB.TryGet(Tap, "ST", out var unverified));
+        Assert.Equal("Good", known.Quality);
+        Assert.Equal("6", known.Value);
+        Assert.True(string.IsNullOrEmpty(unverified.Quality));
+        Assert.Equal("12", unverified.Value);
+        // Other device does not upgrade merely because a peer received q.
+        Assert.Null(unverified.QualityBits);
+    }
 }
