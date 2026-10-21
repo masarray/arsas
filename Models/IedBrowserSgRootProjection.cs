@@ -19,10 +19,10 @@ public static class IedBrowserSgRootProjection
     public static string RootFor(IedBrowserReadTarget target)
     {
         var fc = (target.FunctionalConstraint ?? "").Trim().ToUpperInvariant();
-        if (fc is not ("SG" or "SP" or "CF" or "DC" or "EX")) return "";
+        if (fc is not ("SG" or "SP" or "SE" or "CF" or "DC" or "EX")) return "";
         var marker = "$" + fc + "$";
         // BCUGE's named-variable inventory exposes FC group variables
-        // LN$SP0, LN$SG0, LN$CF0, LN$DC0 and LN$EX0. The name is a
+        // LN$SP0, LN$SG0, LN$SE0, LN$CF0, LN$DC0 and LN$EX0. The name is a
         // CANDIDATE only: an exact GVA typed structure and successful
         // read must precede every scalar's ledger publication.
         var suffix = "$" + fc + "0";
@@ -56,6 +56,7 @@ public static class IedBrowserSgRootProjection
         var slash = root.IndexOf('/');
         var constraint = root.EndsWith("$SP0", StringComparison.Ordinal) ? "SP"
             : root.EndsWith("$SG0", StringComparison.Ordinal) ? "SG"
+            : root.EndsWith("$SE0", StringComparison.Ordinal) ? "SE"
             : root.EndsWith("$CF0", StringComparison.Ordinal) ? "CF"
             : root.EndsWith("$DC0", StringComparison.Ordinal) ? "DC"
             : root.EndsWith("$EX0", StringComparison.Ordinal) ? "EX" : "";
