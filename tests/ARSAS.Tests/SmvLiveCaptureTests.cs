@@ -49,6 +49,24 @@ public sealed class SmvLiveCaptureTests
     }
 
     [Fact]
+    public void LongCapturePause_CannotJoinOldSamplesToAResumedPublisher()
+    {
+        var catalog = new SmvLiveStreamCatalog(Options);
+        var started = DateTimeOffset.UtcNow;
+        for (var i = 0; i < 160; i++)
+            catalog.Receive(Frame("MU01", 0x4000, i, i),
+                started.AddMilliseconds(i / 4.0));
+        var key = Assert.Single(catalog.Publish(null, started).Streams).Key;
+        Assert.NotNull(catalog.Publish(key, started).SelectedSnapshot);
+
+        catalog.Receive(Frame("MU01", 0x4000, 160, 160),
+            started.AddSeconds(3));
+        var update = catalog.Publish(key, started.AddSeconds(3));
+        Assert.Null(update.SelectedSnapshot);
+        Assert.True(Assert.Single(update.Streams).Restarts > 0);
+    }
+
+    [Fact]
     public void MultiplePublishersRemainIsolatedAndCatalogEvictsAtFixedLimit()
     {
         var catalog = new SmvLiveStreamCatalog(Options);

@@ -165,6 +165,7 @@ public sealed class SmvLiveStreamBuffer
     private byte _smpSynch;
     private ushort? _declaredRate, _declaredMode;
     private long _lastFrameOrdinal = -1;
+    private DateTimeOffset _lastCaptureTimestamp;
     private long _gaps, _missing, _duplicates, _outOfOrder, _restarts;
     private string _diagnostic = "Waiting for decoded SV samples.";
 
@@ -200,6 +201,18 @@ public sealed class SmvLiveStreamBuffer
         }
         Asdus++;
         LastSeen = DateTimeOffset.UtcNow;
+        // A capture pause or a discontinuous capture clock cannot silently
+        // stitch old and new samples into one phasor window, even if smpCnt
+        // happens to appear continuous after a full counter wrap.
+        if (_lastCaptureTimestamp != default &&
+            Math.Abs((timestamp - _lastCaptureTimestamp).TotalSeconds) > 1.0)
+        {
+            _restarts++;
+            ResetWindow();
+            _counter.Reset();
+            _diagnostic = "Capture timing discontinuity; rebuilding coherent SV window.";
+        }
+        _lastCaptureTimestamp = timestamp;
         AppId = frame.AppId;
         SvId = asdu.SvId;
         SourceMac = frame.Source.ToString();
