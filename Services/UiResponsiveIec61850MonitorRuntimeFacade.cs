@@ -158,6 +158,10 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         string deviceId,
         Iec61850ControlCommandRequest request,
         CancellationToken cancellationToken)
+        // A command must not silently sit behind a long Read All, discovery
+        // or inspection in the UI lifecycle FIFO. If admission is occupied,
+        // fail visibly BEFORE starting any MMS control service. IEC SBOw and
+        // Operate remain one immutable ordered native flight.
         => RunDeviceOperationAsync(
             deviceId,
             cancellationToken,
@@ -175,7 +179,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 {
                     ClearActiveCommandExpectations(expectationKeys);
                 }
-            });
+            },
+            rejectWhenBusy: true);
 
     public HybridReportPhysicalValidationSnapshot CaptureHybridReportPhysicalValidation(string deviceId)
         => _inner.CaptureHybridReportPhysicalValidation(deviceId);
@@ -540,21 +545,47 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     private async Task<T> RunDeviceOperationAsync<T>(
         string? deviceId,
         CancellationToken cancellationToken,
-        Func<CancellationToken, Task<T>> operation)
+        Func<CancellationToken, Task<T>> operation,
+        bool rejectWhenBusy = false)
     {
         ThrowIfDisposing();
         ArgumentNullException.ThrowIfNull(operation);
 
         var slot = GetSlot(deviceId);
-        await slot.OperationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Non-queuing command admission is immediate; background reads and
+        // ordinary lifecycle operations retain their pre-existing FIFO.
+        // Do not cancel an active Read or mutate a live MMS association.
+        if (rejectWhenBusy && !await slot.OperationGate.WaitAsync(0, cancellationToken)
+                .ConfigureAwait(false))
+            throw new InvalidOperationException(
+                "IEC command NOT SENT: IED lifecycle/inspection/read is busy. " +
+                "Retry after the active operation finishes; commands never queue behind it.");
+        if (!rejectWhenBusy)
+            await slot.OperationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         CancellationTokenSource? linkedCancellation = null;
         long generation = 0;
         try
         {
-            await slot.StopGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            // Stop/Disconnect must never be queued behind by an operator
+            // control; reject if its preemptive teardown already owns the IED.
+            if (rejectWhenBusy && !await slot.StopGate.WaitAsync(0, cancellationToken)
+                    .ConfigureAwait(false))
+                throw new InvalidOperationException(
+                    "IEC command NOT SENT: IED Stop/Disconnect is in progress.");
+            if (!rejectWhenBusy)
+                await slot.StopGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
+                if (rejectWhenBusy)
+                {
+                    lock (slot.SyncRoot)
+                    {
+                        if (slot.ActiveStopTask is { IsCompleted: false })
+                            throw new InvalidOperationException(
+                                "IEC command NOT SENT: IED Stop/Disconnect is in progress.");
+                    }
+                }
                 linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 lock (slot.SyncRoot)
                 {
