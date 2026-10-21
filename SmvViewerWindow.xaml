@@ -135,6 +135,19 @@
                                       BorderThickness="0" Background="Transparent"
                                       RowHeaderWidth="0" SelectionMode="Single"
                                       ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <DataGrid.Style>
+                                    <Style TargetType="{x:Type DataGrid}">
+                                        <Style.Triggers>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IsEnabled, ElementName=CaptureButton}" Value="False"/>
+                                                    <Condition Binding="{Binding IsLiveCaptureRunning}" Value="False"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="IsEnabled" Value="False"/>
+                                            </MultiDataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </DataGrid.Style>
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="svID" Binding="{Binding StreamId}" Width="*"/>
                                     <DataGridTextColumn Header="APPID" Binding="{Binding AppId}" Width="80"/>

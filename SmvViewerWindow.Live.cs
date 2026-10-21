@@ -17,7 +17,10 @@ public partial class SmvViewerWindow
     private int _liveUiScheduled;
     private int _liveGeneration;
     private bool _liveCaptureRunning;
+    private DateTimeOffset _liveStartedAtUtc;
     private bool _hasLivePresentation;
+
+    public bool IsLiveCaptureRunning => _liveCaptureRunning;
 
     public bool HasLivePresentation
     {
@@ -55,6 +58,8 @@ public partial class SmvViewerWindow
         var generation = Interlocked.Increment(ref _liveGeneration);
         _liveCancellation = new CancellationTokenSource();
         _liveCaptureRunning = true;
+        _liveStartedAtUtc = DateTimeOffset.UtcNow;
+        Raise(nameof(IsLiveCaptureRunning));
         HasLivePresentation = true;
         _p0CaptureSelection = null;
         _liveSummaries = [];
@@ -100,6 +105,7 @@ public partial class SmvViewerWindow
             if (generation == _liveGeneration)
             {
                 _liveCaptureRunning = false;
+                Raise(nameof(IsLiveCaptureRunning));
                 _liveFreshnessTimer?.Stop();
                 if (_liveFreshnessTimer is not null)
                     _liveFreshnessTimer.Tick -= LiveFreshness_Tick;
@@ -257,6 +263,12 @@ public partial class SmvViewerWindow
     {
         if (!_liveCaptureRunning)
             return;
+        if (_liveSummaries.Count == 0 && DateTimeOffset.UtcNow - _liveStartedAtUtc > TimeSpan.FromSeconds(2))
+        {
+            CaptureStatusText = "No SV traffic seen. Check Ethernet cable, adapter, VLAN and switch mirror/TAP.";
+            SnapshotBadgeText = "LIVE · NO TRAFFIC";
+            return;
+        }
         var selected = _liveSummaries.FirstOrDefault(s => s.Key == Volatile.Read(ref _liveSelectedKey));
         if (selected is null)
             return;
