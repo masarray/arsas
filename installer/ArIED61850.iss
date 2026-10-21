@@ -105,6 +105,18 @@ Filename: "{app}\{#AppExeName}"; Description: "Launch ARSAS"; WorkingDir: "{app}
 
 [Code]
 #ifdef SmvPreviewBuild
+procedure RegisterExtraCloseApplicationsResources;
+var
+  LegacyDll: String;
+begin
+  { Versions built with older .NET publish settings may leave Accessibility.dll
+    in the installation folder even when the newest published payload omits it.
+    Include that legacy file in Restart Manager's graceful close check. }
+  LegacyDll := ExpandConstant('{app}\Accessibility.dll');
+  if FileExists(LegacyDll) then
+    RegisterExtraCloseApplicationsResource(False, LegacyDll);
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ProbePath: String;

@@ -129,17 +129,24 @@ jobs:
           $params = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/CLOSEAPPLICATIONS',"/DIR=$target")
           $install = Start-Process -FilePath $exe -ArgumentList $params -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "Protected-folder install failed: $($install.ExitCode)." }
-          $accessibility = Join-Path $target 'Accessibility.dll'
-          if (-not (Test-Path $accessibility -PathType Leaf)) { throw 'Required Accessibility.dll missing.' }
-          $expectedAccessibility = (Get-FileHash $accessibility -Algorithm SHA256).Hash
-          # Reproduce a prior/partially replaced DLL, then verify an actual
-          # in-place upgrade restores tested bytes without manual Skip/Retry.
-          [System.IO.File]::WriteAllBytes($accessibility, [byte[]](65,82,83,65,83,45,79,76,68,45,68,76,76))
+          # Existing releases may include Accessibility.dll, while later releases
+          # do not. Test the exact shipped bytes of a real private DLL.
+          $legacyAccessibility = Join-Path $target 'Accessibility.dll'
+          $publishedAccessibility = Join-Path $env:GITHUB_WORKSPACE "ArIED61850Tester\dist\ARSAS-$env:ARSAS_VERSION-win-x64\Accessibility.dll"
+          if (-not (Test-Path $legacyAccessibility) -and -not (Test-Path $publishedAccessibility)) {
+            [System.IO.File]::WriteAllBytes($legacyAccessibility, [byte[]](65,82,83,65,83,83,45,79,76,68))
+            Write-Host 'Seeded a legacy Accessibility.dll as a prior-install fixture.'
+          }
+          $repairName = if (Test-Path $publishedAccessibility -PathType Leaf) { 'Accessibility.dll' } else { 'AR.Iec61850.Transports.Npcap.dll' }
+          $repairPath = Join-Path $target $repairName
+          if (-not (Test-Path $repairPath -PathType Leaf)) { throw "Shipped upgrade-test DLL is missing: $repairName" }
+          $expectedHash = (Get-FileHash $repairPath -Algorithm SHA256).Hash
+          [System.IO.File]::WriteAllBytes($repairPath, [byte[]](65,82,83,65,83,45,79,76,68,45,68,76,76))
           $upgrade = Start-Process -FilePath $exe -ArgumentList $params -Wait -PassThru
           if ($upgrade.ExitCode -ne 0) { throw "In-place Program Files upgrade failed: $($upgrade.ExitCode)." }
-          $actualAccessibility = (Get-FileHash $accessibility -Algorithm SHA256).Hash
-          if ($actualAccessibility -ne $expectedAccessibility) { throw 'Upgrade did not repair the existing Accessibility.dll.' }
-          Write-Host 'SMART_INNO_UPGRADE_PASS: Protected Program Files upgrade restored exact Accessibility.dll bytes.'
+          $actualHash = (Get-FileHash $repairPath -Algorithm SHA256).Hash
+          if ($actualHash -ne $expectedHash) { throw "Upgrade did not restore shipped DLL: $repairName" }
+          Write-Host "SMART_INNO_UPGRADE_PASS: Protected Program Files upgrade restored exact $repairName bytes."
           foreach ($file in @('ARSAS.exe','AR.Iec61850.Transports.Npcap.dll','SharpPcap.dll','PacketDotNet.dll','Tools\ArdIrec\ardirec_bridge.dll')) {
             if (-not (Test-Path (Join-Path $target $file) -PathType Leaf)) { throw "Installed runtime missing: $file" }
           }

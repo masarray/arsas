@@ -24,6 +24,8 @@ public sealed class SmvSmartInstallerUpgradeTests
         Assert.Contains("Flags: ignoreversion recursesubdirs createallsubdirs restartreplace", script);
         Assert.Contains("function PrepareToInstall(var NeedsRestart: Boolean): String;", script);
         Assert.Contains("SMART_UPGRADE_PREFLIGHT", script);
+        Assert.Contains("RegisterExtraCloseApplicationsResources", script);
+        Assert.Contains("RegisterExtraCloseApplicationsResource(False, LegacyDll)", script);
     }
 
     [Fact]
@@ -32,9 +34,10 @@ public sealed class SmvSmartInstallerUpgradeTests
         var ci = Read(".github/workflows/smv-direct-inno-preview.yml");
         Assert.Contains("Join-Path $env:ProgramFiles 'ARSAS-SMV-Preview-CI'", ci);
         Assert.DoesNotContain("'/CURRENTUSER'", ci);
-        Assert.Contains("WriteAllBytes($accessibility", ci);
+        Assert.Contains("WriteAllBytes($repairPath", ci);
+        Assert.Contains("Seeded a legacy Accessibility.dll", ci);
         Assert.Contains("SMART_INNO_UPGRADE_PASS", ci);
-        Assert.Contains("Get-FileHash $accessibility -Algorithm SHA256", ci);
+        Assert.Contains("Get-FileHash $repairPath -Algorithm SHA256", ci);
         Assert.Contains("Uninstall failed", ci);
     }
 
