@@ -68,8 +68,11 @@ public sealed class P0BrowserRcbEnabledTruthTests
     {
         var ledger = new IedBrowserLiveValues();
         var association = ledger.BeginAssociation();
-        Assert.True(ledger.PublishForAssociation(association,
-            Root + ".RptEna", "RP", value, "", "", source));
+        var published = ledger.PublishForAssociation(association,
+            Root + ".RptEna", "RP", value, "", "", source);
+        // A rendered pseudo-array is rejected by the canonical scalar
+        // publication fence itself; it never becomes live Boolean evidence.
+        Assert.Equal(value != "[true]", published);
 
         Assert.False(IedBrowserRcbEnabledPresentation.TryVerifiedTrue(
             ledger, Rcb(), IedBrowserRcbEnabledPresentation.VerifiedTargets(Model(Root)),
