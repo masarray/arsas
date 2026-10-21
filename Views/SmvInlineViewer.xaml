@@ -121,8 +121,8 @@
                         <ComboBox x:Name="ShowModeCombo" Width="83" Height="26" SelectedIndex="0"
                                   SelectionChanged="WaveformOptionsChanged" FontSize="10">
                             <ComboBoxItem Content="Both"/>
-                            <ComboBoxItem Content="Voltage"/>
-                            <ComboBoxItem Content="Current"/>
+                            <ComboBoxItem Content="Group A"/>
+                            <ComboBoxItem Content="Group B"/>
                         </ComboBox>
                         <TextBlock Foreground="#A7B8CB" FontSize="10" VerticalAlignment="Center" Text="Layout" Margin="10,0,5,0"/>
                         <ComboBox x:Name="LayoutModeCombo" Width="76" Height="26" SelectedIndex="0"
@@ -175,7 +175,7 @@
                         </Grid.RowDefinitions>
                         <DockPanel>
                             <TextBlock Text="Measurements" FontSize="12" FontWeight="SemiBold" Foreground="#E3F2FF"/>
-                            <TextBlock Text="relative phase · raw counts" FontSize="9.6" Foreground="#9CB1C6"
+                            <TextBlock Text="Ch1 reference = 0° · raw counts" FontSize="9.6" Foreground="#9CB1C6"
                                        HorizontalAlignment="Right" DockPanel.Dock="Right"/>
                         </DockPanel>
                         <DataGrid Grid.Row="2" ItemsSource="{Binding Measurements}" IsReadOnly="True"
