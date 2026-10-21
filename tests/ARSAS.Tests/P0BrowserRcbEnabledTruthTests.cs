@@ -112,7 +112,7 @@ public sealed class P0BrowserRcbEnabledTruthTests
         Assert.True(reports.IsExpanded);
         var expanded = tree.ExpandedKeys();
         tree.Reset(IedBrowserPresentation.Roots(null, [Rcb()]), expanded);
-        Assert.True(tree.FindVisible("category/reports")?.IsExpanded);
+        Assert.True(tree.FindVisible("category/reports")?.IsExpanded == true);
         tree.Reset(IedBrowserPresentation.Roots(null, [Rcb()]));
         Assert.Equal(6, tree.Rows.Count);
         Assert.All(tree.Rows, x => Assert.False(x.IsExpanded));
