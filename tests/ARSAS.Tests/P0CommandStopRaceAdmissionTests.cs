@@ -104,9 +104,9 @@ public sealed class P0CommandStopRaceAdmissionTests
         Assert.NotNull(source);
 
         var specific = source.IndexOf(
-            "ex.Message.Contains(\\"command NOT SENT\\"", StringComparison.Ordinal);
+            "ex.Message.Contains(\"command NOT SENT\"", StringComparison.Ordinal);
         var generic = source.IndexOf(
-            "signal.ControlLastResult = $\\"Command failed:", StringComparison.Ordinal);
+            "signal.ControlLastResult = $\"Command failed:", StringComparison.Ordinal);
         Assert.True(specific >= 0 && generic > specific,
             "A facade-local NOT SENT must be classified before the generic failure popup.");
         Assert.Contains("CONTROL_UI_NOT_SENT:", source, StringComparison.Ordinal);
