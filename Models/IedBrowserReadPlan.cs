@@ -246,6 +246,34 @@ public static class IedBrowserReadPlan
     }
 
     /// <summary>
+    /// An operator's IED-wide Read All must remain EXHAUSTIVE, but its initial
+    /// order should hydrate productive, model-verified SP/SG/CF/DC/EX roots
+    /// before thousands of independently queued ST/MX leaves. The typed root
+    /// client still requires a successful exact GVA + MMS Read; this plan does
+    /// not imply any unverified value, skip a target, or increase I/O fanout.
+    /// </summary>
+    public static IReadOnlyList<IedBrowserReadTarget> PrioritizeExplicitFullRead(
+        IReadOnlyList<IedBrowserReadTarget> targets)
+    {
+        ArgumentNullException.ThrowIfNull(targets);
+        if (targets.Count < 32) return targets;
+        var ordered = targets
+            .OrderBy(target => target.FunctionalConstraint is "SG" or "SP" ? 0 :
+                target.FunctionalConstraint is "CF" or "DC" or "EX" ? 1 :
+                target.FunctionalConstraint == "ST" ? 2 : 3)
+            .ThenBy(target => target.Reference, StringComparer.Ordinal)
+            .ToArray();
+        var head = FairLnTargets(ordered, Math.Min(48, ordered.Length));
+        var keys = head.Select(target =>
+            IedBrowserLiveValues.CanonicalReference(target.Reference) + "|" +
+            target.FunctionalConstraint.ToUpperInvariant())
+            .ToHashSet(StringComparer.Ordinal);
+        return head.Concat(ordered.Where(target => !keys.Contains(
+            IedBrowserLiveValues.CanonicalReference(target.Reference) + "|" +
+            target.FunctionalConstraint.ToUpperInvariant()))).ToArray();
+    }
+
+    /// <summary>
     /// Explicit Read LN still reads the ENTIRE verified LN selection. Schedule
     /// its first targets by FC so slow ST/DC leaves do not postpone every
     /// protection SP setting or CF engineering unit until the end of a large
