@@ -201,6 +201,15 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             CommandStatus = "The command operation was cancelled.";
             SetResultTone("Neutral");
         }
+        catch (InvalidOperationException ex) when (
+            ex.Message.Contains("command NOT SENT", StringComparison.OrdinalIgnoreCase))
+        {
+            // The facade rejected locally before an MMS control service.
+            // Never label this as an attempted command's wire failure.
+            CommandStage = "Command not sent";
+            CommandStatus = ex.Message;
+            SetResultTone("Warning");
+        }
         catch (Exception ex)
         {
             CommandStage = "Command failed";
