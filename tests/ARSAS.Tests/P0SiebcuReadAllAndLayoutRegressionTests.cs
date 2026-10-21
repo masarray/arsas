@@ -111,7 +111,8 @@ public sealed class P0SiebcuReadAllAndLayoutRegressionTests
         Assert.Contains(ordered.Take(24), t => t.FunctionalConstraint == "CF");
         Assert.Contains(ordered.Take(24), t => t.FunctionalConstraint == "ST");
         Assert.Contains(ordered.Take(24), t => t.FunctionalConstraint == "MX");
-        Assert.Same(targets, IedBrowserReadPlan.PrioritizeExplicitFullRead(targets[..16]));
+        var shortPlan = targets[..16];
+        Assert.Same(shortPlan, IedBrowserReadPlan.PrioritizeExplicitFullRead(shortPlan));
     }
 
     [Fact]
