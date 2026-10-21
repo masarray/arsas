@@ -1,5 +1,5 @@
 using System.Reflection;
-using ArIED61850Tester;
+using UiRuntime = ArIED61850Tester.Iec61850MonitorRuntime;
 
 namespace ARSAS.Tests;
 
@@ -16,7 +16,7 @@ public sealed class P0CommandStopRaceAdmissionTests
     public async Task CommandBusyAtEitherGate_RejectsImmediatelyAndReleasesOwnedLease(
         string busyGateName)
     {
-        await using var runtime = new Iec61850MonitorRuntime();
+        await using var runtime = new UiRuntime();
         const string id = "offline-stop-admission";
         var slot = Slot(runtime, id);
         var busyGate = Gate(slot, busyGateName);
@@ -47,7 +47,7 @@ public sealed class P0CommandStopRaceAdmissionTests
     [Fact]
     public async Task PublishedStopTask_RejectsCommandEvenWhenStopGateIsFree()
     {
-        await using var runtime = new Iec61850MonitorRuntime();
+        await using var runtime = new UiRuntime();
         const string id = "offline-stop-published";
         var slot = Slot(runtime, id);
         var stopProperty = slot.GetType().GetProperty(
@@ -78,7 +78,7 @@ public sealed class P0CommandStopRaceAdmissionTests
     {
         // Slot isolation is the foundation for an unrelated IED remaining
         // responsive when another IED is discovering or stopping.
-        await using var runtime = new Iec61850MonitorRuntime();
+        await using var runtime = new UiRuntime();
         var first = Slot(runtime, "ied-1");
         var second = Slot(runtime, "ied-2");
         Assert.NotSame(first, second);
@@ -86,9 +86,9 @@ public sealed class P0CommandStopRaceAdmissionTests
         Assert.NotSame(Gate(first, "StopGate"), Gate(second, "StopGate"));
     }
 
-    private static object Slot(Iec61850MonitorRuntime runtime, string deviceId)
+    private static object Slot(UiRuntime runtime, string deviceId)
     {
-        var method = typeof(Iec61850MonitorRuntime).GetMethod(
+        var method = typeof(UiRuntime).GetMethod(
             "GetSlot", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(method);
         return method.Invoke(runtime, [deviceId])!;
