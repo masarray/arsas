@@ -74,8 +74,11 @@ public sealed class P0ProtectionSp0RootFieldEvidenceTests
                 new IedBrowserReadTarget(
                     "BCUGEF650/SGgndPIOC1$SG$InMagTyp$setVal",
                     "SG", "Enum")));
-        Assert.Equal("", IedBrowserSgRootProjection.RootFor(
-            T("InMagTyp.setVal", "SE")));
+        // SE now has its OWN GVA-verified root. This must not borrow SP,
+        // SG or another FC's active setting values.
+        Assert.Equal("BCUGEF650/gndPTOC2$SE0",
+            IedBrowserSgRootProjection.RootFor(
+                T("InMagTyp.setVal", "SE")));
         // CF0 is now a separately typed configuration root. Its
         // projection still cannot publish a member in the SP/SG namespace.
         Assert.Equal("BCUGEF650/gndPTOC2$CF0",
