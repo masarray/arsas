@@ -126,7 +126,7 @@ internal sealed class IedBrowserSgRootReadFlight
         // Admission is bounded per EXACT typed FC root, not by the number
         // of unrelated ST/MX leaves in the selected IED. The former >4096
         // all-or-nothing veto disabled safe root reads on large substations.
-        if (target.FunctionalConstraint is not ("SG" or "SP" or "CF" or "DC" or "EX"))
+        if (target.FunctionalConstraint is not ("SG" or "SP" or "SE" or "CF" or "DC" or "EX"))
             return null;
         var root = IedBrowserSgRootProjection.RootFor(target);
         if (root.Length == 0) return null;
