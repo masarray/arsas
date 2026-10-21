@@ -12,6 +12,10 @@ internal sealed class IedBrowserSgRootReadFlight
     private readonly IReadOnlyList<IedBrowserReadTarget> _targets;
     private readonly IReadOnlyList<IedBrowserReadTarget> _verifiedRootScope;
     private readonly HashSet<string> _scheduledKeys;
+    // Exact verified roots are compiled ONCE per user Read. Repeatedly
+    // rescanning 4,000+ leaves for every root used to punish dense IEDs.
+    private readonly IReadOnlyList<string> _orderedRoots;
+    private readonly Dictionary<string, IReadOnlyList<IedBrowserReadTarget>> _rootTargets;
     private readonly HashSet<string> _drainedRootFanout = new(StringComparer.Ordinal);
     private readonly HashSet<string> _groupAttemptedRoots = new(StringComparer.Ordinal);
     private readonly Dictionary<string, IReadOnlyDictionary<string, IedBrowserReadResult>>
@@ -29,6 +33,16 @@ internal sealed class IedBrowserSgRootReadFlight
         _targets = targets;
         _verifiedRootScope = verifiedRootScope ?? targets;
         _scheduledKeys = targets.Select(Key).ToHashSet(StringComparer.Ordinal);
+        _orderedRoots = targets.Select(IedBrowserSgRootProjection.RootFor)
+            .Where(root => root.Length > 0)
+            .Distinct(StringComparer.Ordinal).ToArray();
+        _rootTargets = _verifiedRootScope
+            .GroupBy(IedBrowserSgRootProjection.RootFor, StringComparer.Ordinal)
+            .Where(group => group.Key.Length > 0 &&
+                IedBrowserSgRootProjection.CanReadRoot(group.Count()))
+            .ToDictionary(group => group.Key,
+                group => (IReadOnlyList<IedBrowserReadTarget>)group.ToArray(),
+                StringComparer.Ordinal);
     }
 
     private static string Key(IedBrowserReadTarget target)
@@ -60,7 +74,7 @@ internal sealed class IedBrowserSgRootReadFlight
         // roots. Otherwise the old first-five-only warmup makes every later
         // SGCB root fall back to slow, repeated leaf MMS Read requests.
         var roots = new[] { requestedRoot }
-            .Concat(_targets.Select(IedBrowserSgRootProjection.RootFor))
+            .Concat(_orderedRoots)
             .Where(root => root.Length != 0 &&
                 !_groupAttemptedRoots.Contains(root))
             .Distinct(StringComparer.Ordinal)
@@ -70,16 +84,9 @@ internal sealed class IedBrowserSgRootReadFlight
 
         // Only roots already scheduled in this finite page may enter a group.
         // No speculative LN/FC enumeration, no SCL-only sibling admission.
-        var groups = roots.AsEnumerable()
-            .Select(root =>
-            {
-                var candidates = _verifiedRootScope.Where(t =>
-                    string.Equals(IedBrowserSgRootProjection.RootFor(t),
-                        root, StringComparison.Ordinal)).ToArray();
-                return (Root: root,
-                    Targets: (IReadOnlyList<IedBrowserReadTarget>)candidates);
-            })
-            .Where(g => IedBrowserSgRootProjection.CanReadRoot(g.Targets.Count))
+        var groups = roots
+            .Where(_rootTargets.ContainsKey)
+            .Select(root => (Root: root, Targets: _rootTargets[root]))
             .ToArray();
         if (groups.Length < 2) return;
 
@@ -116,8 +123,10 @@ internal sealed class IedBrowserSgRootReadFlight
         // 32-total-target veto disabled typed SP0/SG0 reads exactly on those
         // dense protection LNs. Bound by page and group instead, not by the
         // number of unrelated, independently declared target attributes.
-        if (_targets.Count > 4096 ||
-            target.FunctionalConstraint is not ("SG" or "SP" or "CF" or "DC" or "EX"))
+        // Admission is bounded per EXACT typed FC root, not by the number
+        // of unrelated ST/MX leaves in the selected IED. The former >4096
+        // all-or-nothing veto disabled safe root reads on large substations.
+        if (target.FunctionalConstraint is not ("SG" or "SP" or "CF" or "DC" or "EX"))
             return null;
         var root = IedBrowserSgRootProjection.RootFor(target);
         if (root.Length == 0) return null;
@@ -126,16 +135,11 @@ internal sealed class IedBrowserSgRootReadFlight
         {
             if (_completed.Count >= MaxRootReadsPerPage)
                 return null;
-            var siblings = _verifiedRootScope.Where(t =>
-                string.Equals(IedBrowserSgRootProjection.RootFor(t),
-                    root, StringComparison.Ordinal)).ToArray();
-            // An oversized or omitted verified group cannot safely be
-            // partially matched to the structural response. Restrict it to
-            // the originally requested exact target list instead.
-            if (siblings.Length == 0)
-                siblings = _targets.Where(t =>
-                    string.Equals(IedBrowserSgRootProjection.RootFor(t),
-                        root, StringComparison.Ordinal)).ToArray();
+            // Never substitute a truncated subset of a verified root: GVA
+            // structural projection needs the entire exact source group.
+            // Missing/oversized groups safely fall back to leaf Reads.
+            var siblings = _rootTargets.GetValueOrDefault(root) ??
+                Array.Empty<IedBrowserReadTarget>();
             IReadOnlyList<IedBrowserReadResult> read = [];
             try
             {
