@@ -1,11 +1,13 @@
 using AR.Iec61850.Mms;
+using System.Windows;
 using ArIED61850Tester.Models;
 
 namespace ARSAS.Tests;
 
 /// <summary>
 /// Reproduces field regression: six RCBs were activated after tree construction,
-/// but their existing Explorer nodes retained '?' instead of caller-owned ●.
+/// RCB occupancy can change after the tree exists, but that cannot certify
+/// live RptEna enabled state or create a status icon.
 /// </summary>
 public sealed class P0BrowserRcbLiveOwnershipReconciliationTests
 {
@@ -24,17 +26,20 @@ public sealed class P0BrowserRcbLiveOwnershipReconciliationTests
         var untouched = Rcb("BCUGEF650/LLN0.RP.URB_MX_SOGI10102");
         var node = new IedBrowserTreeRow("reports/rcb/active",
             active.Name, "RCB", 3, active);
-        Assert.Equal("?", node.RcbUsageGlyph);
+        Assert.Equal(Visibility.Collapsed, node.RcbEnabledVisibility);
         var activeRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "BCUGEF650/LLN0$RP$URB_MX_SOGI10101"
         };
         Assert.Equal(1, IedBrowserRcbLiveOwnershipPresentation.Reconcile(
             [active, untouched], activeRefs, connected: true));
-        Assert.Equal("●", node.RcbUsageGlyph);
+        // Even successfully activated caller ownership does not prove that a
+        // read-only current-association MMS RptEna value is Boolean true.
+        Assert.Equal(Visibility.Collapsed, node.RcbEnabledVisibility);
         Assert.Equal("ARSAS active", active.StatusText);
-        Assert.Equal("?", new IedBrowserTreeRow("reports/rcb/untouched",
-            untouched.Name, "RCB", 3, untouched).RcbUsageGlyph);
+        Assert.Equal(Visibility.Collapsed, new IedBrowserTreeRow(
+            "reports/rcb/untouched", untouched.Name, "RCB", 3,
+            untouched).RcbEnabledVisibility);
         Assert.Equal(0, IedBrowserRcbLiveOwnershipPresentation.Reconcile(
             [active, untouched], activeRefs, connected: true));
     }
