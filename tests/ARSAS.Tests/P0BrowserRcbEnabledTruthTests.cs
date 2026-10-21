@@ -39,11 +39,20 @@ public sealed class P0BrowserRcbEnabledTruthTests
         Assert.False(IedBrowserRcbEnabledPresentation.TryVerifiedTrue(
             ledger, row, targets, true, out _));
         Assert.True(ledger.PublishForAssociation(association,
-            Root + ".RptEna", "RP", "true", "", "", "MMS Read"));
+            Root + ".RptEna", "RP", "true", "", "", "MMS Read",
+            typedBoolean: true));
         Assert.True(IedBrowserRcbEnabledPresentation.TryVerifiedTrue(
             ledger, row, targets, true, out var tooltip));
         Assert.Contains("RptEna: true", tooltip);
         Assert.Contains("verified MMS Read", tooltip);
+        // A formatted string without original decoded Boolean-kind proof
+        // cannot light the icon even when its text and source seem valid.
+        var untyped = new IedBrowserLiveValues();
+        var untypedAssociation = untyped.BeginAssociation();
+        Assert.True(untyped.PublishForAssociation(untypedAssociation,
+            Root + ".RptEna", "RP", "true", "", "", "MMS Read"));
+        Assert.False(IedBrowserRcbEnabledPresentation.TryVerifiedTrue(
+            untyped, row, targets, true, out _));
         // Once Stop/activation changes the RCB state, an older successful
         // read is only history; no new read-back means no live enabled icon.
         Assert.False(IedBrowserRcbEnabledPresentation.TryVerifiedTrue(
@@ -59,6 +68,7 @@ public sealed class P0BrowserRcbEnabledTruthTests
     }
 
     [Theory]
+    [InlineData("true", "MMS Read")]
     [InlineData("false", "MMS Read")]
     [InlineData("1", "MMS Read")]
     [InlineData("true", "MMS Report")]
@@ -86,7 +96,8 @@ public sealed class P0BrowserRcbEnabledTruthTests
         var ledger = new IedBrowserLiveValues();
         var old = ledger.BeginAssociation();
         Assert.True(ledger.PublishForAssociation(old,
-            Root + ".RptEna", "RP", "true", "", "", "MMS Read"));
+            Root + ".RptEna", "RP", "true", "", "", "MMS Read",
+            typedBoolean: true));
         var targets = IedBrowserRcbEnabledPresentation.VerifiedTargets(Model(Root));
         Assert.True(IedBrowserRcbEnabledPresentation.TryVerifiedTrue(
             ledger, Rcb(), targets, true, out _));
@@ -96,7 +107,8 @@ public sealed class P0BrowserRcbEnabledTruthTests
             ledger, Rcb(), targets, true, out _));
         ledger.BeginAssociation();
         Assert.False(ledger.PublishForAssociation(old,
-            Root + ".RptEna", "RP", "true", "", "", "MMS Read"));
+            Root + ".RptEna", "RP", "true", "", "", "MMS Read",
+            typedBoolean: true));
         Assert.False(IedBrowserRcbEnabledPresentation.TryVerifiedTrue(
             ledger, Rcb(), targets, true, out _));
 
