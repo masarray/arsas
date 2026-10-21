@@ -1,8 +1,8 @@
 <Window x:Class="ArIED61850Tester.SmvViewerWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="SMV Snapshot Viewer"
-        Width="1180" Height="820" MinWidth="960" MinHeight="680"
+        Title="ARSAS · Sampled Values Viewer"
+        Width="1460" Height="850" MinWidth="1160" MinHeight="720"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource AppBackgroundGradient}"
         FontFamily="{StaticResource AppFontFamily}"
@@ -33,172 +33,220 @@
                 <Border Grid.Column="1" Padding="9,4" CornerRadius="11"
                         Background="#EAF2FF" BorderBrush="#BDD2F4" BorderThickness="1"
                         VerticalAlignment="Center">
-                    <TextBlock Text="SMV / IEC 61850-9-2 · 2-cycle snapshot" FontSize="11" FontWeight="SemiBold"
+                    <TextBlock Text="SMV · Passive capture · 2-cycle evidence" FontSize="11" FontWeight="SemiBold"
                                Foreground="#245EA8"/>
                 </Border>
             </Grid>
         </Border>
 
-        <Border Grid.Row="2" Style="{StaticResource Card}" Padding="10">
+
+        <Border Grid.Row="2" Style="{StaticResource Card}" Padding="9">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="8"/>
-                    <RowDefinition Height="155"/>
-                    <RowDefinition Height="8"/>
+                    <RowDefinition Height="9"/>
                     <RowDefinition Height="*"/>
-                    <RowDefinition Height="8"/>
-                    <RowDefinition Height="132"/>
                 </Grid.RowDefinitions>
-
                 <Grid Grid.Row="0">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="2.2*"/>
+                        <ColumnDefinition Width="2*"/>
+                        <ColumnDefinition Width="10"/>
+                        <ColumnDefinition Width="115"/>
+                        <ColumnDefinition Width="10"/>
+                        <ColumnDefinition Width="132"/>
+                        <ColumnDefinition Width="7"/>
+                        <ColumnDefinition Width="76"/>
                         <ColumnDefinition Width="12"/>
-                        <ColumnDefinition Width="130"/>
-                        <ColumnDefinition Width="12"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="8"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="14"/>
-                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="1.3*"/>
                     </Grid.ColumnDefinitions>
-
                     <StackPanel Grid.Column="0">
-                        <TextBlock Text="Capture adapter" FontSize="10.5" FontWeight="SemiBold"
-                                   Foreground="{StaticResource Muted}"/>
-                        <ComboBox x:Name="AdapterCombo" Margin="0,4,0,0" MinHeight="31"
+                        <TextBlock Text="Capture adapter" FontSize="10.5" Foreground="{StaticResource Muted}"/>
+                        <ComboBox x:Name="AdapterCombo" Margin="0,3,0,0" MinHeight="31"
                                   ItemsSource="{Binding AdapterOptions}"
                                   SelectedItem="{Binding SelectedAdapter, Mode=TwoWay}"
                                   DisplayMemberPath="DisplayText"
-                                  ToolTip="Select the Windows/Npcap adapter connected to the process bus or mirror port."/>
+                                  ToolTip="Windows/Npcap adapter connected to the authorized process-bus mirror."/>
                     </StackPanel>
-
                     <StackPanel Grid.Column="2">
-                        <TextBlock Text="Nominal frequency" FontSize="10.5" FontWeight="SemiBold"
-                                   Foreground="{StaticResource Muted}"/>
-                        <ComboBox x:Name="FrequencyCombo" Margin="0,4,0,0" MinHeight="31" SelectedIndex="0">
+                        <TextBlock Text="Frequency" FontSize="10.5" Foreground="{StaticResource Muted}"/>
+                        <ComboBox x:Name="FrequencyCombo" Margin="0,3,0,0" MinHeight="31" SelectedIndex="0">
                             <ComboBoxItem Content="50 Hz" Tag="50"/>
                             <ComboBoxItem Content="60 Hz" Tag="60"/>
                         </ComboBox>
                     </StackPanel>
-
                     <Button x:Name="CaptureButton" Grid.Column="4" Content="Capture 2 cycles"
                             Width="132" Height="32" VerticalAlignment="Bottom"
                             Style="{StaticResource SoftButton}" Click="Capture_Click"/>
                     <Button x:Name="CancelButton" Grid.Column="6" Content="Cancel"
-                            Width="78" Height="32" VerticalAlignment="Bottom" IsEnabled="False"
+                            Width="76" Height="32" VerticalAlignment="Bottom" IsEnabled="False"
                             Style="{StaticResource SoftButton}" Click="Cancel_Click"/>
-
                     <StackPanel Grid.Column="8" VerticalAlignment="Bottom">
-                        <TextBlock Text="{Binding CaptureStatusText}" FontSize="10.8"
-                                   Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
-                        <ProgressBar x:Name="SnapshotProgress" Height="5" Margin="0,5,0,2"
+                        <TextBlock Text="{Binding CaptureStatusText}" FontSize="10.5"
+                                   Foreground="{StaticResource Muted}" TextWrapping="Wrap" MaxHeight="33"/>
+                        <ProgressBar x:Name="SnapshotProgress" Height="4" Margin="0,5,0,2"
                                      Minimum="0" Maximum="1" Value="0"/>
                     </StackPanel>
                 </Grid>
-
                 <Grid Grid.Row="2">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="5"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Ellipse Width="7" Height="7" Fill="{StaticResource Accent}" Margin="0,0,7,0"/>
-                            <TextBlock Text="Select the configured or discovered stream" Style="{StaticResource SectionTitle}"/>
-                        </StackPanel>
-                        <TextBlock Grid.Column="1" Text="{Binding StreamCountText}" FontSize="11.5"
-                                   Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
-                    </Grid>
-
-                    <DataGrid x:Name="StreamGrid" Grid.Row="2"
-                              ItemsSource="{Binding Streams}" SelectedItem="{Binding SelectedStream, Mode=TwoWay}"
-                              IsEnabled="{Binding IsEnabled, ElementName=CaptureButton}"
-                              SelectionChanged="P0StreamGrid_SelectionChanged"
-                              AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
-                              CanUserDeleteRows="False" CanUserResizeRows="False" CanUserReorderColumns="False"
-                              HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                              BorderThickness="0" Background="Transparent"
-                              RowHeaderWidth="0" SelectionMode="Single"
-                              ScrollViewer.HorizontalScrollBarVisibility="Auto">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="98"/>
-                            <DataGridTextColumn Header="Control block" Binding="{Binding ControlReference}" Width="190"/>
-                            <DataGridTextColumn Header="svID / smvID" Binding="{Binding StreamId}" Width="135"/>
-                            <DataGridTextColumn Header="DataSet" Binding="{Binding DataSetReference}" Width="190"/>
-                            <DataGridTextColumn Header="APPID" Binding="{Binding AppId}" Width="75"/>
-                            <DataGridTextColumn Header="Destination MAC" Binding="{Binding DestinationMac}" Width="125"/>
-                            <DataGridTextColumn Header="VLAN" Binding="{Binding Vlan}" Width="56"/>
-                            <DataGridTextColumn Header="Rate" Binding="{Binding SampleRate}" Width="68"/>
-                            <DataGridTextColumn Header="Mode" Binding="{Binding SampleMode}" Width="86"/>
-                            <DataGridTextColumn Header="ASDU" Binding="{Binding NumberOfAsdu}" Width="58"/>
-                            <DataGridTextColumn Header="Members" Binding="{Binding MemberCount}" Width="66"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </Grid>
-
-                <Border Grid.Row="4" BorderBrush="#D6E0ED" BorderThickness="1" CornerRadius="10" Background="#FBFDFF">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-                        <Grid Grid.Row="0" Margin="10,8,10,5">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel>
-                                <TextBlock Text="Static waveform proof" FontSize="12" FontWeight="SemiBold"
-                                           Foreground="{StaticResource Ink}"/>
-                                <TextBlock Text="Raw signed INT32 lanes are shown when channel semantics are not resolved by trusted SCL context."
-                                           Margin="0,2,0,0" FontSize="10.5" Foreground="{StaticResource Muted}"/>
-                            </StackPanel>
-                            <TextBlock Grid.Column="1" Text="{Binding SnapshotBadgeText}" VerticalAlignment="Center"
-                                       FontSize="11" FontWeight="SemiBold" Foreground="#245EA8"/>
-                        </Grid>
-                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                            <Canvas x:Name="WaveformCanvas" Height="390" MinHeight="300" Background="Transparent"
-                                    SizeChanged="WaveformCanvas_SizeChanged"/>
-                        </ScrollViewer>
-                    </Grid>
-                </Border>
-
-                <Grid Grid.Row="6">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="1.6*"/>
-                        <ColumnDefinition Width="10"/>
-                        <ColumnDefinition Width="1*"/>
+                        <ColumnDefinition Width="225" MinWidth="205"/>
+                        <ColumnDefinition Width="9"/>
+                        <ColumnDefinition Width="1.25*" MinWidth="355"/>
+                        <ColumnDefinition Width="9"/>
+                        <ColumnDefinition Width="0.95*" MinWidth="355"/>
                     </Grid.ColumnDefinitions>
-                    <Border Grid.Column="0" BorderBrush="#D6E0ED" BorderThickness="1" CornerRadius="10" Padding="10,8">
-                        <StackPanel>
-                            <TextBlock Text="{Binding SnapshotSummaryText}" FontSize="11.2" FontWeight="SemiBold"
-                                       Foreground="{StaticResource Ink}" TextWrapping="Wrap"/>
-                            <TextBlock Text="{Binding SnapshotEvidenceText}" Margin="0,4,0,0" FontSize="10.4"
-                                       Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
-                            <TextBlock Text="{Binding SnapshotContinuityEvidenceText}" Margin="0,3,0,0" FontSize="10.4"
-                                       Foreground="#8A4B08" TextWrapping="Wrap"/>
-                            <TextBlock Text="{Binding SnapshotBoundaryText}" Margin="0,4,0,0" FontSize="10.1"
-                                       Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
-                        </StackPanel>
+                    <!-- Source explorer: compact by design; the authoritative selected stream owns every panel. -->
+                    <Border Grid.Column="0" BorderBrush="#D6E0ED" BorderThickness="1"
+                            CornerRadius="9" Background="#FBFDFF" Padding="8">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="7"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="8"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="SV streams" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{StaticResource Ink}"/>
+                                <TextBlock Grid.Column="1" Text="{Binding StreamCountText}"
+                                           FontSize="10" Foreground="{StaticResource Muted}"/>
+                            </Grid>
+                            <DataGrid x:Name="StreamGrid" Grid.Row="2"
+                                      ItemsSource="{Binding Streams}"
+                                      SelectedItem="{Binding SelectedStream, Mode=TwoWay}"
+                                      IsEnabled="{Binding IsEnabled, ElementName=CaptureButton}"
+                                      SelectionChanged="P0StreamGrid_SelectionChanged"
+                                      AutoGenerateColumns="False" IsReadOnly="True"
+                                      CanUserAddRows="False" CanUserDeleteRows="False"
+                                      CanUserResizeRows="False" CanUserReorderColumns="False"
+                                      EnableRowVirtualization="True"
+                                      HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                                      BorderThickness="0" Background="Transparent"
+                                      RowHeaderWidth="0" SelectionMode="Single"
+                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="svID" Binding="{Binding StreamId}" Width="*"/>
+                                    <DataGridTextColumn Header="APPID" Binding="{Binding AppId}" Width="80"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <TextBlock Grid.Row="4" Text="{Binding SelectedStreamDetail}"
+                                       FontSize="10" Foreground="{StaticResource Muted}"
+                                       TextWrapping="Wrap" MaxHeight="92"
+                                       ToolTip="{Binding SelectedStreamDetail}"/>
+                        </Grid>
                     </Border>
-                    <DataGrid Grid.Column="2" ItemsSource="{Binding SnapshotChannels}"
-                              AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
-                              CanUserDeleteRows="False" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                              BorderBrush="#D6E0ED" BorderThickness="1" RowHeaderWidth="0">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Raw lane" Binding="{Binding Label}" Width="*"/>
-                            <DataGridTextColumn Header="Min" Binding="{Binding MinimumText}" Width="80"/>
-                            <DataGridTextColumn Header="Max" Binding="{Binding MaximumText}" Width="80"/>
-                            <DataGridTextColumn Header="Pk–Pk" Binding="{Binding PeakToPeakText}" Width="80"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
+                    <!-- No synthetic sine: this remains the received raw, unscaled snapshot. -->
+                    <Border Grid.Column="2" BorderBrush="#D6E0ED" BorderThickness="1"
+                            CornerRadius="9" Background="#FBFDFF" Padding="8">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="8"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="8"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Waveforms" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{StaticResource Ink}"/>
+                                    <TextBlock Text="Received INT32 lanes · individual raw scales"
+                                               FontSize="10" Foreground="{StaticResource Muted}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="1" Text="{Binding SnapshotBadgeText}"
+                                           FontSize="10.5" Foreground="#245EA8" VerticalAlignment="Center"/>
+                            </Grid>
+                            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled">
+                                <Canvas x:Name="WaveformCanvas" Height="430" MinHeight="300"
+                                        Background="Transparent"
+                                        SizeChanged="WaveformCanvas_SizeChanged"/>
+                            </ScrollViewer>
+                            <TextBlock Grid.Row="4" Text="{Binding SnapshotContinuityEvidenceText}"
+                                       Foreground="#8A4B08" FontSize="10"
+                                       TextWrapping="Wrap" MaxHeight="42"/>
+                        </Grid>
+                    </Border>
+                    <Grid Grid.Column="4">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="1.05*" MinHeight="260"/>
+                            <RowDefinition Height="9"/>
+                            <RowDefinition Height="0.95*" MinHeight="260"/>
+                        </Grid.RowDefinitions>
+                        <Border Grid.Row="0" BorderBrush="#D6E0ED" BorderThickness="1"
+                                CornerRadius="9" Background="#FBFDFF" Padding="8">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="Phasors" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{StaticResource Ink}"/>
+                                <Canvas x:Name="RawPhasorCanvas" Grid.Row="1" Background="Transparent"
+                                        MinHeight="205" SizeChanged="RawPhasorCanvas_SizeChanged"/>
+                                <TextBlock Grid.Row="2" Text="{Binding RawVectorStatusText}"
+                                           FontSize="10" Foreground="{StaticResource Muted}"
+                                           TextWrapping="Wrap" MaxHeight="46"/>
+                            </Grid>
+                        </Border>
+                        <Border Grid.Row="2" BorderBrush="#D6E0ED" BorderThickness="1"
+                                CornerRadius="9" Background="#FBFDFF" Padding="8">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="7"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="Measurements" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{StaticResource Ink}"/>
+                                <TabControl Grid.Row="2" BorderThickness="0" Background="Transparent"
+                                            FontSize="10.5">
+                                    <TabItem Header="RMS / phase">
+                                        <DataGrid ItemsSource="{Binding RawVectorRows}"
+                                                  AutoGenerateColumns="False" IsReadOnly="True"
+                                                  CanUserAddRows="False" CanUserDeleteRows="False"
+                                                  EnableRowVirtualization="True"
+                                                  HeadersVisibility="Column"
+                                                  GridLinesVisibility="Horizontal"
+                                                  RowHeaderWidth="0" BorderThickness="0">
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn Header="Raw lane" Binding="{Binding Label}" Width="*"/>
+                                                <DataGridTextColumn Header="RMS" Binding="{Binding RmsText}" Width="73"/>
+                                                <DataGridTextColumn Header="Fund." Binding="{Binding FundamentalRmsText}" Width="73"/>
+                                                <DataGridTextColumn Header="Angle" Binding="{Binding AngleText}" Width="61"/>
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </TabItem>
+                                    <TabItem Header="Raw range">
+                                        <DataGrid ItemsSource="{Binding SnapshotChannels}"
+                                                  AutoGenerateColumns="False" IsReadOnly="True"
+                                                  CanUserAddRows="False" CanUserDeleteRows="False"
+                                                  EnableRowVirtualization="True"
+                                                  HeadersVisibility="Column"
+                                                  GridLinesVisibility="Horizontal"
+                                                  RowHeaderWidth="0" BorderThickness="0">
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn Header="Raw lane" Binding="{Binding Label}" Width="*"/>
+                                                <DataGridTextColumn Header="Min" Binding="{Binding MinimumText}" Width="78"/>
+                                                <DataGridTextColumn Header="Max" Binding="{Binding MaximumText}" Width="78"/>
+                                                <DataGridTextColumn Header="P–P" Binding="{Binding PeakToPeakText}" Width="73"/>
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </TabItem>
+                                </TabControl>
+                            </Grid>
+                        </Border>
+                    </Grid>
                 </Grid>
             </Grid>
         </Border>

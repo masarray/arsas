@@ -119,6 +119,7 @@ public partial class SmvViewerWindow
         {
             _snapshot = null;
             SnapshotChannels.Clear();
+            ResetRawVectorPresentation();
             SnapshotBadgeText = "NOT PROVEN";
             SnapshotSummaryText = "The completed snapshot belonged to a different stream selection and was discarded.";
             SnapshotEvidenceText = "No evidence was attached to the newly selected stream.";

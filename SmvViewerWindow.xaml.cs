@@ -16,9 +16,9 @@ public partial class SmvViewerWindow : Window, INotifyPropertyChanged
 {
     private static readonly Brush[] WaveformBrushes =
     [
+        Brushes.Crimson,
+        Brushes.Goldenrod,
         Brushes.DodgerBlue,
-        Brushes.OrangeRed,
-        Brushes.SeaGreen,
         Brushes.MediumPurple,
         Brushes.DeepPink,
         Brushes.DarkCyan,
@@ -267,6 +267,7 @@ public partial class SmvViewerWindow : Window, INotifyPropertyChanged
             ? "The selected SV stream produced a complete two-cycle proof window without detected smpCnt gaps, duplicates or out-of-order transitions."
             : "A complete two-cycle window was decoded, but counter continuity findings remain visible and must be reviewed.";
 
+        BeginRawVectorAnalysis(result);
         Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(RenderWaveform));
     }
 
@@ -274,6 +275,7 @@ public partial class SmvViewerWindow : Window, INotifyPropertyChanged
     {
         _snapshot = null;
         SnapshotChannels.Clear();
+        ResetRawVectorPresentation();
         SnapshotBadgeText = "No snapshot";
         SnapshotSummaryText = "No Sampled Values snapshot has been captured for the selected stream.";
         SnapshotEvidenceText = "The snapshot will report stream identity, payload shape, sample-counter continuity and a static raw waveform.";
@@ -310,12 +312,12 @@ public partial class SmvViewerWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        var width = Math.Max(760, WaveformCanvas.ActualWidth);
+        var width = Math.Max(350, WaveformCanvas.ActualWidth);
         var laneCount = _snapshot.Channels.Count;
         var height = Math.Max(300, laneCount * 48 + 48);
         WaveformCanvas.Height = height;
 
-        const double left = 150;
+        const double left = 102;
         const double right = 18;
         const double top = 24;
         const double bottom = 24;
@@ -528,6 +530,7 @@ public partial class SmvViewerWindow : Window, INotifyPropertyChanged
 
     private void Window_Closed(object? sender, EventArgs e)
     {
+        Interlocked.Increment(ref _rawVectorAnalysisGeneration);
         _captureCancellation?.Cancel();
         _captureCancellation?.Dispose();
         _captureCancellation = null;
