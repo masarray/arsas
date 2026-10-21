@@ -127,4 +127,62 @@ public sealed class P0ModelParentScalarAuthorityTests
         Assert.Equal("ST", fc);
         Assert.EndsWith(".stVal", leaf, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void NonScalarParentShowsObservedChildrenWithoutInventingScalarOrOtherFc()
+    {
+        const string ld = "LD1";
+        var obj = Obj(ld, Attr(ld, "CF", "units"),
+            Attr(ld, "CF", "units.SIUnit"),
+            Attr(ld, "CF", "units.multiplier"),
+            Attr(ld, "SG", "vendorPrivate"),
+            Attr(ld, "SE", "setMag.f"));
+        var row = IedBrowserStructuredDetails.DataObject(obj, null);
+        Assert.Equal("", row.FunctionalConstraint);
+        var ledger = new IedBrowserLiveValues();
+        var a = ledger.BeginAssociation();
+        Assert.False(IedBrowserObservedParentPresentation.TrySummarize(
+            row, ledger, false, out _, out _, out _));
+
+        Assert.True(ledger.PublishForAssociation(a,
+            "LD1/ATCC1.LimVBndR1.units.SIUnit", "CF", "5", "", "",
+            "MMS Read"));
+        Assert.True(IedBrowserObservedParentPresentation.TrySummarize(
+            row, ledger, false, out var label, out var source, out var tooltip));
+        Assert.Equal("Child values observed", label);
+        Assert.Equal("Exact child evidence", source);
+        Assert.Contains("units.SIUnit [CF]", tooltip);
+        Assert.Contains("no invented parent value", tooltip);
+        Assert.DoesNotContain("setMag.f [SE]", tooltip);
+
+        ledger.BeginAssociation();
+        Assert.False(IedBrowserObservedParentPresentation.TrySummarize(
+            row, ledger, false, out _, out _, out _));
+    }
+
+    [Fact]
+    public void ParentChildCandidatePlanIsBoundedAndRejectsWrongObjectOrSeOnly()
+    {
+        const string ld = "LD1";
+        var many = Enumerable.Range(0, 500)
+            .Select(i => Attr(ld, "CF", "vendor" + i)).ToArray();
+        var obj = Obj(ld, many);
+        var plan = IedBrowserObservedParentPresentation.BuildCandidates(obj);
+        Assert.Equal(24, plan.Count);
+        Assert.All(plan, p => Assert.StartsWith("LD1/ATCC1.LimVBndR1.", p.Reference));
+
+        var row = IedBrowserStructuredDetails.DataObject(
+            Obj(ld, Attr(ld, "SE", "setMag.f"), Attr(ld, "CF", "vendor")),
+            null);
+        var ledger = new IedBrowserLiveValues();
+        var a = ledger.BeginAssociation();
+        Assert.True(ledger.PublishForAssociation(
+            a, "LD1/ATCC1.LimVBndR1.setMag.f", "SE",
+            "999", "", "", "MMS Read"));
+        Assert.True(ledger.PublishForAssociation(
+            a, "LD2/ATCC1.LimVBndR1.vendor", "CF",
+            "777", "", "", "MMS Read"));
+        Assert.False(IedBrowserObservedParentPresentation.TrySummarize(
+            row, ledger, false, out _, out _, out _));
+    }
 }
