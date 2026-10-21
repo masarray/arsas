@@ -211,6 +211,30 @@ public static class Iec61850ValueFormatter
                normalized.Contains("bcr", StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// An actual two-bit MMS BIT STRING renders as one octet with exactly
+    /// six unused low bits. Only this wire-proven representation can rescue a
+    /// missing CDC type, and ONLY with an exact model ST.stVal/q declaration.
+    /// Reject trailing text, wrong bit length and nonzero padding. Raw evidence
+    /// is never changed; this function is presentation-only.
+    /// </summary>
+    public static bool TryNormalizeTwoBitWireStatus(string? text, out int code)
+    {
+        code = 0;
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        var rendered = Regex.Match(
+            text,
+            @"^\s*bits\(\s*(?:0x)?([0-9a-f]{2})\s*,\s*unused\s*=\s*6\s*\)\s*$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (!rendered.Success ||
+            !byte.TryParse(rendered.Groups[1].Value, NumberStyles.HexNumber,
+                CultureInfo.InvariantCulture, out var octet) ||
+            (octet & 0x3f) != 0)
+            return false;
+        code = octet >> 6;
+        return true;
+    }
+
     private static bool TryParseDbposText(string text, out int code)
     {
         code = 0;
@@ -220,18 +244,8 @@ public static class Iec61850ValueFormatter
         if (bracketCode.Success)
             return TryParseBits(bracketCode.Groups[1].Value, out code);
 
-        var renderedBits = Regex.Match(
-            text,
-            @"bits\(\s*(?:0x)?([0-9a-f]{2})\s*,\s*unused\s*=\s*(\d+)\s*\)",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        if (renderedBits.Success &&
-            byte.TryParse(renderedBits.Groups[1].Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var raw) &&
-            int.TryParse(renderedBits.Groups[2].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var unused) &&
-            unused == 6)
-        {
-            code = (raw >> unused) & 0x03;
+        if (TryNormalizeTwoBitWireStatus(text, out code))
             return true;
-        }
 
         var compact = text.Trim().Replace(" ", "").Replace("_", "").Replace("-", "").ToLowerInvariant();
         switch (compact)
