@@ -1048,16 +1048,16 @@ public sealed class WaveformPanelControl : FrameworkElement
     {
         return name switch
         {
-            "Ua" or "Ia" => UaBrush,
-            "Ub" or "Ib" => UbBrush,
-            "Uc" or "Ic" => UcBrush,
+            "Ua" or "Ia" or "Ch1" or "Ch5" => UaBrush,
+            "Ub" or "Ib" or "Ch2" or "Ch6" => UbBrush,
+            "Uc" or "Ic" or "Ch3" or "Ch7" => UcBrush,
             _ => NeutralBrush
         };
     }
 
     private static double GetSeriesThickness(string name)
     {
-        return name.StartsWith("U", StringComparison.OrdinalIgnoreCase) ? 2.4 : 2.0;
+        return name.StartsWith("Ch", StringComparison.OrdinalIgnoreCase) ? 2.4 : 2.0;
     }
 
     private static void DrawCenteredMessage(DrawingContext dc, Rect bounds, string text)
