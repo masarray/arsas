@@ -56,17 +56,18 @@ public sealed class IedBrowserTreeRow : ObservableObject
         ? Visibility.Visible : Visibility.Collapsed;
     public string RcbEnabledTooltip => _rcbEnabledTooltip;
 
-    public void SetRcbEnabled(bool verified, string tooltip)
+    public bool SetRcbEnabled(bool verified, string tooltip)
     {
-        if (Payload is not RcbExportRow) return;
+        if (Payload is not RcbExportRow) return false;
         tooltip = verified ? tooltip : "";
         if (_rcbEnabledVerified == verified &&
             string.Equals(_rcbEnabledTooltip, tooltip, StringComparison.Ordinal))
-            return;
+            return false;
         _rcbEnabledVerified = verified;
         _rcbEnabledTooltip = tooltip;
         Raise(nameof(RcbEnabledVisibility));
         Raise(nameof(RcbEnabledTooltip));
+        return true;
     }
     public string RcbUsageTooltip => Payload is RcbExportRow report
         ? report.Availability switch
