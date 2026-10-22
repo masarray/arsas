@@ -281,18 +281,23 @@ class SmartDiscoveryFastRoutingTests(unittest.TestCase):
 
     @staticmethod
     def pr_paths(workflow):
-        import re
-        content = workflow.read_text(encoding="utf-8")
-        match = re.search(
-            r"(?m)^  pull_request:\\n    paths:\\n(?P<paths>(?:      (?:#.*|- .*|)\\n)+)",
-            content,
-        )
-        if match is None:
-            raise AssertionError(f"Missing scoped PR path filters: {workflow}")
-        return [
-            line.split('"')[1] for line in match.group("paths").splitlines()
-            if line.strip().startswith('- "') and '"' in line
-        ]
+        """Read PR path filters without depending on YAML/regex escaping."""
+        content = workflow.read_text(encoding="utf-8").splitlines()
+        try:
+            trigger = content.index("  pull_request:")
+            start = content.index("    paths:", trigger + 1)
+        except ValueError as exc:
+            raise AssertionError(f"Missing scoped PR path filters: {workflow}") from exc
+        patterns = []
+        for line in content[start + 1:]:
+            if not line.startswith("      "):
+                break
+            trimmed = line.strip()
+            if trimmed.startswith('- "') and trimmed.endswith('"'):
+                patterns.append(trimmed[3:-1])
+        if not patterns:
+            raise AssertionError(f"No scoped PR paths: {workflow}")
+        return patterns
 
     def test_smart_discovery_pr_triggers_exclude_unrelated_ui_and_smv(self):
         root = Path(__file__).resolve().parent.parent
@@ -322,7 +327,7 @@ class SmartDiscoveryFastRoutingTests(unittest.TestCase):
             self.assertIn("types: [opened, synchronize, reopened, ready_for_review]",
                           content, name)
             self.assertIn(
-                "(github.event_name != 'pull_request' || !github.event.pull_request.draft)",
+                "github.event_name != 'pull_request' || !github.event.pull_request.draft",
                 content, name)
             self.assertIn("  workflow_dispatch:", content, name)
 
