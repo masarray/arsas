@@ -250,11 +250,17 @@ public sealed class SmvLiveStreamBuffer
             // payload, permit independent counter + NIC-clock confirmation.
             // Never override a plausible declared timebase or infer solely
             // from payload shape, chosen nominal Hz, or a single smpCnt.
-            var fixedLegacyPayload = _payloadLength == 64 && _wordIndexes.Length == 8;
+            // Some physical publishers encode smpRate as samples/second
+            // while smpMod is absent or interpreted as samples/period.
+            // A declared two-cycle window larger than the bounded capture
+            // capacity is unusable, regardless of seqOfData payload layout.
+            // Independently corroborated NIC timing + contiguous smpCnt may
+            // resolve the display window; never infer from payload shape alone.
             var invalidDeclaredTimebase = _timebase?.IsResolved == true &&
                 (long)_timebase.SamplesPerCycle.GetValueOrDefault() * _options.Cycles > 4096;
-            var mayObserve = (_declaredRate is null || _declaredMode is null) ||
-                             (fixedLegacyPayload && invalidDeclaredTimebase);
+            var mayObserve = _timebase?.IsResolved != true ||
+                             invalidDeclaredTimebase ||
+                             _declaredRate is null || _declaredMode is null;
             var observed = mayObserve
                 ? _observedTimebase.Observe(asdu.SampleCount, timestamp)
                 : null;
@@ -265,7 +271,7 @@ public sealed class SmvLiveStreamBuffer
                 ? observed with
                 {
                     Reason = "Conflicting on-wire smpRate/smpMod; display timebase corroborated " +
-                             "by contiguous smpCnt and capture-clock evidence on fixed 4I+4V payload. " +
+                             "by contiguous smpCnt and NIC-clock evidence; source channel semantics remain unverified. " +
                              observed.Reason
                 }
                 : observed;
@@ -413,7 +419,9 @@ public sealed class SmvLiveStreamBuffer
         {
             _length = 0;
             _samples = [];
-            _diagnostic = "Invalid timebase/window (>4096 or no decoded channels); evidence withheld. " +
+            _diagnostic = "Timebase unresolved: declared smpRate/smpMod creates " +
+                $"{length} samples for {_options.Cycles} cycles (limit 4096); " +
+                "checking independent capture timestamps and contiguous smpCnt. " +
                 _timebase.Reason;
             return;
         }
