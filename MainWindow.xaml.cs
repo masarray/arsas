@@ -1422,6 +1422,28 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // The command model is preloaded on real association/selection changes.
         // A manual Refresh values remains available for explicit readback.
         ResizeCommandDockForVerifiedControls();
+        ScrollVerifiedEquipmentCommandsIntoView();
+    }
+
+    // The dock is a virtualized DataGrid: when verified equipment rows are
+    // inserted ahead of an existing generic I/O inventory, WPF can preserve
+    // the old vertical viewport at GGIO despite the sorted backing collection.
+    // Scroll to the first verified equipment DO, never manufacture a command.
+    private void ScrollVerifiedEquipmentCommandsIntoView()
+    {
+        if (SelectedDevice is not { } device || EquipmentCommandGrid is null)
+            return;
+        var first = device.OperableCommandSignals.FirstOrDefault(signal =>
+            Iec61850ControlIdentity.CommandDockPriority(signal) < 100);
+        if (first is null)
+            return;
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded,
+            new Action(() =>
+            {
+                if (ReferenceEquals(SelectedDevice, device) &&
+                    device.OperableCommandSignals.Contains(first))
+                    EquipmentCommandGrid.ScrollIntoView(first);
+            }));
     }
 
     private void CommandPanel_Collapsed(object sender, RoutedEventArgs e)
