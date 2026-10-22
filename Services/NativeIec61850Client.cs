@@ -1133,7 +1133,14 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             raw.Value is string decoded &&
             projected.Value is string scalar &&
             string.Equals(decoded, scalar, StringComparison.Ordinal) &&
-            string.Equals(projected.SourceReference, reference, StringComparison.Ordinal))
+            string.Equals(projected.SourceReference, reference, StringComparison.Ordinal) &&
+            // A successful parent DO read is NOT proof of this exact leaf.
+            // Only the primitive response to the same canonical leaf can
+            // override the conservative display-only array heuristic.
+            string.Equals(
+                IedBrowserLiveValues.CanonicalReference(projected.ReadReference),
+                IedBrowserLiveValues.CanonicalReference(reference),
+                StringComparison.Ordinal))
             projected.VerifiedStringWireKind = raw.Kind;
         if ((reference.EndsWith(".q", StringComparison.Ordinal) ||
              reference.EndsWith("$q", StringComparison.Ordinal)) &&
