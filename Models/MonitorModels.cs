@@ -738,20 +738,12 @@ public sealed class Iec61850MonitorDevice : ObservableObject
 
     private void RefreshCommandSignals()
     {
-        // Inventory membership is NOT operating authority. Show exact selected
-        // CO DataObjects including ZIV ctlModel=0 so commissioning can explicitly
-        // read/configure them; every physical action is still gated by typed
-        // live ctlModel + CDC proof in SignalDefinition/runtime.
-        // Cross-DataSet CSWI targets require exact live typed ctlModel/CO verification;
-        // never promote status-only XCBR/XSWI or mutate DataSet membership.
-        var selected = Iec61850ControlIdentity.DistinctSelected(Signals)
-            .Concat(IsConnected && LiveDiscoveryModel is not null
-                ? Iec61850ControlIdentity.VerifiedIndependentCswiControls(Signals)
-                : [])
-            .GroupBy(signal => Iec61850ControlIdentity.Normalize(signal.ObjectReference),
-                StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.OrderByDescending(signal => signal.IsSelected)
-                .ThenByDescending(signal => signal.ControlSupportsOperate).First())
+        // The Command Dock shows verified operable DOs, regardless of LN class,
+        // DataSet membership or configured LN prefix. ST/Unknown/StatusOnly are
+        // retained in the inspection catalog, never presented as live commands.
+        // Reuse the same SignalDefinition owner through monitoring and refresh.
+        var selected = Iec61850ControlIdentity.VerifiedCommandTargets(
+            Signals, admitDiscovered: IsConnected && LiveDiscoveryModel is not null)
             .OrderBy(signal => signal.SortPriority)
             .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
             .ThenBy(signal => signal.Name, StringComparer.OrdinalIgnoreCase)

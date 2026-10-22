@@ -299,7 +299,7 @@ public partial class MainWindow
                 foreach (var device in Devices.Where(device => device.IsConnected &&
                     (device.SelectedControlSignalCount > 0 ||
                      (device.LiveDiscoveryModel is not null && device.Signals.Any(
-                         Iec61850ControlIdentity.IsIndependentCswiCandidate)))))
+                         signal => signal.HasControlServiceEvidence && signal.IsValidControlObject)))))
             {
                 foreach (var signal in device.Signals.Where(signal => signal.IsSelected && signal.IsValidControlObject))
                     EnsureDefaultControlSafetyChecks(signal);
@@ -309,16 +309,16 @@ public partial class MainWindow
                 if (device.CommandSignals.Any(signal => signal.ControlCommandBusy))
                     continue;
 
-                // DataSets report XCBR/XSWI status, not necessarily their
-                // command-owning CSWI in another LD. Probe a bounded set of
-                // exact live-discovered CSWI.Pos candidates read-only; never
-                // infer operability from their names or the DataSet feedback.
+                // Fast read-only ctlModel scan across ALL DOs with actual CO/CF
+                // evidence. A prefixed GE switch, a TapChg or any vendor DO is
+                // admitted identically. Selected commissioning rows remain
+                // inspectable, but only verified operable controls enter Dock.
                 var selectedCandidates = Iec61850ControlIdentity
                     .InspectionRepresentatives(device.Signals);
-                var independentCswi = device.LiveDiscoveryModel is not null
-                    ? Iec61850ControlIdentity.IndependentCswiInspectionCandidates(device.Signals)
+                var independentControls = device.LiveDiscoveryModel is not null
+                    ? Iec61850ControlIdentity.DiscoveredControlInspectionCandidates(device.Signals)
                     : [];
-                var candidates = selectedCandidates.Concat(independentCswi)
+                var candidates = selectedCandidates.Concat(independentControls)
                     .Where(signal => !signal.ControlModelResolved)
                     .DistinctBy(signal => Iec61850ControlIdentity.Normalize(signal.ObjectReference),
                         StringComparer.OrdinalIgnoreCase)
@@ -345,9 +345,27 @@ public partial class MainWindow
                     signal.ControlInspectionBusy = true;
                     try
                     {
+                        // One cheap CF Read before any expensive Oper/SBOw
+                        // descriptor acquisition. Never inspect status-only,
+                        // unsupported or unreadable models as an executable DO.
+                        var probe = await _runtime.ProbeControlModelAsync(
+                            device.DeviceId, signal, _applicationCancellation.Token);
+                        if (!probe.Decoded)
+                        {
+                            signal.ControlInspectionEvidence = probe.Detail;
+                            signal.ControlModelText = "Unknown";
+                            continue;
+                        }
+                        signal.ControlModelText = probe.ControlModel.ToString();
+                        if (signal.ControlModelKind is Iec61850ControlModelKind.StatusOnly
+                            or Iec61850ControlModelKind.Unknown)
+                        {
+                            signal.ControlInspectionEvidence = probe.Detail;
+                            continue;
+                        }
+
                         var capabilities = await _runtime.InspectControlAsync(
-                            device.DeviceId,
-                            signal,
+                            device.DeviceId, signal,
                             _applicationCancellation.Token);
 
                         if (!signal.ControlCommandBusy)

@@ -75,6 +75,41 @@ public static class Iec61850ControlIdentity
             .Where(s => s.ControlModelResolved && s.ControlSupportsOperate)
             .ToArray();
 
+    /// <summary>
+    /// Discover all verified command services, independent of LN class, display
+    /// name, DataSet membership and operator signal selection. Only the native
+    /// typed descriptor may grant operability; this method never does.
+    /// </summary>
+    public static SignalDefinition[] DiscoveredControlInspectionCandidates(
+        IEnumerable<SignalDefinition> signals, int budget = 2048)
+    {
+        if (budget <= 0) return [];
+        return signals.Where(signal => signal.IsValidControlObject &&
+                                       signal.HasControlServiceEvidence &&
+                                       !signal.ControlModelResolved)
+            .GroupBy(signal => Normalize(signal.ObjectReference),
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.OrderByDescending(signal => signal.IsSelected)
+                .ThenByDescending(signal => signal.ControlSupportsOperate).First())
+            .OrderByDescending(signal => signal.IsSelected)
+            .ThenBy(signal => Normalize(signal.ObjectReference), StringComparer.OrdinalIgnoreCase)
+            .Take(budget).ToArray();
+    }
+
+    public static SignalDefinition[] VerifiedCommandTargets(
+        IEnumerable<SignalDefinition> signals, bool admitDiscovered)
+        => signals.Where(signal => signal.IsValidControlObject &&
+                                   signal.ControlSupportsOperate &&
+                                   !signal.IsGenericControl &&
+                                   (signal.IsSelected ||
+                                    (admitDiscovered && signal.HasControlServiceEvidence)))
+            .GroupBy(signal => Normalize(signal.ObjectReference),
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.OrderByDescending(signal => signal.ControlCommandBusy)
+                .ThenByDescending(signal => signal.ControlConfirmationPending)
+                .ThenByDescending(signal => signal.IsSelected).First())
+            .ToArray();
+
     public static SignalDefinition[] InspectionRepresentatives(IEnumerable<SignalDefinition> signals)
         => DistinctSelected(signals).Where(s => !s.ControlModelResolved).ToArray();
 }

@@ -1396,8 +1396,15 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         // Atomic visual publication boundary: after ALL awaited descriptor
         // and status reads have finished, install one complete typed proof.
         // A changed CDC cannot reuse the previous association's verified CDC.
-        signal.ClearLiveControlAuthority();
-        if (semantic.IsCommandSafe)
+        // Reinspection of an unchanged, already verified command must not
+        // publish an interim disabled state. Only an actual semantic change
+        // revokes authority. This removes avoidable Command Dock flicker.
+        var fullyVerified = semantic.IsCommandSafe && descriptor.IsOperationallyReady;
+        if (!fullyVerified ||
+            (signal.VerifiedLiveControlCdc.Length > 0 &&
+             !signal.VerifiedLiveControlCdc.Equals(effectiveCdc, StringComparison.OrdinalIgnoreCase)))
+            signal.ClearLiveControlAuthority();
+        if (fullyVerified)
             signal.AcceptVerifiedLiveControlCdc(effectiveCdc);
         else
             signal.ControlCdc = effectiveCdc;
