@@ -207,8 +207,9 @@ internal static class DiagnosticReportBuilder
                     ? Iec61850ControlIdentity.IndependentCswiInspectionCandidates(device.Signals)
                     : [];
                 var cswiTotal = device.Signals
-                    .Count(s => Iec61850ControlIdentity.IsIndependentCswiCandidate(s));
-                builder.AppendLine($"CSWI outside DataSet: live candidates={cswiTotal}, bounded inspections={independentCswi.Length}, typed-operable={independentCswi.Count(s => s.ControlSupportsOperate)}, unresolved/status-only={independentCswi.Count(s => !s.ControlSupportsOperate)}; discovery does not imply command authority");
+                    .Count(s => !s.IsSelected &&
+                        Iec61850ControlIdentity.IsIndependentCswiCandidate(s));
+                builder.AppendLine($"CSWI outside DataSet: live candidates={cswiTotal}, bounded candidates={independentCswi.Length}, typed-operable={independentCswi.Count(s => s.ControlSupportsOperate)}, unresolved/status-only={independentCswi.Count(s => !s.ControlSupportsOperate)}; discovery does not imply command authority");
                 foreach (var cswi in independentCswi.Take(12))
                 {
                     var note = (cswi.ControlInspectionEvidence ?? string.Empty)
