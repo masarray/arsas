@@ -47,7 +47,7 @@ public static class IedBrowserIsolatedReadService
             // is genuinely unresolved; positive/negative parent probes are
             // memoized once per exact DO+FC, never per every child.
             var doReadFlight = new IedBrowserTypedDoReadFlight(
-                client, verifiedRootScope ?? targets);
+                client, verifiedRootScope ?? targets, targets);
             for (var i = 0; i < targets.Count; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -57,6 +57,14 @@ public static class IedBrowserIsolatedReadService
                 var target = targets[i];
                 try
                 {
+                    var previouslyVerified = doReadFlight.PreviouslyVerified(target);
+                    if (previouslyVerified is not null)
+                    {
+                        values.Report(previouslyVerified);
+                        successful++;
+                        progress.Report(new IedBrowserReadProgress(i + 1, targets.Count));
+                        continue;
+                    }
                     using var leafToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     // The root attempt has its OWN bounded per-root timeout
                     // and negative-result cache. Do not pass a short leaf
@@ -108,6 +116,11 @@ public static class IedBrowserIsolatedReadService
                         {
                             values.Report(verifiedParent);
                             successful++;
+                            foreach (var extra in doReadFlight.DrainUnscheduledSiblings(target))
+                            {
+                                values.Report(extra);
+                                successful++;
+                            }
                         }
                         else
                             values.Report(new IedBrowserReadResult(target, "", "", "",
