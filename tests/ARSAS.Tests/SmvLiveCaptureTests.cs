@@ -117,6 +117,47 @@ public sealed class SmvLiveCaptureTests
         Assert.Contains("Timebase", Assert.Single(update.Streams).Diagnostic);
     }
 
+    [Theory]
+    [InlineData(64)]
+    [InlineData(80)]
+    public void ArstackLikeContradictoryDeclaredSmpRate_ObservedClockRecoversActualRawSamples(int payloadBytes)
+    {
+        // A real publisher may send smpRate=4000 with a conflicting smpMod
+        // that would otherwise demand 8000 points for the requested 2 cycles.
+        // An independent timestamp rate + continuous smpCnt is needed before
+        // accepting any waveform. Payload shape must not drive the decision.
+        var catalog = new SmvLiveStreamCatalog(Options);
+        var first = new DateTimeOffset(2026, 10, 22, 0, 0, 0, TimeSpan.Zero);
+        for (var n = 0; n < 600; n++)
+        {
+            var payload = new byte[payloadBytes];
+            for (var ch = 0; ch < payload.Length / 8; ch++)
+                BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(ch * 8, 4),
+                    (int)(1000 * Math.Sin(2 * Math.PI * n / 80.0)));
+            var asdu = new SampledValueAsdu
+            {
+                SvId = "ARSTACK_SV01", DataSetReference = "LD0/LLN0$DS",
+                SampleCount = (ushort)n, SampleRate = 4000, SampleMode = 0,
+                SamplePayload = payload
+            };
+            catalog.Receive(new SampledValuesFrame
+            {
+                Source = MacAddress.Parse("E8:F6:0A:E0:C5:3F"),
+                Destination = MacAddress.Parse("01:0C:CD:04:00:01"),
+                AppId = 0x4000,
+                Pdu = new SampledValuesPdu { Asdus = [asdu] }
+            }, first.AddTicks(n * 2500));
+        }
+        var stream = Assert.Single(catalog.Publish(null, first.AddMilliseconds(150)).Streams);
+        var update = catalog.Publish(stream.Key, first.AddMilliseconds(150));
+        var snapshot = Assert.IsType<SmvSnapshotResult>(update.SelectedSnapshot);
+        Assert.True(snapshot.IsCleanProof);
+        Assert.Equal(80, snapshot.SamplesPerCycle);
+        Assert.Equal(160, snapshot.CapturedSamples);
+        Assert.Equal(payloadBytes / 8, snapshot.Channels.Count);
+        Assert.Contains("capture-clock evidence", snapshot.TimebaseReason);
+    }
+
     [Fact]
     public void UiUsesExplicitLiveStartAndOriginalSnapshotProofPath()
     {
