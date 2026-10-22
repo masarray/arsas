@@ -7,6 +7,13 @@ namespace ARSAS.Tests;
 /// Source-neutral task authority contracts for imported SCL and discovered IEDs.
 /// The actual MMS and report paths remain covered by existing integration suites.
 /// </summary>
+// Real WPF ShowDialog must have its own STA/dispatcher time slice. Running it
+// concurrently with thousands of network/model tests can starve the hosted
+// Windows message pump; keep the actual button-click integration assertion.
+[CollectionDefinition("M2QuickStartNativeWpfSerial", DisableParallelization = true)]
+public sealed class M2QuickStartNativeWpfSerialCollection { }
+
+[Collection("M2QuickStartNativeWpfSerial")]
 public sealed class M2QuickStartBrowseTests
 {
     private static readonly XNamespace P = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -145,8 +152,9 @@ public sealed class M2QuickStartBrowseTests
                 catch (Exception ex) { failure = ex; }
             });
             thread.SetApartmentState(System.Threading.ApartmentState.STA);
+            thread.IsBackground = true; // timeout must not leave a foreground UI thread alive.
             thread.Start();
-            Assert.True(thread.Join(TimeSpan.FromSeconds(15)),
+            Assert.True(thread.Join(TimeSpan.FromSeconds(30)),
                 "Native Quick Start click timed out: " + buttonName);
             Assert.Null(failure);
         }
