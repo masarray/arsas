@@ -1234,6 +1234,31 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             await stale.DisposeAsync().ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// One read-only CF ctlModel probe, using the established association and its
+    /// native MMS single-flight. Does not open Oper/SBOw, write or cache authority.
+    /// A status-only control costs one MMS Read instead of a full typed inspection.
+    /// </summary>
+    public async Task<ArControl.Iec61850ControlModelProbe> ProbeControlModelAsync(
+        SignalDefinition signal, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(signal);
+        if (!signal.IsValidControlObject || !_session.IsMmsInitiated)
+            throw new InvalidOperationException("A connected IEC control DataObject root is required.");
+        await _controlCommandGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await RunMmsOperationAsync(
+                () => new ArControl.Iec61850ControlService().ProbeControlModelAsync(
+                    _session, signal.ObjectReference, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _controlCommandGate.Release();
+        }
+    }
+
     public async Task<Iec61850ControlCapabilities> InspectControlAsync(
         SignalDefinition signal,
         CancellationToken cancellationToken)

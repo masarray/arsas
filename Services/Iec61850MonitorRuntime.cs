@@ -1047,6 +1047,27 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         }
     }
 
+    public async Task<AR.Iec61850.Control.Iec61850ControlModelProbe> ProbeControlModelAsync(
+        string deviceId, SignalDefinition signal, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(deviceId);
+        ArgumentNullException.ThrowIfNull(signal);
+        if (!_sessions.TryGetValue(deviceId, out var session) || !session.Client.IsConnected)
+            throw new InvalidOperationException("The IED must be connected before ctlModel discovery.");
+        if (Volatile.Read(ref session.ControlCommandActive) != 0 ||
+            Volatile.Read(ref session.ControlFlightQuarantined) != 0)
+            throw new InvalidOperationException("Control discovery deferred while a command is active.");
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken, session.ControlLifetimeCancellation.Token);
+        var result = await session.Client.ProbeControlModelAsync(signal, lifetime.Token)
+            .ConfigureAwait(false);
+        if (!_sessions.TryGetValue(deviceId, out var current) ||
+            !ReferenceEquals(current, session) ||
+            session.ControlLifetimeCancellation.IsCancellationRequested)
+            throw new OperationCanceledException("Control discovery association was replaced.");
+        return result;
+    }
+
     public async Task<Iec61850ControlCapabilities> InspectControlAsync(
         string deviceId,
         SignalDefinition signal,

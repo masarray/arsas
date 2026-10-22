@@ -135,6 +135,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             cancellationToken,
             token => _inner.StartMonitoringAsync(device, selectedSignals, pollingIntervalMs, token));
 
+    public Task<AR.Iec61850.Control.Iec61850ControlModelProbe> ProbeControlModelAsync(
+        string deviceId, SignalDefinition signal, CancellationToken cancellationToken)
+        => RunDeviceOperationAsync(
+            deviceId,
+            cancellationToken,
+            token => _inner.ProbeControlModelAsync(deviceId, signal, token));
+
     public Task<Iec61850ControlCapabilities> InspectControlAsync(
         string deviceId,
         SignalDefinition signal,
