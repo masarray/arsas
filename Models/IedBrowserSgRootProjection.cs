@@ -96,11 +96,20 @@ public static class IedBrowserSgRootProjection
             var key = canonical + "|" + constraint;
             if (!paths.Add(key) || !targetIndex.TryGetValue(key, out var target))
                 return;
-            var display = MmsDataValueRenderer.ToCompactString(value);
-            if (!IedBrowserReadValuePolicy.TryAcceptDisplay(
-                    display, out var accepted, out _))
+            // An exact ordered GVA component proves this primitive's kind,
+            // not the meaning of a rendered "[" or "{" character. Preserve
+            // legitimate strings without admitting unverified structures.
+            var stringKind = value.Kind is MmsDataKind.VisibleString or MmsDataKind.MmsString
+                ? value.Kind : (MmsDataKind?)null;
+            var display = stringKind is not null && value.Value is string direct
+                ? direct : MmsDataValueRenderer.ToCompactString(value);
+            if (!IedBrowserReadValuePolicy.TryAcceptVerifiedMmsString(
+                    display, target.DataType, stringKind, out var accepted, out _))
                 return;
-            output.Add(new IedBrowserReadResult(target, accepted, "", "", ""));
+            output.Add(new IedBrowserReadResult(target, accepted, "", "", "",
+                TypedBoolean: value.Kind == MmsDataKind.Boolean && value.Value is bool typed
+                    ? typed : null,
+                VerifiedStringWireKind: stringKind));
         }
         Walk(wireType, wireData, "", 0);
         return output;
