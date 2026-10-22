@@ -6,6 +6,55 @@ namespace ARSAS.Tests;
 public sealed class P0ReadEvidenceCsvBehaviorTests
 {
     private const string Domain = "BCUGEF650";
+    
+    [Fact]
+    public void EmptyBrowserCategory_ReturnsExplicitZeroTargets_NeverSuccessCsv()
+    {
+        var model = new LiveIedModelDiscoveryDocument();
+        var category = new IedBrowserTreeRow("category/reports", "Reports", "Category", 1);
+        var ledger = new IedBrowserLiveValues();
+        Assert.Empty(IedBrowserReadEvidenceCsv.Plan(model, category));
+        var problem = Assert.Throws<InvalidOperationException>(() =>
+            IedBrowserReadEvidenceCsv.Build(model, category, ledger));
+        Assert.Contains("ZERO_TARGETS", problem.Message);
+        Assert.Throws<InvalidOperationException>(() =>
+            IedBrowserReadEvidenceCsv.BuildSelection([], ledger));
+        Assert.Empty(IedBrowserReadEvidenceCsv.Plan(null, category));
+        Assert.Empty(IedBrowserReadEvidenceCsv.Plan(model, category, maxTargets: 0));
+    }
+
+    [Fact]
+    public void ScopedReadEvidence_UsesIdenticalTargetSetForPreflightAndExport()
+    {
+        var attr = Attribute("PIOCEna");
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel
+            {
+                MmsDomain = Domain,
+                LogicalNodes = [new LiveIedLogicalNodeModel
+                {
+                    Name = "LLN0",
+                    DataObjects = [new LiveIedDataObjectModel
+                    {
+                        Name = "PIOCEna", Reference = Domain + "/LLN0.PIOCEna",
+                        Attributes = [attr]
+                    }]
+                }]
+            }]
+        };
+        var page = new IedBrowserTreeRow("model/ld/LLN0", "LLN0", "LN", 2,
+            model.LogicalDevices[0].LogicalNodes[0]);
+        var targets = IedBrowserReadEvidenceCsv.Plan(model, page);
+        Assert.Single(targets);
+        var ledger = new IedBrowserLiveValues();
+        var csv = IedBrowserReadEvidenceCsv.BuildSelection(targets, ledger);
+        var rows = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(targets.Count + 1, rows.Length);
+        Assert.Contains("\"NOT_OBSERVED_NO_ATTEMPT_EVIDENCE\"", csv);
+        Assert.Equal(csv, IedBrowserReadEvidenceCsv.Build(model, page, ledger));
+    }
+
     private static LiveIedDataAttributeModel Attribute(string name)
         => new()
         {

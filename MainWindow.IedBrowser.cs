@@ -301,6 +301,16 @@ public partial class MainWindow
                     target.Reference, target.FunctionalConstraint, reason, kind);
             return null;
         }
+        // Validate the EXACT same bounded selection used for exported rows.
+        // A category, Report control or stale/no-target page is not a read.
+        var exportTargets = IedBrowserReadEvidenceCsv.Plan(model, page);
+        if (exportTargets.Count == 0)
+        {
+            IedBrowserSubtitle.Text =
+                $"ZERO_TARGETS · {page.Kind}: {page.Title} · " +
+                "No verified FC attributes for this page. Select a DataSet, LD, LN, DO or DA.";
+            return;
+        }
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             FileName = "ARSAS-IEC-read-evidence-" +
@@ -313,8 +323,8 @@ public partial class MainWindow
         if (dialog.ShowDialog(this) != true) return;
         try
         {
-            var csv = IedBrowserReadEvidenceCsv.Build(
-                model, page, device.LiveValues, ResolveAbsence);
+            var csv = IedBrowserReadEvidenceCsv.BuildSelection(
+                exportTargets, device.LiveValues, ResolveAbsence);
             if (dialog.FilterIndex == 2)
             {
                 var appVersion = typeof(MainWindow).Assembly
@@ -339,8 +349,8 @@ public partial class MainWindow
                     new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
             }
             IedBrowserSubtitle.Text =
-                "Read evidence exported · exact FC, ledger, failures and deferrals; " +
-                "GVA/invoke not instrumented (never inferred).";
+                $"Read evidence exported · {exportTargets.Count} exact FC targets · " +
+                "ledger/failure evidence; GVA/invoke not instrumented.";
         }
         catch (Exception ex)
         {
