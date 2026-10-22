@@ -327,6 +327,12 @@ public partial class MainWindow
                 if (candidates.Length == 0)
                     continue;
 
+                // Bound presentation work without waiting for every control in
+                // a large IED to finish its serialized, read-only inspection.
+                // Only a newly VERIFIED operable DO schedules a projection.
+                // Unchanged/status-only candidates never churn DataGrid rows.
+                var inspectedSinceProjection = 0;
+                var hasNewVerifiedControl = false;
                 foreach (var signal in candidates)
                 {
                     // A single MMS association already serializes all reads.
@@ -399,8 +405,20 @@ public partial class MainWindow
                     {
                         signal.ControlInspectionBusy = false;
                     }
+
+                    hasNewVerifiedControl |= signal.ControlSupportsOperate;
+                    if (++inspectedSinceProjection >= 16)
+                    {
+                        if (hasNewVerifiedControl && device.IsConnected)
+                            device.RefreshCommandSignalProjection();
+                        hasNewVerifiedControl = false;
+                        inspectedSinceProjection = 0;
+                    }
                 }
 
+                    // Final trailing group, or genuine revocation. The
+                    // identity-preserving projection emits no collection events
+                    // when neither membership nor order changed.
                     device.RefreshCommandSignalProjection();
                     RebuildControlFeedbackIndex(device);
                 }

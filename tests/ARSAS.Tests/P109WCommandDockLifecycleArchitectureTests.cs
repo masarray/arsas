@@ -131,6 +131,18 @@ public sealed class P109WCommandDockLifecycleArchitectureTests
     }
 
     [Fact]
+    public void LargeIEDPublishesVerifiedControlsInBoundedBatchesWithoutCollectionReset()
+    {
+        var source = Source("MainWindow.CommandPanelUx.cs");
+        Assert.Contains("var inspectedSinceProjection = 0;", source, StringComparison.Ordinal);
+        Assert.Contains("hasNewVerifiedControl |= signal.ControlSupportsOperate;", source, StringComparison.Ordinal);
+        Assert.Contains("if (++inspectedSinceProjection >= 16)", source, StringComparison.Ordinal);
+        Assert.Contains("if (hasNewVerifiedControl && device.IsConnected)", source, StringComparison.Ordinal);
+        Assert.Contains("device.RefreshCommandSignalProjection();", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Task.WhenAll(candidates", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void InspectionPublishesTypedAuthorizationOnlyAfterFinalMmsReads()
     {
         var client = Source("Services/NativeIec61850Client.cs");
