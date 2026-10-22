@@ -578,7 +578,8 @@ public partial class MainWindow
                     result.UtcTimeEvidence, result.QualityEvidence,
                     typedBoolean: result.TypedBoolean,
                     verifiedStringWireKind: result.VerifiedStringWireKind,
-                    declaredDataType: result.Target.DataType);
+                    declaredDataType: result.Target.DataType,
+                    readWireShapeEvidence: result.WireShapeEvidence);
                 if (!accepted) return;
                 _iedBrowserReadFailureEvidence?.ClearFailure(result.Target);
                 successes++;
