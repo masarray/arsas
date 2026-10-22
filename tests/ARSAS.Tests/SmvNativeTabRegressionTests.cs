@@ -20,7 +20,7 @@ public sealed class SmvNativeTabRegressionTests
         Assert.Contains("private readonly SmvLiveCaptureService _service = new();", code);
         Assert.Contains("new SmvSnapshotCaptureService().ListAdapters()", code);
         Assert.Contains("Volatile.Read(ref _selectedKey)", code);
-        Assert.Contains("SmvDigSubPresentationAdapter.BuildWaveform(snapshot)", code);
+        Assert.Contains("SmvDigSubPresentationAdapter.BuildWaveform(snapshot, profile)", code);
         Assert.Contains("SmvDigSubPresentationAdapter.RelativeMeasurements(vectors)", code);
         Assert.DoesNotContain("private void DrawWaveform()", code);
         Assert.DoesNotContain("private void DrawPhasors()", code);
