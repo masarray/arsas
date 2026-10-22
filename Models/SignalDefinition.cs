@@ -129,6 +129,7 @@ public class SignalDefinition : ObservableObject
                 !candidate.Equals(_verifiedLiveControlCdc, StringComparison.OrdinalIgnoreCase))
                 return;
             if (!Set(ref _controlCdc, candidate)) return;
+            Raise(nameof(ControlDockRole));
             RaiseControlActionProperties();
         }
     }
@@ -147,6 +148,7 @@ public class SignalDefinition : ObservableObject
         {
             _verifiedLiveControlCdc = validated;
             Raise(nameof(VerifiedLiveControlCdc));
+            Raise(nameof(ControlDockRole));
         }
         ControlCdc = validated;
     }
@@ -834,6 +836,13 @@ public class SignalDefinition : ObservableObject
     public int SortPriority => IsControlSignal
         ? 45
         : CalculateSortPriority(LogicalNodeClass, ObjectReference, Category, Confidence, IsScadaCoreSignal);
+
+    // Non-authoritative UI role, derived from IEC object identity and typed
+    // CDC. Control readiness is still guarded solely by live MMS evidence.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string ControlDockRole =>
+        ArIED61850Tester.Services.Iec61850ControlIdentity.CommandDockRole(this);
+
 
     public string ReportCoverage
     {
