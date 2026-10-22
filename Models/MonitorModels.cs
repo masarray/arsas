@@ -742,7 +742,19 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         // CO DataObjects including ZIV ctlModel=0 so commissioning can explicitly
         // read/configure them; every physical action is still gated by typed
         // live ctlModel + CDC proof in SignalDefinition/runtime.
+        // An actual CSWI.Pos can be in another LD and absent from every
+        // reporting DataSet. Surface it only AFTER current live ctlModel
+        // inspection proves it operable; never mutate IsSelected or report
+        // coverage to make the command appear. This cannot grant authority
+        // to StatusOnly XCBR/XSWI feedback objects.
         var selected = Iec61850ControlIdentity.DistinctSelected(Signals)
+            .Concat(IsConnected && LiveDiscoveryModel is not null
+                ? Iec61850ControlIdentity.VerifiedIndependentCswiControls(Signals)
+                : [])
+            .GroupBy(signal => Iec61850ControlIdentity.Normalize(signal.ObjectReference),
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.OrderByDescending(signal => signal.IsSelected)
+                .ThenByDescending(signal => signal.ControlSupportsOperate).First())
             .OrderBy(signal => signal.SortPriority)
             .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
             .ThenBy(signal => signal.Name, StringComparer.OrdinalIgnoreCase)
