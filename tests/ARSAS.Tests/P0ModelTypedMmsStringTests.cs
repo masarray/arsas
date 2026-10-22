@@ -159,6 +159,21 @@ public sealed class P0ModelTypedMmsStringTests
     }
 
     [Fact]
+    public void ReadAllDeduplicatesVerifiedRefAndFcAcrossIndependentParentFlights()
+    {
+        var isolated = ReadRepoSource("Services/IedBrowserIsolatedReadService.cs");
+        Assert.Contains("var emitted = new HashSet<string>(StringComparer.Ordinal)", isolated);
+        Assert.Contains("IedBrowserLiveValues.CanonicalReference(target.Reference)", isolated);
+        Assert.Contains("target.FunctionalConstraint.Trim().ToUpperInvariant()", isolated);
+        Assert.Contains("if (!emitted.Add(Key(result.Target))) return;", isolated);
+        Assert.Contains("if (emitted.Contains(Key(target)))", isolated);
+        Assert.Contains("EmitVerified(verifiedSg)", isolated);
+        Assert.Contains("EmitVerified(verifiedParent)", isolated);
+        Assert.Contains("EmitVerified(previouslyVerified)", isolated);
+        Assert.Equal(1, isolated.Split("successful++;").Length - 1);
+    }
+
+    [Fact]
     public void UnresolvedWireShapeExplainsDecoderKindWithoutLoggingVendorValues()
     {
         var primitive = IedBrowserReadWireShapeEvidence.Describe(
