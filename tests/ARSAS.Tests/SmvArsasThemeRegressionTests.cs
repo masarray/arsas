@@ -14,7 +14,7 @@ public sealed class SmvArsasThemeRegressionTests
         Assert.Contains("Style=\"{StaticResource PrimaryButton}\"", x);
         Assert.Contains("Style=\"{StaticResource SoftButton}\"", x);
         Assert.Contains("Style=\"{StaticResource IedIconButton}\"", x);
-        Assert.Contains("Style=\"{StaticResource AppFontFamily}\"", x.Replace("FontFamily=", "Style="));
+        Assert.Contains("FontFamily=\"{StaticResource AppFontFamily}\"", x);
         Assert.Equal(5, Count(x, "Style=\"{StaticResource ModernComboBox}\""));
         Assert.Contains("<ListBox x:Name=\"StreamList\"", x);
         Assert.Contains("ItemContainerStyle=\"{StaticResource SmvStreamItem}\"", x);
