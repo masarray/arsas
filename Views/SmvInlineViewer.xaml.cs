@@ -418,6 +418,8 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
             CurrentWaveform = SmvDigSubPresentationAdapter.BuildWaveform(snapshot, profile);
             Notify(nameof(CurrentWaveform));
             WaveformStatus =
+                (snapshot.TimebaseReason.StartsWith("ASSUMED", StringComparison.OrdinalIgnoreCase)
+                    ? "ASSUMED timebase · rate/PTP unverified · " : string.Empty) +
                 $"Received {snapshot.CapturedSamples:N0} coherent samples • {snapshot.SamplesPerCycle} samples/cycle • " +
                 (profile == SmvDisplayUnits.NineTwoLe
                     ? "9-2LE operator-selected engineering display"
