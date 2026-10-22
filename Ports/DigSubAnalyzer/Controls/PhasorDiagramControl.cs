@@ -39,34 +39,35 @@ public sealed class PhasorDiagramControl : FrameworkElement
             typeof(PhasorDiagramControl),
             new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
 
-    private static readonly Brush PanelBrush = CreateBrush("#0C1B2B");
-    private static readonly Brush TextSecondaryBrush = CreateBrush("#A7B8CB");
-    private static readonly Brush TextMutedBrush = CreateBrush("#7E93AA");
-    private static readonly Brush StaleBrush = CreateBrush("#F0B533");
-    private static readonly Brush OriginBrush = CreateBrush("#EAF3FF");
-    private static readonly Brush OriginInnerBrush = CreateBrush("#1D8FFF");
+    // ARSAS light workstation presentation; render geometry and DSP unchanged.
+    private static readonly Brush PanelBrush = CreateBrush("#FFFFFF");
+    private static readonly Brush TextSecondaryBrush = CreateBrush("#63758B");
+    private static readonly Brush TextMutedBrush = CreateBrush("#7D8EA3");
+    private static readonly Brush StaleBrush = CreateBrush("#B77905");
+    private static readonly Brush OriginBrush = CreateBrush("#FFFFFF");
+    private static readonly Brush OriginInnerBrush = CreateBrush("#2563EB");
 
-    private static readonly Brush PhaseRBrush = CreateBrush("#F02D4A");
-    private static readonly Brush PhaseSBrush = CreateBrush("#F5B400");
-    private static readonly Brush PhaseTBrush = CreateBrush("#258DF4");
+    private static readonly Brush PhaseRBrush = CreateBrush("#E33455");
+    private static readonly Brush PhaseSBrush = CreateBrush("#D99A0B");
+    private static readonly Brush PhaseTBrush = CreateBrush("#257ADE");
 
-    private static readonly Pen OuterBorderPen = CreatePen(CreateBrush("#1D8FFF"), 1.4);
-    private static readonly Pen RingPen = CreatePen(CreateBrush("#28445E"), 1.0, [3.0, 5.0]);
-    private static readonly Pen AxisPen = CreatePen(CreateBrush("#45627E"), 1.2);
-    private static readonly Pen DiagonalPen = CreatePen(CreateBrush("#1D344E"), 0.85, [2.5, 5.0]);
+    private static readonly Pen OuterBorderPen = CreatePen(CreateBrush("#2563EB"), 1.4);
+    private static readonly Pen RingPen = CreatePen(CreateBrush("#D6E3F2"), 1.0, [3.0, 5.0]);
+    private static readonly Pen AxisPen = CreatePen(CreateBrush("#AAC0DA"), 1.2);
+    private static readonly Pen DiagonalPen = CreatePen(CreateBrush("#EBF1F8"), 0.85, [2.5, 5.0]);
     // Tinted, hairline leaders: voltage solid and current dashed, matching
     // their respective arrow families. Cached/frozen like all plot pens.
     private static readonly Pen[] VoltageLeaderPens =
     [
-        CreatePen(CreateBrush("#A86877"), 0.95),
-        CreatePen(CreateBrush("#C0A055"), 0.95),
-        CreatePen(CreateBrush("#729FC8"), 0.95)
+        CreatePen(CreateBrush("#C88B9A"), 0.95),
+        CreatePen(CreateBrush("#C7AC73"), 0.95),
+        CreatePen(CreateBrush("#8BAED5"), 0.95)
     ];
     private static readonly Pen[] CurrentLeaderPens =
     [
-        CreatePen(CreateBrush("#A86877"), 1.05, [2.0, 2.0]),
-        CreatePen(CreateBrush("#C0A055"), 1.05, [2.0, 2.0]),
-        CreatePen(CreateBrush("#729FC8"), 1.05, [2.0, 2.0])
+        CreatePen(CreateBrush("#C88B9A"), 1.05, [2.0, 2.0]),
+        CreatePen(CreateBrush("#C7AC73"), 1.05, [2.0, 2.0]),
+        CreatePen(CreateBrush("#8BAED5"), 1.05, [2.0, 2.0])
     ];
     private static readonly Pen[] VoltagePens =
     [
@@ -88,9 +89,9 @@ public sealed class PhasorDiagramControl : FrameworkElement
     ];
 
     private static readonly Typeface LabelTypeface =
-        new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
+        new((FontFamily)System.Windows.Application.Current.FindResource("AppFontFamily"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
     private static readonly Typeface BodyTypeface =
-        new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+        new((FontFamily)System.Windows.Application.Current.FindResource("AppFontFamily"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
 
     private readonly record struct RenderedVector(PhasorDisplayItem Item, Point Tip, Brush Brush, FormattedText Label);
 
