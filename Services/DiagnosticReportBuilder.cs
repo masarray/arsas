@@ -212,7 +212,7 @@ internal static class DiagnosticReportBuilder
                 foreach (var cswi in independentCswi.Take(12))
                 {
                     var note = (cswi.ControlInspectionEvidence ?? string.Empty)
-                        .Replace('\\r', ' ').Replace('\\n', ' ');
+                        .Replace('\r', ' ').Replace('\n', ' ');
                     if (note.Length > 180) note = note[..180] + "…";
                     builder.AppendLine($"  CSWI {cswi.ObjectReference} | model={cswi.ControlModelText} | verifiedCDC={cswi.VerifiedLiveControlCdc} | operable={cswi.ControlSupportsOperate} | {note}");
                 }
