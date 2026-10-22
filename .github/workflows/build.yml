@@ -676,11 +676,13 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Upload portable single EXE
+      # GitHub Actions upload-artifact v7: a SINGLE file plus archive:false
+      # makes the artifact itself download as a real .exe in the browser.
+      # Keep the canonical sealed Windows package (previous upload) unchanged:
+      # it carries portable-build-identity.json, manifests and release evidence.
+      - name: Upload directly downloadable portable EXE (no ZIP)
         uses: actions/upload-artifact@v7
         with:
-          name: ARSAS-win-x64-portable-single-exe
-          path: |
-            ArIED61850Tester\dist\ARSAS-*-win-x64-portable.exe
-            ArIED61850Tester\dist\ARSAS-*-win-x64-portable-build-identity.json
+          path: ArIED61850Tester\dist\ARSAS-*-win-x64-portable.exe
+          archive: false
           if-no-files-found: error
