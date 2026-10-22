@@ -40,7 +40,7 @@ concurrency:
 
 jobs:
   verify-repeat-run-stability:
-    name: Verify P0-5f repeat-run stability contract
+    name: Verify P0-5f repeat-run stability and P0-5e golden budget/provenance
     runs-on: windows-latest
     steps:
       - name: Checkout exact ARSAS candidate
@@ -270,26 +270,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  verify-golden-lock:
-    name: Verify P0-5e evidence-derived hard budget
-    runs-on: windows-latest
-    steps:
-      - name: Checkout exact ARSAS candidate
-        uses: actions/checkout@v7
-        with:
-          path: ArIED61850Tester
-          fetch-depth: 1
-          persist-credentials: false
-
-      - name: Verify exact candidate revision
-        shell: powershell
-        run: |
-          $actual = (git -C .\ArIED61850Tester rev-parse HEAD).Trim().ToLowerInvariant()
-          $expected = $env:GITHUB_SHA.Trim().ToLowerInvariant()
-          if ($actual -ne $expected) {
-            throw "ARSAS source revision mismatch. Expected $expected, checked out $actual."
-          }
-
       - name: Validate P0-5e production target remains evidence-gated
         shell: powershell
         run: |
@@ -461,26 +441,6 @@ jobs:
           path: ArIED61850Tester\TestResults\P0-5E-*.json
           if-no-files-found: warn
           retention-days: 14
-
-  verify-provenance:
-    name: Verify P0-5e capture build and target provenance
-    runs-on: windows-latest
-    steps:
-      - name: Checkout exact ARSAS candidate
-        uses: actions/checkout@v7
-        with:
-          path: ArIED61850Tester
-          fetch-depth: 1
-          persist-credentials: false
-
-      - name: Verify exact candidate revision
-        shell: powershell
-        run: |
-          $actual = (git -C .\ArIED61850Tester rev-parse HEAD).Trim().ToLowerInvariant()
-          $expected = $env:GITHUB_SHA.Trim().ToLowerInvariant()
-          if ($actual -ne $expected) {
-            throw "ARSAS source revision mismatch. Expected $expected, checked out $actual."
-          }
 
       - name: Execute P0-5e provenance fixtures
         shell: powershell

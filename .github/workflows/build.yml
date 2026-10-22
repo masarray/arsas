@@ -2,7 +2,8 @@ name: Build ARSAS
 
 on:
   push:
-    branches: [ main ]
+    # Exact HEAD canonical packages for trusted SMV branch direct Inno builds.
+    branches: [ main, feat/smv-sharp-latest-p0-20261022, fix/smv-arstack-actual-wire-interop-20261022 ]
   pull_request:
   workflow_dispatch:
 

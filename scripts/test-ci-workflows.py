@@ -190,14 +190,15 @@ jobs:
         merged = (repo / ".github/workflows/smart-discovery-repeat-run-stability.yml").read_text(
             encoding="utf-8"
         )
-        for job_id, check_name in (
-            ("verify-repeat-run-stability", "Verify P0-5f repeat-run stability contract"),
-            ("verify-golden-lock", "Verify P0-5e evidence-derived hard budget"),
-            ("verify-provenance", "Verify P0-5e capture build and target provenance"),
+        self.assertIn("  verify-repeat-run-stability:\n", merged)
+        self.assertIn("name: Verify P0-5f repeat-run stability and P0-5e golden budget/provenance", merged)
+        for preserved in (
+            "Validate P0-5e production target remains evidence-gated",
+            "Execute P0-5e provenance fixtures",
+            "Validate P0-5f sources",
         ):
-            self.assertIn(f"  {job_id}:\n", merged)
-            self.assertIn(f"name: {check_name}", merged)
-        self.assertEqual(merged.count("\n  verify-"), 3)
+            self.assertIn(f"- name: {preserved}", merged)
+        self.assertEqual(merged.count("Checkout exact ARSAS candidate"), 1)
 
         release = (repo / ".github/workflows/release-windows.yml").read_text(
             encoding="utf-8"
