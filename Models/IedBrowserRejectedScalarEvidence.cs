@@ -35,6 +35,8 @@ public static class IedBrowserRejectedScalarEvidence
             ", modelType=" + Safe(modelType) +
             ", projection=" + Safe(read.Projection) +
             ", CLR=" + payloadType +
+            ", wire=" + Safe(string.IsNullOrWhiteSpace(read.WireShapeEvidence)
+                ? "not captured" : read.WireShapeEvidence) +
             ", display='" + Safe(read.DisplayValue) + "'" +
             ", source=" + Safe(read.ReadReference) +
             "; GVA/invoke raw not captured).";

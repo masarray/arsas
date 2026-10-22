@@ -1129,6 +1129,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         Iec61850ReadValue? projected, ArMms.MmsDataValue? raw, string reference)
     {
         if (projected is null || raw is null) return projected;
+        projected.WireShapeEvidence = IedBrowserReadWireShapeEvidence.Describe(raw);
         if (raw.Kind is ArMms.MmsDataKind.VisibleString or ArMms.MmsDataKind.MmsString &&
             raw.Value is string decoded &&
             projected.Value is string scalar &&

@@ -158,6 +158,49 @@ public sealed class P0ModelTypedMmsStringTests
         Assert.Contains("MaximumParentAttempts = 24", flight);
     }
 
+    [Fact]
+    public void ReadAllDeduplicatesVerifiedRefAndFcAcrossIndependentParentFlights()
+    {
+        var isolated = ReadRepoSource("Services/IedBrowserIsolatedReadService.cs");
+        Assert.Contains("var emitted = new HashSet<string>(StringComparer.Ordinal)", isolated);
+        Assert.Contains("IedBrowserLiveValues.CanonicalReference(target.Reference)", isolated);
+        Assert.Contains("target.FunctionalConstraint.Trim().ToUpperInvariant()", isolated);
+        Assert.Contains("if (!emitted.Add(Key(result.Target))) return;", isolated);
+        Assert.Contains("if (emitted.Contains(Key(target)))", isolated);
+        Assert.Contains("EmitVerified(verifiedSg)", isolated);
+        Assert.Contains("EmitVerified(verifiedParent)", isolated);
+        Assert.Contains("EmitVerified(previouslyVerified)", isolated);
+        Assert.Equal(1, isolated.Split("successful++;").Length - 1);
+    }
+
+    [Fact]
+    public void UnresolvedWireShapeExplainsDecoderKindWithoutLoggingVendorValues()
+    {
+        var primitive = IedBrowserReadWireShapeEvidence.Describe(
+            MmsDataValue.Integer(-517832));
+        Assert.Contains("wireKind=Integer", primitive);
+        Assert.Contains("category=primitive", primitive);
+        Assert.Contains("childCount=0", primitive);
+        Assert.DoesNotContain("-517832", primitive);
+
+        var composite = IedBrowserReadWireShapeEvidence.Describe(
+            MmsDataValue.Structure([
+                MmsDataValue.Integer(468123),
+                MmsDataValue.Boolean(false)
+            ]));
+        Assert.Contains("wireKind=Structure", composite);
+        Assert.Contains("category=composite", composite);
+        Assert.Contains("childCount=2", composite);
+        Assert.DoesNotContain("468123", composite);
+        Assert.Equal("wire=null", IedBrowserReadWireShapeEvidence.Describe(null));
+
+        var native = ReadRepoSource("Services/NativeIec61850Client.cs");
+        var failure = ReadRepoSource("Models/IedBrowserRejectedScalarEvidence.cs");
+        Assert.Contains("WireShapeEvidence = IedBrowserReadWireShapeEvidence.Describe(raw)", native);
+        Assert.Contains("read.WireShapeEvidence", failure);
+        Assert.DoesNotContain("LastReadResponseHex", failure);
+    }
+
     private static string ReadRepoSource(string relativePath)
     {
         for (DirectoryInfo? root = new(AppContext.BaseDirectory);
