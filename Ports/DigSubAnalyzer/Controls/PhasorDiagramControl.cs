@@ -252,11 +252,13 @@ public sealed class PhasorDiagramControl : FrameworkElement
             item.Family == PhasorFamily.Voltage && IsRenderable(item))?.Unit ?? "counts";
         var currentUnit = _visualItems.FirstOrDefault(item =>
             item.Family == PhasorFamily.Current && IsRenderable(item))?.Unit ?? "counts";
-        var voltageScaleText = PhasorScaleCaption.Format("A", voltageMax, voltageUnit);
-        var currentScaleText = PhasorScaleCaption.Format("B", currentMax, currentUnit);
+        var voltageScaleText = PhasorScaleCaption.Format(voltageUnit == "V" ? "U" : "A", voltageMax, voltageUnit);
+        var currentScaleText = PhasorScaleCaption.Format(currentUnit == "A" ? "I" : "B", currentMax, currentUnit);
         DrawText(dc, $"{voltageScaleText}   ·   {currentScaleText}",
             10.0, new Point(6, height - 31), TextSecondaryBrush, BodyTypeface);
-        DrawText(dc, "RAW A solid · RAW B dashed · independent count scales",
+        DrawText(dc, voltageUnit == "V" && currentUnit == "A"
+            ? "9-2LE · U solid / I dashed · independent scales"
+            : "RAW A solid · RAW B dashed · independent count scales",
             9.5, new Point(6, height - 15), TextMutedBrush, BodyTypeface);
         if (!IsStreamLive)
             DrawText(dc, "STALE · last valid samples", 11, new Point(7, 5), StaleBrush, LabelTypeface);

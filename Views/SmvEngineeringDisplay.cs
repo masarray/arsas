@@ -50,6 +50,7 @@ public sealed record SmvDisplayMeasurement(
     int ChannelIndex, string DisplayName, string Unit, double Rms,
     double FundamentalRms, double PhaseDegrees, bool HasFundamental)
 {
+    public string Label => $"Wire channel {ChannelIndex} · {DisplayName}";
     public string RmsText => Rms.ToString("0.###", CultureInfo.InvariantCulture);
     public string FundamentalRmsText => FundamentalRms.ToString("0.###", CultureInfo.InvariantCulture);
     public string AngleText => HasFundamental

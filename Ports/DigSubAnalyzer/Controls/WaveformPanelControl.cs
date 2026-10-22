@@ -444,10 +444,11 @@ public sealed class WaveformPanelControl : FrameworkElement
 
     private double ResolveLaneAmplitudeMax(LaneDefinition lane, IReadOnlyList<WaveformSeriesModel> series)
     {
-        // A raw-count voltage lane is still the voltage lane. Its history
-        // must not share the current lane auto-range, nor adopt fixed A/V scales.
-        var isVoltage = string.Equals(lane.Title, "Voltage", StringComparison.OrdinalIgnoreCase) ||
-                        lane.Title.StartsWith("RAW Ch1", StringComparison.OrdinalIgnoreCase);
+        // Engineering units select the correct independent scale families.
+        // RAW retains existing per-lane auto-range behavior.
+        var isVoltage = string.Equals(lane.Unit, "V", StringComparison.OrdinalIgnoreCase) ||
+                        (string.Equals(lane.Unit, "counts", StringComparison.OrdinalIgnoreCase) &&
+                         lane.Title.StartsWith("RAW Ch1", StringComparison.OrdinalIgnoreCase));
         ResetLaneScaleWhenUnitsChange(isVoltage, lane.Unit);
         var hasPhysicalUnits = string.Equals(lane.Unit, isVoltage ? "V" : "A", StringComparison.OrdinalIgnoreCase);
         var scaleText = isVoltage ? VoltageScale : CurrentScale;

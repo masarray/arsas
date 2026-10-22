@@ -40,6 +40,7 @@ public sealed class SmvEngineeringDisplayTests
         var measurement = SmvEngineeringDisplay.Present(vector, SmvDisplayUnits.NineTwoLe);
         Assert.Equal("Ua", measurement.DisplayName);
         Assert.Equal(50, measurement.Rms, 8);
+        Assert.Equal("Wire channel 5 · Ua", measurement.Label);
         Assert.Equal(47, measurement.FundamentalRms, 8);
         Assert.Equal("V", measurement.Unit);
         var phasors = SmvDigSubPresentationAdapter.BuildPhasors(
