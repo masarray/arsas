@@ -236,12 +236,15 @@ public sealed class SmvLiveStreamBuffer
         }
 
         if (_wordIndexes.Length == 0 || _payloadLength != payload.Length ||
-            _confRev != asdu.ConfigurationRevision || _smpSynch != asdu.SampleSynchronization ||
+            _confRev != asdu.ConfigurationRevision ||
             !DataSetReference.Equals(asdu.DataSetReference, StringComparison.Ordinal))
         {
             if (_wordIndexes.Length > 0) _restarts++;
             Configure(asdu, payload.Length);
         }
+        // Synchronization is ASDU status, not an SV stream schema transition.
+        // AUTO 0->2 must preserve its measured timebase, counter and waveform ring.
+        _smpSynch = asdu.SampleSynchronization;
 
         if (_timebase?.IsResolved != true || _length == 0)
         {
