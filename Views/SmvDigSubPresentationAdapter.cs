@@ -10,25 +10,27 @@ namespace ArIED61850Tester.Views;
 /// </summary>
 public static class SmvDigSubPresentationAdapter
 {
-    public static WaveformSnapshot BuildWaveform(SmvSnapshotResult snapshot)
+    public static WaveformSnapshot BuildWaveform(SmvSnapshotResult snapshot, SmvDisplayUnits profile = SmvDisplayUnits.RawCounts)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         if (!snapshot.IsCleanProof || snapshot.SamplesPerCycle < 4 ||
             snapshot.Channels.Any(c => c.Samples.Count != snapshot.TargetSamples))
             return new WaveformSnapshot { StatusText = "Waiting for coherent, trusted raw SV window." };
 
+        profile = SmvEngineeringDisplay.Effective(snapshot, profile);
         var a = new List<WaveformSeriesModel>(4);
         var b = new List<WaveformSeriesModel>(4);
         foreach (var channel in snapshot.Channels.Take(8))
         {
             var aligned = PhaseAlign(channel.Samples, snapshot.FirstSampleCount,
                 snapshot.SamplesPerCycle);
+            var channelUnits = SmvEngineeringDisplay.Describe(channel.ChannelIndex, profile);
             var series = new WaveformSeriesModel
             {
-                Name = $"Ch{channel.ChannelIndex}",
-                Unit = "counts",
+                Name = $"Ch{channel.ChannelIndex}", // fixed color identity shared with RAW
+                Unit = channelUnits.Unit,
                 Freshness = ChannelFreshness.Live,
-                Samples = aligned,
+                Samples = channelUnits.Scale == 1 ? aligned : aligned.Select(v => v * channelUnits.Scale).ToArray(),
                 ShapeSeverity = "Unknown",
                 ShapeStatusText = "Raw decoded INT32; channel semantics unverified"
             };
@@ -43,7 +45,9 @@ public static class SmvDigSubPresentationAdapter
             SampleRateHz = snapshot.SamplesPerCycle * snapshot.NominalFrequencyHz,
             MeasuredFrequencyHz = 0, // never claim a measured frequency from nominal
             WindowDurationMilliseconds = 1000.0 * snapshot.CycleCount / snapshot.NominalFrequencyHz,
-            StatusText = "Coherent sample-counter-anchored raw SV; no engineering channel mapping",
+            StatusText = profile == SmvDisplayUnits.NineTwoLe
+                ? "9-2LE engineering display · operator-selected I/U mapping; raw evidence unchanged"
+                : "Coherent sample-counter-anchored raw SV; no engineering channel mapping",
             ShapeSeverity = "Unknown"
         };
     }
@@ -73,7 +77,8 @@ public static class SmvDigSubPresentationAdapter
     /// These six names are RAW Ch indices, NOT guessed Ia/Ua identities.
     /// </summary>
     public static IReadOnlyList<PhasorDisplayItem> BuildPhasors(
-        IReadOnlyList<SmvRawVectorMeasurement> vectors)
+        IReadOnlyList<SmvRawVectorMeasurement> vectors,
+        SmvDisplayUnits profile = SmvDisplayUnits.RawCounts)
     {
         var reference = vectors.FirstOrDefault(v => v.ChannelIndex == 1 && v.HasFundamental)
             ?? vectors.FirstOrDefault(v => v.HasFundamental);
@@ -88,13 +93,14 @@ public static class SmvDigSubPresentationAdapter
             var a = vector.HasFundamental
                 ? Math.IEEERemainder(vector.PhaseDegrees - reference.PhaseDegrees, 360)
                 : (double?)null;
+            var units = SmvEngineeringDisplay.Describe(vector.ChannelIndex, profile);
             rows.Add(new PhasorDisplayItem
             {
-                Name = $"Ch{vector.ChannelIndex}",
-                Family = vector.ChannelIndex <= 4 ? PhasorFamily.Voltage : PhasorFamily.Current,
-                Magnitude = vector.HasFundamental ? vector.FundamentalRms : null,
+                Name = units.Name,
+                Family = units.IsVoltage ? PhasorFamily.Voltage : PhasorFamily.Current,
+                Magnitude = vector.HasFundamental ? vector.FundamentalRms * units.Scale : null,
                 AngleDegrees = a,
-                Unit = "counts",
+                Unit = units.Unit,
                 Freshness = ChannelFreshness.Live
             });
         }

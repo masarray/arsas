@@ -93,6 +93,10 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="16"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="7"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel VerticalAlignment="Center">
@@ -123,6 +127,16 @@
                           ToolTip="Nominal system frequency for SV timebase">
                     <ComboBoxItem Content="50 Hz" Tag="50"/>
                     <ComboBoxItem Content="60 Hz" Tag="60"/>
+                </ComboBox>
+                <TextBlock Grid.Column="12" Text="Values" Style="{StaticResource SvCaption}"
+                           VerticalAlignment="Center" Margin="0,0,2,0"/>
+                <ComboBox x:Name="UnitsModeCombo" Grid.Column="14"
+                          Style="{StaticResource ModernComboBox}" Width="175" Height="33"
+                          MinHeight="33" Padding="9,2" FontSize="11" SelectedIndex="0"
+                          VerticalAlignment="Center" SelectionChanged="UnitsMode_SelectionChanged"
+                          ToolTip="9-2LE assumes I channels 1–4 and U channels 5–8; verify publisher DataSet before interpreting V/A.">
+                    <ComboBoxItem Content="Raw counts" Tag="Raw"/>
+                    <ComboBoxItem Content="9-2LE · V/A" Tag="NineTwoLe"/>
                 </ComboBox>
                 <Button x:Name="StartButton" Grid.Column="6"
                         Style="{StaticResource PrimaryButton}" Padding="12,6"
@@ -249,11 +263,17 @@
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <DockPanel Margin="2,1,2,0">
-                        <TextBlock Text="Waveforms" Style="{StaticResource SvHeading}"/>
-                        <TextBlock Text="2 cycles · raw INT32" Style="{StaticResource SvCaption}"
-                                   DockPanel.Dock="Right" HorizontalAlignment="Right"/>
-                    </DockPanel>
+                    <Grid Margin="2,2,2,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Waveforms" Style="{StaticResource SvHeading}"/>
+                        <TextBlock Grid.Column="2" Text="2 cycles · selected stream"
+                                   Style="{StaticResource SvCaption}" Margin="12,0,0,0"
+                                   VerticalAlignment="Center"/>
+                    </Grid>
                     <WrapPanel Grid.Row="2" VerticalAlignment="Center" Margin="2,0,0,0">
                         <TextBlock Text="Show" Style="{StaticResource SvCaption}"
                                    VerticalAlignment="Center" Margin="0,0,5,0"/>
@@ -305,11 +325,17 @@
                             <RowDefinition Height="5"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
-                        <DockPanel Margin="2,1,2,0">
-                            <TextBlock Text="Phasors" Style="{StaticResource SvHeading}"/>
-                            <TextBlock DockPanel.Dock="Right" Text="Ch1 = 0° reference"
-                                       Style="{StaticResource SvCaption}"/>
-                        </DockPanel>
+                        <Grid Margin="2,2,2,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Phasors" Style="{StaticResource SvHeading}"/>
+                            <TextBlock Grid.Column="2" Text="{Binding PhaseReferenceText}"
+                                       Style="{StaticResource SvCaption}" Margin="12,0,0,0"
+                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        </Grid>
                         <dig:PhasorDiagramControl x:Name="PhasorView" Grid.Row="2"
                                 ItemsSource="{Binding CurrentPhasors}"
                                 IsStreamLive="{Binding IsLiveSnapshot}"/>
@@ -325,11 +351,17 @@
                             <RowDefinition Height="6"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
-                        <DockPanel Margin="2,1,2,0">
-                            <TextBlock Text="Measurements" Style="{StaticResource SvHeading}"/>
-                            <TextBlock DockPanel.Dock="Right" Text="Fundamental &amp; RMS"
-                                       Style="{StaticResource SvCaption}"/>
-                        </DockPanel>
+                        <Grid Margin="2,2,2,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Measurements" Style="{StaticResource SvHeading}"/>
+                            <TextBlock Grid.Column="2" Text="RMS · fundamental"
+                                       Style="{StaticResource SvCaption}" Margin="12,0,0,0"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
                         <DataGrid Grid.Row="2"
                                   ItemsSource="{Binding Measurements}" IsReadOnly="True"
                                   Style="{StaticResource ModernDataGrid}"
@@ -346,7 +378,7 @@
                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                 <Ellipse Style="{StaticResource SmvChannelDot}"
                                                          VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                                <TextBlock Text="{Binding ChannelIndex, StringFormat=Ch{0}}"
+                                                <TextBlock Text="{Binding DisplayName}"
                                                            Foreground="{StaticResource Ink}" FontSize="11.3"
                                                            ToolTip="{Binding Label}" VerticalAlignment="Center"/>
                                             </StackPanel>
@@ -354,16 +386,19 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
                                 <DataGridTextColumn Header="RMS" Binding="{Binding RmsText}"
-                                                    Width="80" ElementStyle="{StaticResource SmvNumberText}"/>
+                                                    Width="75" ElementStyle="{StaticResource SmvNumberText}"/>
                                 <DataGridTextColumn Header="Fund." Binding="{Binding FundamentalRmsText}"
-                                                    Width="83" ElementStyle="{StaticResource SmvNumberText}"/>
+                                                    Width="76" ElementStyle="{StaticResource SmvNumberText}"/>
                                 <DataGridTextColumn Header="Angle" Binding="{Binding AngleText}"
-                                                    Width="70" ElementStyle="{StaticResource SmvNumberText}"/>
+                                                    Width="68" ElementStyle="{StaticResource SmvNumberText}"/>
+                                <DataGridTextColumn Header="Unit" Binding="{Binding Unit}"
+                                                    Width="59" ElementStyle="{StaticResource SmvNumberText}"/>
                             </DataGrid.Columns>
                         </DataGrid>
-                        <TextBlock Grid.Row="4" Text="Raw counts · not calibrated V/A · relative angle"
+                        <TextBlock Grid.Row="4" Text="{Binding UnitStatus}"
                                    Style="{StaticResource SvCaption}" FontSize="9.5"
-                                   Margin="3,1,0,0"/>
+                                   Margin="3,1,0,0" TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding UnitStatus}"/>
                     </Grid>
                 </Border>
             </Grid>

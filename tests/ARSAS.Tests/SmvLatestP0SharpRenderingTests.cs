@@ -20,7 +20,7 @@ public sealed class SmvLatestP0SharpRenderingTests
     {
         var code = Read("Ports/DigSubAnalyzer/Controls/WaveformPanelControl.cs");
         Assert.Contains("dc.DrawGeometry(null, GetSeriesPen(series.Name), geometry);", code);
-        Assert.Contains("CreateFrozenSeriesPen(GetSeriesBrush(name), 1.9)", code);
+        Assert.Contains("CreateFrozenSeriesPen(GetSeriesBrush(name), 2.7)", code);
         Assert.DoesNotContain("pens.Glow", code);
         Assert.DoesNotContain("pens.Shadow", code);
         Assert.DoesNotContain("new SeriesPens(", code);

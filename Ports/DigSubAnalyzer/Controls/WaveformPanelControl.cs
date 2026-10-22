@@ -236,9 +236,9 @@ public sealed class WaveformPanelControl : FrameworkElement
 
         var visibleLanes = new List<LaneDefinition>(2);
         if (showVoltage)
-            visibleLanes.Add(new LaneDefinition("RAW Ch1–4", snapshot.VoltageSeries.FirstOrDefault()?.Unit ?? "counts", snapshot.VoltageSeries));
+            visibleLanes.Add(new LaneDefinition(snapshot.VoltageSeries.FirstOrDefault()?.Unit == "A" ? "CURRENT · Ch1–4" : "RAW Ch1–4", snapshot.VoltageSeries.FirstOrDefault()?.Unit ?? "counts", snapshot.VoltageSeries));
         if (showCurrent)
-            visibleLanes.Add(new LaneDefinition("RAW Ch5–8", snapshot.CurrentSeries.FirstOrDefault()?.Unit ?? "counts", snapshot.CurrentSeries));
+            visibleLanes.Add(new LaneDefinition(snapshot.CurrentSeries.FirstOrDefault()?.Unit == "V" ? "VOLTAGE · Ch5–8" : "RAW Ch5–8", snapshot.CurrentSeries.FirstOrDefault()?.Unit ?? "counts", snapshot.CurrentSeries));
 
         if (visibleLanes.Count == 0)
         {
@@ -278,13 +278,18 @@ public sealed class WaveformPanelControl : FrameworkElement
         dc.DrawText(CreateText(lane.Title, 13, TitleBrush, TitleTypeface), new Point(rect.Left + 12, rect.Top + 7));
         // Stable header legend, not badges covering the trace. Samples remain
         // geometrically unmodified and every phase retains its color identity.
-        var legendX = rect.Left + 115;
+        var legendX = rect.Left + (lane.Title.StartsWith("RAW", StringComparison.Ordinal) ? 115 : 188);
         foreach (var visible in laneSeries)
         {
             var suffix = ChannelFreshnessDisplay.Suffix(visible.Freshness);
             var title = suffix.Length == 0 ? visible.Name : visible.Name + " " + suffix;
             var legend = CreateText(title, 10.5, LabelBrush, LabelTypeface);
             dc.PushOpacity(TraceOpacity(IsStreamLive, visible.Freshness));
+            if (legendX + legend.Width + 9 > rect.Right - 12)
+            {
+                dc.Pop();
+                break;
+            }
             dc.DrawEllipse(GetSeriesBrush(visible.Name), null,
                 new Point(legendX, rect.Top + 15), 3.5, 3.5);
             dc.DrawText(legend, new Point(legendX + 7, rect.Top + 7));
@@ -880,7 +885,7 @@ public sealed class WaveformPanelControl : FrameworkElement
         if (SeriesPenCache.TryGetValue(name, out var pen))
             return pen;
         // Cache one frozen pen per channel, without glow or halo allocations.
-        pen = CreateFrozenSeriesPen(GetSeriesBrush(name), 1.9);
+        pen = CreateFrozenSeriesPen(GetSeriesBrush(name), 2.7);
         SeriesPenCache[name] = pen;
         return pen;
     }

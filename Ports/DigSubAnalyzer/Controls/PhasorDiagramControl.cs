@@ -18,7 +18,7 @@ public sealed class PhasorDiagramControl : FrameworkElement
     private const double VoltageRadiusFactor = 0.96;
     private const double CurrentRadiusFactor = 0.73;
     private const double VoltageLineThickness = 2.7;
-    private const double CurrentLineThickness = 2.4;
+    private const double CurrentLineThickness = 2.7;
 
     private IReadOnlyList<PhasorDisplayItem> _visualItems = Array.Empty<PhasorDisplayItem>();
 
