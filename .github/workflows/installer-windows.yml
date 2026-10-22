@@ -484,6 +484,53 @@ jobs:
           ) -Wait -PassThru
           if ($uninstall.ExitCode -ne 0) { throw "Uninstaller exited with code $($uninstall.ExitCode)." }
 
+      # Preserve the retired SMV preview workflow's protected-folder upgrade
+      # qualification inside the canonical installer workflow (no extra CI runner).
+      - name: Verify protected Program Files in-place DLL repair and uninstall
+        shell: powershell
+        run: |
+          $exe = ".\\ArIED61850Tester\\dist\\ARSAS-$env:APP_VERSION-win-x64-setup.exe"
+          if (-not (Test-Path $exe -PathType Leaf)) { throw 'Canonical installer missing.' }
+          $target = Join-Path $env:ProgramFiles 'ARSAS-FAT-ProtectedFolder-CI'
+          $dirArgument = '/DIR="' + $target + '"'
+          $params = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/CLOSEAPPLICATIONS',$dirArgument)
+          $installed = $false
+          try {
+            $install = Start-Process -FilePath $exe -ArgumentList $params -Wait -PassThru
+            if ($install.ExitCode -ne 0) { throw "Protected-folder install failed: $($install.ExitCode)." }
+            $installed = $true
+            if (-not (Test-Path (Join-Path $target 'ARSAS.exe') -PathType Leaf)) {
+              throw "Silent install did not use requested Program Files directory: $target"
+            }
+            $legacyAccessibility = Join-Path $target 'Accessibility.dll'
+            $publishedAccessibility = Join-Path $env:INSTALLER_INPUT_DIR 'Accessibility.dll'
+            if (-not (Test-Path $legacyAccessibility) -and -not (Test-Path $publishedAccessibility)) {
+              [System.IO.File]::WriteAllBytes($legacyAccessibility, [byte[]](65,82,83,65,83,83,45,79,76,68))
+              Write-Host 'Seeded a legacy Accessibility.dll as a prior-install fixture.'
+            }
+            $repairName = if (Test-Path $publishedAccessibility -PathType Leaf) { 'Accessibility.dll' } else { 'AR.Iec61850.Transports.Npcap.dll' }
+            $repairPath = Join-Path $target $repairName
+            if (-not (Test-Path $repairPath -PathType Leaf)) { throw "Shipped upgrade-test DLL is missing: $repairName" }
+            $expectedHash = (Get-FileHash $repairPath -Algorithm SHA256).Hash
+            [System.IO.File]::WriteAllBytes($repairPath, [byte[]](65,82,83,65,83,45,79,76,68,45,68,76,76))
+            $upgrade = Start-Process -FilePath $exe -ArgumentList $params -Wait -PassThru
+            if ($upgrade.ExitCode -ne 0) { throw "In-place Program Files upgrade failed: $($upgrade.ExitCode)." }
+            $actualHash = (Get-FileHash $repairPath -Algorithm SHA256).Hash
+            if ($actualHash -ne $expectedHash) { throw "Upgrade did not restore shipped DLL: $repairName" }
+            Write-Host "SMART_INNO_UPGRADE_PASS: Protected Program Files upgrade restored exact $repairName bytes."
+            foreach ($file in @('ARSAS.exe','AR.Iec61850.Transports.Npcap.dll','SharpPcap.dll','PacketDotNet.dll','Tools\\ArdIrec\\ardirec_bridge.dll')) {
+              if (-not (Test-Path (Join-Path $target $file) -PathType Leaf)) { throw "Installed runtime missing: $file" }
+            }
+          }
+          finally {
+            $uninstaller = Join-Path $target 'unins000.exe'
+            if ($installed -or (Test-Path $uninstaller -PathType Leaf)) {
+              if (-not (Test-Path $uninstaller -PathType Leaf)) { throw 'Uninstaller missing.' }
+              $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
+              if ($uninstall.ExitCode -ne 0) { throw "Uninstall failed: $($uninstall.ExitCode)." }
+            }
+          }
+
       - name: Create release checksums
         shell: powershell
         run: |
