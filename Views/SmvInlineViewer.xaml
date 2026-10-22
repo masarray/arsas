@@ -61,6 +61,47 @@
                 <DataTrigger Binding="{Binding ChannelIndex}" Value="7"><Setter Property="Fill" Value="#257ADE"/></DataTrigger>
             </Style.Triggers>
         </Style>
+        <!-- Measurements intentionally keeps the official ARSAS DataGrid template,
+             but overrides native/system beige backgrounds with the same cool
+             white / blue-white surface used by the adjacent waveform panel. -->
+        <Style x:Key="SmvMeasurementGrid" TargetType="DataGrid"
+               BasedOn="{StaticResource ModernDataGrid}">
+            <Setter Property="Background" Value="#F8FBFF"/>
+            <Setter Property="RowBackground" Value="#F8FBFF"/>
+            <Setter Property="AlternatingRowBackground" Value="#EDF5FF"/>
+            <Setter Property="BorderBrush" Value="#D7E5F6"/>
+            <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+        </Style>
+        <Style x:Key="SmvMeasurementHeader" TargetType="DataGridColumnHeader"
+               BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+            <Setter Property="Background" Value="#E8F2FF"/>
+            <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+            <Setter Property="BorderBrush" Value="#D5E4F6"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        </Style>
+        <Style x:Key="SmvMeasurementCell" TargetType="DataGridCell"
+               BasedOn="{StaticResource {x:Type DataGridCell}}">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="#E2EBF7"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Padding" Value="7,0"/>
+        </Style>
+        <Style x:Key="SmvMeasurementRow" TargetType="DataGridRow"
+               BasedOn="{StaticResource {x:Type DataGridRow}}">
+            <Setter Property="BorderBrush" Value="#E2EBF7"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Style.Triggers>
+                <Trigger Property="ItemsControl.AlternationIndex" Value="0">
+                    <Setter Property="Background" Value="#F8FBFF"/>
+                </Trigger>
+                <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                    <Setter Property="Background" Value="#EDF5FF"/>
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#E4F0FF"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
         <Style x:Key="SmvNumberText" TargetType="TextBlock">
             <Setter Property="HorizontalAlignment" Value="Right"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
@@ -374,7 +415,12 @@
                         </Grid>
                         <DataGrid Grid.Row="2"
                                   ItemsSource="{Binding Measurements}" IsReadOnly="True"
-                                  Style="{StaticResource ModernDataGrid}"
+                                  Style="{StaticResource SmvMeasurementGrid}"
+                                  ColumnHeaderStyle="{StaticResource SmvMeasurementHeader}"
+                                  CellStyle="{StaticResource SmvMeasurementCell}"
+                                  RowStyle="{StaticResource SmvMeasurementRow}"
+                                  RowBackground="#F8FBFF" AlternatingRowBackground="#EDF5FF"
+                                  Background="#F8FBFF" AlternationCount="2"
                                   FontSize="11" RowHeight="31" ColumnHeaderHeight="30"
                                   BorderThickness="0" GridLinesVisibility="None"
                                   CanUserResizeColumns="False" CanUserSortColumns="False"
