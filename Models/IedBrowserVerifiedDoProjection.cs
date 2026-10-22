@@ -118,10 +118,16 @@ public static class IedBrowserVerifiedDoProjection
             if (path.Length == 0) return;
             if (!targets.TryGetValue(prefix + "." + path + "|" + fc, out var target))
                 return;
-            var rendered = MmsDataValueRenderer.ToCompactString(wire);
-            if (IedBrowserReadValuePolicy.TryAcceptDisplay(
-                    rendered, out var accepted, out _))
-                found.Add(new IedBrowserReadResult(target, accepted, "", "", ""));
+            var stringKind = wire.Kind is MmsDataKind.VisibleString or MmsDataKind.MmsString
+                ? wire.Kind : (MmsDataKind?)null;
+            var rendered = stringKind is not null && wire.Value is string direct
+                ? direct : MmsDataValueRenderer.ToCompactString(wire);
+            if (IedBrowserReadValuePolicy.TryAcceptVerifiedMmsString(
+                    rendered, target.DataType, stringKind, out var accepted, out _))
+                found.Add(new IedBrowserReadResult(target, accepted, "", "", "",
+                    TypedBoolean: wire.Kind == MmsDataKind.Boolean && wire.Value is bool typed
+                        ? typed : null,
+                    VerifiedStringWireKind: stringKind));
         }
         Walk(type, data, "", 0);
         return found;
