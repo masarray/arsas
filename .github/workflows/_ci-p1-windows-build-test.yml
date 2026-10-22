@@ -373,24 +373,17 @@ jobs:
             throw 'CI-P1 shadow SHA/TRX proof is incomplete; fail closed.'
           }
 
-      # FAST FAT: publish one standalone executable without an evidence ZIP.
-      # Exact engine SHA, regression, native bridge and EXE smoke gates above stay mandatory.
-      - name: Upload FAST FAT EXE directly (no ZIP)
-        if: ${{ success() && inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.focus == 'command-read' }}
+      # Keep ONE upload action for CI-sprawl budget. FAST trial downloads
+      # a single EXE without ZIP; nontrial CI still retains TRX/manifest proof.
+      - name: Upload FAST EXE directly or nontrial diagnostics
+        if: always()
         uses: actions/upload-artifact@v7
         with:
-          path: ARSAS/TestResults/sg7-bcu-fat-trial/ARSAS-SG7_BCU-ED2-FAT-TRIAL-*-win-x64.exe
-          archive: false
+          name: ${{ inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.focus == 'command-read' && format('ARSAS-SG7-BCU-FAT-TRIAL-{0}.exe', github.run_id) || format('ci-p1-shadow-{0}-{1}', github.run_id, github.run_attempt) }}
+          path: |
+            ${{ inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.focus == 'command-read' && 'ARSAS/TestResults/sg7-bcu-fat-trial/ARSAS-SG7_BCU-ED2-FAT-TRIAL-*-win-x64.exe' || 'ARSAS/TestResults/*.trx' }}
+            ${{ inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.focus == 'command-read' && '' || format('{0}/ci-p1-shadow-manifest.json', runner.temp) }}
+          archive: ${{ !(inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.focus == 'command-read') }}
           if-no-files-found: error
           retention-days: 14
-
-      - name: Upload nontrial shadow diagnostics
-        if: ${{ always() && !(inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.focus == 'command-read') }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ format('ci-p1-shadow-{0}-{1}', github.run_id, github.run_attempt) }}
-          path: |
-            ARSAS/TestResults/*.trx
-            ${{ runner.temp }}/ci-p1-shadow-manifest.json
-          if-no-files-found: error
           retention-days: 14
