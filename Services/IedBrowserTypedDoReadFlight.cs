@@ -12,15 +12,20 @@ internal sealed class IedBrowserTypedDoReadFlight
     private const int MaximumParentAttempts = 24;
     private readonly NativeIec61850Client _client;
     private readonly Dictionary<string, IReadOnlyList<IedBrowserReadTarget>> _verified;
+    private readonly HashSet<string> _scheduledKeys;
+    private readonly HashSet<string> _drainedParents = new(StringComparer.Ordinal);
     private readonly Dictionary<string, IReadOnlyDictionary<string, IedBrowserReadResult>>
         _completed = new(StringComparer.Ordinal);
     private int _attemptCount;
 
     public IedBrowserTypedDoReadFlight(
         NativeIec61850Client client,
-        IReadOnlyList<IedBrowserReadTarget> verifiedScope)
+        IReadOnlyList<IedBrowserReadTarget> verifiedScope,
+        IReadOnlyList<IedBrowserReadTarget>? scheduledTargets = null)
     {
         _client = client;
+        _scheduledKeys = (scheduledTargets ?? verifiedScope)
+            .Select(Key).ToHashSet(StringComparer.Ordinal);
         _verified = verifiedScope
             .GroupBy(IedBrowserVerifiedDoProjection.ParentFor, StringComparer.Ordinal)
             .Where(g => g.Key.Length > 0 && g.Count() <= 128)
@@ -33,6 +38,30 @@ internal sealed class IedBrowserTypedDoReadFlight
     private static string Key(IedBrowserReadTarget t)
         => IedBrowserLiveValues.CanonicalReference(t.Reference) +
            "|" + t.FunctionalConstraint.Trim().ToUpperInvariant();
+
+    // Reuse already GVA-verified siblings in this one Read operation. A
+    // successful parent DO read must not be followed by N redundant wire
+    // leaf reads that can fail independently and spoil coverage counts.
+    internal IedBrowserReadResult? PreviouslyVerified(IedBrowserReadTarget target)
+    {
+        var parent = IedBrowserVerifiedDoProjection.ParentFor(target);
+        return parent.Length > 0 && _completed.TryGetValue(parent, out var values) &&
+               values.TryGetValue(Key(target), out var verified) ? verified : null;
+    }
+
+    // A selected DO read may prove siblings that were not scheduled in this
+    // particular page; publish them at most once through the SAME evidence
+    // inbox. No speculative values: only present verified parent results.
+    internal IReadOnlyList<IedBrowserReadResult> DrainUnscheduledSiblings(
+        IedBrowserReadTarget selected)
+    {
+        var parent = IedBrowserVerifiedDoProjection.ParentFor(selected);
+        if (parent.Length == 0 || !_completed.TryGetValue(parent, out var verified) ||
+            !_drainedParents.Add(parent))
+            return [];
+        return verified.Where(item => !_scheduledKeys.Contains(item.Key))
+            .Select(item => item.Value).ToArray();
+    }
 
     public async Task<IedBrowserReadResult?> TryReadAsync(
         IedBrowserReadTarget failedLeaf, CancellationToken cancellationToken)
