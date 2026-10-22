@@ -29,6 +29,9 @@ public sealed class P0CswiCrossDataSetCommandDiscoveryTests
         var cswi = Control("GR_X_7SX85CB1/CSWI1.Pos");
         var other = Control("GR_X_7SX85Ds1/CSWI2.Pos");
         var nameplate = Control("GR_X_7SX85CB1/CSWI1.Mod");
+        // Genuinely discoverable CSWI may have no CDC yet; native inspection
+        // must establish it, not prefilter this exact DO away as generic.
+        other.ControlCdc = "";
         var candidates = Iec61850ControlIdentity.IndependentCswiInspectionCandidates(
             [cbFeedback, disconnector, cswi, other, nameplate]);
         Assert.Equal(2, candidates.Length);
