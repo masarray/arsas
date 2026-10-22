@@ -113,16 +113,18 @@ public sealed class ModelDrivenAutoCommandDockTests
         var breaker1 = Candidate("SG7_BCUSystem/Bkr0XCBR1.Pos");
         var breaker2 = Candidate("SG7_BCUSystem/Bkr0XCBR2.Pos");
         var cswi = Candidate("SG7_BCUSystem/BkrCSWI1.Pos");
-        var cilo = Candidate("SG7_BCUSystem/BkrCILO1.EnaOpn", "SPC");
+        var cilo = Candidate("SG7_BCUSystem/BkrCILO1.EnaOpn", "SPC", withCo: false);
         var disconnector = Candidate("SG7_BCUSystem/Disc0XSWI1.Pos");
         var tap = Candidate("OtherLD/ATCC1.TapChg", "BSC");
         var unknown = Candidate("OtherLD/OddVendor1.Pos");
         var statusOnly = Candidate("SG7_BCUSystem/Bkr0XCBR3.Pos");
         statusOnly.ControlModelText = "Status only";
+        cilo.ControlModelText = "Status only";
 
         var signals = new[] { io, breaker1, breaker2, cswi, cilo,
             disconnector, tap, unknown, statusOnly };
-        foreach (var signal in signals.Where(s => !ReferenceEquals(s, statusOnly)))
+        foreach (var signal in signals.Where(s =>
+            !ReferenceEquals(s, statusOnly) && !ReferenceEquals(s, cilo)))
             Verify(signal, signal.ControlCdc);
 
         var device = new Iec61850MonitorDevice
@@ -134,14 +136,15 @@ public sealed class ModelDrivenAutoCommandDockTests
         device.RecountSelectedSignals();
 
         var dock = device.OperableCommandSignals.ToArray();
-        Assert.Equal(8, dock.Length);
+        Assert.Equal(7, dock.Length);
         Assert.Equal(new[] { breaker1, breaker2, disconnector, cswi, tap,
-            unknown, io, cilo }, dock);
+            unknown, io }, dock);
         Assert.Equal("Circuit breaker · XCBR",
             Iec61850ControlIdentity.CommandDockRole(breaker1));
         Assert.Equal("Generic I/O · equipment unlinked",
             Iec61850ControlIdentity.CommandDockRole(io));
         Assert.DoesNotContain(statusOnly, dock);
+        Assert.DoesNotContain(cilo, dock);
         // Status ownership and equipment linkage are not guessed from rank:
         // the independent CSWI command and breaker remain separate references.
         Assert.NotEqual(breaker1.ObjectReference, cswi.ObjectReference);
