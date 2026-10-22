@@ -122,6 +122,49 @@ public sealed class P109UStableCommandProjectionTests
     }
 
     [Fact]
+    public void ActualDockMembershipNeverResetsDuringReportingAndOnlyChangesForRealAuthority()
+    {
+        var breaker = Verified("LD0/Bkr0XCBR2.Pos");
+        var tap = Verified("LD0/ATCC1.TapChg");
+        tap.ControlCdc = "DPC"; // keep immutable typed test fixture semantics
+        var statusOnly = Verified("LD0/Disc0XSWI1.Pos");
+        statusOnly.ControlModelText = "Status only";
+        var device = new Iec61850MonitorDevice();
+        device.Signals.ReplaceAll([breaker, tap, statusOnly]);
+        device.RecountSelectedSignals();
+        Assert.Equal(2, device.OperableCommandSignals.Count);
+
+        var events = new List<NotifyCollectionChangedAction>();
+        device.OperableCommandSignals.CollectionChanged += (_, e) => events.Add(e.Action);
+        breaker.ControlInterlockCheck = false;
+        for (var iteration = 0; iteration < 100; iteration++)
+        {
+            breaker.ControlCurrentValue = iteration % 2 == 0 ? "Open" : "Closed";
+            tap.ControlCurrentValue = iteration.ToString();
+            device.RefreshCommandSignalProjection();
+        }
+        Assert.Empty(events);
+        Assert.False(breaker.ControlInterlockCheck);
+        Assert.DoesNotContain(statusOnly, device.OperableCommandSignals);
+
+        breaker.ClearLiveControlAuthority();
+        device.RefreshCommandSignalProjection();
+        Assert.Single(device.OperableCommandSignals);
+        Assert.Same(tap, device.OperableCommandSignals[0]);
+        Assert.Equal(NotifyCollectionChangedAction.Remove, Assert.Single(events));
+        events.Clear();
+
+        breaker.AcceptVerifiedLiveControlCdc("DPC");
+        breaker.ControlSemanticVerified = true;
+        device.RefreshCommandSignalProjection();
+        Assert.Equal(2, device.OperableCommandSignals.Count);
+        Assert.Contains(breaker, device.OperableCommandSignals);
+        Assert.Contains(tap, device.OperableCommandSignals);
+        Assert.DoesNotContain(NotifyCollectionChangedAction.Reset, events);
+        Assert.False(breaker.ControlInterlockCheck);
+    }
+
+    [Fact]
     public void StatusOnlyAndUnknownObjectsRemainVisibleButCannotOperate()
     {
         var valid = Verified("LD0/CSWI1.Pos");
