@@ -102,9 +102,13 @@ public sealed class IedBrowserLiveValues
         string? value, string? quality, string? timestamp, string source,
         Iec61850UtcTimeEvidence? utcTimeEvidence = null,
         MmsQualityEvidence? qualityEvidence = null,
-        bool? typedBoolean = null)
+        bool? typedBoolean = null,
+        AR.Iec61850.Mms.MmsDataKind? verifiedStringWireKind = null,
+        string? declaredDataType = null)
         => TryPublish(reference, fc, value, quality, timestamp, source, association,
-            utcTimeEvidence, qualityEvidence, typedBoolean: typedBoolean);
+            utcTimeEvidence, qualityEvidence, typedBoolean: typedBoolean,
+            verifiedStringWireKind: verifiedStringWireKind,
+            declaredDataType: declaredDataType);
 
     /// <summary>
     /// Atomically attach a verified, exact-model-owned q or t Report companion
@@ -156,12 +160,15 @@ public sealed class IedBrowserLiveValues
         string? timestamp, string source, long? expectedAssociation,
         Iec61850UtcTimeEvidence? utcTimeEvidence,
         MmsQualityEvidence? qualityEvidence, bool onlyIfNoReport = false,
-        bool? typedBoolean = null)
+        bool? typedBoolean = null,
+        AR.Iec61850.Mms.MmsDataKind? verifiedStringWireKind = null,
+        string? declaredDataType = null)
     {
         if (string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(fc) ||
             string.IsNullOrWhiteSpace(value) ||
             (string.Equals(source, "MMS Read", StringComparison.Ordinal) &&
-             !IedBrowserReadValuePolicy.TryAcceptDisplay(value, out _, out _)) ||
+             !IedBrowserReadValuePolicy.TryAcceptVerifiedMmsString(
+                 value, declaredDataType, verifiedStringWireKind, out _, out _)) ||
             value.Trim() is "-" or "Not read" or "Unknown")
             return false;
 
@@ -350,5 +357,6 @@ public sealed record IedBrowserReadResult(
     string DeviceTimestamp, string Error,
     Iec61850UtcTimeEvidence? UtcTimeEvidence = null,
     MmsQualityEvidence? QualityEvidence = null,
-    bool? TypedBoolean = null);
+    bool? TypedBoolean = null,
+    AR.Iec61850.Mms.MmsDataKind? VerifiedStringWireKind = null);
 public sealed record IedBrowserReadProgress(int Completed, int Total);
