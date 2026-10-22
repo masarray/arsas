@@ -4,6 +4,10 @@ on:
   push:
     branches: [ main ]
   pull_request:
+    # A trial-manifest-only PR already runs FAST CI-P1; don't duplicate a
+    # full Windows application build, native bridge build or package upload.
+    paths-ignore:
+      - "engines/ARIEC61850.trial.json"
   workflow_dispatch:
 
 concurrency:
