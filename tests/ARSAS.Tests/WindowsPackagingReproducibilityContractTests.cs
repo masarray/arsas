@@ -50,7 +50,13 @@ public sealed class WindowsPackagingReproducibilityContractTests
         const string identity =
             "ArIED61850Tester\\dist\\ARSAS-*-win-x64-portable-build-identity.json";
 
-        Assert.Contains(identity, canonical, StringComparison.Ordinal);
+        // The one-click portable Actions artifact is now a SINGLE unzipped
+        // .exe. The immutable sealed package still contains the complete
+        // versioned identity and all original release/provenance evidence.
+        Assert.Contains("portable-build-identity.json", canonical, StringComparison.Ordinal);
+        Assert.Contains("name: ARSAS-windows-package-input", canonical, StringComparison.Ordinal);
+        Assert.Contains("--portable-identity", canonical, StringComparison.Ordinal);
+        Assert.Contains("archive: false", canonical, StringComparison.Ordinal);
         Assert.Contains(identity, capture, StringComparison.Ordinal);
         Assert.Contains(
             "--portable-identity",
