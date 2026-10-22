@@ -116,7 +116,8 @@ public static class IedBrowserIsolatedReadService
                             read?.Quality ?? "", read?.DeviceTimestamp ?? "", "",
                             read?.UtcTimeEvidence, read?.QualityEvidence,
                             read?.Value is bool typed ? typed : null,
-                            read?.VerifiedStringWireKind));
+                            read?.VerifiedStringWireKind,
+                            read?.WireShapeEvidence ?? ""));
                     }
                     else
                     {

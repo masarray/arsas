@@ -18,7 +18,7 @@ public static class IedBrowserReadEvidenceCsv
     {
         ArgumentNullException.ThrowIfNull(ledger);
         var result = new StringBuilder();
-        result.AppendLine("CanonicalReference,FC,MmsReference,ModelType,RootCandidate,LedgerState,FailureKind,Reason,Association,ObservedUtc,Source,RawValue,Quality,DeviceTimestamp,GvaStatus,MmsInvokeStatus,UiProjection,FailureReasonCode");
+        result.AppendLine("CanonicalReference,FC,MmsReference,ModelType,RootCandidate,LedgerState,FailureKind,Reason,Association,ObservedUtc,Source,RawValue,Quality,DeviceTimestamp,GvaStatus,MmsInvokeStatus,UiProjection,FailureReasonCode,DecodedMmsWireShape");
         if (model is null || page is null || maxTargets <= 0)
             return result.ToString();
         var targets = IedBrowserReadPlan.Build(model, page, readAll: false)
@@ -41,7 +41,10 @@ public static class IedBrowserReadEvidenceCsv
                 observation?.Source ?? "", observation?.Value ?? "",
                 observation?.Quality ?? "", observation?.DeviceTimestamp ?? "",
                 "NOT_CAPTURED", "NOT_CAPTURED", "NOT_MEASURED",
-                projection.FailureReasonCode
+                projection.FailureReasonCode,
+                // Decoded wire-kind shape is captured from MMS result, never
+                // parsed from displayed strings. No invoke/GVA proof fabricated.
+                observation?.ReadWireShapeEvidence ?? ""
             };
             result.AppendLine(string.Join(",", cells.Select(Csv)));
         }

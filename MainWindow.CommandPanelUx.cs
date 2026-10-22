@@ -296,7 +296,10 @@ public partial class MainWindow
             do
             {
                 _controlModelPreloadPending = false;
-                foreach (var device in Devices.Where(device => device.IsConnected && device.SelectedControlSignalCount > 0))
+                foreach (var device in Devices.Where(device => device.IsConnected &&
+                    (device.SelectedControlSignalCount > 0 ||
+                     (device.LiveDiscoveryModel is not null && device.Signals.Any(
+                         Iec61850ControlIdentity.IsIndependentCswiCandidate)))))
             {
                 foreach (var signal in device.Signals.Where(signal => signal.IsSelected && signal.IsValidControlObject))
                     EnsureDefaultControlSafetyChecks(signal);
@@ -306,8 +309,20 @@ public partial class MainWindow
                 if (device.CommandSignals.Any(signal => signal.ControlCommandBusy))
                     continue;
 
-                // Cache aliases of the same DataObject share one ctlModel probe.
-                var candidates = Iec61850ControlIdentity.InspectionRepresentatives(device.Signals);
+                // DataSets report XCBR/XSWI status, not necessarily their
+                // command-owning CSWI in another LD. Probe a bounded set of
+                // exact live-discovered CSWI.Pos candidates read-only; never
+                // infer operability from their names or the DataSet feedback.
+                var selectedCandidates = Iec61850ControlIdentity
+                    .InspectionRepresentatives(device.Signals);
+                var independentCswi = device.LiveDiscoveryModel is not null
+                    ? Iec61850ControlIdentity.IndependentCswiInspectionCandidates(device.Signals)
+                    : [];
+                var candidates = selectedCandidates.Concat(independentCswi)
+                    .Where(signal => !signal.ControlModelResolved)
+                    .DistinctBy(signal => Iec61850ControlIdentity.Normalize(signal.ObjectReference),
+                        StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
 
                 if (candidates.Length == 0)
                     continue;

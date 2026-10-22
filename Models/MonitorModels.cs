@@ -742,7 +742,16 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         // CO DataObjects including ZIV ctlModel=0 so commissioning can explicitly
         // read/configure them; every physical action is still gated by typed
         // live ctlModel + CDC proof in SignalDefinition/runtime.
+        // Cross-DataSet CSWI targets require exact live typed ctlModel/CO verification;
+        // never promote status-only XCBR/XSWI or mutate DataSet membership.
         var selected = Iec61850ControlIdentity.DistinctSelected(Signals)
+            .Concat(IsConnected && LiveDiscoveryModel is not null
+                ? Iec61850ControlIdentity.VerifiedIndependentCswiControls(Signals)
+                : [])
+            .GroupBy(signal => Iec61850ControlIdentity.Normalize(signal.ObjectReference),
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.OrderByDescending(signal => signal.IsSelected)
+                .ThenByDescending(signal => signal.ControlSupportsOperate).First())
             .OrderBy(signal => signal.SortPriority)
             .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
             .ThenBy(signal => signal.Name, StringComparer.OrdinalIgnoreCase)
