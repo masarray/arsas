@@ -41,6 +41,38 @@ public static class Iec61850ControlIdentity
            (force || !signal.ControlModelResolved ||
             (signal.ControlSupportsOperate && signal.ControlCurrentValue == "-"));
 
+    /// <summary>
+    /// A control is NOT a DataSet member merely because its feedback Pos.stVal
+    /// is reported. Yet a verified live CSWI.Pos may exist in another LD and
+    /// must remain discoverable without changing the operator's signal selection.
+    /// Candidate admission is structural only; no control is enabled until
+    /// the exact live ctlModel and Oper structure pass native inspection.
+    /// </summary>
+    public static bool IsIndependentCswiCandidate(SignalDefinition signal)
+        => signal.IsValidControlObject && !signal.IsGenericControl &&
+           string.Equals(SignalDefinition.DetectLogicalNodeClass(signal.LogicalNode),
+               "CSWI", StringComparison.OrdinalIgnoreCase) &&
+           Normalize(signal.ObjectReference).EndsWith(".Pos",
+               StringComparison.OrdinalIgnoreCase);
+
+    public static SignalDefinition[] IndependentCswiInspectionCandidates(
+        IEnumerable<SignalDefinition> signals, int budget = 24)
+    {
+        if (budget <= 0) return [];
+        return signals.Where(s => !s.IsSelected && IsIndependentCswiCandidate(s))
+            .GroupBy(s => Normalize(s.ObjectReference), StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.OrderByDescending(s => s.ControlModelResolved)
+                .ThenByDescending(s => s.ControlSupportsOperate).First())
+            .OrderBy(s => Normalize(s.ObjectReference), StringComparer.OrdinalIgnoreCase)
+            .Take(budget).ToArray();
+    }
+
+    public static SignalDefinition[] VerifiedIndependentCswiControls(
+        IEnumerable<SignalDefinition> signals)
+        => IndependentCswiInspectionCandidates(signals)
+            .Where(s => s.ControlModelResolved && s.ControlSupportsOperate)
+            .ToArray();
+
     public static SignalDefinition[] InspectionRepresentatives(IEnumerable<SignalDefinition> signals)
         => DistinctSelected(signals).Where(s => !s.ControlModelResolved).ToArray();
 }
