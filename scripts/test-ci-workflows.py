@@ -173,8 +173,6 @@ jobs:
             ".github/workflows/validate-sv-evidence.yml",
             ".github/workflows/validate-io-testing.yml",
             ".github/workflows/comtrade-viewer-integration.yml",
-            ".github/workflows/smart-discovery-golden-provenance.yml",
-            ".github/workflows/smart-discovery-golden-budget-lock.yml",
             ".github/workflows/smart-discovery-repeat-run-stability.yml",
         ]
         expected_group = (
@@ -187,6 +185,19 @@ jobs:
             source = (repo / relative).read_text(encoding="utf-8")
             self.assertIn(expected_group, source, relative)
             self.assertIn(expected_cancel, source, relative)
+
+        # Original P0-5e authorities survive as independent check-named jobs.
+        merged = (repo / ".github/workflows/smart-discovery-repeat-run-stability.yml").read_text(
+            encoding="utf-8"
+        )
+        for job_id, check_name in (
+            ("verify-repeat-run-stability", "Verify P0-5f repeat-run stability contract"),
+            ("verify-golden-lock", "Verify P0-5e evidence-derived hard budget"),
+            ("verify-provenance", "Verify P0-5e capture build and target provenance"),
+        ):
+            self.assertIn(f"  {job_id}:\n", merged)
+            self.assertIn(f"name: {check_name}", merged)
+        self.assertEqual(merged.count("\n  verify-"), 3)
 
         release = (repo / ".github/workflows/release-windows.yml").read_text(
             encoding="utf-8"
