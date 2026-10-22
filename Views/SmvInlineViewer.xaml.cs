@@ -46,13 +46,31 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
     public ObservableCollection<GooseAdapterOption> Adapters { get; } = [];
     public ObservableCollection<SmvLiveStreamSummary> Streams { get; } = [];
-    public ObservableCollection<SmvRawVectorMeasurement> Measurements { get; } = [];
+    public ObservableCollection<SmvDisplayMeasurement> Measurements { get; } = [];
 
     // The original DigSub WPF controls repaint immutable models, not packet work.
     public WaveformSnapshot? CurrentWaveform { get; private set; }
     public IReadOnlyList<PhasorDisplayItem> CurrentPhasors { get; private set; } = [];
     public string CurrentStreamKey { get; private set; } = string.Empty;
     public bool IsLiveSnapshot { get; private set; }
+
+    private SmvDisplayUnits RequestedUnits
+        => (UnitsModeCombo?.SelectedItem as ComboBoxItem)?.Tag?.ToString() == "NineTwoLe"
+            ? SmvDisplayUnits.NineTwoLe : SmvDisplayUnits.RawCounts;
+
+    private SmvDisplayUnits ActiveUnits
+        => SmvEngineeringDisplay.Effective(_visibleSnapshot, RequestedUnits);
+
+    public string PhaseReferenceText => ActiveUnits == SmvDisplayUnits.NineTwoLe
+        ? "Ia (Ch1) · 0°" : "Ch1 · 0° reference";
+
+    public string UnitStatus => RequestedUnits switch
+    {
+        SmvDisplayUnits.RawCounts => "RAW counts · no verified U/I channel scale",
+        _ when ActiveUnits == SmvDisplayUnits.NineTwoLe
+            => "9-2LE user profile · 1 mA / 10 mV per count · verify publisher DataSet",
+        _ => "9-2LE selected · need eight clean channels; displaying RAW counts"
+    };
 
     public string StreamCountText => $"{Streams.Count:N0} detected";
     public string CaptureStatus { get => _captureStatus; private set => Change(ref _captureStatus, value, nameof(CaptureStatus)); }
@@ -313,9 +331,7 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
         _visibleSnapshot = snapshot;
         IsLiveSnapshot = true;
         Notify(nameof(IsLiveSnapshot));
-        WaveformStatus = $"Received {snapshot.CapturedSamples:N0} coherent samples • {snapshot.SamplesPerCycle} samples/cycle • unscaled INT32";
-        CurrentWaveform = SmvDigSubPresentationAdapter.BuildWaveform(snapshot);
-        Notify(nameof(CurrentWaveform));
+        UpdateUnitPresentation(redrawWaveform: true);
         BeginAnalysis(snapshot, selectedKey, generation);
     }
 
@@ -330,18 +346,14 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
                 selectedKey != Volatile.Read(ref _selectedKey))
                 return;
             _visibleVectors = SmvDigSubPresentationAdapter.RelativeMeasurements(vectors);
-            Measurements.Clear();
-            foreach (var row in _visibleVectors)
-                Measurements.Add(row);
-            UpdateDigSubPhasors();
+            UpdateUnitPresentation(redrawWaveform: false);
         }
         catch (Exception)
         {
             if (generation != _generation || analysis != _analysisGeneration)
                 return;
             _visibleVectors = [];
-            Measurements.Clear();
-            UpdateDigSubPhasors();
+            UpdateUnitPresentation(redrawWaveform: false);
             WaveformStatus = "Raw phasor calculation unavailable; no substitute values shown.";
         }
     }
@@ -377,13 +389,44 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
         Notify(nameof(CurrentStreamKey));
         IsLiveSnapshot = false;
         Notify(nameof(IsLiveSnapshot));
-        UpdateDigSubPhasors();
+        UpdateUnitPresentation(redrawWaveform: false);
     }
 
     private void UpdateDigSubPhasors()
     {
-        CurrentPhasors = SmvDigSubPresentationAdapter.BuildPhasors(_visibleVectors);
+        CurrentPhasors = SmvDigSubPresentationAdapter.BuildPhasors(_visibleVectors, ActiveUnits);
         Notify(nameof(CurrentPhasors));
+    }
+
+    private void UnitsMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (WaveformView is null || UnitsModeCombo is null)
+            return; // SelectionChanged also fires while InitializeComponent constructs the UI.
+        UpdateUnitPresentation(redrawWaveform: true);
+    }
+
+    private void UpdateUnitPresentation(bool redrawWaveform)
+    {
+        var profile = ActiveUnits;
+        if (redrawWaveform && _visibleSnapshot is { } snapshot)
+        {
+            CurrentWaveform = SmvDigSubPresentationAdapter.BuildWaveform(snapshot, profile);
+            Notify(nameof(CurrentWaveform));
+            WaveformStatus =
+                $"Received {snapshot.CapturedSamples:N0} coherent samples • {snapshot.SamplesPerCycle} samples/cycle • " +
+                (profile == SmvDisplayUnits.NineTwoLe
+                    ? "9-2LE operator-selected engineering display"
+                    : "raw INT32 counts");
+        }
+
+        // The immutable wire/DSP vectors remain raw. Scaling is presentation-only.
+        // WPF collections remain bounded to at most the 8 displayed channels.
+        Measurements.Clear();
+        foreach (var raw in _visibleVectors)
+            Measurements.Add(SmvEngineeringDisplay.Present(raw, profile));
+        UpdateDigSubPhasors();
+        Notify(nameof(UnitStatus));
+        Notify(nameof(PhaseReferenceText));
     }
 
     private void WaveformOptionsChanged(object sender, SelectionChangedEventArgs e)
