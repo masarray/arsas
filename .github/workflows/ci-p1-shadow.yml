@@ -22,6 +22,16 @@ on:
       - "*.xaml"
       - "MainWindow*.cs"
   workflow_dispatch:
+    inputs:
+      fast_dev:
+        description: 'FAST DEV compile + scoped regression; never release qualified'
+        type: boolean
+        default: false
+      focus:
+        description: 'Focused regression group'
+        type: choice
+        options: [quality-browser, smv, command-read, all]
+        default: quality-browser
 
 permissions:
   contents: read
@@ -84,4 +94,6 @@ jobs:
     with:
       source_sha: ${{ github.sha }}
       shadow_mode: true
+      fast_dev: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_dev == true }}
+      focus: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_dev == true && inputs.focus || 'all' }}
     secrets: {}
