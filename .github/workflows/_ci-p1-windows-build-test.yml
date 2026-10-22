@@ -373,17 +373,42 @@ jobs:
             throw 'CI-P1 shadow SHA/TRX proof is incomplete; fail closed.'
           }
 
-      # Keep ONE upload action for CI-sprawl budget. FAST trial downloads
-      # a single EXE without ZIP; nontrial CI still retains TRX/manifest proof.
-      - name: Upload FAST EXE directly or nontrial diagnostics
+      # CI-sprawl budget permits one upload action. Compute exact FAST vs
+      # diagnostic paths once, without changing release or FAT authority.
+      - name: Choose FAST EXE or diagnostic artifact
+        id: artifact-mode
+        if: always()
+        shell: pwsh
+        env:
+          FAST_DEV: ${{ inputs.fast_dev }}
+          TRIAL_SHA: ${{ inputs.engine_trial_sha }}
+          FOCUS: ${{ inputs.focus }}
+        run: |
+          $trial = ($env:FAST_DEV -eq 'true' -and
+                    $env:TRIAL_SHA -match '^[0-9a-f]{40}
+          retention-days: 14
+ -and
+                    $env:FOCUS -eq 'command-read')
+          if ($trial) {
+            "artifact_name=ARSAS-SG7-BCU-FAT-TRIAL-$env:GITHUB_RUN_ID.exe" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+            "artifact_path=ARSAS/TestResults/sg7-bcu-fat-trial/ARSAS-SG7_BCU-ED2-FAT-TRIAL-*-win-x64.exe" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+            "artifact_archive=false" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          } else {
+            "artifact_name=ci-p1-shadow-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+            "artifact_path<<END_OF_PATHS" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+            "ARSAS/TestResults/*.trx" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+            "$env:RUNNER_TEMP/ci-p1-shadow-manifest.json" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+            "END_OF_PATHS" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+            "artifact_archive=true" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          }
+
+      - name: Upload directly downloadable FAST EXE or normal CI proof
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.focus == 'command-read' && format('ARSAS-SG7-BCU-FAT-TRIAL-{0}.exe', github.run_id) || format('ci-p1-shadow-{0}-{1}', github.run_id, github.run_attempt) }}
-          path: |
-            ${{ inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.focus == 'command-read' && 'ARSAS/TestResults/sg7-bcu-fat-trial/ARSAS-SG7_BCU-ED2-FAT-TRIAL-*-win-x64.exe' || 'ARSAS/TestResults/*.trx' }}
-            ${{ inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.focus == 'command-read' && '' || format('{0}/ci-p1-shadow-manifest.json', runner.temp) }}
-          archive: ${{ !(inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.focus == 'command-read') }}
+          name: ${{ steps.artifact-mode.outputs.artifact_name }}
+          path: ${{ steps.artifact-mode.outputs.artifact_path }}
+          archive: ${{ steps.artifact-mode.outputs.artifact_archive }}
           if-no-files-found: error
           retention-days: 14
           retention-days: 14
