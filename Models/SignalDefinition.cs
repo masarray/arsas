@@ -102,6 +102,11 @@ public class SignalDefinition : ObservableObject
     public string TimestampReference { get; set; } = "";
     public string Source { get; set; } = "Online";
     public bool IsControlSignal { get; set; }
+    /// <summary>
+    /// Exact MMS CO service / CF ctlModel inventory evidence, never inferred from LN
+    /// names or ST feedback. Read-only candidate evidence is NOT operate authority.
+    /// </summary>
+    public bool HasControlServiceEvidence { get; set; }
     public bool IsValidControlObject => IsControlSignal && IsControlObjectReference(ObjectReference);
     /// <summary>Association-scoped CDC proved by a typed live control descriptor.</summary>
     [System.Text.Json.Serialization.JsonIgnore]

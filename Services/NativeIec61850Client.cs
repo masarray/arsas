@@ -3876,13 +3876,90 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         var attributes = dataObject.Attributes ?? Array.Empty<LiveIedDataAttributeModel>();
         var hasControlOperation = attributes.Any(attribute =>
         {
-            var fc = attribute.FunctionalConstraint ?? string.Empty;
+            if (!string.Equals(attribute.FunctionalConstraint, "CO", StringComparison.OrdinalIgnoreCase))
+                return false;
+            var segments = (attribute.AttributePath ?? string.Empty)
+                .Replace('
+
+        var controlModelAttribute = attributes.FirstOrDefault(attribute =>
+        {
             var path = attribute.AttributePath ?? string.Empty;
-            return fc.Equals("CO", StringComparison.OrdinalIgnoreCase) &&
-                   (path.Contains("Oper", StringComparison.OrdinalIgnoreCase) ||
-                    path.Contains("SBO", StringComparison.OrdinalIgnoreCase) ||
-                    path.Contains("Cancel", StringComparison.OrdinalIgnoreCase) ||
-                    path.EndsWith("ctlVal", StringComparison.OrdinalIgnoreCase));
+            var reference = attribute.ObjectReference ?? string.Empty;
+            return string.Equals(attribute.FunctionalConstraint, "CF", StringComparison.OrdinalIgnoreCase) &&
+                   (path.EndsWith("ctlModel", StringComparison.OrdinalIgnoreCase) ||
+                    reference.EndsWith(".ctlModel", StringComparison.OrdinalIgnoreCase));
+        });
+
+        // ST values and guessed CDC cannot establish command authority.
+
+        var cdc = (dataObject.InferredCdc ?? string.Empty).Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(cdc))
+            cdc = InferControlCdc(logicalNode, dataObject, attributes, hasControlOperation);
+
+        if (!hasControlOperation && controlModelAttribute == null)
+            return;
+
+        var reference = (dataObject.Reference ?? string.Empty).Trim().Replace('$', '.');
+        if (string.IsNullOrWhiteSpace(reference) || !IsValidControlObjectReference(reference))
+            return;
+
+        var objectLeaf = reference[(reference.LastIndexOf('.') + 1)..];
+        if (IsControlServiceLeaf(objectLeaf) || IsControlServiceLeaf(dataObject.Name))
+        {
+            // ctlModel/ctlVal/ctlNum/Oper/SBOw are attributes of a control object,
+            // not independent command targets. Rootless shallow discovery is ignored;
+            // the validated status-to-control projection will add the parent DO when
+            // Pos.stVal, TapOpR.stVal, or another standard status object is available.
+            return;
+        }
+
+        var controlModelReference = controlModelAttribute?.ObjectReference;
+        if (string.IsNullOrWhiteSpace(controlModelReference))
+            controlModelReference = controlModelAttribute?.MmsReference;
+        if (string.IsNullOrWhiteSpace(controlModelReference))
+            controlModelReference = $"{reference}.ctlModel";
+
+        var ln = string.IsNullOrWhiteSpace(logicalNode.Name) ? ExtractLogicalNode(reference) : logicalNode.Name;
+        var objectName = string.IsNullOrWhiteSpace(dataObject.Name)
+            ? reference[(reference.LastIndexOf('.') + 1)..]
+            : dataObject.Name;
+        var type = string.IsNullOrWhiteSpace(cdc) ? "Control" : $"{cdc} Control";
+
+        signals.Add(new SignalDefinition
+        {
+            Name = $"{ln} {objectName} Control".Replace("  ", " ").Trim(),
+            ObjectReference = reference,
+            FunctionalConstraint = "CO",
+            DataType = type,
+            Category = "Control",
+            Confidence = hasControlOperation ? "High" : "Medium",
+            IsSelected = false,
+            IsControlSignal = true,
+            HasControlServiceEvidence = true,
+            ControlCdc = cdc,
+            ControlModelReference = controlModelReference.Replace('$', '.'),
+            ControlStatusReference = BuildControlStatusReference(reference, cdc),
+            ControlModelText = "Auto-detect on command",
+            ControlValueType = InferControlValueType(cdc),
+            IsReportCapable = false,
+            ReportCoverage = "Command object",
+            ReportCoverageReason = hasControlOperation
+                ? "ARIEC61850 discovered an IEC 61850 CO operation structure for this controllable data object."
+                : "ARIEC61850 inferred a controllable CDC/ctlModel. Command capability must be validated before operate.",
+            Source = "ARIEC61850 live control-object discovery",
+            Value = "Control object",
+            Quality = "-",
+            DeviceTimestamp = "-",
+            ProbeStatus = "Control discovered",
+            Timestamp = now
+        });
+    }
+
+, '.').Split('.', StringSplitOptions.RemoveEmptyEntries);
+            return segments.Any(segment => segment.Equals("Oper", StringComparison.OrdinalIgnoreCase) ||
+                                           segment.Equals("SBO", StringComparison.OrdinalIgnoreCase) ||
+                                           segment.Equals("SBOw", StringComparison.OrdinalIgnoreCase) ||
+                                           segment.Equals("Cancel", StringComparison.OrdinalIgnoreCase));
         });
 
         var controlModelAttribute = attributes.FirstOrDefault(attribute =>
