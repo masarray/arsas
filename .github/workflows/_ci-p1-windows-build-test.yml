@@ -373,14 +373,25 @@ jobs:
             throw 'CI-P1 shadow SHA/TRX proof is incomplete; fail closed.'
           }
 
-      - name: Upload SHA-verified trial EXE, native proof and regression TRX
-        if: always()
+      # FAST DEV: upload only the single SHA-verified EXE, directly downloadable.
+      # No ZIP wrapper and no test files attached to the user-facing artifact.
+      - name: Upload directly downloadable verified SG7 BCU trial EXE
+        if: ${{ success() && inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.focus == 'command-read' }}
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.focus == 'command-read' && format('ARSAS-SG7-BCU-ED2-FAT-TRIAL-{0}', github.run_id) || format('ci-p1-shadow-{0}-{1}', github.run_id, github.run_attempt) }}
+          path: ARSAS/TestResults/sg7-bcu-fat-trial/ARSAS-SG7_BCU-ED2-FAT-TRIAL-*-win-x64.exe
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+      # Retain diagnostics for normal CI, not for the fast trial download.
+      - name: Upload ordinary shadow regression evidence
+        if: ${{ always() && !(inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.focus == 'command-read') }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-p1-shadow-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ARSAS/TestResults/*.trx
-            ARSAS/TestResults/sg7-bcu-fat-trial/*
             ${{ runner.temp }}/ci-p1-shadow-manifest.json
           if-no-files-found: error
           retention-days: 14
