@@ -71,6 +71,29 @@ on:
       - "engines/ARIEC61850.lock.json"
       - "engines/ARDIREC.lock.json"
   workflow_dispatch:
+    inputs:
+      fat_preview:
+        description: "Create a direct .exe FAT prerelease (not a stable release)"
+        type: boolean
+        required: false
+        default: false
+      tested_sha:
+        description: "Exact fully CI-passed 40-character PR source SHA (FAT only)"
+        type: string
+        required: false
+      build_run_id:
+        description: "Exact-SHA completed successful Build ARSAS workflow run ID (FAT only)"
+        type: string
+        required: false
+      installer_run_id:
+        description: "Optional successful exact-SHA installer run ID; use 0 to omit setup.exe"
+        type: string
+        required: false
+        default: '0'
+      public_preview_ack:
+        description: "For a PUBLIC FAT prerelease, type PUBLISH PUBLIC NONPRODUCTION FAT EXE"
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -185,7 +208,7 @@ jobs:
     if: >-
       ${{
         always() &&
-        (github.event_name == 'workflow_dispatch' ||
+        ((github.event_name == 'workflow_dispatch' && inputs.fat_preview != true) ||
          needs.package-ready.result == 'success')
       }}
     runs-on: windows-latest
@@ -199,6 +222,12 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Test FAT direct EXE verifier guards (no public release)
+        shell: pwsh
+        run: |
+          python .\\ArIED61850Tester\\scripts\\test-fat-direct-exe.py
+          if ($LASTEXITCODE -ne 0) { throw "FAT direct EXE verifier regression failed." }
 
       - name: Verify exact installer source identity
         shell: powershell
@@ -520,3 +549,121 @@ jobs:
             ArIED61850Tester/dist/ARSAS-${{ env.APP_VERSION }}-win-x64-setup.exe
             ArIED61850Tester/dist/SHA256SUMS.txt
             ArIED61850Tester/dist/ci-installer-authority.json
+
+  fat-direct-preview:
+    name: Verify and publish direct .exe FAT preview (manual-only, public)
+    permissions:
+      contents: write
+      actions: read
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.fat_preview == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: fat-preview-publication
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TESTED_SHA: ${{ inputs.tested_sha }}
+      BUILD_RUN_ID: ${{ inputs.build_run_id }}
+      INSTALLER_RUN_ID: ${{ inputs.installer_run_id }}
+      PUBLIC_ACK: ${{ inputs.public_preview_ack }}
+    steps:
+      - name: Fetch approved verification scripts from exact main workflow SHA (no extra checkout)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p scripts
+          for file in test-fat-direct-exe.py verify-fat-direct-exe.py; do
+            gh api "repos/$GITHUB_REPOSITORY/contents/scripts/$file?ref=$GITHUB_SHA" \
+              --jq '.content' | base64 -d > "scripts/$file"
+            test -s "scripts/$file"
+          done
+          python3 scripts/test-fat-direct-exe.py
+
+      - name: Verify explicit consent and exact HEAD full CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/test-fat-direct-exe.py
+          [[ "$PUBLIC_ACK" == "PUBLISH PUBLIC NONPRODUCTION FAT EXE" ]] || {
+            echo "An explicit public preview acknowledgement is required." >&2; exit 1;
+          }
+          [[ "$TESTED_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          [[ "$BUILD_RUN_ID" =~ ^[0-9]+$ ]] || exit 1
+          [[ "$INSTALLER_RUN_ID" =~ ^[0-9]+$ ]] || exit 1
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$TESTED_SHA&per_page=100" > ci.json
+          jq --arg sha "$TESTED_SHA" -e '
+            [.workflow_runs[] | select(.head_sha == $sha) |
+              select(.event == "pull_request" or .event == "push")] as $runs |
+            ($runs | length >= 10) and
+            ([$runs[] | select(.status != "completed" or .conclusion != "success")] | length == 0)
+          ' ci.json || { echo "All exact-SHA CI workflows must be successful." >&2; exit 1; }
+          TAG="fat-${TESTED_SHA:0:12}"
+          echo "PREVIEW_TAG=$TAG" >> "$GITHUB_ENV"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Immutable preview already exists; never overwrite an asset." >&2; exit 1
+          fi
+
+      - name: Verify downloaded Windows portable is the actual CI-tested EXE
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p staged/portable published
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID" > build-run.json
+          gh run download "$BUILD_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name ARSAS-win-x64-portable-single-exe --dir staged/portable
+          mapfile -t files < <(find staged/portable -type f -name '*.exe')
+          [[ "${#files[@]}" -eq 1 ]] || { echo "Expected exactly one EXE." >&2; exit 1; }
+          python3 scripts/verify-fat-direct-exe.py \
+            --run-json build-run.json --sha "$TESTED_SHA" --workflow "Build ARSAS" \
+            --exe "${files[0]}" --output published/portable-provenance.json
+          cp "${files[0]}" "published/ARSAS-FAT-${TESTED_SHA:0:12}-win-x64-portable.exe"
+
+      - name: Optionally verify separately successful exact-SHA installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$INSTALLER_RUN_ID" == 0 ]]; then exit 0; fi
+          mkdir -p staged/installer
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$INSTALLER_RUN_ID" > installer-run.json
+          gh run download "$INSTALLER_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'ARSAS-*-win-x64-installer' --dir staged/installer
+          mapfile -t files < <(find staged/installer -type f -name '*-setup.exe')
+          [[ "${#files[@]}" -eq 1 ]] || { echo "Expected exactly one installer." >&2; exit 1; }
+          python3 scripts/verify-fat-direct-exe.py \
+            --run-json installer-run.json --sha "$TESTED_SHA" \
+            --workflow "Validate ARSAS Windows installer" \
+            --exe "${files[0]}" --output published/installer-provenance.json
+          cp "${files[0]}" "published/ARSAS-FAT-${TESTED_SHA:0:12}-win-x64-setup.exe"
+
+      - name: Publish only approved non-production direct EXE preview assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd published && sha256sum ./*.exe > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
+          cat > published/NOT-PRODUCTION.txt <<EOF
+          ARSAS manual public prerelease FAT preview.
+          Exact tested source: $TESTED_SHA
+          Windows Build run: $BUILD_RUN_ID
+          Installer run: $INSTALLER_RUN_ID (0 means not included).
+          No physical FAT acceptance. No production release.
+          EOF
+          cat > release-notes.md <<EOF
+          ARSAS engineering FAT preview only; NOT a production release.
+          Source SHA: $TESTED_SHA
+          Build run ID: $BUILD_RUN_ID
+          Installer run ID: $INSTALLER_RUN_ID
+
+          Direct executable files are release assets, not CI ZIP artifacts.
+          Verify SHA256SUMS.txt. No physical IED acceptance is implied.
+          Stable releases, mainline acceptance and production metadata remain unchanged.
+          EOF
+          gh release create "$PREVIEW_TAG" published/* --repo "$GITHUB_REPOSITORY" \
+            --target "$TESTED_SHA" --title "ARSAS FAT Preview ${TESTED_SHA:0:12}" \
+            --notes-file release-notes.md --prerelease
+          {
+            echo "## Direct .exe FAT preview (NOT production)"
+            echo "Source: $TESTED_SHA"
+            echo "Portable: https://github.com/$GITHUB_REPOSITORY/releases/download/$PREVIEW_TAG/ARSAS-FAT-${TESTED_SHA:0:12}-win-x64-portable.exe"
+            if [[ "$INSTALLER_RUN_ID" != 0 ]]; then
+              echo "Installer: https://github.com/$GITHUB_REPOSITORY/releases/download/$PREVIEW_TAG/ARSAS-FAT-${TESTED_SHA:0:12}-win-x64-setup.exe"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
