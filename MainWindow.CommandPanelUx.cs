@@ -296,7 +296,10 @@ public partial class MainWindow
             do
             {
                 _controlModelPreloadPending = false;
-                foreach (var device in Devices.Where(device => device.IsConnected && device.SelectedControlSignalCount > 0))
+                foreach (var device in Devices.Where(device => device.IsConnected &&
+                    (device.SelectedControlSignalCount > 0 ||
+                     (device.LiveDiscoveryModel is not null && device.Signals.Any(
+                         Iec61850ControlIdentity.IsIndependentCswiCandidate)))))
             {
                 foreach (var signal in device.Signals.Where(signal => signal.IsSelected && signal.IsValidControlObject))
                     EnsureDefaultControlSafetyChecks(signal);
