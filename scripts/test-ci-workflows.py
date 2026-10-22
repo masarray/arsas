@@ -315,6 +315,17 @@ class SmartDiscoveryFastRoutingTests(unittest.TestCase):
                     f"{name} wrongly triggered by {unrelated}",
                 )
 
+    def test_draft_runs_fast_and_ready_for_review_reruns_full_gates(self):
+        root = Path(__file__).resolve().parent.parent
+        for name in (*self.WORKFLOWS, ".github/workflows/installer-windows.yml"):
+            content = (root / name).read_text(encoding="utf-8")
+            self.assertIn("types: [opened, synchronize, reopened, ready_for_review]",
+                          content, name)
+            self.assertIn(
+                "(github.event_name != 'pull_request' || !github.event.pull_request.draft)",
+                content, name)
+            self.assertIn("  workflow_dispatch:", content, name)
+
     def test_smart_discovery_critical_changes_still_trigger_and_manual_exists(self):
         root = Path(__file__).resolve().parent.parent
         from fnmatch import fnmatchcase

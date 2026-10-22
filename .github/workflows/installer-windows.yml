@@ -37,6 +37,7 @@ on:
       - "engines/ARIEC61850.lock.json"
       - "engines/ARDIREC.lock.json"
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "installer/**"
       - "scripts/build-windows-installer.ps1"
@@ -83,7 +84,7 @@ concurrency:
 jobs:
   package-ready:
     name: Wait for exact canonical package metadata
-    if: github.event_name != 'workflow_dispatch'
+    if: github.event_name != 'workflow_dispatch' && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     runs-on: ubuntu-latest
     timeout-minutes: 25
     outputs:
@@ -185,6 +186,7 @@ jobs:
     if: >-
       ${{
         always() &&
+        (github.event_name != 'pull_request' || !github.event.pull_request.draft) &&
         (github.event_name == 'workflow_dispatch' ||
          needs.package-ready.result == 'success')
       }}

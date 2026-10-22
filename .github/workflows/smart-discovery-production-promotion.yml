@@ -2,6 +2,7 @@ name: Smart Discovery Production Promotion Guard
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       # Fast PR routing: only Smart Discovery authority/dependencies trigger this gate.
       - "Services/NativeIec61850Client*.cs"
@@ -30,6 +31,7 @@ concurrency:
 
 jobs:
   verify-production-route:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Verify physical-proven Smart Discovery production parity
     runs-on: windows-latest
     timeout-minutes: 25
