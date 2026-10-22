@@ -52,20 +52,31 @@ public sealed class SmvArstackRealPublisherInteropTests
             cat.Receive(Frame(i, declaredRate: 4000, mode: 0), stamp);
         var state = cat.Publish(null, stamp);
         Assert.Null(state.SelectedSnapshot);
-        Assert.Contains("window", Assert.Single(state.Streams).Diagnostic,
+        Assert.Contains("Timebase unresolved", Assert.Single(state.Streams).Diagnostic,
             StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void ContradictoryMetadataWithoutFixedShape_DoesNotEnableFallback()
+    public void ContradictoryMetadataDifferentPayload_RequiresFullIndependentClockEvidence()
     {
         var cat = new SmvLiveStreamCatalog(Options);
         var stamp = new DateTimeOffset(2026,10,22,0,0,0,TimeSpan.Zero);
-        for (var i = 0; i < 800; i++)
+        for (var i = 0; i < 239; i++)
             cat.Receive(Frame(i, declaredRate: 4000, mode: 0, eightChannels: false),
                 stamp.AddTicks(i * 2500));
-        var state = cat.Publish(null, stamp);
-        Assert.Null(state.SelectedSnapshot);
+        var pending = cat.Publish(null, stamp);
+        Assert.Null(pending.SelectedSnapshot);
+        for (var i = 239; i < 800; i++)
+            cat.Receive(Frame(i, declaredRate: 4000, mode: 0, eightChannels: false),
+                stamp.AddTicks(i * 2500));
+        var selectedKey = Assert.Single(cat.Publish(null, stamp).Streams).Key;
+        var state = cat.Publish(selectedKey, stamp);
+        var snapshot = Assert.IsType<SmvSnapshotResult>(state.SelectedSnapshot);
+        Assert.Equal(2, snapshot.Channels.Count);
+        Assert.Equal(160, snapshot.CapturedSamples);
+        Assert.Contains("NIC-clock evidence", snapshot.TimebaseReason);
+        // No guessing Ua/Ia semantics merely because the timebase was observed.
+        Assert.All(snapshot.Channels, c => Assert.Contains("Raw", c.Label));
     }
 
     private static SampledValuesFrame Frame(int sample, ushort declaredRate, ushort mode,
