@@ -74,17 +74,17 @@ public sealed class ModelDrivenAutoCommandDockTests
         device.Signals.ReplaceAll([breaker, tap, statusOnly, noProof]);
         device.RecountSelectedSignals();
 
-        Assert.Equal(2, device.CommandSignals.Count);
-        Assert.Contains(breaker, device.CommandSignals);
-        Assert.Contains(tap, device.CommandSignals);
-        Assert.DoesNotContain(statusOnly, device.CommandSignals);
-        Assert.DoesNotContain(noProof, device.CommandSignals);
+        Assert.Equal(2, device.OperableCommandSignals.Count);
+        Assert.Contains(breaker, device.OperableCommandSignals);
+        Assert.Contains(tap, device.OperableCommandSignals);
+        Assert.DoesNotContain(statusOnly, device.OperableCommandSignals);
+        Assert.DoesNotContain(noProof, device.OperableCommandSignals);
         Assert.False(breaker.IsSelected);
         Assert.False(tap.IsSelected);
 
         var events = new List<NotifyCollectionChangedAction>();
-        device.CommandSignals.CollectionChanged += (_, e) => events.Add(e.Action);
-        var first = device.CommandSignals.ToArray();
+        device.OperableCommandSignals.CollectionChanged += (_, e) => events.Add(e.Action);
+        var first = device.OperableCommandSignals.ToArray();
         for (var i = 0; i < 100; i++)
         {
             breaker.ControlCurrentValue = i % 2 == 0 ? "Open" : "Closed";
@@ -92,7 +92,7 @@ public sealed class ModelDrivenAutoCommandDockTests
             device.RefreshCommandSignalProjection();
         }
         Assert.Empty(events);
-        Assert.True(first.SequenceEqual(device.CommandSignals));
+        Assert.True(first.SequenceEqual(device.OperableCommandSignals));
     }
 
     [Fact]
