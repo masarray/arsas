@@ -24,8 +24,7 @@ public static class IedBrowserReadWireShapeEvidence
             ", childCount=" + decoded.Children.Count.ToString(
                 System.Globalization.CultureInfo.InvariantCulture) +
             (decoded.Kind == MmsDataKind.Unknown
-                ? ", unknownTag=" + decoded.UnknownTagNumber.ToString(
-                    System.Globalization.CultureInfo.InvariantCulture)
+                ? ", unknownTag=" + decoded.UnknownTagNumber.ToString()
                 : "");
     }
 }
