@@ -76,9 +76,15 @@ public sealed class M214BrowserReadValueVerdictTests
         var isolated = File.ReadAllText(Find("Services/IedBrowserIsolatedReadService.cs"));
         var shared = File.ReadAllText(Find("Services/Iec61850MonitorRuntime.cs"));
         var ui = File.ReadAllText(Find("MainWindow.IedBrowser.cs"));
-        Assert.Contains("IedBrowserReadValuePolicy.TryAcceptDisplay", isolated);
+        // Both reader and UI now require wire-kind proof when an MMS string
+        // begins with array/structure-like punctuation. The shared monitoring
+        // service retains the conservative display-only policy; its untyped
+        // observations must never receive the explicit-read exception.
+        Assert.Contains("IedBrowserReadValuePolicy.TryAcceptVerifiedMmsString", isolated);
         Assert.Contains("IedBrowserReadValuePolicy.TryAcceptDisplay", shared);
-        Assert.Contains("IedBrowserReadValuePolicy.TryAcceptDisplay", ui);
+        Assert.Contains("IedBrowserReadValuePolicy.TryAcceptVerifiedMmsString", ui);
+        Assert.Contains("result.VerifiedStringWireKind", ui);
+        Assert.Contains("declaredDataType: result.Target.DataType", ui);
         Assert.Contains("failureExamples", ui);
     }
 

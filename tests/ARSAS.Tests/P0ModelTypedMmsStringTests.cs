@@ -67,6 +67,109 @@ public sealed class P0ModelTypedMmsStringTests
         Assert.False(ledger.TryGet(reference, "DC", out _, preferReport: false));
     }
 
+
+    [Fact]
+    public void ExactGvaDcRootCanProjectVendorTextStartingWithBracket()
+    {
+        const string root = "ZIVAVR/LLN0$DC0";
+        var target = new IedBrowserReadTarget(
+            "ZIVAVR/LLN0$DC$NamPlt$swRev", "DC", "VisString255");
+        var gva = new MmsTypeSpecificationNode
+        {
+            MmsType = "structure",
+            Children =
+            [
+                new MmsTypeSpecificationNode
+                {
+                    Name = "NamPlt", MmsType = "structure",
+                    Children = [new MmsTypeSpecificationNode
+                    {
+                        Name = "swRev", MmsType = "visible-string"
+                    }]
+                }
+            ]
+        };
+        var wire = MmsDataValue.Structure([
+            MmsDataValue.Structure([MmsDataValue.VisibleString("[IRV:firmware")])
+        ]);
+        var result = Assert.Single(IedBrowserSgRootProjection.Project(
+            root, gva, wire, [target]));
+        Assert.Equal(target, result.Target);
+        Assert.Equal("[IRV:firmware", result.Value);
+        Assert.Equal(MmsDataKind.VisibleString, result.VerifiedStringWireKind);
+        Assert.False(IedBrowserSgRootProjection.Project(root, gva, wire,
+            [target with { FunctionalConstraint = "CF" }]).Any());
+    }
+
+    [Fact]
+    public void ExactGvaDoParentCanProjectLiteralStringButRejectWrongModelType()
+    {
+        const string parent = "ZIVAVR/CSWI1$SE$VendorDO";
+        var target = new IedBrowserReadTarget(
+            "ZIVAVR/CSWI1$SE$VendorDO$setVal", "SE", "VisString64");
+        var gva = new MmsTypeSpecificationNode
+        {
+            MmsType = "structure",
+            Children = [new MmsTypeSpecificationNode
+            {
+                Name = "setVal", MmsType = "visible-string"
+            }]
+        };
+        var wire = MmsDataValue.Structure([MmsDataValue.VisibleString("{safe literal")]);
+        var result = Assert.Single(IedBrowserVerifiedDoProjection.Project(
+            parent, gva, wire, [target]));
+        Assert.Equal("{safe literal", result.Value);
+        Assert.Equal(MmsDataKind.VisibleString, result.VerifiedStringWireKind);
+        Assert.Empty(IedBrowserVerifiedDoProjection.Project(
+            parent, gva, wire, [target with { DataType = "INT32" }]));
+    }
+
+    [Fact]
+    public void ExactGvaParentPreservesFalseTypedBooleanWithoutInventingTrue()
+    {
+        const string parent = "SIEBCUCTRL/CSWI1$ST$SwAuth";
+        var target = new IedBrowserReadTarget(
+            "SIEBCUCTRL/CSWI1$ST$SwAuth$stVal", "ST", "Boolean");
+        var gva = new MmsTypeSpecificationNode
+        {
+            MmsType = "structure",
+            Children = [new MmsTypeSpecificationNode
+            {
+                Name = "stVal", MmsType = "boolean"
+            }]
+        };
+        var wire = MmsDataValue.Structure([MmsDataValue.Boolean(false)]);
+        var result = Assert.Single(IedBrowserVerifiedDoProjection.Project(
+            parent, gva, wire, [target]));
+        Assert.False(result.TypedBoolean);
+        Assert.Null(result.VerifiedStringWireKind);
+    }
+
+    [Fact]
+    public void StSeParentFlightReusesOnlyVerifiedScheduledSiblingsAndBoundedUnscheduledFanout()
+    {
+        var service = ReadRepoSource("Services/IedBrowserIsolatedReadService.cs");
+        var flight = ReadRepoSource("Services/IedBrowserTypedDoReadFlight.cs");
+        Assert.Contains("doReadFlight.PreviouslyVerified(target)", service);
+        Assert.Contains("doReadFlight.DrainUnscheduledSiblings(target)", service);
+        Assert.Contains("_scheduledKeys.Contains(item.Key)", flight);
+        Assert.Contains("_drainedParents.Add(parent)", flight);
+        Assert.Contains("_completed.TryGetValue(parent", flight);
+        Assert.Contains("MaximumParentAttempts = 24", flight);
+    }
+
+    private static string ReadRepoSource(string relativePath)
+    {
+        for (DirectoryInfo? root = new(AppContext.BaseDirectory);
+             root is not null; root = root.Parent)
+        {
+            var path = Path.Combine(root.FullName,
+                relativePath.Replace('/', Path.DirectorySeparatorChar));
+            if (File.Exists(path)) return File.ReadAllText(path);
+        }
+        throw new FileNotFoundException(relativePath);
+    }
+
     [Fact]
     public void ReadDecodeProofMustFlowThroughIsolatedReaderAndBrowserIngestion()
     {
