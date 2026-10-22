@@ -58,6 +58,26 @@ public sealed class SmvObservedTimebaseTests
         Assert.False(SmvObservedTimebaseDetector.IsSupportedWrap(3999, 80, 60));
     }
 
+
+    [Fact]
+    public void RealPublisher_ConflictingDeclaredTimebase_StillObservesIndependentClockForAnyPayload()
+    {
+        var runtime = Read("Services/SmvLiveCaptureService.cs");
+        Assert.Contains("invalidDeclaredTimebase ||", runtime);
+        Assert.DoesNotContain("fixedLegacyPayload && invalidDeclaredTimebase", runtime);
+        Assert.Contains("source channel semantics remain unverified", runtime);
+        Assert.Contains("checking independent capture timestamps and contiguous smpCnt", runtime);
+        // The existing clean timebase detector still enforces independent
+        // timestamp evidence and counter continuity before permitting samples.
+        var detector = new SmvObservedTimebaseDetector(50);
+        var started = new DateTimeOffset(2026, 10, 22, 0, 0, 0, TimeSpan.Zero);
+        AR.Iec61850.SampledValues.Measurements.SvTimebaseResolution? resolved = null;
+        for (var n = 0; n < 500; n++)
+            resolved ??= detector.Observe((ushort)n, started.AddTicks(n * 2500));
+        Assert.NotNull(resolved);
+        Assert.Equal(80, resolved.SamplesPerCycle);
+    }
+
     [Fact]
     public void LiveBuffer_UsesObservationRatherThanAssuming80ForAnyUnknownStream()
     {
