@@ -217,6 +217,11 @@ internal static class DiagnosticReportBuilder
                     if (note.Length > 180) note = note[..180] + "…";
                     builder.AppendLine($"  CSWI {cswi.ObjectReference} | model={cswi.ControlModelText} | verifiedCDC={cswi.VerifiedLiveControlCdc} | operable={cswi.ControlSupportsOperate} | {note}");
                 }
+                // Side-effect-free SCD ↔ wire-model command parity for Siemens,
+                // ZIV and other vendors; do not confuse offline ctlModel design
+                // intent with a live MMS inspection or promote StatusOnly rows.
+                foreach (var parity in Iec61850SclLiveCswiParityDiagnostic.Summarize(device))
+                    builder.AppendLine(parity);
                 builder.AppendLine($"Logical Devices  : {EmptyAsUnavailable(device.LogicalDeviceSummary)}");
                 builder.AppendLine($"Identity source  : {EmptyAsUnavailable(device.IdentitySource)}");
 

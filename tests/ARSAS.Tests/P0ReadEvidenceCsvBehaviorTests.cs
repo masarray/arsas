@@ -48,7 +48,8 @@ public sealed class P0ReadEvidenceCsvBehaviorTests
         var ledger = new IedBrowserLiveValues();
         var association = ledger.BeginAssociation();
         Assert.True(ledger.PublishForAssociation(association,
-            Domain + "/LLN0.PIOCEna.setVal", "SG", "false", "", "", "MMS Read"));
+            Domain + "/LLN0.PIOCEna.setVal", "SG", "false", "", "", "MMS Read",
+            readWireShapeEvidence: "wireKind=Boolean, category=primitive, clrKind=Boolean, rawOctets=1, childCount=0"));
         var csv = IedBrowserReadEvidenceCsv.Build(model, page, ledger,
             target => target.Reference.Contains("$InMagTyp$", StringComparison.Ordinal)
                 ? new IedBrowserReadFailureSample(target.Reference, "SG",
@@ -56,6 +57,12 @@ public sealed class P0ReadEvidenceCsvBehaviorTests
                 : null);
         Assert.Contains("\"BCUGEF650/LLN0.PIOCEna.setVal\",\"SG\"", csv);
         Assert.Contains("\"OBSERVED\"", csv);
+        Assert.Contains("DecodedMmsWireShape", csv);
+        Assert.Contains("wireKind=Boolean, category=primitive", csv);
+        // We have decoder evidence, NOT invoke ID or GVA proof. Keeping
+        // those separate prevents synthetic wire-fidelity conclusions.
+        Assert.Contains("\"NOT_CAPTURED\",\"NOT_CAPTURED\"", csv);
+
         Assert.Contains("\"MMS Read\"", csv);
         Assert.Contains("\"READ_FAILED\"", csv);
         Assert.Contains("\"typed root mismatch, refused\"", csv);
