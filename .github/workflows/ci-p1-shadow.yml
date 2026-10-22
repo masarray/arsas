@@ -121,7 +121,11 @@ jobs:
       }}
     uses: ./.github/workflows/_ci-p1-windows-build-test.yml
     with:
-      source_sha: ${{ github.sha }}
+      # PR validation must package the immutable branch HEAD, not GitHub's
+      # synthetic refs/pull/<n>/merge SHA. The synthetic merge remains covered
+      # independently by canonical PR CI; FAST DEV evidence must match the
+      # exact operator-downloaded source revision.
+      source_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       shadow_mode: true
       fast_dev: ${{ (github.event_name == 'workflow_dispatch' && inputs.fast_dev == true) || (github.event_name == 'pull_request' && needs.classify.outputs.engine_trial_sha != '') }}
       focus: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_dev == true && inputs.focus || needs.classify.outputs.engine_trial_sha != '' && 'command-read' || 'all' }}
