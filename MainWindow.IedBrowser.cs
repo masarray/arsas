@@ -574,7 +574,8 @@ public partial class MainWindow
                     readAssociation, result.Target.Reference,
                     result.Target.FunctionalConstraint, safeValue,
                     result.Quality, result.DeviceTimestamp, "MMS Read",
-                    result.UtcTimeEvidence, result.QualityEvidence);
+                    result.UtcTimeEvidence, result.QualityEvidence,
+                    typedBoolean: result.TypedBoolean);
                 if (!accepted) return;
                 _iedBrowserReadFailureEvidence?.ClearFailure(result.Target);
                 successes++;
