@@ -1129,6 +1129,12 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         Iec61850ReadValue? projected, ArMms.MmsDataValue? raw, string reference)
     {
         if (projected is null || raw is null) return projected;
+        if (raw.Kind is ArMms.MmsDataKind.VisibleString or ArMms.MmsDataKind.MmsString &&
+            raw.Value is string decoded &&
+            projected.Value is string scalar &&
+            string.Equals(decoded, scalar, StringComparison.Ordinal) &&
+            string.Equals(projected.SourceReference, reference, StringComparison.Ordinal))
+            projected.VerifiedStringWireKind = raw.Kind;
         if ((reference.EndsWith(".q", StringComparison.Ordinal) ||
              reference.EndsWith("$q", StringComparison.Ordinal)) &&
             raw.Kind == ArMms.MmsDataKind.BitString &&
