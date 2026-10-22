@@ -38,7 +38,7 @@ class FatDirectInstallerLaneTests(unittest.TestCase):
         self.assertIn('gh release view "$TAG"', workflow)
         # The FAT job itself obtains reviewed scripts via read-only API and
         # adds no checkout action beyond the existing installer checkout.
-        fat_job = workflow.split("  fat-direct-preview:\\n", 1)[1]
+        fat_job = workflow.split("  fat-direct-preview:\n", 1)[1]
         self.assertNotIn("uses: actions/checkout@", fat_job)
         self.assertNotIn("--latest", fat_job)
         self.assertNotIn('gh release upload', fat_job)
