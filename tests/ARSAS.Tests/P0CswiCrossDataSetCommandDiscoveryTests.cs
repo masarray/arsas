@@ -56,6 +56,23 @@ public sealed class P0CswiCrossDataSetCommandDiscoveryTests
     }
 
     [Fact]
+    public void AllServiceBackedControlsAreScheduledRegardlessOfNameOrDataset()
+    {
+        var candidates = Enumerable.Range(1, 2200)
+            .Select(i => Control($"ED2_SYS/Prefix{i}GGIO{i}.Command"))
+            .ToArray();
+        foreach (var item in candidates)
+            item.HasControlServiceEvidence = true;
+        // Neither a hard-coded LN class nor an arbitrary first-2048 cap is
+        // allowed to hide a real service-backed TapChg or vendor control.
+        var selected = Iec61850ControlIdentity.DiscoveredControlInspectionCandidates(candidates);
+        Assert.Equal(2200, selected.Length);
+        Assert.All(selected, item => Assert.False(item.ControlSupportsOperate));
+        Assert.Equal(12, Iec61850ControlIdentity.DiscoveredControlInspectionCandidates(
+            candidates, budget: 12).Length);
+    }
+
+    [Fact]
     public void CrossDataSetCswiProbeIsBoundedDeduplicatedAndDoesNotChangeUserSelection()
     {
         var signals = Enumerable.Range(1, 80)

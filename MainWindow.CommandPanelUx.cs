@@ -356,10 +356,15 @@ public partial class MainWindow
                             signal.ControlModelText = "Unknown";
                             continue;
                         }
-                        signal.ControlModelText = probe.ControlModel.ToString();
-                        if (signal.ControlModelKind is Iec61850ControlModelKind.StatusOnly
-                            or Iec61850ControlModelKind.Unknown)
+                        // Do not publish a partially validated positive ctlModel.
+                        // The full inspection publishes its typed evidence in one
+                        // step; otherwise buttons/rows briefly enable and then
+                        // disable whenever the user reopens the Command Dock.
+                        // StatusOnly is conclusive, safe read-only evidence.
+                        if (probe.ControlModel is ArControl.Iec61850ControlModel.StatusOnly
+                            or ArControl.Iec61850ControlModel.Unknown)
                         {
+                            signal.ControlModelText = probe.ControlModel.ToString();
                             signal.ControlInspectionEvidence = probe.Detail;
                             continue;
                         }

@@ -76,12 +76,14 @@ public static class Iec61850ControlIdentity
             .ToArray();
 
     /// <summary>
-    /// Discover all verified command services, independent of LN class, display
-    /// name, DataSet membership and operator signal selection. Only the native
-    /// typed descriptor may grant operability; this method never does.
+    /// Discover control-service candidates independently of LN class, display
+    /// name, DataSet membership and operator selection. CO/CF service evidence
+    /// only schedules a read-only ctlModel probe; typed live Oper/SBOw status
+    /// proof is still mandatory before a command is admitted. The default
+    /// scan does not silently truncate very large vendor control inventories.
     /// </summary>
     public static SignalDefinition[] DiscoveredControlInspectionCandidates(
-        IEnumerable<SignalDefinition> signals, int budget = 2048)
+        IEnumerable<SignalDefinition> signals, int budget = int.MaxValue)
     {
         if (budget <= 0) return [];
         return signals.Where(signal => signal.IsValidControlObject &&
