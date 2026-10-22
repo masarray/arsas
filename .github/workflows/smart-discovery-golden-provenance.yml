@@ -2,6 +2,7 @@ name: Smart Discovery Golden Provenance
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       # Fast PR routing: only Smart Discovery authority/dependencies trigger this gate.
       - "scripts/new-smart-discovery-golden-lock.ps1"
@@ -18,6 +19,7 @@ concurrency:
 
 jobs:
   verify-provenance:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Verify P0-5e capture build and target provenance
     runs-on: windows-latest
     steps:

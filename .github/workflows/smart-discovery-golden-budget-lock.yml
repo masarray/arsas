@@ -2,6 +2,7 @@ name: Smart Discovery Golden Budget Lock
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       # Fast PR routing: only Smart Discovery authority/dependencies trigger this gate.
       - "scripts/new-smart-discovery-golden-lock.ps1"
@@ -18,6 +19,7 @@ concurrency:
 
 jobs:
   verify-golden-lock:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Verify P0-5e evidence-derived hard budget
     runs-on: windows-latest
     steps:
