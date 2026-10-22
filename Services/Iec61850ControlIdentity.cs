@@ -45,11 +45,13 @@ public static class Iec61850ControlIdentity
     /// A control is NOT a DataSet member merely because its feedback Pos.stVal
     /// is reported. Yet a verified live CSWI.Pos may exist in another LD and
     /// must remain discoverable without changing the operator's signal selection.
-    /// Candidate admission is structural only; no control is enabled until
+    /// Candidate admission deliberately does not require a pre-proved CDC:
+    /// the purpose of the bounded native inspection is to verify that CDC.
+    /// No control is enabled until
     /// the exact live ctlModel and Oper structure pass native inspection.
     /// </summary>
     public static bool IsIndependentCswiCandidate(SignalDefinition signal)
-        => signal.IsValidControlObject && !signal.IsGenericControl &&
+        => signal.IsValidControlObject &&
            string.Equals(SignalDefinition.DetectLogicalNodeClass(signal.LogicalNode),
                "CSWI", StringComparison.OrdinalIgnoreCase) &&
            Normalize(signal.ObjectReference).EndsWith(".Pos",
