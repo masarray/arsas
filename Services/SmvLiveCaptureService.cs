@@ -230,13 +230,20 @@ public sealed class SmvLiveStreamBuffer
             return;
         }
 
+        // smpSynch is a per-ASDU quality of synchronization, NOT a change
+        // to the stream's schema or sample clock. A real ARStack publisher
+        // legitimately transitions 0 -> 2 after AUTO PTP phase acquisition.
+        // Reconfiguring the entire ring here used to discard valid samples,
+        // reset observed-rate inference, and blank the waveform at lock.
+        // Preserve sample continuity; report the most recent sync status.
         if (_wordIndexes.Length == 0 || _payloadLength != payload.Length ||
-            _confRev != asdu.ConfigurationRevision || _smpSynch != asdu.SampleSynchronization ||
+            _confRev != asdu.ConfigurationRevision ||
             !DataSetReference.Equals(asdu.DataSetReference, StringComparison.Ordinal))
         {
             if (_wordIndexes.Length > 0) _restarts++;
             Configure(asdu, payload.Length);
         }
+        _smpSynch = asdu.SampleSynchronization;
 
         if (_timebase?.IsResolved != true || _length == 0)
         {
