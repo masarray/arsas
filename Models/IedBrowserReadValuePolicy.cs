@@ -59,6 +59,40 @@ public static class IedBrowserReadValuePolicy
         return false;
     }
 
+    /// <summary>
+    /// A square/curly-bracket prefix can be literal text in a verified MMS
+    /// VisibleString/MMSString scalar. Permit it ONLY with direct decoded wire
+    /// kind proof and an exactly compatible verified model declaration.
+    /// Never treat rendered arrays, structures or unknown BER tags as strings.
+    /// </summary>
+    public static bool TryAcceptVerifiedMmsString(
+        string? candidate, string? modelType,
+        AR.Iec61850.Mms.MmsDataKind? verifiedWireKind,
+        out string display, out string rejection)
+    {
+        if (TryAcceptDisplay(candidate, out display, out rejection))
+            return true;
+        if (display.Length is 0 or > 512 ||
+            !(display.StartsWith("[", StringComparison.Ordinal) ||
+              display.StartsWith("{", StringComparison.Ordinal)))
+            return false;
+
+        var declared = (modelType ?? "").Trim();
+        var compatible = verifiedWireKind switch
+        {
+            AR.Iec61850.Mms.MmsDataKind.VisibleString =>
+                declared.StartsWith("VisString", StringComparison.OrdinalIgnoreCase) ||
+                declared.Equals("visible-string", StringComparison.OrdinalIgnoreCase),
+            AR.Iec61850.Mms.MmsDataKind.MmsString =>
+                declared.StartsWith("MmsString", StringComparison.OrdinalIgnoreCase) ||
+                declared.Equals("mms-string", StringComparison.OrdinalIgnoreCase),
+            _ => false
+        };
+        if (!compatible) return false;
+        rejection = "";
+        return true;
+    }
+
     public static bool TryAcceptDisplay(
         string? candidate, out string display, out string rejection)
     {
