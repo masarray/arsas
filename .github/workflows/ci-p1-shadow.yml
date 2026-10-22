@@ -32,6 +32,10 @@ on:
         type: choice
         options: [quality-browser, smv, command-read, all]
         default: quality-browser
+      engine_trial_sha:
+        description: 'Optional exact 40-char experimental ARIEC SHA; FAST DEV only, never FAT'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -96,4 +100,5 @@ jobs:
       shadow_mode: true
       fast_dev: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_dev == true }}
       focus: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_dev == true && inputs.focus || 'all' }}
+      engine_trial_sha: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_dev == true && inputs.engine_trial_sha || '' }}
     secrets: {}

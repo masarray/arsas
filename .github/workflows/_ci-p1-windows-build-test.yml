@@ -19,6 +19,10 @@ on:
         description: FAST DEV regression selection
         type: string
         default: all
+      engine_trial_sha:
+        description: Explicit experimental ARIEC commit for isolated FAST DEV only
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -69,7 +73,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: ${{ steps.engine.outputs.repository }}
-          ref: ${{ steps.engine.outputs.commit }}
+          ref: ${{ inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.engine_trial_sha || steps.engine.outputs.commit }}
           path: ARIEC61850
           fetch-depth: 1
           persist-credentials: false
@@ -77,14 +81,28 @@ jobs:
       - name: Verify exact engine and immutable history provenance
         shell: pwsh
         env:
-          EXPECTED_ENGINE_SHA: ${{ steps.engine.outputs.commit }}
+          EXPECTED_ENGINE_SHA: ${{ inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.engine_trial_sha || steps.engine.outputs.commit }}
+          PINNED_ENGINE_SHA: ${{ steps.engine.outputs.commit }}
+          TRIAL_ENGINE_SHA: ${{ inputs.engine_trial_sha }}
+          FAST_DEV: ${{ inputs.fast_dev }}
         run: |
           $ErrorActionPreference = 'Stop'
+          if ($env:TRIAL_ENGINE_SHA -and $env:FAST_DEV -ne 'true') {
+            throw 'An engine trial is forbidden outside explicit FAST DEV.'
+          }
+          if ($env:TRIAL_ENGINE_SHA -and $env:TRIAL_ENGINE_SHA -cnotmatch '^[0-9a-f]{40}$') {
+            throw 'ENGINE_TRIAL_SHA must be an exact 40-character Git SHA.'
+          }
           $actual = (git -C .\ARIEC61850 rev-parse HEAD).Trim().ToLowerInvariant()
           if ($actual -cne $env:EXPECTED_ENGINE_SHA) {
-            throw "ARIEC61850 pinned checkout drifted: expected $env:EXPECTED_ENGINE_SHA, got $actual."
+            throw "ARIEC61850 exact checkout drifted: expected $env:EXPECTED_ENGINE_SHA, got $actual."
           }
-          Write-Host "Reproducible compilation authority: ARSAS + pinned ARIEC61850."
+          if ($env:TRIAL_ENGINE_SHA) {
+            if ($actual -ceq $env:PINNED_ENGINE_SHA) { throw 'Trial engine unexpectedly matches production pin.' }
+            Write-Host "NON-PROMOTABLE ENGINE TRIAL: $actual; unchanged production pin: $env:PINNED_ENGINE_SHA"
+          } else {
+            Write-Host "Reproducible compilation: ARSAS + production pinned ARIEC61850 $actual."
+          }
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v6
@@ -105,33 +123,43 @@ jobs:
       - name: Build solution once
         run: dotnet build .\ARSAS\ArIED61850Tester.sln -c Release --no-restore
 
-      - name: Run full ARSAS regression suite once
-        if: ${{ !inputs.fast_dev }}
-        run: dotnet test .\ARSAS\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore --logger "trx;LogFileName=ci-p1-shadow.trx" --results-directory .\ARSAS\TestResults
-
-      - name: FAST DEV targeted regression only
-        if: ${{ inputs.fast_dev }}
+      - name: Run ARSAS regression (full or focused FAST DEV)
         shell: pwsh
         env:
+          FAST_DEV: ${{ inputs.fast_dev }}
           FOCUS: ${{ inputs.focus }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $filter = switch ($env:FOCUS) {
-            'quality-browser' { 'FullyQualifiedName~QualityInvalidAttentionTests|FullyQualifiedName~IedBrowserPresentationTests|FullyQualifiedName~M2TypedQualityEvidenceTests|FullyQualifiedName~P0ReadEvidenceCsvBehaviorTests|FullyQualifiedName~P0SiebcuReadAllAndLayoutRegressionTests' }
-            'smv' { 'FullyQualifiedName~SmvArstack|FullyQualifiedName~SmvLiveCaptureTests|FullyQualifiedName~SmvObservedTimebaseTests|FullyQualifiedName~SmvDigSubPortTests' }
-            'command-read' { 'FullyQualifiedName~P0CswiCrossDataSetCommandDiscoveryTests|FullyQualifiedName~P0GrxCswiSelectionVisibilityTests|FullyQualifiedName~P0GrxSclLiveCswiParityTests|FullyQualifiedName~P0ReadEvidenceCsvBehaviorTests' }
-            'all' { 'FullyQualifiedName~QualityInvalidAttentionTests|FullyQualifiedName~SmvArstack|FullyQualifiedName~P0CswiCrossDataSetCommandDiscoveryTests|FullyQualifiedName~P0ReadEvidenceCsvBehaviorTests' }
-            default { throw 'Unknown FAST DEV scope; refusing to skip tests.' }
+          $arguments = @(
+            'test', '.\ARSAS\tests\ARSAS.Tests\ARSAS.Tests.csproj',
+            '-c', 'Release', '--no-build', '--no-restore',
+            '--logger', 'trx;LogFileName=ci-p1-shadow.trx',
+            '--results-directory', '.\ARSAS\TestResults'
+          )
+          if ($env:FAST_DEV -eq 'true') {
+            $filter = switch ($env:FOCUS) {
+              'quality-browser' { 'FullyQualifiedName~QualityInvalidAttentionTests|FullyQualifiedName~IedBrowserPresentationTests|FullyQualifiedName~M2TypedQualityEvidenceTests|FullyQualifiedName~P0ReadEvidenceCsvBehaviorTests|FullyQualifiedName~P0SiebcuReadAllAndLayoutRegressionTests' }
+              'smv' { 'FullyQualifiedName~SmvArstack|FullyQualifiedName~SmvLiveCaptureTests|FullyQualifiedName~SmvObservedTimebaseTests|FullyQualifiedName~SmvDigSubPortTests' }
+              'command-read' { 'FullyQualifiedName~P0CswiCrossDataSetCommandDiscoveryTests|FullyQualifiedName~P0GrxCswiSelectionVisibilityTests|FullyQualifiedName~P0GrxSclLiveCswiParityTests|FullyQualifiedName~P0ReadEvidenceCsvBehaviorTests|FullyQualifiedName~P109KGenericControlSafetyTests' }
+              'all' { 'FullyQualifiedName~QualityInvalidAttentionTests|FullyQualifiedName~SmvArstack|FullyQualifiedName~P0CswiCrossDataSetCommandDiscoveryTests|FullyQualifiedName~P0ReadEvidenceCsvBehaviorTests' }
+              default { throw 'Unknown FAST DEV scope; refusing to silently skip tests.' }
+            }
+            $arguments += @('--filter', $filter)
+            Write-Host "NON-FAT scoped regression only ($env:FOCUS). No release/physical authority."
+          } else {
+            Write-Host "FULL ARSAS regression; no selected-test filter."
           }
-          Write-Host "FAST_DEV_NON_FAT scope=$env:FOCUS; this run cannot qualify a release."
-          dotnet test .\ARSAS\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore --filter "$filter" --logger "trx;LogFileName=ci-fast-dev.trx" --results-directory .\ARSAS\TestResults
-          if ($LASTEXITCODE -ne 0) { throw 'FAST DEV focused regression failed.' }
+          # One .NET test invocation for both modes; CI sprawl budget unchanged.
+          & dotnet @arguments
+          if ($LASTEXITCODE -ne 0) { throw 'Selected ARSAS regression failed.' }
 
       - name: Write non-promotion build authority manifest
         if: always()
         shell: pwsh
         env:
-          ENGINE_SHA: ${{ steps.engine.outputs.commit }}
+          ENGINE_SHA: ${{ inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.engine_trial_sha || steps.engine.outputs.commit }}
+          BASELINE_ENGINE_SHA: ${{ steps.engine.outputs.commit }}
+          ENGINE_TRIAL_SHA: ${{ inputs.engine_trial_sha }}
           ENGINE_REPOSITORY: ${{ steps.engine.outputs.repository }}
           HISTORICAL_ENGINE_SHA: ${{ steps.engine.outputs.merged-main-commit }}
           PHYSICAL_TESTED_ENGINE_SHA: ${{ steps.engine.outputs.physical-tested-commit }}
@@ -148,7 +176,10 @@ jobs:
             kind = if ('${{ inputs.fast_dev }}' -eq 'true') { 'ci-p1-fast-dev-nonfat' } else { 'ci-p1-nonpromotion-shadow' }
             fastDev = '${{ inputs.fast_dev }}'
             focus = '${{ inputs.focus }}'
-            fullRegressionQualified = ('${{ inputs.fast_dev }}' -ne 'true')
+            engineTrialSha = $env:ENGINE_TRIAL_SHA
+            approvedPinnedEngineSha = $env:BASELINE_ENGINE_SHA
+            engineIsExperimental = -not [string]::IsNullOrWhiteSpace($env:ENGINE_TRIAL_SHA)
+            fullRegressionQualified = ('${{ inputs.fast_dev }}' -ne 'true' -and [string]::IsNullOrWhiteSpace($env:ENGINE_TRIAL_SHA))
             exactArsasSha = $sourceSha
             exactEngineSha = $engineActual
             expectedEngineSha = $env:ENGINE_SHA

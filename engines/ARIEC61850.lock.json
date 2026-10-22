@@ -2,14 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "3a09b1e52456fbef2fa2c5468c7cfbb9c027f7bc",
-  "sourcePullRequest": 189,
-  "purpose": "Engineering-only FAT trial: IEC 61850 Ed2 prefixed LN identity permits exact DPC Boolean ctlVal with Pos.stVal feedback; source parent is pinned #184. No device-operation, performance, or physical acceptance claimed.",
-  "previousControlTrialPin": {
-    "commit": "9c7cb40364023a7b217e5ec31ab3105ba90142eb",
-    "sourcePullRequest": 184,
-    "purpose": "Previously pinned SBOw stage-attributed async error evidence; all existing control protections retained in descendant PR #189."
-  },
+  "commit": "9c7cb40364023a7b217e5ec31ab3105ba90142eb",
+  "sourcePullRequest": 184,
+  "purpose": "P0-C stage-attributed SBOw asynchronous-error observation trial on engine #183 ancestry; delayed rejection regression code-qualified; no performance or physical acceptance yet.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
