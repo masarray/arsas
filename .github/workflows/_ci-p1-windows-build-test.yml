@@ -140,7 +140,7 @@ jobs:
             $filter = switch ($env:FOCUS) {
               'quality-browser' { 'FullyQualifiedName~QualityInvalidAttentionTests|FullyQualifiedName~IedBrowserPresentationTests|FullyQualifiedName~M2TypedQualityEvidenceTests|FullyQualifiedName~P0ReadEvidenceCsvBehaviorTests|FullyQualifiedName~P0SiebcuReadAllAndLayoutRegressionTests' }
               'smv' { 'FullyQualifiedName~SmvArstack|FullyQualifiedName~SmvLiveCaptureTests|FullyQualifiedName~SmvObservedTimebaseTests|FullyQualifiedName~SmvDigSubPortTests' }
-              'command-read' { 'FullyQualifiedName~P0CswiCrossDataSetCommandDiscoveryTests|FullyQualifiedName~P0GrxCswiSelectionVisibilityTests|FullyQualifiedName~P0GrxSclLiveCswiParityTests|FullyQualifiedName~P0ReadEvidenceCsvBehaviorTests|FullyQualifiedName~P109KGenericControlSafetyTests' }
+              'command-read' { 'FullyQualifiedName~ModelDrivenAutoCommandDockTests|FullyQualifiedName~P109UStableCommandProjectionTests|FullyQualifiedName~P109WCommandDockLifecycleArchitectureTests|FullyQualifiedName~P0CswiCrossDataSetCommandDiscoveryTests|FullyQualifiedName~P0GrxCswiSelectionVisibilityTests|FullyQualifiedName~P0GrxSclLiveCswiParityTests|FullyQualifiedName~P0ReadEvidenceCsvBehaviorTests|FullyQualifiedName~P109KGenericControlSafetyTests|FullyQualifiedName~ZivBscStepControlRegressionTests|FullyQualifiedName~G1ControlCorrectnessRegressionTests' }
               'all' { 'FullyQualifiedName~QualityInvalidAttentionTests|FullyQualifiedName~SmvArstack|FullyQualifiedName~P0CswiCrossDataSetCommandDiscoveryTests|FullyQualifiedName~P0ReadEvidenceCsvBehaviorTests' }
               default { throw 'Unknown FAST DEV scope; refusing to silently skip tests.' }
             }
@@ -152,6 +152,16 @@ jobs:
           # One .NET test invocation for both modes; CI sprawl budget unchanged.
           & dotnet @arguments
           if ($LASTEXITCODE -ne 0) { throw 'Selected ARSAS regression failed.' }
+          $trxPath = '.\ARSAS\TestResults\ci-p1-shadow.trx'
+          if (-not (Test-Path -LiteralPath $trxPath)) {
+            throw 'No TRX proof for selected regression; refusing empty pass.'
+          }
+          [xml]$trx = Get-Content -LiteralPath $trxPath -Raw
+          $counts = $trx.TestRun.ResultSummary.Counters
+          if ($null -eq $counts -or [int]$counts.executed -lt 1 -or [int]$counts.failed -gt 0) {
+            throw "No actual passing tests or failures in FAST DEV/full TRX."
+          }
+          Write-Host "Exact-source regression results: executed=$($counts.executed) passed=$($counts.passed) failed=$($counts.failed)."
 
       - name: Write non-promotion build authority manifest
         if: always()
