@@ -16,7 +16,7 @@ public sealed class MultiGridNaturalSortRegressionTests
         Assert.Contains(grids, g=>(string?)g.Attribute("Loaded")=="ExplorerLiveGrid_Loaded" &&
             ((string?)g.Attribute("ItemsSource"))?.Contains("SelectedDevice.Points")==true);
         Assert.Contains(grids, g=>(string?)g.Attribute("Loaded")=="CommandGrid_Loaded" &&
-            ((string?)g.Attribute("ItemsSource"))?.Contains("SelectedDevice.CommandSignals")==true);
+            ((string?)g.Attribute("ItemsSource"))?.Contains("SelectedDevice.OperableCommandSignals")==true);
         Assert.Contains(grids, g=>(string?)g.Attribute("Loaded")=="GlobalLiveGrid_Loaded" &&
             ((string?)g.Attribute("ItemsSource"))?.Contains("GlobalPoints")==true);
         var sort=Read("MainWindow.IecNaturalSort.cs");
