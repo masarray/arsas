@@ -141,15 +141,24 @@ public class SignalDefinition : ObservableObject
         var validated = cdc.Trim().ToUpperInvariant();
         // This method must only be called after the engine's typed live semantic
         // resolver succeeded; it is not an SCL authority override.
-        _verifiedLiveControlCdc = validated;
-        Raise(nameof(VerifiedLiveControlCdc));
+        // A repeated read of the same typed CDC is not an authority change.
+        // Suppress redundant WPF notifications on refresh/report traffic.
+        if (!string.Equals(_verifiedLiveControlCdc, validated, StringComparison.Ordinal))
+        {
+            _verifiedLiveControlCdc = validated;
+            Raise(nameof(VerifiedLiveControlCdc));
+        }
         ControlCdc = validated;
     }
 
     public bool ApplyDataSetAdvisoryControlMetadata(string cdc, string? statusReference)
     {
-        _dataSetAdvisoryCdc = cdc?.Trim().ToUpperInvariant() ?? string.Empty;
-        Raise(nameof(DataSetAdvisoryCdc));
+        var advisory = cdc?.Trim().ToUpperInvariant() ?? string.Empty;
+        if (!string.Equals(_dataSetAdvisoryCdc, advisory, StringComparison.Ordinal))
+        {
+            _dataSetAdvisoryCdc = advisory;
+            Raise(nameof(DataSetAdvisoryCdc));
+        }
         if (_verifiedLiveControlCdc.Length > 0)
         {
             // Reporting membership is independent of the control plane. Do not
@@ -166,10 +175,16 @@ public class SignalDefinition : ObservableObject
     public void ClearLiveControlAuthority()
     {
         // Called only at MMS association teardown/new association boundary.
-        _verifiedLiveControlCdc = string.Empty;
-        _dataSetAdvisoryCdc = string.Empty;
-        Raise(nameof(VerifiedLiveControlCdc));
-        Raise(nameof(DataSetAdvisoryCdc));
+        if (_verifiedLiveControlCdc.Length > 0)
+        {
+            _verifiedLiveControlCdc = string.Empty;
+            Raise(nameof(VerifiedLiveControlCdc));
+        }
+        if (_dataSetAdvisoryCdc.Length > 0)
+        {
+            _dataSetAdvisoryCdc = string.Empty;
+            Raise(nameof(DataSetAdvisoryCdc));
+        }
         ControlSemanticVerified = false;
     }
     // Preserve exact read-only MMS proof independently of ControlLastResult,

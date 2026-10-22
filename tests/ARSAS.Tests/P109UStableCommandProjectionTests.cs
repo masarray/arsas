@@ -54,6 +54,44 @@ public sealed class P109UStableCommandProjectionTests
     }
 
     [Fact]
+    public void RepeatSemanticAndReportingEvidenceDoesNotFlickerVerifiedCommandAuthority()
+    {
+        var signal = Verified("LD0/Bkr0XCBR2.Pos");
+        var notifications = new List<string>();
+        signal.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName is not null)
+                notifications.Add(args.PropertyName);
+        };
+        signal.ControlInterlockCheck = false; // operator-owned choice
+        notifications.Clear();
+
+        for (var repeat = 0; repeat < 100; repeat++)
+        {
+            signal.AcceptVerifiedLiveControlCdc("DPC");
+            signal.ControlSemanticVerified = true;
+            signal.ApplyDataSetAdvisoryControlMetadata("DPC",
+                "LD0/Bkr0XCBR2.Pos.stVal");
+        }
+        Assert.True(signal.ControlSupportsOperate);
+        Assert.Equal("DPC", signal.VerifiedLiveControlCdc);
+        Assert.False(signal.ControlInterlockCheck);
+        Assert.DoesNotContain(nameof(SignalDefinition.VerifiedLiveControlCdc),
+            notifications);
+        Assert.Equal(1, notifications.Count(name =>
+            name == nameof(SignalDefinition.DataSetAdvisoryCdc)));
+
+        notifications.Clear();
+        signal.ClearLiveControlAuthority();
+        Assert.False(signal.ControlSupportsOperate);
+        Assert.Contains(nameof(SignalDefinition.VerifiedLiveControlCdc),
+            notifications);
+        notifications.Clear();
+        signal.ClearLiveControlAuthority(); // duplicate teardown is silent
+        Assert.Empty(notifications);
+    }
+
+    [Fact]
     public void GenuineAuthorityRevocation_DisablesOnlyAffectedRowWithoutResettingGrid()
     {
         var first = Verified("LD0/CSWI1.Pos");
