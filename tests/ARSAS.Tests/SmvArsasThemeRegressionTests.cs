@@ -10,7 +10,8 @@ public sealed class SmvArsasThemeRegressionTests
     {
         var x = Read("Views/SmvInlineViewer.xaml");
         Assert.Contains("BasedOn=\"{StaticResource WorkspaceCard}\"", x);
-        Assert.Contains("Style=\"{StaticResource ModernDataGrid}\"", x);
+        Assert.Contains("Style=\"{StaticResource SmvMeasurementGrid}\"", x);
+        Assert.Contains("BasedOn=\"{StaticResource ModernDataGrid}\"", x);
         Assert.Contains("Style=\"{StaticResource PrimaryButton}\"", x);
         Assert.Contains("Style=\"{StaticResource SoftButton}\"", x);
         Assert.Contains("Style=\"{StaticResource IedIconButton}\"", x);
