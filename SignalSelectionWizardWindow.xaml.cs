@@ -159,11 +159,25 @@ public partial class SignalSelectionWizardWindow : Window, INotifyPropertyChange
             _ => string.Empty
         };
 
+    private static bool IsCswiControl(SignalDefinition signal)
+    {
+        if (!signal.IsValidControlObject) return false;
+        var reference = signal.ObjectReference ?? string.Empty;
+        var slash = reference.IndexOf('/');
+        if (slash < 0) return false;
+        var dot = reference.IndexOf('.', slash + 1);
+        if (dot < 0) return false;
+        var ln = reference[(slash + 1)..dot];
+        return System.Text.RegularExpressions.Regex.IsMatch(ln,
+            @"(?:^|_)CSWI[0-9]+$", RegexOptions.IgnoreCase);
+    }
+
     private bool MatchesQuickFilter(SignalDefinition signal)
         => _quickFilter switch
         {
             "Live" => !signal.IsControlSignal,
             "Control" => signal.IsValidControlObject,
+            "CSWI" => IsCswiControl(signal),
             "Selected" => signal.IsSelected,
             _ => true
         };
@@ -211,7 +225,7 @@ public partial class SignalSelectionWizardWindow : Window, INotifyPropertyChange
 
         _quickFilter = key;
         selected.IsChecked = true;
-        foreach (var button in new[] { QuickAllButton, QuickLiveButton, QuickControlButton, QuickSelectedButton })
+        foreach (var button in new[] { QuickAllButton, QuickLiveButton, QuickControlButton, QuickCswiButton, QuickSelectedButton })
         {
             if (!ReferenceEquals(button, selected))
                 button.IsChecked = false;
@@ -247,6 +261,7 @@ public partial class SignalSelectionWizardWindow : Window, INotifyPropertyChange
         QuickAllButton.IsChecked = true;
         QuickLiveButton.IsChecked = false;
         QuickControlButton.IsChecked = false;
+        QuickCswiButton.IsChecked = false;
         QuickSelectedButton.IsChecked = false;
         _columnFilters.Clear();
         foreach (var weak in _filterTextBoxes.Values)
