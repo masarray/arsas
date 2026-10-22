@@ -758,9 +758,9 @@ public sealed class Iec61850MonitorDevice : ObservableObject
                 StringComparer.OrdinalIgnoreCase)
             .Select(group => group.OrderByDescending(signal => signal.IsSelected)
                 .ThenByDescending(signal => signal.ControlSupportsOperate).First())
-            .OrderBy(signal => signal.SortPriority)
+            .OrderBy(Iec61850ControlIdentity.CommandDockPriority)
             .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(signal => signal.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(signal => signal.ObjectReference, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
         // Common case: verification/report/navigation changed data, not the
@@ -823,9 +823,9 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     {
         var targets = Iec61850ControlIdentity.VerifiedCommandTargets(
                 Signals, admitDiscovered: IsConnected && LiveDiscoveryModel is not null)
-            .OrderBy(signal => signal.SortPriority)
+            .OrderBy(Iec61850ControlIdentity.CommandDockPriority)
             .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(signal => signal.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(signal => signal.ObjectReference, StringComparer.OrdinalIgnoreCase)
             .ToArray();
         if (OperableCommandSignals.Count == targets.Length &&
             OperableCommandSignals.SequenceEqual(targets, ReferenceEqualityComparer.Instance))

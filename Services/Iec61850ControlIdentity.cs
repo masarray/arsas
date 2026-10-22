@@ -112,6 +112,60 @@ public static class Iec61850ControlIdentity
                 .ThenByDescending(signal => signal.IsSelected).First())
             .ToArray();
 
+
+    /// <summary>
+    /// Presentation classification only, never Operate authority or asserted
+    /// physical wiring. IEC LN class and typed CDC sort verified command
+    /// objects; MMS ctlModel and Oper/SBOw proof alone grant authorization.
+    /// A GGIO DPC does not become a breaker merely because it has ctlVal.
+    /// </summary>
+    public static (int Rank, string Role) DescribeCommandRole(SignalDefinition signal)
+    {
+        ArgumentNullException.ThrowIfNull(signal);
+        var cdc = (signal.VerifiedLiveControlCdc.Length > 0
+            ? signal.VerifiedLiveControlCdc : signal.ControlCdc).Trim().ToUpperInvariant();
+        var reference = Normalize(signal.ObjectReference);
+        var lastDot = reference.LastIndexOf('.');
+        var dataObject = lastDot < 0 ? string.Empty : reference[(lastDot + 1)..];
+        var ln = signal.LogicalNodeClass.ToUpperInvariant();
+
+        if (cdc == "DPC" && dataObject.Equals("Pos", StringComparison.OrdinalIgnoreCase))
+            return ln switch
+            {
+                "XCBR" => (10, "Circuit breaker · XCBR"),
+                "XSWI" => (20, "Disconnector · XSWI"),
+                "CSWI" => (30, "Switch controller · CSWI"),
+                _ => (85, "Position control · equipment unlinked")
+            };
+
+        if (cdc == "BSC" && dataObject.Equals("TapChg", StringComparison.OrdinalIgnoreCase))
+            return (40, ln == "ATCC" ? "Tap changer · ATCC" : "Tap changer · equipment unlinked");
+
+        if (cdc == "APC" && (ln == "AVCO" || ln == "AVC"))
+            return (50, "Voltage control");
+
+        if (cdc == "BSC")
+            return (90, "Step control · equipment unlinked");
+
+        // Maintenance and block commands remain available but are never
+        // confused with switch position Open/Close.
+        if (new[] { "MemClr", "RsStat", "EvtRcdClr", "LEDRs", "BlkOpn",
+                    "BlkCls", "TagOn", "Mod", "LocSta", "CmdBlk" }
+            .Contains(dataObject, StringComparer.OrdinalIgnoreCase))
+            return (350, "Auxiliary / maintenance");
+
+        if (ln == "GGIO")
+            return (250, "Generic I/O · equipment unlinked");
+
+        return (150, "Other IEC control · equipment unlinked");
+    }
+
+    public static int CommandDockPriority(SignalDefinition signal)
+        => DescribeCommandRole(signal).Rank;
+
+    public static string CommandDockRole(SignalDefinition signal)
+        => DescribeCommandRole(signal).Role;
+
     public static SignalDefinition[] InspectionRepresentatives(IEnumerable<SignalDefinition> signals)
         => DistinctSelected(signals).Where(s => !s.ControlModelResolved).ToArray();
 }

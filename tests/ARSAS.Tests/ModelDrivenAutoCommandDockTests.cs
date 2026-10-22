@@ -107,6 +107,57 @@ public sealed class ModelDrivenAutoCommandDockTests
     }
 
     [Fact]
+    public void Ed2VerifiedEquipmentAppearsBeforeGenericIoWithoutInventingWiring()
+    {
+        var io = Candidate("SG7_BCUMaster/GGIO2.DPCSO01");
+        var breaker1 = Candidate("SG7_BCUSystem/Bkr0XCBR1.Pos");
+        var breaker2 = Candidate("SG7_BCUSystem/Bkr0XCBR2.Pos");
+        var cswi = Candidate("SG7_BCUSystem/BkrCSWI1.Pos");
+        var cilo = Candidate("SG7_BCUSystem/BkrCILO1.EnaOpn", "SPC");
+        var disconnector = Candidate("SG7_BCUSystem/Disc0XSWI1.Pos");
+        var tap = Candidate("OtherLD/ATCC1.TapChg", "BSC");
+        var unknown = Candidate("OtherLD/OddVendor1.Pos");
+        var statusOnly = Candidate("SG7_BCUSystem/Bkr0XCBR3.Pos");
+        statusOnly.ControlModelText = "Status only";
+
+        var signals = new[] { io, breaker1, breaker2, cswi, cilo,
+            disconnector, tap, unknown, statusOnly };
+        foreach (var signal in signals.Where(s => !ReferenceEquals(s, statusOnly)))
+            Verify(signal, signal.ControlCdc);
+
+        var device = new Iec61850MonitorDevice
+        {
+            IsConnected = true,
+            LiveDiscoveryModel = new LiveIedModelDiscoveryDocument()
+        };
+        device.Signals.ReplaceAll(signals);
+        device.RecountSelectedSignals();
+
+        var dock = device.OperableCommandSignals.ToArray();
+        Assert.Equal(8, dock.Length);
+        Assert.Equal(new[] { breaker1, breaker2, disconnector, cswi, tap,
+            unknown, io, cilo }, dock);
+        Assert.Equal("Circuit breaker · XCBR",
+            Iec61850ControlIdentity.CommandDockRole(breaker1));
+        Assert.Equal("Generic I/O · equipment unlinked",
+            Iec61850ControlIdentity.CommandDockRole(io));
+        Assert.DoesNotContain(statusOnly, dock);
+        // Status ownership and equipment linkage are not guessed from rank:
+        // the independent CSWI command and breaker remain separate references.
+        Assert.NotEqual(breaker1.ObjectReference, cswi.ObjectReference);
+
+        var events = new List<NotifyCollectionChangedAction>();
+        device.OperableCommandSignals.CollectionChanged += (_, args) => events.Add(args.Action);
+        for (var i = 0; i < 100; i++)
+        {
+            breaker1.ControlCurrentValue = i % 2 == 0 ? "Open" : "Closed";
+            device.RefreshCommandSignalProjection();
+        }
+        Assert.Empty(events);
+        Assert.Equal(dock, device.OperableCommandSignals);
+    }
+
+    [Fact]
     public void RawMmsNameListCreatesCandidateOnlyForExactCoCfService()
     {
         var snapshot = new NativeMmsDiscoverySnapshot

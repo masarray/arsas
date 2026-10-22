@@ -706,7 +706,15 @@
                                                       ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                                       CanUserResizeColumns="False" ClipToBounds="True">
                                                 <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="IEC Telegram" Binding="{Binding DisplayReference}" Width="1.9*" MinWidth="145" IsReadOnly="True"/>
+                                                    <DataGridTextColumn Header="IEC Telegram" Binding="{Binding DisplayReference}" Width="1.5*" MinWidth="165" IsReadOnly="True"/>
+                                                    <DataGridTextColumn Header="Control role" Binding="{Binding ControlDockRole}" Width="1.05*" MinWidth="143" IsReadOnly="True">
+                                                        <DataGridTextColumn.ElementStyle>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                                                <Setter Property="ToolTip" Value="Presentation class only. Live typed MMS model decides Operate eligibility; CSWI/CILO/XCBR physical relationships are never guessed."/>
+                                                            </Style>
+                                                        </DataGridTextColumn.ElementStyle>
+                                                    </DataGridTextColumn>
                                                     <DataGridTemplateColumn Header="Value" Width="0.93*" MinWidth="137">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
