@@ -204,6 +204,130 @@ jobs:
           }
           Write-Host "Exact-source regression results: executed=$($counts.executed) passed=$($counts.passed) failed=$($counts.failed)."
 
+      - name: Build locked ArdIrec bridge and native regression for SG7 BCU trial
+        if: ${{ inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.focus == 'command-read' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bridge = [string](.\ARSAS\scripts\build-ardirec-bridge.ps1 `
+            -OutputDirectory (Join-Path $env:RUNNER_TEMP 'sg7-ardirec-bridge') `
+            -CTestJunitPath (Join-Path $env:RUNNER_TEMP 'sg7-ardirec-ctest.xml') |
+            Select-Object -Last 1)
+          $bridge = $bridge.Trim()
+          if (-not (Test-Path -LiteralPath $bridge -PathType Leaf) -or
+              -not (Test-Path (Join-Path $env:RUNNER_TEMP 'sg7-ardirec-ctest.xml') -PathType Leaf)) {
+            throw 'Native bridge build / CTest evidence missing.'
+          }
+          "SG7_NATIVE_BRIDGE=$bridge" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Publish actual self-contained SG7 BCU Ed2 trial Windows EXE
+        if: ${{ inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.focus == 'command-read' }}
+        shell: pwsh
+        env:
+          ARSAS_NONPROMOTION_ENGINE_TRIAL: 'true'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $temporary = Join-Path $env:RUNNER_TEMP 'ariec-ci-p1-nonpromotion-lock.json'
+          if (-not (Test-Path $temporary -PathType Leaf) -or
+              -not (Test-Path $env:SG7_NATIVE_BRIDGE -PathType Leaf)) {
+            throw 'Engine/ArdIrec exact-SHA trial packaging prerequisites missing.'
+          }
+          .\ARSAS\scripts\publish-windows-portable.ps1 `
+            -Version '1.6.40-sg7bcued2trial' `
+            -Runtime win-x64 `
+            -SingleFile $true `
+            -SelfContained $true `
+            -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
+            -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj" `
+            -ArdIrecBridgePath $env:SG7_NATIVE_BRIDGE `
+            -EngineValidationLockPath $temporary
+          if ($LASTEXITCODE -ne 0) { throw 'Single EXE trial publish failed.' }
+
+      - name: Execute portable EXE smoke and seal physical FAT trial identity
+        if: ${{ inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.focus == 'command-read' }}
+        shell: pwsh
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          EXPERIMENTAL_ENGINE: ${{ inputs.engine_trial_sha }}
+          BASELINE_ENGINE: ${{ steps.engine.outputs.commit }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = '.\ARSAS\dist'
+          $source = Join-Path $root 'ARSAS-1.6.40-sg7bcued2trial-win-x64-portable.exe'
+          $identityPath = Join-Path $root 'ARSAS-1.6.40-sg7bcued2trial-win-x64-portable-build-identity.json'
+          if (-not (Test-Path $source -PathType Leaf) -or -not (Test-Path $identityPath -PathType Leaf)) {
+            throw 'Single file EXE / portable identity missing.'
+          }
+          $ident = Get-Content $identityPath -Raw | ConvertFrom-Json
+          $exeHash = (Get-FileHash $source -Algorithm SHA256).Hash.ToLowerInvariant()
+          $bridgeHash = (Get-FileHash $env:SG7_NATIVE_BRIDGE -Algorithm SHA256).Hash.ToLowerInvariant()
+          $sourceSha = (git -C .\ARSAS rev-parse HEAD).Trim().ToLowerInvariant()
+          $engineSha = (git -C .\ARIEC61850 rev-parse HEAD).Trim().ToLowerInvariant()
+          $lock = Get-Content '.\ARSAS\engines\ARIEC61850.lock.json' -Raw | ConvertFrom-Json
+          if ($ident.sourceCommit -cne $env:SOURCE_SHA -or
+              $ident.engineCommit -cne $env:EXPERIMENTAL_ENGINE -or
+              $ident.ardIrecBridgeSha256 -cne $bridgeHash -or
+              $ident.portableSha256 -cne $exeHash -or
+              $sourceSha -cne $env:SOURCE_SHA -or
+              $engineSha -cne $env:EXPERIMENTAL_ENGINE -or
+              $lock.commit -cne $env:BASELINE_ENGINE -or
+              $engineSha -ceq $env:BASELINE_ENGINE) {
+            throw 'Exact SHA provenance, binary hash, or unchanged production lock failed.'
+          }
+          $exePath = (Resolve-Path $source).Path
+          $proc = Start-Process -FilePath $exePath -ArgumentList @('--portable-smoke-test') -PassThru
+          if (-not $proc.WaitForExit(90000)) {
+            $proc.Kill()
+            throw 'Portable EXE smoke timeout.'
+          }
+          if ($proc.ExitCode -ne 0) { throw "Portable EXE smoke failed: $($proc.ExitCode)" }
+          $out = '.\ARSAS\TestResults\sg7-bcu-fat-trial'
+          New-Item -ItemType Directory -Path $out -Force | Out-Null
+          $name = 'ARSAS-SG7_BCU-ED2-FAT-TRIAL-' + $engineSha.Substring(0,8) + '-win-x64.exe'
+          $exe = Join-Path $out $name
+          Copy-Item $source $exe -Force
+          if ((Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant() -cne $exeHash) {
+            throw 'Staged trial EXE differs from smoke-tested EXE.'
+          }
+          Copy-Item $identityPath (Join-Path $out 'portable-build-identity.json') -Force
+          Copy-Item (Join-Path $env:RUNNER_TEMP 'sg7-ardirec-ctest.xml') (Join-Path $out 'native-ardirec-ctest.xml') -Force
+          [ordered]@{
+            schemaVersion = 1
+            kind = 'arsas-nonrelease-supervised-iec61850-ed2-fat-trial'
+            sourceSha = $sourceSha
+            engineTrialSha = $engineSha
+            sourceApprovedEngineSha = $lock.commit
+            ardIrecSourceSha = $ident.ardIrecLockCommit
+            nativeBridgeSha256 = $bridgeHash
+            exeFileName = $name
+            exeSha256 = $exeHash
+            exeSizeBytes = (Get-Item $exe).Length
+            smokeTestExitCode = $proc.ExitCode
+            regressionTrx = 'ci-p1-shadow.trx'
+            externalRelayTestPerformed = $false
+            productionReleaseAuthority = $false
+          } | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $out 'FAT-TRIAL-SHA256.json') -Encoding utf8
+          @'
+          ARSAS SG7_BCU IEC 61850 EDITION 2 | SUPERVISED FAT TRIAL
+          -------------------------------------------------------
+          THIS IS NOT AN OFFICIAL RELEASE; NO PHYSICAL RELAY TEST HAS BEEN PERFORMED.
+          Extract the EXE. Check its SHA256 against FAT-TRIAL-SHA256.json
+          using PowerShell: Get-FileHash -Algorithm SHA256 .\ARSAS-SG7_BCU-*.exe
+          Single-file self-contained Windows x64, pinned native bridge included.
+          Stage 1: Connect / discover / monitor / reporting READ ONLY.
+          Stage 2: Inspect verified Command Dock candidates, including renamed
+          GE Bkr0XCBR2.Pos, disconnector and TapChg, and confirm StatusOnly blocked.
+          Stage 3: Only under test engineer/operator approval, physically isolated
+          safe bench and documented switching permission, test SBOw / Operate /
+          CommandTermination; preserve interlock, negative response, LastApplError,
+          actual status q/t, reporting BufferOverflow/Invalid evidence.
+          No automatic Operate retry when acceptance/feedback is uncertain.
+          An automation PASS does not prove physical command success.
+          The repository production engine lock remains the qualified #184.
+          '@ | Set-Content (Join-Path $out 'READ-ME-FIRST.txt') -Encoding utf8
+          Write-Host "EXE SMOKE SUCCESS: $name SHA256 $exeHash"
+          Write-Host 'SUPERVISED FAT candidate only. No release or physical command authority.'
+
       - name: Write non-promotion build authority manifest
         if: always()
         shell: pwsh
@@ -249,13 +373,14 @@ jobs:
             throw 'CI-P1 shadow SHA/TRX proof is incomplete; fail closed.'
           }
 
-      - name: Upload inspectable shadow TRX and SHA manifest
+      - name: Upload SHA-verified trial EXE, native proof and regression TRX
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ci-p1-shadow-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ${{ inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.focus == 'command-read' && format('ARSAS-SG7-BCU-ED2-FAT-TRIAL-{0}', github.run_id) || format('ci-p1-shadow-{0}-{1}', github.run_id, github.run_attempt) }}
           path: |
             ARSAS/TestResults/*.trx
+            ARSAS/TestResults/sg7-bcu-fat-trial/*
             ${{ runner.temp }}/ci-p1-shadow-manifest.json
-          if-no-files-found: warn
-          retention-days: 7
+          if-no-files-found: error
+          retention-days: 14
