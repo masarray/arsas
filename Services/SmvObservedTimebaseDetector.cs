@@ -12,6 +12,7 @@ namespace ArIED61850Tester.Services;
 public sealed class SmvObservedTimebaseDetector
 {
     private const double RateTolerance = 0.12;
+    private static readonly int[] SamplesPerCycleCandidates = [80, 256];
     private readonly double _nominalHz;
     private ushort? _previous;
     private DateTimeOffset _begin;
@@ -63,7 +64,7 @@ public sealed class SmvObservedTimebaseDetector
             return null;
 
         var observedRate = (_consecutive - 1) / seconds;
-        foreach (var pointsPerCycle in new[] { 80, 256 })
+        foreach (var pointsPerCycle in SamplesPerCycleCandidates)
         {
             var rate = _nominalHz * pointsPerCycle;
             if (Math.Abs(observedRate - rate) > rate * RateTolerance)
