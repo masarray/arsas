@@ -127,7 +127,8 @@ public static class IedBrowserVerifiedDoProjection
                 found.Add(new IedBrowserReadResult(target, accepted, "", "", "",
                     TypedBoolean: wire.Kind == MmsDataKind.Boolean && wire.Value is bool typed
                         ? typed : null,
-                    VerifiedStringWireKind: stringKind));
+                    VerifiedStringWireKind: stringKind,
+                    WireShapeEvidence: IedBrowserReadWireShapeEvidence.Describe(wire)));
         }
         Walk(type, data, "", 0);
         return found;
