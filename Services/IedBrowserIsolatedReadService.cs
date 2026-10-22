@@ -85,13 +85,15 @@ public static class IedBrowserIsolatedReadService
                     cancellationToken.ThrowIfCancellationRequested();
                     var read = raw as Iec61850ReadValue;
                     var display = raw?.ToString() ?? "";
-                    if (IedBrowserReadValuePolicy.TryAcceptDisplay(
-                            display, out var accepted, out var reason))
+                    if (IedBrowserReadValuePolicy.TryAcceptVerifiedMmsString(
+                            display, target.DataType, read?.VerifiedStringWireKind,
+                            out var accepted, out var reason))
                     {
                         values.Report(new IedBrowserReadResult(target, accepted,
                             read?.Quality ?? "", read?.DeviceTimestamp ?? "", "",
                             read?.UtcTimeEvidence, read?.QualityEvidence,
-                            read?.Value is bool typed ? typed : null));
+                            read?.Value is bool typed ? typed : null,
+                            read?.VerifiedStringWireKind));
                         successful++;
                     }
                     else
