@@ -3,35 +3,13 @@ name: Smart Discovery Golden Budget Lock
 on:
   pull_request:
     paths:
-      - "*.cs"
-      - "**/*.cs"
-      - "*.csproj"
-      - "**/*.csproj"
-      - "*.sln"
-      - "**/*.sln"
-      - "*.props"
-      - "**/*.props"
-      - "*.targets"
-      - "**/*.targets"
-      - "global.json"
-      - "*.xaml"
-      - "**/*.xaml"
-      - "app.manifest"
-      - "VERSION"
-      - ".release/**"
-      - ".github/workflows/**"
-      - "Assets/**"
-      - "Resources/**"
-      - "installer/**"
-      - "engine-patches/**"
-      - "landing/release-notes*.json"
-      - "landing/latest.json"
-      - "engines/**"
-      - "scripts/**"
-      - "tests/**"
-      - "evidence/**"
-      - "docs/INTEROPERABILITY_REFERENCE_CONTRACT.md"
-      - ".github/workflows/smart-discovery-*.yml"
+      # Fast PR routing: only Smart Discovery authority/dependencies trigger this gate.
+      - "scripts/new-smart-discovery-golden-lock.ps1"
+      - "scripts/verify-smart-discovery-golden-lock.ps1"
+      - "evidence/smart-discovery-golden-target.json"
+      - "evidence/smart-discovery-golden-lock.json"
+      - "tests/ARSAS.Tests/*SmartDiscovery*.cs"
+      - ".github/workflows/smart-discovery-golden-budget-lock.yml"
   workflow_dispatch:
 
 concurrency:

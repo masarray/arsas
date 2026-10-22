@@ -265,5 +265,75 @@ jobs:
         )
 
 
+
+class SmartDiscoveryFastRoutingTests(unittest.TestCase):
+    """Keep broad UI changes out of unrelated physical Smart Discovery CI."""
+
+    WORKFLOWS = (
+        ".github/workflows/smart-discovery-capture-build.yml",
+        ".github/workflows/smart-discovery-golden-provenance.yml",
+        ".github/workflows/smart-discovery-golden-budget-lock.yml",
+        ".github/workflows/smart-discovery-repeat-run-stability.yml",
+        ".github/workflows/smart-discovery-mainline-readiness.yml",
+        ".github/workflows/smart-discovery-merge-execution-guard.yml",
+        ".github/workflows/smart-discovery-production-promotion.yml",
+    )
+
+    @staticmethod
+    def pr_paths(workflow):
+        import re
+        content = workflow.read_text(encoding="utf-8")
+        match = re.search(
+            r"(?m)^  pull_request:\\n    paths:\\n(?P<paths>(?:      (?:#.*|- .*|)\\n)+)",
+            content,
+        )
+        if match is None:
+            raise AssertionError(f"Missing scoped PR path filters: {workflow}")
+        return [
+            line.split('"')[1] for line in match.group("paths").splitlines()
+            if line.strip().startswith('- "') and '"' in line
+        ]
+
+    def test_smart_discovery_pr_triggers_exclude_unrelated_ui_and_smv(self):
+        root = Path(__file__).resolve().parent.parent
+        from fnmatch import fnmatchcase
+        irrelevant = (
+            "MainWindow.xaml",
+            "MainWindow.IedBrowser.cs",
+            "Models/QualityInvalidAttention.cs",
+            "Services/SmvLiveCaptureService.cs",
+            "tests/ARSAS.Tests/QualityInvalidAttentionTests.cs",
+            "docs/WINDOWS_RELEASES.md",
+        )
+        for name in self.WORKFLOWS:
+            paths = self.pr_paths(root / name)
+            self.assertTrue(paths, name)
+            self.assertIn(name, paths)
+            for unrelated in irrelevant:
+                self.assertFalse(
+                    any(fnmatchcase(unrelated, pattern) for pattern in paths),
+                    f"{name} wrongly triggered by {unrelated}",
+                )
+
+    def test_smart_discovery_critical_changes_still_trigger_and_manual_exists(self):
+        root = Path(__file__).resolve().parent.parent
+        from fnmatch import fnmatchcase
+        for name in self.WORKFLOWS:
+            content = (root / name).read_text(encoding="utf-8")
+            self.assertIn("  workflow_dispatch:", content)
+            paths = self.pr_paths(root / name)
+            self.assertTrue(any(fnmatchcase(name, pattern) for pattern in paths))
+        shared = (
+            ".github/workflows/smart-discovery-capture-build.yml",
+            ".github/workflows/smart-discovery-mainline-readiness.yml",
+            ".github/workflows/smart-discovery-merge-execution-guard.yml",
+            ".github/workflows/smart-discovery-production-promotion.yml",
+        )
+        for name in shared:
+            paths = self.pr_paths(root / name)
+            for critical in ("Models/MonitorModels.cs", "engines/ARIEC61850.lock.json"):
+                self.assertTrue(any(fnmatchcase(critical, pattern) for pattern in paths),
+                                f"{name} omitted {critical}")
+
 if __name__ == "__main__":
     unittest.main()
