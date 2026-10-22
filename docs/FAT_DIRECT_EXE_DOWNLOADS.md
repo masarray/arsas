@@ -1,49 +1,84 @@
-# Direct EXE downloads for engineering FAT — opt-in public preview
+# Direct Windows EXE downloads for engineering FAT
 
-## Why a PR build link still returns ZIP
+## The fast path
 
-The Windows Build ARSAS workflow already produces a real x64 single-file portable \`.exe\`. GitHub Actions stores and **downloads all workflow artifacts as ZIP**, even when only one EXE is uploaded. Changing upload-artifact names or extensions does not change this behavior. Do not label an Actions artifact URL as a direct EXE.
+**GitHub Actions artifacts are ZIP containers, by design**, even when one
+`.exe` was uploaded. Renaming an Actions artifact to `.exe` would mislead
+the user and does not change the bytes.
 
-Published GitHub **Release assets**, by contrast, give direct binary URLs ending in \`.exe\`. ARSAS stable v1.6.41 already offers official direct portable/installer EXEs; these are **historical stable files**, not newer #659 FAT binaries.
+The stable GitHub Releases assets already download directly:
+- https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.exe
+- https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe
 
-## Proposed safe workflow
+Those URLs are **stable release builds**, not necessarily the latest open PR.
 
-\`.github/workflows/fat-direct-exe.yml\` is a **manual-only, opt-in** preview publisher. Pull requests may run only **read-only offline verifier tests**, with `contents: read`; the privileged publishing job has **no push, tag, PR, or workflow_run publishing trigger** and is gated to a manual dispatch on the default branch. It can only be dispatched after the infrastructure file exists on the default branch and after the owner has explicitly approved **public non-production distribution**. Do not merge any unfinished P0 application/engine changes merely to install this infrastructure. An optional GitHub Environment named \`fat-preview-publication\` can require a human reviewer.
+For *development/FAT* binaries, the existing
+`.github/workflows/installer-windows.yml` now includes an independently
+gated manual `fat-direct-preview` job. We deliberately did **not** add
+a new workflow file or another checkout; the repository's
+`CI P0 Workflow Integrity` restricts CI workflow/checkout counts.
 
-Required inputs:
-- \`tested_sha\`: exact qualified 40-char candidate source commit.
-- \`build_run_id\`: completed successful Build ARSAS run for that SHA; the workflow verifies its run identity, full set of exact-SHA workflow gates, downloaded PE signatures, and SHA-256.
-- \`installer_run_id\`: optional separate successful installer validation run for the **same exact SHA**; use \`0\` when no installer exists.
-- \`public_preview_ack\`: exactly \`PUBLISH PUBLIC NONPRODUCTION FAT EXE\`. This is a deliberate public-distribution authorization; without it the workflow aborts.
+## Publish a tested PR binary as one-click .exe (maintainers)
 
-A successful explicitly authorized run publishes a **public GitHub prerelease** named \`fat-<SHA12>\`, never a stable release or "latest", with:
-- \`ARSAS-FAT-<SHA12>-win-x64-portable.exe\`
-- \`ARSAS-FAT-<SHA12>-win-x64-setup.exe\` **only if a fully qualified exact-SHA installer exists**
-- \`SHA256SUMS.txt\`, source/build provenance receipts and a NOT-PRODUCTION warning.
+Once this infrastructure change has passed CI and been approved on `main`:
 
-Direct URLs then have the form:
+1. Open **Actions → Validate ARSAS Windows installer → Run workflow**.
+2. Choose branch **main** and enable **fat_preview**.
+3. Paste **tested_sha** (full 40-character, already all-green PR head)
+   and the successful **Build ARSAS** workflow **build_run_id** for that exact SHA.
+4. Leave **installer_run_id=0** for portable EXE only, or supply the completed
+   exact-SHA installer workflow run ID for both direct EXEs.
+5. For a deliberately **PUBLIC**, non-production engineering preview, type
+   **PUBLISH PUBLIC NONPRODUCTION FAT EXE** in **public_preview_ack**.
+   The dedicated `fat-preview-publication` environment may require reviewer
+   approval. This is never triggered by PR/push/tag automatically.
 
-\`\`\`text
+After the public preview is approved and published, the direct download is:
+
+```text
 https://github.com/masarray/arsas/releases/download/fat-<SHA12>/ARSAS-FAT-<SHA12>-win-x64-portable.exe
+```
+
+If a separate exact-SHA installer succeeded and its ID was entered:
+
+```text
 https://github.com/masarray/arsas/releases/download/fat-<SHA12>/ARSAS-FAT-<SHA12>-win-x64-setup.exe
-\`\`\`
+```
 
-These are **URL templates, not existing download links** until the explicitly approved run finishes. Every SHA gets a fresh immutable tag; never overwrite existing preview binaries or stable v1.6.40/v1.6.41 assets. Do not change \`.release/windows.json\`, publish-verified production release metadata or \`main\` engineering acceptance through this workflow.
+These are **templates**, not valid URLs until the preview release is actually
+published. Download is one click and does not require unzipping.
 
-## Immediate #659 status
+## Proof and immutability
 
-Current P0 Data Model #659 exact tested source:
-\`1371c2990c40356acb1794bfa42c76e408421b47\`.
-Windows 11/11 CI green, portable single-file artifact verified, but **Actions ZIP**:
-https://github.com/masarray/arsas/actions/runs/39525163418/artifacts/12312721694
+The publisher:
+- Runs offline positive/negative verifier tests from the exact approved
+  `main` workflow commit, without executing candidate-branch scripts.
+- Requires all current exact-source CI workflows completed successfully,
+  with at least 10 results, and a successful exact-SHA Build ARSAS run.
+- Downloads the canonical Actions artifact and validates the actual
+  Windows PE bytes, build run identity and SHA-256; an optional installer
+  is independently validated against the exact source SHA.
+- Publishes a new immutable `fat-<SHA12>` **prerelease** with
+  `SHA256SUMS.txt`, provenance files and `NOT-PRODUCTION.txt`.
+  It refuses to overwrite an existing preview tag.
+- Does **not** alter stable releases, `latest`, application version,
+  `.release/windows.json`, engine pin, landing download metadata, R7/R10
+  safety evidence, or physical FAT acceptance.
 
-There is **no #659 direct EXE release asset yet**. Publishing a public prerelease (even explicitly marked FAT-only) must be approved by the repository owner before it runs. Installer for this exact candidate must pass its own Windows installer workflow before the optional setup.exe is made public. Do not substitute an older stable installer.
+A normal `workflow_dispatch` with **fat_preview disabled** continues the
+existing installer-validation path. CI PR/push events remain read-only and
+cannot publish any asset.
 
-As a separate reminder, a different, already published production version currently has direct EXEs:
-https://github.com/masarray/arsas/releases/download/v1.6.41/ARSAS-Windows-x64-Portable.exe
-https://github.com/masarray/arsas/releases/download/v1.6.41/ARSAS-Windows-x64-Setup.exe
-These assets do NOT contain the latest #659 Data Model patch.
+## Current qualification
 
-## Security and regression
+The GR_X SCD/CSWI, Model Read diagnostics preview **#674** already has a
+successful Windows Build and portable Actions ZIP. Exact tested source:
+`7e93907e8ef1454913ac8b1b5d2f79e49d651bb6`, Build ARSAS run
+`39719067914`. Its ZIP artifact contains the genuine self-contained
+`.exe` but is **not** a direct GitHub Release asset yet. Do not claim a
+`fat-7e93907e8ef1` release exists until the manually approved publication
+successfully creates it.
 
-Run \`python scripts/test-fat-direct-exe.py\` before any preview publication. The tests reject SHA mismatch, incomplete/failing workflow run, disguised ZIP, and wrong/missing PE signature. The publication script also fails closed if fewer than ten exact-SHA workflow checks succeeded, if any are incomplete/failing, if the preview tag exists, or if any candidate executable failed independent local SHA sealing. No IED connection, read, write, release promotion or application runtime change is made.
+The earlier standalone direct-EXE workflow proposed in #660 was blocked
+by CI workflow/checkout budget; this implementation reuses the existing
+installer lane instead of bypassing that invariant.
