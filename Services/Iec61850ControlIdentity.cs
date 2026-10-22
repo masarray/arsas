@@ -75,6 +75,31 @@ public static class Iec61850ControlIdentity
             .Where(s => s.ControlModelResolved && s.ControlSupportsOperate)
             .ToArray();
 
+
+    /// <summary>
+    /// Read-only probe priority. These are IEC function hints, NOT commands
+    /// or eligibility decisions. A switch position can be behind any vendor
+    /// prefix or logical device; prefer its typed ctlModel discovery over
+    /// generic channel banks so operator equipment appears promptly.
+    /// Unrecognized LN classes remain in the queue.
+    /// </summary>
+    public static int ControlInspectionPriority(SignalDefinition signal)
+    {
+        ArgumentNullException.ThrowIfNull(signal);
+        var reference = Normalize(signal.ObjectReference);
+        var dot = reference.LastIndexOf('.');
+        var doName = dot < 0 ? string.Empty : reference[(dot + 1)..];
+        var ln = signal.LogicalNodeClass.ToUpperInvariant();
+        if (doName.Equals("Pos", StringComparison.OrdinalIgnoreCase))
+            return ln switch { "XCBR" => 0, "XSWI" => 1, "CSWI" => 2, _ => 8 };
+        if (doName.Equals("TapChg", StringComparison.OrdinalIgnoreCase))
+            return 3;
+        if (ln == "ATCC") return 12;
+        if (ln == "GGIO") return 90;
+        if (ln == "CILO") return 95;
+        return 40;
+    }
+
     /// <summary>
     /// Discover control-service candidates independently of LN class, display
     /// name, DataSet membership and operator selection. CO/CF service evidence
@@ -94,6 +119,7 @@ public static class Iec61850ControlIdentity
             .Select(group => group.OrderByDescending(signal => signal.IsSelected)
                 .ThenByDescending(signal => signal.ControlSupportsOperate).First())
             .OrderByDescending(signal => signal.IsSelected)
+            .ThenBy(ControlInspectionPriority)
             .ThenBy(signal => Normalize(signal.ObjectReference), StringComparer.OrdinalIgnoreCase)
             .Take(budget).ToArray();
     }

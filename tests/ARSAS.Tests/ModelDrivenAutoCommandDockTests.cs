@@ -44,6 +44,26 @@ public sealed class ModelDrivenAutoCommandDockTests
     }
 
     [Fact]
+    public void LiveControlProbePrioritizesEquipmentBeforeLargeGenericChannelBank()
+    {
+        var bank = Enumerable.Range(1, 900)
+            .Select(i => Candidate($"SG7_BCUMaster/GGIO2.DPCSO{i:000}"))
+            .ToList();
+        var breaker = Candidate("SG7_BCUSystem/Bkr0XCBR1.Pos");
+        var switchController = Candidate("SG7_BCUSystem/BkrCSWI1.Pos");
+        var disconnector = Candidate("SG7_BCUSystem/Disc0XSWI1.Pos");
+        var tap = Candidate("CustomLD/ATCC1.TapChg", "BSC");
+        // Deliberately put hundreds of generic channels first.
+        var candidates = bank.Concat([switchController, tap, disconnector, breaker]).ToArray();
+        var scheduled = Iec61850ControlIdentity.DiscoveredControlInspectionCandidates(candidates);
+        Assert.Equal(new[] { breaker, disconnector, switchController, tap },
+            scheduled.Take(4));
+        Assert.Equal(904, scheduled.Length);
+        Assert.All(scheduled, signal => Assert.False(signal.ControlSupportsOperate));
+        Assert.Empty(Iec61850ControlIdentity.VerifiedCommandTargets(scheduled, true));
+    }
+
+    [Fact]
     public void NoCoCfProofMeansNoAutomaticCommandEvenWithPosOrTapChgName()
     {
         var ghosts = new[]

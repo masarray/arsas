@@ -322,6 +322,8 @@ public partial class MainWindow
                     .Where(signal => !signal.ControlModelResolved)
                     .DistinctBy(signal => Iec61850ControlIdentity.Normalize(signal.ObjectReference),
                         StringComparer.OrdinalIgnoreCase)
+                    .OrderByDescending(signal => signal.IsSelected)
+                    .ThenBy(Iec61850ControlIdentity.ControlInspectionPriority)
                     .ToArray();
 
                 if (candidates.Length == 0)
