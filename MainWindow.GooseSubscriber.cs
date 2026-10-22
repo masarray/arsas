@@ -184,7 +184,7 @@ public partial class MainWindow
                 RefreshGooseAdapters();
             GooseStatusText = GooseAdapters.Count == 0
                 ? "No capture adapter found. Install Npcap and refresh."
-                : "Select an Ethernet adapter, then press Start; no SCL is required.";
+                : "Select the Ethernet adapter in the dropdown, then press Start. SCL is not required.";
             return;
         }
 

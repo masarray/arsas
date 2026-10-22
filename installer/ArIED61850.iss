@@ -87,6 +87,10 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
 
 [Files]
+; Dedicated shell icon is embedded separately from the .NET single-file host.
+; Keep this exact P0 icon contract intact for stable AND preview installations.
+Source: "..\Assets\app-icon.ico"; DestDir: "{app}\Assets"; Flags: ignoreversion
+
 #ifdef SmvPreviewBuild
 ; A still-loaded .NET framework/private DLL must be queued for replacement
 ; on Windows restart rather than presenting Retry / Skip / Cancel mid-upgrade.
@@ -97,8 +101,8 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 #endif
 
 [Icons]
-Name: "{autoprograms}\{#AppShortcut}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExeName}"
-Name: "{autodesktop}\{#AppShortcut}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\{#AppShortcut}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\app-icon.ico"; AppUserModelID: "masarray.ARSAS.IEC61850"
+Name: "{autodesktop}\{#AppShortcut}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\app-icon.ico"; AppUserModelID: "masarray.ARSAS.IEC61850"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "Launch ARSAS"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
