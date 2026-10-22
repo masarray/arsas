@@ -243,14 +243,32 @@ public sealed class SmvLiveStreamBuffer
             // smpRate/smpMod are optional in actual field SV streams.
             // Derive a bounded capture timebase from counter continuity AND
             // independently observed NIC timestamps. Do not fabricate samples.
-            // Declared-but-contradictory metadata must not be silently overridden.
-            var observed = (_declaredRate is null || _declaredMode is null)
+            // Some real MUs advertise smpRate=4000/4800 while smpMod=0
+            // (samples/period), which would request an impossible 8000+ point
+            // two-cycle scope. That is contradictory metadata, not trustworthy
+            // evidence of an 80-sample cycle. With a 64-byte fixed 4I+4V
+            // payload, permit independent counter + NIC-clock confirmation.
+            // Never override a plausible declared timebase or infer solely
+            // from payload shape, chosen nominal Hz, or a single smpCnt.
+            var fixedLegacyPayload = _payloadLength == 64 && _wordIndexes.Length == 8;
+            var invalidDeclaredTimebase = _timebase?.IsResolved == true &&
+                (long)_timebase.SamplesPerCycle.GetValueOrDefault() * _options.Cycles > 4096;
+            var mayObserve = (_declaredRate is null || _declaredMode is null) ||
+                             (fixedLegacyPayload && invalidDeclaredTimebase);
+            var observed = mayObserve
                 ? _observedTimebase.Observe(asdu.SampleCount, timestamp)
                 : null;
             if (observed is null)
                 return;
 
-            _timebase = observed;
+            _timebase = invalidDeclaredTimebase
+                ? observed with
+                {
+                    Reason = "Conflicting on-wire smpRate/smpMod; display timebase corroborated " +
+                             "by contiguous smpCnt and capture-clock evidence on fixed 4I+4V payload. " +
+                             observed.Reason
+                }
+                : observed;
             AllocateResolvedWindow();
             _counter.Reset();
         }
