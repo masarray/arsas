@@ -41,6 +41,19 @@ public static class IedBrowserIsolatedReadService
             }
 
             var successful = 0;
+            // One exact key per observed child across typed FC roots and
+            // same-DO parent fallbacks. An overlapping fanout must never
+            // publish duplicate ledger revisions or inflate Read All success.
+            var emitted = new HashSet<string>(StringComparer.Ordinal);
+            static string Key(IedBrowserReadTarget target) =>
+                IedBrowserLiveValues.CanonicalReference(target.Reference) + "|" +
+                target.FunctionalConstraint.Trim().ToUpperInvariant();
+            void EmitVerified(IedBrowserReadResult result)
+            {
+                if (!emitted.Add(Key(result.Target))) return;
+                values.Report(result);
+                successful++;
+            }
             var sgRootFlight = new IedBrowserSgRootReadFlight(
                 client, targets, verifiedRootScope);
             // One association-scoped flight, only used AFTER a scalar Read
@@ -55,13 +68,17 @@ public static class IedBrowserIsolatedReadService
                     throw new InvalidOperationException(
                         "Live IED discovery/model or monitoring association changed during isolated MMS Read.");
                 var target = targets[i];
+                if (emitted.Contains(Key(target)))
+                {
+                    progress.Report(new IedBrowserReadProgress(i + 1, targets.Count));
+                    continue;
+                }
                 try
                 {
                     var previouslyVerified = doReadFlight.PreviouslyVerified(target);
                     if (previouslyVerified is not null)
                     {
-                        values.Report(previouslyVerified);
-                        successful++;
+                        EmitVerified(previouslyVerified);
                         progress.Report(new IedBrowserReadProgress(i + 1, targets.Count));
                         continue;
                     }
@@ -77,13 +94,11 @@ public static class IedBrowserIsolatedReadService
                     // the queued target itself was absent or refused.
                     foreach (var extra in sgRootFlight.DrainUnscheduledSiblings(target))
                     {
-                        values.Report(extra);
-                        successful++;
+                        EmitVerified(extra);
                     }
                     if (verifiedSg is not null)
                     {
-                        values.Report(verifiedSg);
-                        successful++;
+                        EmitVerified(verifiedSg);
                         progress.Report(new IedBrowserReadProgress(i + 1, targets.Count));
                         continue;
                     }
@@ -97,12 +112,11 @@ public static class IedBrowserIsolatedReadService
                             display, target.DataType, read?.VerifiedStringWireKind,
                             out var accepted, out var reason))
                     {
-                        values.Report(new IedBrowserReadResult(target, accepted,
+                        EmitVerified(new IedBrowserReadResult(target, accepted,
                             read?.Quality ?? "", read?.DeviceTimestamp ?? "", "",
                             read?.UtcTimeEvidence, read?.QualityEvidence,
                             read?.Value is bool typed ? typed : null,
                             read?.VerifiedStringWireKind));
-                        successful++;
                     }
                     else
                     {
@@ -114,12 +128,10 @@ public static class IedBrowserIsolatedReadService
                             target, cancellationToken).ConfigureAwait(false);
                         if (verifiedParent is not null)
                         {
-                            values.Report(verifiedParent);
-                            successful++;
+                            EmitVerified(verifiedParent);
                             foreach (var extra in doReadFlight.DrainUnscheduledSiblings(target))
                             {
-                                values.Report(extra);
-                                successful++;
+                                EmitVerified(extra);
                             }
                         }
                         else
