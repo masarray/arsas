@@ -73,6 +73,47 @@ public sealed class P0CswiCrossDataSetCommandDiscoveryTests
     }
 
     [Fact]
+    public void VerifiedCommandDockAdmissionsUseControlEvidence_NotLnNameOrDataSetMembership()
+    {
+        SignalDefinition Verified(string reference, string cdc)
+        {
+            var signal = Control(reference);
+            signal.HasControlServiceEvidence = true;
+            signal.ControlCdc = cdc;
+            signal.ControlModelText = "SBO • Enhanced security";
+            signal.AcceptVerifiedLiveControlCdc(cdc);
+            signal.ControlSemanticVerified = true;
+            return signal;
+        }
+
+        var breaker = Verified("SG7_BCUSystem/Bkr0XCBR2.Pos", "DPC");
+        var tap = Verified("LD_ATCC/SomePrefixATCC1.TapChg", "BSC");
+        var vendorCommand = Verified("LD_GEN/CustomGGIO7.FutureSwitch", "SPC");
+        var statusOnly = Control("SG7_BCUSystem/Disc0XSWI1.Pos");
+        statusOnly.HasControlServiceEvidence = true;
+        statusOnly.ControlModelText = "Status only";
+
+        var advisoryOnly = Control("LD_GEN/CustomGGIO8.Signal");
+        advisoryOnly.ControlModelText = "SBO • Enhanced security";
+        advisoryOnly.HasControlServiceEvidence = true;
+        var duplicate = Control(tap.ObjectReference);
+
+        var signals = new[] { breaker, tap, vendorCommand, statusOnly, advisoryOnly, duplicate };
+        Assert.Empty(Iec61850ControlIdentity.VerifiedCommandTargets(signals,
+            admitDiscovered: false));
+        var verified = Iec61850ControlIdentity.VerifiedCommandTargets(signals,
+            admitDiscovered: true);
+        Assert.Equal(3, verified.Length);
+        Assert.Contains(breaker, verified);
+        Assert.Contains(tap, verified);
+        Assert.Contains(vendorCommand, verified);
+        Assert.DoesNotContain(statusOnly, verified);
+        Assert.DoesNotContain(advisoryOnly, verified);
+        Assert.DoesNotContain(duplicate, verified);
+        Assert.All(verified, signal => Assert.False(signal.IsSelected));
+    }
+
+    [Fact]
     public void CrossDataSetCswiProbeIsBoundedDeduplicatedAndDoesNotChangeUserSelection()
     {
         var signals = Enumerable.Range(1, 80)

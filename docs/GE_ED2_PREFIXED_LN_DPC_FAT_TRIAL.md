@@ -8,11 +8,11 @@ IEC LN names have prefix + lnClass + inst. The qualified engine (#184) classifie
 
 ## Correction (vendor-neutral)
 
-Engine ARIEC61850 PR #189 parses the rightmost 4-character LN class immediately before the required trailing instance digits, retaining arbitrary LN prefixes (including prefix digits) and requiring the exact Pos DO. For Boolean DPC, the live descriptor also requires the same-object `.stVal` reference, control model, actual Oper and SBOw type proof, Cancel, and CommandTermination support. No arbitrary Boolean-to-DPC upgrade, no automatic Select/Operate, and no change to SBOw 400ms delayed LastApplError grace.
+Engine ARIEC61850 PR #189 now verifies Boolean DPC using the exact **live two-bit ST `.stVal` read**, matching the same DataObject as the Boolean Oper `ctlVal`; declared SCL CDC is advisory, and LN name/prefix is no longer the authority. The older prefix-aware CSWI/XCBR/XSWI recognizer remains only an optional probe optimization. This works for arbitrarily renamed IEC Edition 2 LN/control DOs while failing closed when the typed status is absent or wrong. The live descriptor still requires an operational control model, actual Oper and SBOw type proof, Cancel, and CommandTermination support. No blanket Boolean-to-DPC promotion, no automatic Select/Operate and no change to SBOw 400ms delayed LastApplError grace.
 
 ## Isolated fast validation
 
-Production lock stays at engine #184 `9c7cb40364023a7b217e5ec31ab3105ba90142eb`. Use the existing CI-P1 reusable Windows build/test via manual FAST DEV, focus `command-read`, experimental engine SHA `3a09b1e52456fbef2fa2c5468c7cfbb9c027f7bc`. This compiles ARSAS against experimental engine and runs focused, read-only tests. The source manifest records the trial SHA and explicitly excludes this job from any FAT/release qualification. Engine PR #189 separately tests positive and negative semantic admission, including incorrect feedback and missing enhanced-control descriptor components.
+Production lock stays at engine #184 `9c7cb40364023a7b217e5ec31ab3105ba90142eb`. Use the existing CI-P1 reusable Windows build/test via manual FAST DEV, focus `command-read`, experimental engine SHA `5744f302fb3ee949bb57eb84800c9ff68fbbd040`. This compiles ARSAS against experimental engine and runs focused, read-only tests. The source manifest records the trial SHA and explicitly excludes this job from any FAT/release qualification. Engine PR #189 separately tests positive and negative semantic admission, including incorrect feedback and missing enhanced-control descriptor components.
 
 ## Existing evidence versus remaining acceptance
 
