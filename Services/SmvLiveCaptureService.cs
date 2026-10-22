@@ -155,6 +155,7 @@ public sealed class SmvLiveStreamBuffer
     private readonly SmvLiveCaptureOptions _options;
     private readonly SmvLiveExpectedStream? _expected;
     private readonly SvSampleCounterTracker _counter = new();
+    private readonly SmvObservedTimebaseDetector _observedTimebase;
     private SvTimebaseResolution? _timebase;
     private double[][] _samples = [];
     private ushort[] _counters = [];
@@ -175,6 +176,7 @@ public sealed class SmvLiveStreamBuffer
         Key = key;
         _options = options;
         _expected = expected;
+        _observedTimebase = new SmvObservedTimebaseDetector(options.NominalFrequencyHz);
     }
 
     public string Key { get; }
@@ -237,7 +239,30 @@ public sealed class SmvLiveStreamBuffer
         }
 
         if (_timebase?.IsResolved != true || _length == 0)
-            return;
+        {
+            // smpRate/smpMod are optional in actual field SV streams.
+            // Derive a bounded capture timebase from counter continuity AND
+            // independently observed NIC timestamps. Do not fabricate samples.
+            // Declared-but-contradictory metadata must not be silently overridden.
+            var observed = (_declaredRate is null || _declaredMode is null)
+                ? _observedTimebase.Observe(asdu.SampleCount, timestamp)
+                : null;
+            if (observed is null)
+                return;
+
+            _timebase = observed;
+            AllocateResolvedWindow();
+            _counter.Reset();
+        }
+
+        // An observed 4000/4800/... Hz publisher may roll smpCnt at its
+        // sampling frequency rather than at UInt16.MaxValue. Adopt a counter
+        // modulus ONLY on the actually observed supported wrap edge.
+        if (_timebase.SampleCounterWrap is null &&
+            asdu.SampleCount == 0 && _counter.Last is ushort previous &&
+            SmvObservedTimebaseDetector.IsSupportedWrap(previous,
+                _timebase.SamplesPerCycle!.Value, _timebase.NominalFrequencyHz!.Value))
+            _timebase = _timebase with { SampleCounterWrap = (ushort)(previous + 1) };
 
         var transition = _counter.Observe(asdu.SampleCount, _timebase.SampleCounterWrap);
         switch (transition.Kind)
@@ -326,6 +351,7 @@ public sealed class SmvLiveStreamBuffer
     {
         ResetWindow();
         _counter.Reset();
+        _observedTimebase.Reset();
         DataSetReference = asdu.DataSetReference;
         _confRev = asdu.ConfigurationRevision;
         _smpSynch = asdu.SampleSynchronization;
@@ -343,19 +369,36 @@ public sealed class SmvLiveStreamBuffer
             IsFixedLegacyProtectionLayout = groups && payloadLength == 64,
             TrustedNominalFrequencyHz = _options.NominalFrequencyHz
         });
-        var length = (long)_timebase.SamplesPerCycle.GetValueOrDefault() * _options.Cycles;
-        if (!_timebase.IsResolved || length is < 4 or > 4096 || _wordIndexes.Length == 0)
+        if (!_timebase.IsResolved)
         {
             _length = 0;
             _samples = [];
-            _diagnostic = $"Timebase unknown or window >4096 samples. {_timebase.Reason}";
+            _diagnostic = "Waiting for verified SV timebase: " +
+                "checking smpCnt continuity and capture rate (optional smpRate/smpMod absent).";
+            return;
+        }
+        AllocateResolvedWindow();
+    }
+
+    private void AllocateResolvedWindow()
+    {
+        var length = (long)_timebase!.SamplesPerCycle.GetValueOrDefault() * _options.Cycles;
+        if (length is < 4 or > 4096 || _wordIndexes.Length == 0)
+        {
+            _length = 0;
+            _samples = [];
+            _diagnostic = "Invalid timebase/window (>4096 or no decoded channels); evidence withheld. " +
+                _timebase.Reason;
             return;
         }
         _length = (int)length;
-        _samples = Enumerable.Range(0, _wordIndexes.Length).Select(_ => new double[_length]).ToArray();
+        _samples = Enumerable.Range(0, _wordIndexes.Length)
+            .Select(_ => new double[_length]).ToArray();
         _counters = new ushort[_length];
         _times = new DateTimeOffset[_length];
-        _diagnostic = "Stream recognized; collecting continuous samples.";
+        ResetWindow();
+        _diagnostic = "Verified capture-rate evidence · collecting coherent SV samples. " +
+            _timebase.Reason;
     }
 
     private void ResetWindow()
