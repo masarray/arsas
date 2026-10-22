@@ -422,6 +422,12 @@ public partial class MainWindow
                     // identity-preserving projection emits no collection events
                     // when neither membership nor order changed.
                     device.RefreshCommandSignalProjection();
+                    // On first live proof XCBR/CSWI rows may be inserted before
+                    // hundreds of GGIO rows while the DataGrid keeps its
+                    // previous scroll anchor. Show the actual equipment instead.
+                    if (ReferenceEquals(SelectedDevice, device) &&
+                        CommandPanelExpander?.IsExpanded == true)
+                        ScrollVerifiedEquipmentCommandsIntoView();
                     RebuildControlFeedbackIndex(device);
                 }
             }
