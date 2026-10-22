@@ -156,6 +156,7 @@ public sealed class SmvLiveStreamBuffer
     private readonly SmvLiveExpectedStream? _expected;
     private readonly SvSampleCounterTracker _counter = new();
     private readonly SmvObservedTimebaseDetector _observedTimebase;
+    private readonly SmvDeclaredRateCounterVerifier _declaredRateVerifier;
     private SvTimebaseResolution? _timebase;
     private double[][] _samples = [];
     private ushort[] _counters = [];
@@ -177,6 +178,7 @@ public sealed class SmvLiveStreamBuffer
         _options = options;
         _expected = expected;
         _observedTimebase = new SmvObservedTimebaseDetector(options.NominalFrequencyHz);
+        _declaredRateVerifier = new SmvDeclaredRateCounterVerifier(options.NominalFrequencyHz, options.Cycles);
     }
 
     public string Key { get; }
@@ -261,20 +263,32 @@ public sealed class SmvLiveStreamBuffer
             var mayObserve = _timebase?.IsResolved != true ||
                              invalidDeclaredTimebase ||
                              _declaredRate is null || _declaredMode is null;
+            // On real NICs multiple ASDUs can have identical/batched capture
+            // timestamps. An independently declared sample rate plus a whole
+            // counter-contiguous window is sufficient for a conservative
+            // display-only timebase, without fabricating samples or using the
+            // nominal 50/60Hz setting alone as evidence.
+            var declaredCounterProof = mayObserve
+                ? _declaredRateVerifier.Observe(asdu.SampleCount, _declaredRate, _declaredMode)
+                : null;
             var observed = mayObserve
                 ? _observedTimebase.Observe(asdu.SampleCount, timestamp)
                 : null;
-            if (observed is null)
+            var resolved = observed ?? declaredCounterProof;
+            if (resolved is null)
+            {
+                _diagnostic = _declaredRateVerifier.ProgressText;
                 return;
+            }
 
             _timebase = invalidDeclaredTimebase
-                ? observed with
+                ? resolved with
                 {
                     Reason = "Conflicting on-wire smpRate/smpMod; display timebase corroborated " +
                              "by contiguous smpCnt and NIC-clock evidence; source channel semantics remain unverified. " +
-                             observed.Reason
+                             resolved.Reason
                 }
-                : observed;
+                : resolved;
             AllocateResolvedWindow();
             _counter.Reset();
         }
@@ -384,6 +398,7 @@ public sealed class SmvLiveStreamBuffer
         ResetWindow();
         _counter.Reset();
         _observedTimebase.Reset();
+        _declaredRateVerifier.Reset();
         DataSetReference = asdu.DataSetReference;
         _confRev = asdu.ConfigurationRevision;
         _smpSynch = asdu.SampleSynchronization;
