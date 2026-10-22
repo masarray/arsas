@@ -83,6 +83,8 @@ public sealed class P0ModelTypedMmsStringTests
         Assert.Contains("declaredDataType: result.Target.DataType", source);
         Assert.Contains("read?.VerifiedStringWireKind", isolated);
         Assert.Contains("raw.Value is string decoded", native);
+        Assert.Contains("CanonicalReference(projected.ReadReference)", native);
+        Assert.Contains("CanonicalReference(reference)", native);
         Assert.Contains("projected.VerifiedStringWireKind = raw.Kind", native);
     }
 }
