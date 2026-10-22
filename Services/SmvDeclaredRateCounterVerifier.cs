@@ -17,6 +17,8 @@ public sealed class SmvDeclaredRateCounterVerifier
     private int _length;
     private ushort? _rate;
     private ushort? _mode;
+    private DateTimeOffset _startedAt;
+    private DateTimeOffset _lastAt;
     public SmvDeclaredRateCounterVerifier(double nominal, int cycles)
     {
         if (nominal is not (50 or 60) || cycles is < 1 or > 10)
@@ -34,10 +36,12 @@ public sealed class SmvDeclaredRateCounterVerifier
         _length = 0;
         _rate = null;
         _mode = null;
+        _startedAt = default;
+        _lastAt = default;
         ProgressText = "Timebase pending: checking declared rate and counter continuity.";
     }
 
-    public SvTimebaseResolution? Observe(ushort counter, ushort? declaredRate, ushort? declaredMode)
+    public SvTimebaseResolution? Observe(ushort counter, DateTimeOffset capturedAt, ushort? declaredRate, ushort? declaredMode)
     {
         if (declaredRate != _rate || declaredMode != _mode)
         {
@@ -67,11 +71,28 @@ public sealed class SmvDeclaredRateCounterVerifier
             if (counter != next)
                 _length = 0;
         }
+        if (_lastAt != default &&
+            (capturedAt < _lastAt.AddMilliseconds(-5) ||
+             capturedAt - _lastAt > TimeSpan.FromSeconds(1)))
+        {
+            _length = 0;
+            _startedAt = default;
+        }
+        if (_startedAt == default)
+            _startedAt = capturedAt;
         _last = counter;
+        _lastAt = capturedAt;
         _length++;
         var required = checked(points * _cycles);
         ProgressText = $"Timebase pending: {Math.Min(_length, required)}/{required} sequential smpCnt samples, declared {rate} samples/s at {_nominal:0} Hz.";
-        if (_length < required)
+        // A completely frozen NIC clock is not independent evidence of any
+        // active sampled-value rate. A batched multi-ASDU packet is fine:
+        // several samples can share a timestamp, but across two complete
+        // cycles the capture clock must advance by a plausible amount.
+        var elapsedSeconds = (capturedAt - _startedAt).TotalSeconds;
+        var idealSeconds = (required - 1.0) / rate;
+        if (_length < required || elapsedSeconds < idealSeconds * 0.30 ||
+            elapsedSeconds > idealSeconds * 5)
             return null;
 
         return new SvTimebaseResolution
@@ -80,7 +101,7 @@ public sealed class SmvDeclaredRateCounterVerifier
             SamplesPerCycle = points,
             SampleCounterWrap = wrap,
             Source = SvTimebaseSource.ObservedLegacyProtectionRate,
-            Reason = $"Display-only rate: declared {rate} interpreted as samples/second with {_length} contiguous smpCnt samples at explicitly selected {_nominal:0} Hz. NIC timestamp rate not corroborated; verify publisher profile."
+            Reason = $"Display-only rate: declared {rate} interpreted as samples/second with {_length} contiguous smpCnt samples at explicitly selected {_nominal:0} Hz. NIC clock advanced, but per-ASDU timestamp cadence unverified; verify publisher profile."
         };
     }
 }

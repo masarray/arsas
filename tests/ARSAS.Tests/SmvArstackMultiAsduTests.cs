@@ -12,24 +12,26 @@ public sealed class SmvArstackMultiAsduTests
     public void BatchedCaptureClock_DeclaredRatePlusTwoCyclesResolves(int hz, ushort rate, int spc)
     {
         var verifier = new SmvDeclaredRateCounterVerifier(hz, 2);
+        var t = new DateTimeOffset(2026, 10, 22, 0, 0, 0, TimeSpan.Zero);
         for (var n = 0; n < spc * 2 - 1; n++)
-            Assert.Null(verifier.Observe((ushort)n, rate, 0));
-        var proof = verifier.Observe((ushort)(spc * 2 - 1), rate, 0);
+            Assert.Null(verifier.Observe((ushort)n, t.AddTicks(n * TimeSpan.TicksPerSecond / rate), rate, 0));
+        var proof = verifier.Observe((ushort)(spc * 2 - 1), t.AddTicks((spc * 2 - 1) * TimeSpan.TicksPerSecond / rate), rate, 0);
         Assert.NotNull(proof);
         Assert.Equal(spc, proof.SamplesPerCycle);
         Assert.Equal(rate, proof.SampleCounterWrap);
-        Assert.Contains("NIC timestamp rate not corroborated", proof.Reason);
+        Assert.Contains("per-ASDU timestamp cadence unverified", proof.Reason);
     }
 
     [Fact]
     public void MissingCounter_ResetsWindowAndRefusesOldEvidence()
     {
         var verifier = new SmvDeclaredRateCounterVerifier(50, 2);
+        var t = new DateTimeOffset(2026, 10, 22, 0, 0, 0, TimeSpan.Zero);
         for (var n = 0; n < 120; n++)
-            Assert.Null(verifier.Observe((ushort)n, 4000, 0));
-        Assert.Null(verifier.Observe(125, 4000, 0));
+            Assert.Null(verifier.Observe((ushort)n, t.AddTicks(n * 2500), 4000, 0));
+        Assert.Null(verifier.Observe(125, t.AddTicks(125 * 2500), 4000, 0));
         for (var n = 126; n < 260; n++)
-            Assert.Null(verifier.Observe((ushort)n, 4000, 0));
+            Assert.Null(verifier.Observe((ushort)n, t.AddTicks(n * 2500), 4000, 0));
     }
 
     [Fact]
@@ -39,11 +41,20 @@ public sealed class SmvArstackMultiAsduTests
         {
             var verifier = new SmvDeclaredRateCounterVerifier(50, 2);
             for(var i=0;i<200;i++)
-                Assert.Null(verifier.Observe((ushort)i, rate, 0));
+                Assert.Null(verifier.Observe((ushort)i, DateTimeOffset.UtcNow.AddTicks(i * 2500), rate, 0));
         }
         var mode = new SmvDeclaredRateCounterVerifier(50, 2);
         for(var i=0;i<200;i++)
-            Assert.Null(mode.Observe((ushort)i, 4000, 2));
+            Assert.Null(mode.Observe((ushort)i, DateTimeOffset.UtcNow.AddTicks(i * 2500), 4000, 2));
+    }
+
+    [Fact]
+    public void FrozenCaptureClock_FailsClosedEvenWithDeclaredRateAndCounterContinuity()
+    {
+        var verifier = new SmvDeclaredRateCounterVerifier(50, 2);
+        var frozen = new DateTimeOffset(2026, 10, 22, 0, 0, 0, TimeSpan.Zero);
+        for (var i = 0; i < 300; i++)
+            Assert.Null(verifier.Observe((ushort)i, frozen, 4000, 0));
     }
 
     [Fact]

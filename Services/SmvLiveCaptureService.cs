@@ -269,7 +269,7 @@ public sealed class SmvLiveStreamBuffer
             // display-only timebase, without fabricating samples or using the
             // nominal 50/60Hz setting alone as evidence.
             var declaredCounterProof = mayObserve
-                ? _declaredRateVerifier.Observe(asdu.SampleCount, _declaredRate, _declaredMode)
+                ? _declaredRateVerifier.Observe(asdu.SampleCount, timestamp, _declaredRate, _declaredMode)
                 : null;
             var observed = mayObserve
                 ? _observedTimebase.Observe(asdu.SampleCount, timestamp)
