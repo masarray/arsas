@@ -87,7 +87,13 @@ public sealed class P0CswiCrossDataSetCommandDiscoveryTests
         Assert.Contains("VerifiedIndependentCswiControls(Signals)", monitor);
         Assert.Contains("IsConnected && LiveDiscoveryModel is not null", monitor);
         Assert.Contains("IndependentCswiInspectionCandidates(device.Signals)", preload);
+        Assert.Contains("device.SelectedControlSignalCount > 0 ||", preload);
+        Assert.Contains("device.Signals.Any(", preload);
         Assert.Contains("_runtime.InspectControlAsync(", preload);
+        var diagnostic = Source("Services/DiagnosticReportBuilder.cs");
+        Assert.Contains("CSWI outside DataSet: live candidates=", diagnostic);
+        Assert.Contains("typed-operable=", diagnostic);
+        Assert.Contains("operable={cswi.ControlSupportsOperate}", diagnostic);
         Assert.DoesNotContain("ConfigureControlModelAsync(", preload);
         Assert.DoesNotContain("ExecuteControlAsync(", preload);
     }
