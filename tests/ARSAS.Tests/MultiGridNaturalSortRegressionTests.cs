@@ -91,7 +91,13 @@ public sealed class MultiGridNaturalSortRegressionTests
             device.Signals.ReplaceAll(ggios.Concat(cswi).Concat(switches).Concat(breakers));
             device.RecountSelectedSignals();
 
-            var grid = new DataGrid { ItemsSource = device.OperableCommandSignals };
+            // Mirror the production Dock: no WPF new-item placeholder in the view.
+            var grid = new DataGrid
+            {
+                CanUserAddRows = false,
+                CanUserDeleteRows = false,
+                ItemsSource = device.OperableCommandSignals
+            };
             var view = Assert.IsType<ListCollectionView>(
                 CollectionViewSource.GetDefaultView(grid.ItemsSource));
             view.SortDescriptions.Clear();
