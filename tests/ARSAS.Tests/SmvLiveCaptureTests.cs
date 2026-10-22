@@ -154,8 +154,8 @@ public sealed class SmvLiveCaptureTests
         Assert.True(snapshot.IsCleanProof);
         Assert.Equal(80, snapshot.SamplesPerCycle);
         Assert.Equal(160, snapshot.CapturedSamples);
-        Assert.Equal(payloadBytes / 8, snapshot.Channels.Count);
-        Assert.Contains("capture-clock evidence", snapshot.TimebaseReason);
+        Assert.Equal(Math.Min(Options.MaximumChannels, payloadBytes / 8), snapshot.Channels.Count);
+        Assert.Contains("NIC-clock evidence", snapshot.TimebaseReason);
     }
 
     [Fact]
