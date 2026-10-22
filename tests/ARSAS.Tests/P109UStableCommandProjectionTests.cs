@@ -68,23 +68,23 @@ public sealed class P109UStableCommandProjectionTests
         first.ClearLiveControlAuthority();
         device.RefreshCommandSignalProjection();
 
-        Assert.Equal(2, device.CommandSignals.Count);
-        Assert.Same(first, device.CommandSignals[0]);
-        Assert.Same(second, device.CommandSignals[1]);
+        Assert.Single(device.CommandSignals);
+        Assert.Same(second, device.CommandSignals[0]);
         Assert.False(first.ControlSupportsOperate);
-        Assert.Empty(events);
+        Assert.Equal(new[] { NotifyCollectionChangedAction.Remove }, events);
 
         // Fresh live-typed authority is mandatory before the control can return.
         first.AcceptVerifiedLiveControlCdc("DPC");
         first.ControlSemanticVerified = true;
+        events.Clear();
         device.RefreshCommandSignalProjection();
         Assert.Equal(2, device.CommandSignals.Count);
         Assert.True(first.ControlSupportsOperate);
-        Assert.Empty(events);
+        Assert.Equal(new[] { NotifyCollectionChangedAction.Add }, events);
     }
 
     [Fact]
-    public void StatusOnlyAndUnknownObjectsRemainVisibleButCannotOperate()
+    public void StatusOnlyAndUnknownObjectsRemainInInventoryNotInCommandDock()
     {
         var valid = Verified("LD0/CSWI1.Pos");
         var readonlyControl = Verified("LD0/CSWI2.Pos");
@@ -96,10 +96,10 @@ public sealed class P109UStableCommandProjectionTests
         device.Signals.ReplaceAll([valid, readonlyControl, unknownControl]);
         device.RecountSelectedSignals();
 
-        Assert.Equal(3, device.CommandSignals.Count);
+        Assert.Single(device.CommandSignals);
         Assert.Contains(valid, device.CommandSignals);
-        Assert.Contains(readonlyControl, device.CommandSignals);
-        Assert.Contains(unknownControl, device.CommandSignals);
+        Assert.DoesNotContain(readonlyControl, device.CommandSignals);
+        Assert.DoesNotContain(unknownControl, device.CommandSignals);
         Assert.Single(Iec61850ControlIdentity.DistinctOperable(device.Signals));
         Assert.False(readonlyControl.ControlSupportsOperate);
         Assert.False(unknownControl.ControlSupportsOperate);

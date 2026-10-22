@@ -106,6 +106,7 @@ public class SignalDefinition : ObservableObject
     /// Exact MMS CO service / CF ctlModel inventory evidence, never inferred from LN
     /// names or ST feedback. Read-only candidate evidence is NOT operate authority.
     /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
     public bool HasControlServiceEvidence { get; set; }
     public bool IsValidControlObject => IsControlSignal && IsControlObjectReference(ObjectReference);
     /// <summary>Association-scoped CDC proved by a typed live control descriptor.</summary>

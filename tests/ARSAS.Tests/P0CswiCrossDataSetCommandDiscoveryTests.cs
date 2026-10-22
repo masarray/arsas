@@ -87,9 +87,10 @@ public sealed class P0CswiCrossDataSetCommandDiscoveryTests
         }
         var monitor = Source("Models/MonitorModels.cs");
         var preload = Source("MainWindow.CommandPanelUx.cs");
-        Assert.Contains("VerifiedIndependentCswiControls(Signals)", monitor);
+        Assert.Contains("Iec61850ControlIdentity.VerifiedCommandTargets(", monitor);
         Assert.Contains("IsConnected && LiveDiscoveryModel is not null", monitor);
-        Assert.Contains("IndependentCswiInspectionCandidates(device.Signals)", preload);
+        Assert.Contains("DiscoveredControlInspectionCandidates(device.Signals)", preload);
+        Assert.Contains("_runtime.ProbeControlModelAsync(", preload);
         Assert.Contains("device.SelectedControlSignalCount > 0 ||", preload);
         Assert.Contains("device.Signals.Any(", preload);
         Assert.Contains("_runtime.InspectControlAsync(", preload);
