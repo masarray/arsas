@@ -28,7 +28,7 @@ public sealed class SmvDeclaredRateCounterVerifier
     }
 
     public string ProgressText { get; private set; } =
-        "Timebase pending: need plausible declared sampling rate and contiguous sample-counter evidence.";
+        "Timebase unresolved: need plausible declared sampling rate and contiguous sample-counter evidence.";
 
     public void Reset()
     {
@@ -38,7 +38,7 @@ public sealed class SmvDeclaredRateCounterVerifier
         _mode = null;
         _startedAt = default;
         _lastAt = default;
-        ProgressText = "Timebase pending: checking declared rate and counter continuity.";
+        ProgressText = "Timebase unresolved: checking declared rate and counter continuity.";
     }
 
     public SvTimebaseResolution? Observe(ushort counter, DateTimeOffset capturedAt, ushort? declaredRate, ushort? declaredMode)
@@ -60,7 +60,7 @@ public sealed class SmvDeclaredRateCounterVerifier
             (long)points * _cycles > 4096 ||
             declaredMode is not (null or 0))
         {
-            ProgressText = "Timebase pending: declared rate does not prove a supported display window; checking independent NIC clock.";
+            ProgressText = "Timebase unresolved: declared rate does not prove a supported display window; checking independent NIC clock.";
             return null;
         }
 
@@ -84,7 +84,7 @@ public sealed class SmvDeclaredRateCounterVerifier
         _lastAt = capturedAt;
         _length++;
         var required = checked(points * _cycles);
-        ProgressText = $"Timebase pending: {Math.Min(_length, required)}/{required} sequential smpCnt samples, declared {rate} samples/s at {_nominal:0} Hz.";
+        ProgressText = $"Timebase unresolved: {Math.Min(_length, required)}/{required} sequential smpCnt samples, declared {rate} samples/s at {_nominal:0} Hz.";
         // A completely frozen NIC clock is not independent evidence of any
         // active sampled-value rate. A batched multi-ASDU packet is fine:
         // several samples can share a timestamp, but across two complete
