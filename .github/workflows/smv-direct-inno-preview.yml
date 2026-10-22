@@ -4,7 +4,7 @@ name: Direct Inno SMV Preview EXE
 # Trusted, narrowly scoped branch only. Stable release is never modified.
 on:
   push:
-    branches: [feat/smv-sharp-latest-p0-20261022]
+    branches: [feat/smv-real-arstack-timebase-override-20261022]
 
 permissions:
   contents: write
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   direct-preview:
-    if: github.repository == 'masarray/arsas' && github.ref == 'refs/heads/feat/smv-sharp-latest-p0-20261022'
+    if: github.repository == 'masarray/arsas' && github.ref == 'refs/heads/feat/smv-real-arstack-timebase-override-20261022'
     runs-on: windows-latest
     timeout-minutes: 65
     defaults:
