@@ -92,43 +92,23 @@ public partial class MainWindow
         if (sender is not Button { CommandParameter: Iec61850MonitorDevice device })
             return;
 
-        OpenSmvWorkspaceForDevice(device);
+        ActivateSelectedSmvWorkspace();
     }
 
     /// <summary>
     /// Present an inert tab landing state. A selection change must not create
     /// a viewer, enumerate Npcap adapters or begin a passive wire capture.
     /// </summary>
+    // SMV is an Ethernet-scoped native tab. IED/SCL identity is optional
+    // enrichment, never a prerequisite for sniffing or selecting the NIC.
     private void PrepareSelectedSmvWorkspace()
     {
-        if (SmvWorkspaceStatus is null) return;
-        if (SelectedDevice is not { } selected)
-        {
-            SmvWorkspaceStatus.Text =
-                "Select an IED in Device Explorer, then press Open SMV Capture.";
-            return;
-        }
-
-        if (_activeSmvViewerWindow is { IsLoaded: true } viewer &&
-            viewer.DeviceId.Equals(selected.DeviceId, StringComparison.OrdinalIgnoreCase))
-        {
-            SmvWorkspaceStatus.Text =
-                $"SMV viewer is already open for {selected.Name}; snapshot retained.";
-            return;
-        }
-
-        SmvWorkspaceStatus.Text =
-            $"Ready for {selected.Name} · press Open SMV Capture to inspect adapters and streams.";
+        // The embedded view owns its own adapter discovery and continuity state.
+        // Tab navigation must not reset an already selected stream.
     }
 
     private void ActivateSelectedSmvWorkspace()
-    {
-        if (SelectedDevice is { } device)
-            OpenSmvWorkspaceForDevice(device);
-        else if (SmvWorkspaceStatus is not null)
-            SmvWorkspaceStatus.Text =
-                "Select an IED in Device Explorer, then press Open SMV Capture.";
-    }
+        => MainTabs.SelectedIndex = EngineeringNavigationRoute.SmvWorkspaceIndex;
 
     private void OpenSmvCapture_Click(object sender, RoutedEventArgs e)
         => ActivateSelectedSmvWorkspace();
@@ -136,9 +116,6 @@ public partial class MainWindow
     private void OpenSmvWorkspaceForDevice(Iec61850MonitorDevice device)
     {
         SelectedDevice = device;
-        if (SmvWorkspaceStatus is not null)
-            SmvWorkspaceStatus.Text =
-                "SMV capture for " + device.Name + " · existing verified viewer";
 
         if (_activeSmvViewerWindow is { IsLoaded: true } existing)
         {

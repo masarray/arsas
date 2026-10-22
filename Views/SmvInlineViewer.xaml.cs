@@ -1,0 +1,420 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Shapes;
+using System.Windows.Threading;
+using ArIED61850Tester.Services;
+using ArIED61850Tester.Models;
+using ProcessBus.Core.Models;
+
+namespace ArIED61850Tester.Views;
+
+/// <summary>
+/// Native, IED-independent main-tab SV viewer. One passive engine reader,
+/// one selected publisher, bounded snapshot presentation, no synthetic data.
+/// </summary>
+public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
+{
+    private static readonly Brush[] ChannelBrushes =
+    [
+        Brushes.Crimson, Brushes.Goldenrod, Brushes.DodgerBlue,
+        Brushes.MediumSeaGreen, Brushes.MediumPurple, Brushes.DarkOrange,
+        Brushes.DeepPink, Brushes.Teal
+    ];
+
+    private readonly SmvLiveCaptureService _service = new();
+    private readonly DispatcherTimer _freshness;
+    private CancellationTokenSource? _captureCancellation;
+    private SmvLiveUpdate? _pendingUpdate;
+    private SmvSnapshotResult? _visibleSnapshot;
+    private IReadOnlyList<SmvRawVectorMeasurement> _visibleVectors = [];
+    private string? _selectedKey;
+    private string _captureStatus = "Select an Ethernet adapter and press Start. No IED or SCL is required.";
+    private string _waveformStatus = "Waiting for received samples; no test sine waves are generated.";
+    private string _streamDetail = "Streams are discovered directly from wire traffic.";
+    private DateTimeOffset _lastReceived;
+    private int _generation;
+    private int _analysisGeneration;
+    private int _uiQueued;
+    private bool _capturing;
+    private bool _loadingAdapters;
+    private bool _selectingProgrammatically;
+    private long _frameCount;
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    public ObservableCollection<GooseAdapterOption> Adapters { get; } = [];
+    public ObservableCollection<SmvLiveStreamSummary> Streams { get; } = [];
+    public ObservableCollection<SmvRawVectorMeasurement> Measurements { get; } = [];
+
+    // The original DigSub WPF controls repaint immutable models, not packet work.
+    public WaveformSnapshot? CurrentWaveform { get; private set; }
+    public IReadOnlyList<PhasorDisplayItem> CurrentPhasors { get; private set; } = [];
+    public string CurrentStreamKey { get; private set; } = string.Empty;
+    public bool IsLiveSnapshot { get; private set; }
+
+    public string StreamCountText => $"{Streams.Count:N0} detected";
+    public string CaptureStatus { get => _captureStatus; private set => Change(ref _captureStatus, value, nameof(CaptureStatus)); }
+    public string WaveformStatus { get => _waveformStatus; private set => Change(ref _waveformStatus, value, nameof(WaveformStatus)); }
+    public string StreamDetail { get => _streamDetail; private set => Change(ref _streamDetail, value, nameof(StreamDetail)); }
+
+    public SmvInlineViewer()
+    {
+        InitializeComponent();
+        DataContext = this;
+        _freshness = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(500)
+        };
+        _freshness.Tick += Freshness_Tick;
+    }
+
+    private async void Viewer_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (Adapters.Count == 0 && !_loadingAdapters)
+            await LoadAdaptersAsync();
+    }
+
+    private void Viewer_Unloaded(object sender, RoutedEventArgs e)
+    {
+        // Main tab changes and window shutdown never leave a hidden NIC reader
+        // owned by the view; cancellation remains idempotent.
+        StopCapture();
+    }
+
+    private async void RefreshAdapters_Click(object sender, RoutedEventArgs e)
+        => await LoadAdaptersAsync();
+
+    private void Adapter_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (AdapterCombo.SelectedItem is GooseAdapterOption chosen && !_capturing)
+            CaptureStatus = $"Selected {chosen.DisplayText}. Press Start to sniff SMV.";
+    }
+
+    private async Task LoadAdaptersAsync()
+    {
+        if (_capturing || _loadingAdapters)
+            return;
+        _loadingAdapters = true;
+        var previous = (AdapterCombo.SelectedItem as GooseAdapterOption)?.Selector;
+        try
+        {
+            var adapters = await Task.Run(() => new SmvSnapshotCaptureService().ListAdapters());
+            if (!IsLoaded)
+                return;
+            Adapters.Clear();
+            foreach (var adapter in adapters)
+                Adapters.Add(adapter);
+            AdapterCombo.SelectedItem = Adapters.FirstOrDefault(a =>
+                a.Selector.Equals(previous, StringComparison.OrdinalIgnoreCase));
+            CaptureStatus = Adapters.Count == 0
+                ? "No capture adapters found. Install Npcap and refresh; IED/SCL is not required."
+                : $"{Adapters.Count} Ethernet adapter(s) available. Choose one, then press Start.";
+        }
+        catch (Exception ex)
+        {
+            CaptureStatus = $"Ethernet adapter discovery failed: {ex.Message}";
+        }
+        finally
+        {
+            _loadingAdapters = false;
+        }
+    }
+
+    private async void Start_Click(object sender, RoutedEventArgs e)
+    {
+        if (_capturing)
+            return;
+        if (AdapterCombo.SelectedItem is not GooseAdapterOption adapter)
+        {
+            CaptureStatus = Adapters.Count == 0
+                ? "No Ethernet adapter available. Install Npcap, then click refresh."
+                : "Choose an Ethernet adapter in the dropdown above before pressing Start.";
+            AdapterCombo.Focus();
+            AdapterCombo.IsDropDownOpen = Adapters.Count > 0;
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        _captureCancellation = cts;
+        var generation = Interlocked.Increment(ref _generation);
+        _capturing = true;
+        _selectedKey = null;
+        _lastReceived = DateTimeOffset.UtcNow;
+        _frameCount = 0;
+        _selectingProgrammatically = true;
+        StreamList.SelectedItem = null;
+        Streams.Clear();
+        _selectingProgrammatically = false;
+        Notify(nameof(StreamCountText));
+        ClearPresentation("Listening for first coherent SV window.");
+        CaptureStatus = $"LIVE • {adapter.DisplayText} • waiting for SV packets; no IED/SCL needed.";
+        StartButton.IsEnabled = false;
+        StopButton.IsEnabled = true;
+        AdapterCombo.IsEnabled = false;
+        FrequencyCombo.IsEnabled = false;
+        _freshness.Start();
+
+        var hz = FrequencyCombo.SelectedItem is ComboBoxItem item &&
+                 double.TryParse(item.Tag?.ToString(), out var v) ? v : 50;
+        var options = new SmvLiveCaptureOptions
+        {
+            AdapterSelector = adapter.Selector,
+            NominalFrequencyHz = hz,
+            Cycles = 2,
+            MaximumChannels = 8,
+            MaximumStreams = 32,
+            RefreshMilliseconds = 200
+        };
+
+        try
+        {
+            await _service.RunAsync(options,
+                () => Volatile.Read(ref _selectedKey),
+                update => QueueUpdate(update, generation), cts.Token);
+            if (generation == _generation)
+                CaptureStatus = "Capture completed.";
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            if (generation == _generation)
+                CaptureStatus = "SMV capture stopped.";
+        }
+        catch (Exception ex)
+        {
+            if (generation == _generation)
+                CaptureStatus = $"SMV capture failed: {ex.Message}. Check Npcap/NIC/VLAN access.";
+        }
+        finally
+        {
+            if (generation == _generation)
+            {
+                _capturing = false;
+                _freshness.Stop();
+                StartButton.IsEnabled = true;
+                StopButton.IsEnabled = false;
+                AdapterCombo.IsEnabled = true;
+                FrequencyCombo.IsEnabled = true;
+                IsLiveSnapshot = false;
+                Notify(nameof(IsLiveSnapshot));
+                WaveformStatus = _visibleSnapshot is null
+                    ? "Stopped • no complete continuous window captured."
+                    : "HOLD • last valid observed window (raw counts, not calibrated V/A).";
+            }
+            if (ReferenceEquals(_captureCancellation, cts))
+                _captureCancellation = null;
+            cts.Dispose();
+        }
+    }
+
+    private void Stop_Click(object sender, RoutedEventArgs e) => StopCapture();
+
+    private void StopCapture()
+    {
+        if (!_capturing)
+            return;
+        StopButton.IsEnabled = false;
+        CaptureStatus = "Stopping passive SV capture…";
+        _freshness.Stop();
+        _captureCancellation?.Cancel();
+    }
+
+    private void Stream_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_selectingProgrammatically)
+            return;
+        var stream = StreamList.SelectedItem as SmvLiveStreamSummary;
+        Volatile.Write(ref _selectedKey, stream?.Key);
+        Interlocked.Increment(ref _analysisGeneration);
+        ClearPresentation(stream is null ? "Select a publisher to display samples."
+            : $"Acquiring coherent samples from {stream.SvId}.");
+        UpdateStreamDetail(stream);
+    }
+
+    private void QueueUpdate(SmvLiveUpdate update, int generation)
+    {
+        if (generation != Volatile.Read(ref _generation))
+            return;
+        Interlocked.Exchange(ref _pendingUpdate, update);
+        if (Interlocked.CompareExchange(ref _uiQueued, 1, 0) != 0)
+            return;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            Interlocked.Exchange(ref _uiQueued, 0);
+            var newest = Interlocked.Exchange(ref _pendingUpdate, null);
+            if (!IsLoaded || !_capturing || generation != _generation || newest is null)
+                return;
+            ApplyUpdate(newest, generation);
+        }));
+    }
+
+    private void ApplyUpdate(SmvLiveUpdate update, int generation)
+    {
+        _frameCount = update.TotalFrames;
+        if (Streams.Count != update.Streams.Count ||
+            !Streams.Select(s => s.Key).SequenceEqual(update.Streams.Select(s => s.Key)))
+        {
+            var currentKey = Volatile.Read(ref _selectedKey);
+            _selectingProgrammatically = true;
+            Streams.Clear();
+            foreach (var discovered in update.Streams)
+                Streams.Add(discovered);
+            _selectingProgrammatically = false;
+            Notify(nameof(StreamCountText));
+
+            var next = Streams.FirstOrDefault(s => s.Key == currentKey) ??
+                       (currentKey is null ? Streams.FirstOrDefault() : null);
+            if (next is not null)
+            {
+                StreamList.SelectedItem = next;
+                Volatile.Write(ref _selectedKey, next.Key);
+            }
+            else
+            {
+                StreamList.SelectedItem = null;
+                Volatile.Write(ref _selectedKey, null);
+            }
+        }
+
+        var selectedKey = Volatile.Read(ref _selectedKey);
+        var summary = update.Streams.FirstOrDefault(s => s.Key == selectedKey);
+        if (summary is null)
+        {
+            CaptureStatus = update.Streams.Count == 0
+                ? $"LIVE • {_frameCount:N0} SV frame(s). No publisher observed; verify VLAN/TAP/mirror."
+                : "LIVE • choose an observed SV publisher in the list.";
+            return;
+        }
+
+        _lastReceived = summary.LastSeen;
+        UpdateStreamDetail(summary);
+        var age = DateTimeOffset.UtcNow - summary.LastSeen;
+        if (age > TimeSpan.FromSeconds(2))
+        {
+            IsLiveSnapshot = false;
+            Notify(nameof(IsLiveSnapshot));
+            CaptureStatus = $"HOLD • {summary.SvId} stale; no new packets for {age.TotalSeconds:0.0}s.";
+            return;
+        }
+
+        CaptureStatus = $"LIVE • {update.Streams.Count} stream(s) • {_frameCount:N0} frames • " +
+            $"gap {summary.Gaps} • missing {summary.Missing} • duplicate {summary.Duplicates} • out-of-order {summary.OutOfOrder}";
+
+        // Only publish samples for the exact currently selected publisher;
+        // no mixing old results after stream selection or captured-source changes.
+        if (update.SelectedKey != selectedKey || update.SelectedSnapshot is null)
+        {
+            ClearPresentation(summary.Diagnostic);
+            return;
+        }
+
+        var snapshot = update.SelectedSnapshot;
+        _visibleSnapshot = snapshot;
+        IsLiveSnapshot = true;
+        Notify(nameof(IsLiveSnapshot));
+        WaveformStatus = $"Received {snapshot.CapturedSamples:N0} coherent samples • {snapshot.SamplesPerCycle} samples/cycle • unscaled INT32";
+        CurrentWaveform = SmvDigSubPresentationAdapter.BuildWaveform(snapshot);
+        Notify(nameof(CurrentWaveform));
+        BeginAnalysis(snapshot, selectedKey, generation);
+    }
+
+    private async void BeginAnalysis(SmvSnapshotResult snapshot, string? selectedKey, int generation)
+    {
+        var analysis = Interlocked.Increment(ref _analysisGeneration);
+        try
+        {
+            var vectors = await Task.Run(() => SmvRawVectorMath.Analyze(snapshot));
+            if (generation != _generation || analysis != _analysisGeneration ||
+                !ReferenceEquals(_visibleSnapshot, snapshot) || !IsLoaded ||
+                selectedKey != Volatile.Read(ref _selectedKey))
+                return;
+            _visibleVectors = SmvDigSubPresentationAdapter.RelativeMeasurements(vectors);
+            Measurements.Clear();
+            foreach (var row in _visibleVectors)
+                Measurements.Add(row);
+            UpdateDigSubPhasors();
+        }
+        catch (Exception)
+        {
+            if (generation != _generation || analysis != _analysisGeneration)
+                return;
+            _visibleVectors = [];
+            Measurements.Clear();
+            UpdateDigSubPhasors();
+            WaveformStatus = "Raw phasor calculation unavailable; no substitute values shown.";
+        }
+    }
+
+    private void Freshness_Tick(object? sender, EventArgs e)
+    {
+        if (!_capturing)
+            return;
+        if (DateTimeOffset.UtcNow - _lastReceived > TimeSpan.FromSeconds(2))
+            CaptureStatus = _frameCount == 0
+                ? "LIVE • no SV packets yet. Check adapter, publisher, capture permissions and VLAN."
+                : "HOLD • selected publisher has stopped delivering packets. Check network.";
+    }
+
+    private void UpdateStreamDetail(SmvLiveStreamSummary? summary)
+    {
+        StreamDetail = summary is null
+            ? "Passive discovery • no selected publisher. No MMS connection needed."
+            : $"{summary.SvId} • APPID 0x{summary.AppId:X4}\n" +
+              $"{summary.SourceMac} → {summary.DestinationMac}\n" +
+              $"VLAN {summary.Vlan} • gap {summary.Gaps} • restart {summary.Restarts}";
+    }
+
+    private void ClearPresentation(string message)
+    {
+        _visibleSnapshot = null;
+        _visibleVectors = [];
+        Measurements.Clear();
+        WaveformStatus = message;
+        CurrentWaveform = null;
+        Notify(nameof(CurrentWaveform));
+        CurrentStreamKey = Volatile.Read(ref _selectedKey) ?? string.Empty;
+        Notify(nameof(CurrentStreamKey));
+        IsLiveSnapshot = false;
+        Notify(nameof(IsLiveSnapshot));
+        UpdateDigSubPhasors();
+    }
+
+    private void UpdateDigSubPhasors()
+    {
+        CurrentPhasors = SmvDigSubPresentationAdapter.BuildPhasors(_visibleVectors);
+        Notify(nameof(CurrentPhasors));
+    }
+
+    private void WaveformOptionsChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // Controls may raise selection events during InitializeComponent.
+        if (WaveformView is null || ShowModeCombo is null ||
+            LayoutModeCombo is null || ScaleModeCombo is null)
+            return;
+        var mode = (ShowModeCombo.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Both";
+        WaveformView.ShowMode = mode switch
+        {
+            "Group A" => "Voltage",
+            "Group B" => "Current",
+            _ => "Both"
+        };
+        WaveformView.LayoutMode =
+            (LayoutModeCombo.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Overlay";
+        var scale = (ScaleModeCombo.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Auto Peak Hold";
+        WaveformView.VoltageScale = scale;
+        WaveformView.CurrentScale = scale;
+    }
+
+    private bool Change(ref string field, string next, string name)
+    {
+        if (field == next) return false;
+        field = next;
+        Notify(name);
+        return true;
+    }
+
+    private void Notify(string propertyName)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
+}
