@@ -149,7 +149,7 @@ public sealed class P0BrowserRcbEnabledTruthTests
         // Regression guard: a read result with TypedBoolean=true must not be
         // reduced to a display string before the RptEna presentation selector.
         Assert.Matches(
-            @"LiveValues\\.PublishForAssociation\\([\\s\\S]{0,420}typedBoolean: result\\.TypedBoolean",
+            @"LiveValues\.PublishForAssociation\([\s\S]{0,420}typedBoolean: result\.TypedBoolean",
             source);
     }
 
