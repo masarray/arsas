@@ -12,6 +12,21 @@
         TextOptions.TextHintingMode="Fixed"
         Icon="Assets/app-icon.ico" Closing="Window_Closing" PreviewKeyDown="MainWindow_PreviewKeyDown">
     <Window.Resources>
+        <!-- IEC validity attention is display-only; use a single vector and avoid font-dependent emojis. -->
+        <GeometryGroup x:Key="InvalidQualityWarningGeometry" FillRule="EvenOdd">
+            <PathGeometry Figures="M 40,-120 L 480,-880 920,-120 Z"/>
+            <PathGeometry Figures="M 178,-200 L 782,-200 480,-720 Z"/>
+            <RectangleGeometry Rect="440,-560,80,200"/>
+            <EllipseGeometry Center="480,-280" RadiusX="40" RadiusY="40"/>
+        </GeometryGroup>
+        <Style x:Key="InvalidQualityWarningIconStyle" TargetType="{x:Type Path}">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsInvalidQuality}" Value="True">
+                    <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
         <!-- Exact operator-supplied circular unlocked-padlock vector; no font glyph. -->
         <Geometry x:Key="BrowserRcbEnabledIconGeometry">M380-320h200q25 0 42.5-17.5T640-380v-120q0-25-17.5-42.5T580-560v-60q0-42-29-71t-71-29q-42 0-71 29t-29 71h60q0-17 11.5-28.5T480-660q17 0 28.5 11.5T520-620v60H380q-25 0-42.5 17.5T320-500v120q0 25 17.5 42.5T380-320ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T197-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z</Geometry>
         <!-- Preserve compact columns; hover reveals the complete list of
@@ -623,7 +638,21 @@
                                                     </DataTemplate>
                                                 </DataGridTemplateColumn.CellTemplate>
                                             </DataGridTemplateColumn>
-                                            <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="0.72*" MinWidth="105"/>
+                                            <DataGridTemplateColumn Header="Quality" Width="0.72*" MinWidth="105">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Quality}" ToolTip="{Binding Quality}"
+                                                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                            <Path Data="{StaticResource InvalidQualityWarningGeometry}" Width="12" Height="12"
+                                              Stretch="Uniform" Fill="#B97800" Margin="5,0,0,0"
+                                              VerticalAlignment="Center"
+                                              Style="{StaticResource InvalidQualityWarningIconStyle}"
+                                              ToolTip="IED-reported quality validity: Invalid"/>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
                                             <DataGridTextColumn Header="IED Timestamp" Binding="{Binding DeviceTimestamp}" Width="1.05*" MinWidth="155"/>
                                             <DataGridTextColumn Header="Acquisition" Binding="{Binding AcquisitionShort}" IsReadOnly="True" ElementStyle="{StaticResource RcbAcquisitionTextStyle}" Width="1.05*" MinWidth="150"/>
                                         </DataGrid.Columns>
@@ -1016,7 +1045,21 @@
                                 <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="195"/>
                                 <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="320"/>
                                 <DataGridTemplateColumn Header="Value" Width="125" CellTemplate="{StaticResource ProcessValueBadgeTemplate}"/>
-                                <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="155"/>
+                                <DataGridTemplateColumn Header="Quality" Width="155">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Quality}" ToolTip="{Binding Quality}"
+                                                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                            <Path Data="{StaticResource InvalidQualityWarningGeometry}" Width="12" Height="12"
+                                              Stretch="Uniform" Fill="#B97800" Margin="5,0,0,0"
+                                              VerticalAlignment="Center"
+                                              Style="{StaticResource InvalidQualityWarningIconStyle}"
+                                              ToolTip="IED-reported quality validity: Invalid"/>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
                                 <DataGridTextColumn Header="IED Timestamp" Binding="{Binding DeviceTimestamp}" Width="185"/>
                                 <DataGridTextColumn Header="Acquisition" Binding="{Binding AcquisitionShort}" IsReadOnly="True" ElementStyle="{StaticResource RcbAcquisitionTextStyle}" Width="190"/>
                             </DataGrid.Columns>
@@ -1771,8 +1814,15 @@
                                            Foreground="#48586B" TextTrimming="CharacterEllipsis"/>
                             </Border>
                             <Border Grid.Column="1" BorderBrush="#E3E8EF" BorderThickness="0,0,0,1" Padding="7,3">
-                                <TextBlock Text="{Binding Value}" FontSize="11.2"
-                                           Foreground="#24364B" TextTrimming="CharacterEllipsis"/>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Value}" FontSize="11.2"
+                                               Foreground="#24364B" TextTrimming="CharacterEllipsis"/>
+                                    <Path Data="{StaticResource InvalidQualityWarningGeometry}" Width="12" Height="12"
+                                              Stretch="Uniform" Fill="#B97800" Margin="5,0,0,0"
+                                              VerticalAlignment="Center"
+                                              Style="{StaticResource InvalidQualityWarningIconStyle}"
+                                              ToolTip="IED-reported quality validity: Invalid"/>
+                                </StackPanel>
                             </Border>
                         </Grid>
                     </DataTemplate>
@@ -1831,9 +1881,16 @@
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
-                                    <TextBlock Grid.Column="0" Text="{Binding Value}" ToolTip="{Binding Value}"
-                                               FontSize="11.2" Foreground="#344860"
-                                               TextTrimming="CharacterEllipsis"/>
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Value}" ToolTip="{Binding Value}"
+                                                   FontSize="11.2" Foreground="#344860"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <Path Data="{StaticResource InvalidQualityWarningGeometry}" Width="12" Height="12"
+                                              Stretch="Uniform" Fill="#B97800" Margin="5,0,0,0"
+                                              VerticalAlignment="Center"
+                                              Style="{StaticResource InvalidQualityWarningIconStyle}"
+                                              ToolTip="IED-reported quality validity: Invalid"/>
+                                    </StackPanel>
                                 </Grid>
                             </Border>
                         </Grid>

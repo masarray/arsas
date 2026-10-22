@@ -197,8 +197,18 @@ public sealed record IedBrowserDetailRow(
             if (_displayValue == value) return;
             _displayValue = value;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Value)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsInvalidQuality)));
         }
     }
+    /// <summary>Presentation only: never alters the evidence or an IEC quality bit.</summary>
+    public bool IsInvalidQuality =>
+        QualityInvalidAttention.IsInvalid(Value) &&
+        (EvidenceKind == "Quality" &&
+            (EvidenceField.Length == 0 || EvidenceField == "Validity") ||
+         EvidenceField.Length == 0 &&
+            (FunctionalConstraint is "ST" or "MX" or "SV") &&
+            (ValueReference.EndsWith(".q", StringComparison.Ordinal) ||
+             ValueReference.EndsWith("$q", StringComparison.Ordinal)));
     private string _observationSource = "";
     private string _observationTooltip = "";
     /// <summary>Explicit observation channel, never model metadata or a source guess.</summary>

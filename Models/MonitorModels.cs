@@ -945,7 +945,17 @@ public sealed class Iec61850MonitorPoint : ObservableObject
         IecDataType,
         Category,
         IecReference);
-    public string Quality { get => _quality; set => Set(ref _quality, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
+    public string Quality
+    {
+        get => _quality;
+        set
+        {
+            if (Set(ref _quality, string.IsNullOrWhiteSpace(value) ? "Unknown" : value))
+                Raise(nameof(IsInvalidQuality));
+        }
+    }
+    /// <summary>Warning glyph is a UI projection, not protocol or command authority.</summary>
+    public bool IsInvalidQuality => QualityInvalidAttention.IsInvalid(Quality);
     public string DeviceTimestamp { get => _deviceTimestamp; set => Set(ref _deviceTimestamp, string.IsNullOrWhiteSpace(value) ? "-" : value); }
     public string SourceMode
     {
