@@ -262,7 +262,15 @@ public sealed class SmvLiveStreamBuffer
             asdu.SampleCount == 0 && _counter.Last is ushort previous &&
             SmvObservedTimebaseDetector.IsSupportedWrap(previous,
                 _timebase.SamplesPerCycle!.Value, _timebase.NominalFrequencyHz!.Value))
+        {
             _timebase = _timebase with { SampleCounterWrap = (ushort)(previous + 1) };
+            // The tracker cached its next expectation under unknown UInt16
+            // modulus (4000, not 0). Re-prime using the JUST-OBSERVED
+            // preceding sample so this proven normal rollover is not a gap.
+            // Do not reset or splice the actual coherent sample ring.
+            _counter.Reset();
+            _counter.Observe(previous, _timebase.SampleCounterWrap);
+        }
 
         var transition = _counter.Observe(asdu.SampleCount, _timebase.SampleCounterWrap);
         switch (transition.Kind)
@@ -373,7 +381,7 @@ public sealed class SmvLiveStreamBuffer
         {
             _length = 0;
             _samples = [];
-            _diagnostic = "Waiting for verified SV timebase: " +
+            _diagnostic = "Timebase pending: " +
                 "checking smpCnt continuity and capture rate (optional smpRate/smpMod absent).";
             return;
         }
