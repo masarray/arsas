@@ -97,6 +97,8 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="7"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel VerticalAlignment="Center">
@@ -137,6 +139,14 @@
                           ToolTip="9-2LE assumes I channels 1–4 and U channels 5–8; verify publisher DataSet before interpreting V/A.">
                     <ComboBoxItem Content="Raw counts" Tag="Raw"/>
                     <ComboBoxItem Content="9-2LE · V/A" Tag="NineTwoLe"/>
+                </ComboBox>
+                <ComboBox x:Name="TimebaseCombo" Grid.Column="16"
+                          Style="{StaticResource ModernComboBox}" Width="126" Height="33"
+                          MinHeight="33" Padding="8,2" FontSize="10.5" SelectedIndex="0"
+                          ToolTip="Auto proves rate from metadata or NIC timing. 80/256 is an unverified display-only assumption for problematic field streams.">
+                    <ComboBoxItem Content="Timebase Auto" Tag="Auto"/>
+                    <ComboBoxItem Content="80 / cycle" Tag="80"/>
+                    <ComboBoxItem Content="256 / cycle" Tag="256"/>
                 </ComboBox>
                 <Button x:Name="StartButton" Grid.Column="6"
                         Style="{StaticResource PrimaryButton}" Padding="12,6"

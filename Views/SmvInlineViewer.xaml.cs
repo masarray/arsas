@@ -172,6 +172,7 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
         StopButton.IsEnabled = true;
         AdapterCombo.IsEnabled = false;
         FrequencyCombo.IsEnabled = false;
+        TimebaseCombo.IsEnabled = false;
         _freshness.Start();
 
         var hz = FrequencyCombo.SelectedItem is ComboBoxItem item &&
@@ -181,6 +182,9 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
             AdapterSelector = adapter.Selector,
             NominalFrequencyHz = hz,
             Cycles = 2,
+            DisplaySamplesPerCycleOverride =
+                int.TryParse((TimebaseCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString(), out var chosenSpc)
+                    ? chosenSpc : null,
             MaximumChannels = 8,
             MaximumStreams = 32,
             RefreshMilliseconds = 200
@@ -214,6 +218,7 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
                 StopButton.IsEnabled = false;
                 AdapterCombo.IsEnabled = true;
                 FrequencyCombo.IsEnabled = true;
+        TimebaseCombo.IsEnabled = true;
                 IsLiveSnapshot = false;
                 Notify(nameof(IsLiveSnapshot));
                 WaveformStatus = _visibleSnapshot is null

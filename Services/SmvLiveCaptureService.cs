@@ -16,6 +16,8 @@ public sealed record SmvLiveCaptureOptions
     public required string AdapterSelector { get; init; }
     public double NominalFrequencyHz { get; init; } = 50;
     public int Cycles { get; init; } = 2;
+    // Display-only assumption, NEVER a verified source sampling rate.
+    public int? DisplaySamplesPerCycleOverride { get; init; }
     public int MaximumChannels { get; init; } = 8;
     public int MaximumStreams { get; init; } = 32;
     public int RefreshMilliseconds { get; init; } = 200;
@@ -51,7 +53,8 @@ public sealed class SmvLiveCaptureService
             options.Cycles is < 1 or > 10 ||
             options.MaximumChannels is < 1 or > 16 ||
             options.MaximumStreams is < 1 or > 64 ||
-            options.RefreshMilliseconds is < 100 or > 2000)
+            options.RefreshMilliseconds is < 100 or > 2000 ||
+            options.DisplaySamplesPerCycleOverride is not (null or 80 or 256))
             throw new ArgumentOutOfRangeException(nameof(options), "Invalid bounded SV capture configuration.");
 
         var catalog = new SmvLiveStreamCatalog(options);
@@ -416,6 +419,21 @@ public sealed class SmvLiveStreamBuffer
             IsFixedLegacyProtectionLayout = groups && payloadLength == 64,
             TrustedNominalFrequencyHz = _options.NominalFrequencyHz
         });
+        // A real SV publisher may omit smpRate/smpMod and provide unusable NIC
+        // timestamp cadence. Only an EXPLICIT operator-selected display window
+        // can bypass rate verification. Raw samples and smpCnt discontinuity
+        // checks remain mandatory; this MUST NOT claim MU/PTP synchronization.
+        if (!_timebase.IsResolved && _options.DisplaySamplesPerCycleOverride is int assumed)
+        {
+            _timebase = new SvTimebaseResolution
+            {
+                SamplesPerCycle = assumed,
+                NominalFrequencyHz = _options.NominalFrequencyHz,
+                Source = SvTimebaseSource.ObservedLegacyProtectionRate,
+                Reason = $"ASSUMED display window {assumed} samples/cycle from operator selection. " +
+                    "Sample rate and PTP sync NOT verified; counter continuity enforced."
+            };
+        }
         if (!_timebase.IsResolved)
         {
             _length = 0;
@@ -430,6 +448,20 @@ public sealed class SmvLiveStreamBuffer
     private void AllocateResolvedWindow()
     {
         var length = (long)_timebase!.SamplesPerCycle.GetValueOrDefault() * _options.Cycles;
+        if ((length is < 4 or > 4096) &&
+            _options.DisplaySamplesPerCycleOverride is int chosen &&
+            _timebase is { IsResolved: true })
+        {
+            _timebase = new SvTimebaseResolution
+            {
+                SamplesPerCycle = chosen,
+                NominalFrequencyHz = _options.NominalFrequencyHz,
+                Source = SvTimebaseSource.ObservedLegacyProtectionRate,
+                Reason = $"ASSUMED display window {chosen} samples/cycle (conflicting/unusable declared rate). " +
+                    "Operator-selected, NOT verified sampling rate or PTP synchronization."
+            };
+            length = (long)chosen * _options.Cycles;
+        }
         if (length is < 4 or > 4096 || _wordIndexes.Length == 0)
         {
             _length = 0;
