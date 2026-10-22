@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "bd9a2bb0806cc56e53b505df098f77a334d11291",
+  "commit": "3a09b1e52456fbef2fa2c5468c7cfbb9c027f7bc",
   "sourcePullRequest": 189,
   "purpose": "Engineering-only FAT trial: IEC 61850 Ed2 prefixed LN identity permits exact DPC Boolean ctlVal with Pos.stVal feedback; source parent is pinned #184. No device-operation, performance, or physical acceptance claimed.",
   "previousControlTrialPin": {
