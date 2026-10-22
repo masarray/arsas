@@ -361,8 +361,8 @@ public partial class MainWindow
                         // step; otherwise buttons/rows briefly enable and then
                         // disable whenever the user reopens the Command Dock.
                         // StatusOnly is conclusive, safe read-only evidence.
-                        if (probe.ControlModel is ArControl.Iec61850ControlModel.StatusOnly
-                            or ArControl.Iec61850ControlModel.Unknown)
+                        if (probe.ControlModel is AR.Iec61850.Control.Iec61850ControlModel.StatusOnly
+                            or AR.Iec61850.Control.Iec61850ControlModel.Unknown)
                         {
                             signal.ControlModelText = probe.ControlModel.ToString();
                             signal.ControlInspectionEvidence = probe.Detail;
