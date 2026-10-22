@@ -139,6 +139,21 @@ public sealed class P0BrowserRcbEnabledTruthTests
     }
 
     [Fact]
+    public void ExplicitBrowserReadForwardsDecodedBooleanEvidenceIntoAssociationLedger()
+    {
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "MainWindow.IedBrowser.cs")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var source = File.ReadAllText(Path.Combine(root!.FullName, "MainWindow.IedBrowser.cs"));
+        // Regression guard: a read result with TypedBoolean=true must not be
+        // reduced to a display string before the RptEna presentation selector.
+        Assert.Matches(
+            @"LiveValues\\.PublishForAssociation\\([\\s\\S]{0,420}typedBoolean: result\\.TypedBoolean",
+            source);
+    }
+
+    [Fact]
     public void XamlUsesOriginalSingleVectorInInlineFixedRcbNameSlot()
     {
         DirectoryInfo? root = new(AppContext.BaseDirectory);
