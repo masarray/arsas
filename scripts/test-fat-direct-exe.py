@@ -19,6 +19,39 @@ def run(name="Build ARSAS", sha=SHA, status="completed", conclusion="success"):
             "conclusion": conclusion, "event": "pull_request"}
 
 
+class FatDirectInstallerLaneTests(unittest.TestCase):
+    def test_existing_installer_lane_is_the_only_fat_publication_entry(self):
+        # CI-P0 budget: no extra workflow file or actions/checkout for FAT.
+        root = Path(__file__).resolve().parent.parent
+        workflow = (root / ".github/workflows/installer-windows.yml").read_text()
+        self.assertFalse((root / ".github/workflows/fat-direct-exe.yml").exists())
+        self.assertIn("fat-direct-preview:", workflow)
+        self.assertIn("inputs.fat_preview == true", workflow)
+        self.assertIn("inputs.fat_preview != true", workflow)
+        self.assertIn("environment: fat-preview-publication", workflow)
+        self.assertIn('PUBLIC_ACK', workflow)
+        self.assertIn('PUBLISH PUBLIC NONPRODUCTION FAT EXE', workflow)
+        self.assertIn("scripts/test-fat-direct-exe.py", workflow)
+        self.assertIn("scripts/verify-fat-direct-exe.py", workflow)
+        self.assertIn('gh release create "$PREVIEW_TAG"', workflow)
+        self.assertIn('--prerelease', workflow)
+        self.assertIn('gh release view "$TAG"', workflow)
+        # The FAT job itself obtains reviewed scripts via read-only API and
+        # adds no checkout action beyond the existing installer checkout.
+        fat_job = workflow.split("  fat-direct-preview:\\n", 1)[1]
+        self.assertNotIn("uses: actions/checkout@", fat_job)
+        self.assertNotIn("--latest", fat_job)
+        self.assertNotIn('gh release upload', fat_job)
+        self.assertNotIn('.release/windows.json', fat_job)
+
+    def test_actions_artifact_is_not_labeled_direct_exe(self):
+        root = Path(__file__).resolve().parent.parent
+        docs = (root / "docs/FAT_DIRECT_EXE_DOWNLOADS.md").read_text()
+        self.assertIn("GitHub Actions artifacts are ZIP", docs)
+        self.assertIn("GitHub Release", docs)
+        self.assertIn("templates", docs.lower())
+
+
 class FatDirectExeGuardTests(unittest.TestCase):
     def test_exact_qualified_build_and_installer(self):
         guard.validate_run(run(), SHA, "Build ARSAS")
