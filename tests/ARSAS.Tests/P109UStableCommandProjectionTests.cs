@@ -11,7 +11,7 @@ namespace ARSAS.Tests;
 /// </summary>
 public sealed class P109UStableCommandProjectionTests
 {
-    private static SignalDefinition Verified(string reference) 
+    private static SignalDefinition Verified(string reference, string cdc = "DPC") 
     {
         var signal = new SignalDefinition
         {
@@ -20,10 +20,10 @@ public sealed class P109UStableCommandProjectionTests
             FunctionalConstraint = "CO",
             IsSelected = true,
             IsControlSignal = true,
-            ControlCdc = "DPC",
+            ControlCdc = cdc,
             ControlModelText = "Select Before Operate (SBO) • Enhanced security"
         };
-        signal.AcceptVerifiedLiveControlCdc("DPC");
+        signal.AcceptVerifiedLiveControlCdc(cdc);
         signal.ControlSemanticVerified = true;
         return signal;
     }
@@ -125,8 +125,7 @@ public sealed class P109UStableCommandProjectionTests
     public void ActualDockMembershipNeverResetsDuringReportingAndOnlyChangesForRealAuthority()
     {
         var breaker = Verified("LD0/Bkr0XCBR2.Pos");
-        var tap = Verified("LD0/ATCC1.TapChg");
-        tap.ControlCdc = "DPC"; // keep immutable typed test fixture semantics
+        var tap = Verified("LD0/ATCC1.TapChg", "BSC");
         var statusOnly = Verified("LD0/Disc0XSWI1.Pos");
         statusOnly.ControlModelText = "Status only";
         var device = new Iec61850MonitorDevice();
