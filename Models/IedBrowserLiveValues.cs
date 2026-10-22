@@ -13,7 +13,8 @@ public sealed record IedBrowserObservedValue(
     long Revision = 0, long Association = 0, bool IsStale = false,
     MmsQualityEvidence? QualityBits = null,
     Iec61850UtcTimeEvidence? TimeBits = null,
-    bool? TypedBoolean = null);
+    bool? TypedBoolean = null,
+    string ReadWireShapeEvidence = "");
 
 internal sealed record IedBrowserObservationChannels(
     IedBrowserObservedValue? Report = null,
@@ -104,11 +105,13 @@ public sealed class IedBrowserLiveValues
         MmsQualityEvidence? qualityEvidence = null,
         bool? typedBoolean = null,
         AR.Iec61850.Mms.MmsDataKind? verifiedStringWireKind = null,
-        string? declaredDataType = null)
+        string? declaredDataType = null,
+        string? readWireShapeEvidence = null)
         => TryPublish(reference, fc, value, quality, timestamp, source, association,
             utcTimeEvidence, qualityEvidence, typedBoolean: typedBoolean,
             verifiedStringWireKind: verifiedStringWireKind,
-            declaredDataType: declaredDataType);
+            declaredDataType: declaredDataType,
+            readWireShapeEvidence: readWireShapeEvidence);
 
     /// <summary>
     /// Atomically attach a verified, exact-model-owned q or t Report companion
@@ -162,7 +165,8 @@ public sealed class IedBrowserLiveValues
         MmsQualityEvidence? qualityEvidence, bool onlyIfNoReport = false,
         bool? typedBoolean = null,
         AR.Iec61850.Mms.MmsDataKind? verifiedStringWireKind = null,
-        string? declaredDataType = null)
+        string? declaredDataType = null,
+        string? readWireShapeEvidence = null)
     {
         if (string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(fc) ||
             string.IsNullOrWhiteSpace(value) ||
@@ -219,7 +223,11 @@ public sealed class IedBrowserLiveValues
                           string.Equals(timestamp, previousReport?.DeviceTimestamp,
                               StringComparison.Ordinal)
                             ? previousReport?.TimeBits : null,
-                TypedBoolean: typedBoolean);
+                TypedBoolean: typedBoolean,
+                ReadWireShapeEvidence: source == "MMS Read" &&
+                    !string.IsNullOrWhiteSpace(readWireShapeEvidence)
+                        ? readWireShapeEvidence[..Math.Min(192, readWireShapeEvidence.Length)]
+                        : "");
             _values[key] = isReport
                 ? channels with { Report = observed }
                 : channels with { Read = observed };
@@ -358,5 +366,6 @@ public sealed record IedBrowserReadResult(
     Iec61850UtcTimeEvidence? UtcTimeEvidence = null,
     MmsQualityEvidence? QualityEvidence = null,
     bool? TypedBoolean = null,
-    AR.Iec61850.Mms.MmsDataKind? VerifiedStringWireKind = null);
+    AR.Iec61850.Mms.MmsDataKind? VerifiedStringWireKind = null,
+    string WireShapeEvidence = "");
 public sealed record IedBrowserReadProgress(int Completed, int Total);
