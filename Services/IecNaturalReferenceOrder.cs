@@ -66,6 +66,16 @@ public sealed class IecNaturalCommandSort : IComparer
         if (ReferenceEquals(a, b)) return 0;
         if (a is not SignalDefinition left || b is not SignalDefinition right)
             return Comparer.DefaultInvariant.Compare(a,b);
+        // WPF's ListCollectionView.CustomSort is the FINAL visual order.
+        // The underlying device.OperableCommandSignals is already ranked,
+        // but the view's alphabetical comparer used to override that rank:
+        // SG7_BCUMaster/GGIO2 sorted above SG7_BCUSystem/Bkr0XCBR.Pos.
+        // Match exactly the live-verified command role priority at the view
+        // boundary, while keeping natural instance order WITHIN each role.
+        // This is presentation only; no rank authorizes an MMS Operate.
+        var role = Iec61850ControlIdentity.CommandDockPriority(left)
+            .CompareTo(Iec61850ControlIdentity.CommandDockPriority(right));
+        if (role != 0) return role;
         var result = IecNaturalReferenceOrder.Compare(left.DisplayReference,right.DisplayReference);
         return result != 0 ? result : IecNaturalReferenceOrder.Compare(left.ObjectReference,right.ObjectReference);
     }
