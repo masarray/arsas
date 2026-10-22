@@ -551,8 +551,9 @@ public partial class MainWindow
                     sourceDevice.LiveValues.Association != readAssociation ||
                     bindingIndex is not { IsCurrent: true })
                     return; // superseded association, catalog or read flight
-                var scalarValid = IedBrowserReadValuePolicy.TryAcceptDisplay(
-                    result.Value, out var safeValue, out var scalarReason);
+                var scalarValid = IedBrowserReadValuePolicy.TryAcceptVerifiedMmsString(
+                    result.Value, result.Target.DataType, result.VerifiedStringWireKind,
+                    out var safeValue, out var scalarReason);
                 if (result.Error.Length != 0 || !scalarValid)
                 {
                     failures++;
@@ -575,7 +576,9 @@ public partial class MainWindow
                     result.Target.FunctionalConstraint, safeValue,
                     result.Quality, result.DeviceTimestamp, "MMS Read",
                     result.UtcTimeEvidence, result.QualityEvidence,
-                    typedBoolean: result.TypedBoolean);
+                    typedBoolean: result.TypedBoolean,
+                    verifiedStringWireKind: result.VerifiedStringWireKind,
+                    declaredDataType: result.Target.DataType);
                 if (!accepted) return;
                 _iedBrowserReadFailureEvidence?.ClearFailure(result.Target);
                 successes++;
