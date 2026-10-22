@@ -91,6 +91,13 @@ public partial class SignalSelectionWizardWindow : Window, INotifyPropertyChange
         };
 
         InitializeComponent();
+        var candidateCount = device.Signals.Count(s => s.IsValidControlObject);
+        var cswiCount = device.Signals.Count(s => s.IsValidControlObject && IsCswiControl(s));
+        QuickControlButton.Content = $"Control ({candidateCount:N0})";
+        QuickCswiButton.Content = $"CSWI ({cswiCount:N0})";
+        QuickCswiButton.ToolTip = cswiCount == 0
+            ? "No CSWI control object was discovered in this IED model. XCBR/XSWI status is not proof of a CSWI command object. Check CO/CF MMS discovery or SCL."
+            : $"{cswiCount:N0} CSWI control candidate(s) discovered. Select the exact CSWI.Pos required; physical control remains disabled until a live ctlModel and CDC check passes.";
         DataContext = this;
         Loaded += (_, _) =>
         {
