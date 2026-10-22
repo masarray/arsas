@@ -170,10 +170,7 @@ jobs:
             ".github/workflows/installer-windows.yml",
             ".github/workflows/smart-discovery-mainline-readiness.yml",
             ".github/workflows/rcb-export-guard.yml",
-            ".github/workflows/validate-sv-evidence.yml",
-            ".github/workflows/validate-io-testing.yml",
             ".github/workflows/comtrade-viewer-integration.yml",
-            ".github/workflows/smart-discovery-golden-provenance.yml",
             ".github/workflows/smart-discovery-golden-budget-lock.yml",
             ".github/workflows/smart-discovery-repeat-run-stability.yml",
         ]
@@ -187,6 +184,26 @@ jobs:
             source = (repo / relative).read_text(encoding="utf-8")
             self.assertIn(expected_group, source, relative)
             self.assertIn(expected_cancel, source, relative)
+
+        # Removed specialized SV/IO workflows are consolidated into the
+        # exact-SHA full regression, not simply dropped from acceptance.
+        canonical = (repo / ".github/workflows/build.yml").read_text(
+            encoding="utf-8"
+        )
+        for family in (
+            "SmvSnapshotEvidenceExporterTests", "IoTest", "IoList",
+            "IoFat", "FatDataSet", "FatScl",
+        ):
+            self.assertIn(family, canonical)
+        self.assertIn("Assert SV and IO domain regression coverage", canonical)
+
+        # The merged P0-5e job keeps BOTH formerly independent fixture lanes.
+        golden = (repo / ".github/workflows/smart-discovery-golden-budget-lock.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("Execute P0-5e golden budget fixtures", golden)
+        self.assertIn("Execute P0-5e provenance fixtures", golden)
+        self.assertIn("ARSAS-p0-5e-golden-provenance-fixtures", golden)
 
         release = (repo / ".github/workflows/release-windows.yml").read_text(
             encoding="utf-8"
