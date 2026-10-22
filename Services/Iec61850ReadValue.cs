@@ -14,6 +14,11 @@ public sealed class Iec61850ReadValue
     public string ReadReference { get; init; } = string.Empty;
     public string Projection { get; init; } = string.Empty;
 
+    // Positive wire-kind proof, not inferred from the rendered display. Only
+    // direct, primitive MMS string results with matching projected CLR text
+    // receive this marker. A parent structure can never claim this proof.
+    public MmsDataKind? VerifiedStringWireKind { get; internal set; }
+
     // Authoritative engine-owned UTC-Time evidence. Available only when
     // a direct MMS .t read preserved the original eight wire bytes.
     public Iec61850UtcTimeEvidence? UtcTimeEvidence { get; internal set; }
