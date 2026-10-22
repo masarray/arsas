@@ -199,6 +199,24 @@ internal static class DiagnosticReportBuilder
                     if (evidence.Length > 480) evidence = evidence[..480] + "…";
                     builder.AppendLine($"  {command.ObjectReference} | CDC={command.ControlCdc} | liveVerifiedCdc={command.VerifiedLiveControlCdc} | dataSetCdc={command.DataSetAdvisoryCdc} | model={command.ControlModelText} | canOperate={command.ControlSupportsOperate} | {evidence}");
                 }
+                // A static DataSet may report XCBR/XSWI Pos but omit the
+                // separate command-owning CSWI.Pos in another LD. Report the
+                // live discovery candidates independently of user selection;
+                // diagnostic visibility NEVER grants an MMS control command.
+                var independentCswi = device.LiveDiscoveryModel is not null
+                    ? Iec61850ControlIdentity.IndependentCswiInspectionCandidates(device.Signals)
+                    : [];
+                var cswiTotal = device.Signals
+                    .Count(s => !s.IsSelected &&
+                        Iec61850ControlIdentity.IsIndependentCswiCandidate(s));
+                builder.AppendLine($"CSWI outside DataSet: live candidates={cswiTotal}, bounded candidates={independentCswi.Length}, typed-operable={independentCswi.Count(s => s.ControlSupportsOperate)}, unresolved/status-only={independentCswi.Count(s => !s.ControlSupportsOperate)}; discovery does not imply command authority");
+                foreach (var cswi in independentCswi.Take(12))
+                {
+                    var note = (cswi.ControlInspectionEvidence ?? string.Empty)
+                        .Replace('\r', ' ').Replace('\n', ' ');
+                    if (note.Length > 180) note = note[..180] + "…";
+                    builder.AppendLine($"  CSWI {cswi.ObjectReference} | model={cswi.ControlModelText} | verifiedCDC={cswi.VerifiedLiveControlCdc} | operable={cswi.ControlSupportsOperate} | {note}");
+                }
                 builder.AppendLine($"Logical Devices  : {EmptyAsUnavailable(device.LogicalDeviceSummary)}");
                 builder.AppendLine($"Identity source  : {EmptyAsUnavailable(device.IdentitySource)}");
 
