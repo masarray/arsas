@@ -373,8 +373,8 @@ jobs:
             throw 'CI-P1 shadow SHA/TRX proof is incomplete; fail closed.'
           }
 
-      # CI-sprawl budget permits one upload action. Compute exact FAST vs
-      # diagnostic paths once, without changing release or FAT authority.
+      # Single upload keeps CI-sprawl budget unchanged. FAST = raw executable;
+      # ordinary shadow = TRX + manifest diagnostics, unchanged gates.
       - name: Choose FAST EXE or diagnostic artifact
         id: artifact-mode
         if: always()
@@ -385,9 +385,7 @@ jobs:
           FOCUS: ${{ inputs.focus }}
         run: |
           $trial = ($env:FAST_DEV -eq 'true' -and
-                    $env:TRIAL_SHA -match '^[0-9a-f]{40}
-          retention-days: 14
- -and
+                    $env:TRIAL_SHA -match '^[0-9a-f]{40}$' -and
                     $env:FOCUS -eq 'command-read')
           if ($trial) {
             "artifact_name=ARSAS-SG7-BCU-FAT-TRIAL-$env:GITHUB_RUN_ID.exe" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
@@ -410,5 +408,4 @@ jobs:
           path: ${{ steps.artifact-mode.outputs.artifact_path }}
           archive: ${{ steps.artifact-mode.outputs.artifact_archive }}
           if-no-files-found: error
-          retention-days: 14
           retention-days: 14
