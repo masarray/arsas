@@ -552,19 +552,11 @@ public class SignalDefinition : ObservableObject
     // ControlSupportsOperate still independently gates every staged/direct write.
     private bool CanExposeControlActions => IsValidControlObject;
 
-    private bool IsPositionSemanticControl
-    {
-        get
-        {
-            var reference = (ObjectReference ?? string.Empty).Replace('$', '.').TrimEnd('.');
-            var leaf = reference[(reference.LastIndexOf('.') + 1)..];
-            return leaf.Equals("Pos", StringComparison.OrdinalIgnoreCase) ||
-                   ((LogicalNodeClass.Equals("CSWI", StringComparison.OrdinalIgnoreCase) ||
-                     LogicalNodeClass.Equals("XCBR", StringComparison.OrdinalIgnoreCase) ||
-                     LogicalNodeClass.Equals("XSWI", StringComparison.OrdinalIgnoreCase)) &&
-                    reference.Contains(".Pos", StringComparison.OrdinalIgnoreCase));
-        }
-    }
+    // Action widgets are derived from the declared/live CDC, not the LN or
+    // data-object name. An arbitrary vendor-named DPC is still a DPC; a
+    // coincidentally named Pos object without DPC evidence is not Open/Close.
+    private bool IsPositionSemanticControl =>
+        string.Equals(ControlCdc, "DPC", StringComparison.OrdinalIgnoreCase);
 
     public bool IsPositionControl => CanExposeControlActions && IsPositionSemanticControl;
     public bool IsRaiseOnlyControl => CanExposeControlActions && (ContainsControlToken("TapOpR") || ContainsControlToken("Raise"));
