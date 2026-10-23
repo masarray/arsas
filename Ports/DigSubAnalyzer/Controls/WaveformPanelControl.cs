@@ -32,10 +32,15 @@ public sealed class WaveformPanelControl : FrameworkElement
     private static readonly Pen ZeroPen = CreatePen("#A1B4CA", 1.35);
     private static readonly Pen HighlightPen = CreatePen("#EDF3FA", 1.0);
     private static readonly Brush AxisTextBrush = CreateBrush("#7C8DA4");
-    private static readonly Pen CursorPen = CreatePen("#2563EB", 1.4);
-    private static readonly Brush CursorDotBrush = CreateBrush("#2865C7");
-    private static readonly Brush CursorFillBrush = CreateBrush("#E8F1FF");
-    private static readonly Pen CursorBorderPen = CreatePen("#2865C7", 1.0);
+    // Soft vertical guide; phase-specific leader arrows carry the information.
+    // All drawing resources are frozen and shared between render frames.
+    private static readonly Pen CursorPen = CreatePen("#8AA0BA", 1.05, [3.0, 4.0]);
+    private static readonly Brush CursorLabelSurface = CreateBrush("#F8FBFF");
+    private static readonly Pen CursorLabelFrame = CreatePen("#D0DCEB", 0.9);
+    private static readonly Pen CursorRedLeader = CreateFrozenSeriesPen(UaBrush, 1.4);
+    private static readonly Pen CursorGoldLeader = CreateFrozenSeriesPen(UbBrush, 1.4);
+    private static readonly Pen CursorBlueLeader = CreateFrozenSeriesPen(UcBrush, 1.4);
+    private static readonly Pen CursorNeutralLeader = CreateFrozenSeriesPen(NeutralBrush, 1.4);
     private static readonly Dictionary<string, Pen> SeriesPenCache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Typeface TitleTypeface = new((FontFamily)System.Windows.Application.Current.FindResource("AppFontFamily"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
     private static readonly Typeface LabelTypeface = new((FontFamily)System.Windows.Application.Current.FindResource("AppFontFamily"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
@@ -314,8 +319,13 @@ public sealed class WaveformPanelControl : FrameworkElement
         }
 
         var stacked = string.Equals(LayoutMode, "Stacked", StringComparison.OrdinalIgnoreCase);
-        DrawGrid(dc, innerRect, stacked, laneSeries.Count);
-        DrawYAxisScale(dc, innerRect, amplitudeMax, lane.Unit, stacked, laneSeries.Count);
+        // Neutral at exactly zero is not a fourth *phase waveform*; retain its
+        // legend and measurements, but do not waste a Stacked band on a flat line.
+        var plotSeries = laneSeries
+            .Where(item => item.Samples.Count >= 2 && !IsSilentZeroTrace(item.Samples))
+            .ToArray();
+        DrawGrid(dc, innerRect, stacked, plotSeries.Length);
+        DrawYAxisScale(dc, innerRect, amplitudeMax, lane.Unit, stacked, plotSeries.Length);
 
         if (laneSeries.Count == 0 || laneSeries.All(item => item.Samples.Count < 2))
         {
@@ -323,18 +333,16 @@ public sealed class WaveformPanelControl : FrameworkElement
             return;
         }
 
-        for (var index = 0; index < laneSeries.Count; index++)
+        for (var index = 0; index < plotSeries.Length; index++)
         {
-            var trace = laneSeries[index];
+            var trace = plotSeries[index];
             dc.PushOpacity(TraceOpacity(IsStreamLive, trace.Freshness));
-            DrawSeries(dc, innerRect, trace, amplitudeMax, stacked, index, laneSeries.Count);
+            DrawSeries(dc, innerRect, trace, amplitudeMax, stacked, index, plotSeries.Length);
             dc.Pop();
         }
 
-        // Inspection overlay is interactive only: never obstruct live curves
-        // with a permanent cursor/tooltip when the operator is not inspecting.
         if (MarkersEnabled && _cursorVisible && _cursorLane == laneIndex)
-            DrawCursor(dc, innerRect, laneSeries, amplitudeMax, stacked, snapshot);
+            DrawCursor(dc, innerRect, plotSeries, amplitudeMax, stacked, snapshot);
 
         DrawTimebaseLabel(dc, innerRect, snapshot);
     }
@@ -727,7 +735,7 @@ public sealed class WaveformPanelControl : FrameworkElement
 
     private static void DrawGrid(DrawingContext dc, Rect rect, bool stacked, int traces)
     {
-        // Fast retained pens: no allocations and no permanent zero-axis overlay.
+        // Frozen pens and lightweight subdivisions; never remove the actual 0 axis.
         for (var i = 1; i < 10; i++)
         {
             var x = rect.Left + (rect.Width * i / 10.0);
@@ -735,8 +743,8 @@ public sealed class WaveformPanelControl : FrameworkElement
                 new Point(x, rect.Top), new Point(x, rect.Bottom));
         }
 
-        // In overlay, a permanent heavy zero line obscures low-level channels.
-        // Stacked traces have independent baselines instead of one false global zero.
+        // Stacked gets one mathematically correct baseline per *visible phase*.
+        // Overlay gets exactly one shared baseline at Y=0.
         if (stacked && traces > 0)
         {
             var band = rect.Height / traces;
@@ -755,12 +763,15 @@ public sealed class WaveformPanelControl : FrameworkElement
         }
         else
         {
-            // Nonzero subdivisions only: the waveform itself defines the shape.
             for (var i = 1; i < 4; i += 2)
             {
                 var y = rect.Top + rect.Height * i / 4.0;
                 dc.DrawLine(GridPen, new Point(rect.Left, y), new Point(rect.Right, y));
             }
+            var zeroY = rect.Top + rect.Height / 2.0;
+            dc.DrawLine(ZeroPen, new Point(rect.Left, zeroY), new Point(rect.Right, zeroY));
+            dc.DrawText(CreateText("0", 9.6, AxisTextBrush, LabelTypeface),
+                new Point(rect.Left + 3, zeroY - 13));
         }
 
         dc.DrawLine(HighlightPen, new Point(rect.Left, rect.Top + 1), new Point(rect.Right, rect.Top + 1));
@@ -960,6 +971,14 @@ public sealed class WaveformPanelControl : FrameworkElement
         return GetPoint(rect, samples, amplitudeMax, stacked, index, totalSeries, samples.Count - 1).Y;
     }
 
+    private static Pen GetCursorLeaderPen(string name) => name switch
+    {
+        "Ua" or "Ia" or "Ch1" or "Ch5" => CursorRedLeader,
+        "Ub" or "Ib" or "Ch2" or "Ch6" => CursorGoldLeader,
+        "Uc" or "Ic" or "Ch3" or "Ch7" => CursorBlueLeader,
+        _ => CursorNeutralLeader
+    };
+
     private void DrawCursor(
         DrawingContext dc,
         Rect rect,
@@ -968,85 +987,111 @@ public sealed class WaveformPanelControl : FrameworkElement
         bool stacked,
         WaveformSnapshot snapshot)
     {
-        var maxSamples = series.Select(item => item.Samples.Count).DefaultIfEmpty(0).Max();
-        if (maxSamples < 2)
+        if (series.Count == 0)
             return;
 
-        var sampleIndex = (int)Math.Round(_cursorFraction * (maxSamples - 1));
-        sampleIndex = Math.Clamp(sampleIndex, 0, maxSamples - 1);
-
-        var x = rect.Left + (rect.Width * sampleIndex / (maxSamples - 1.0));
-        dc.DrawLine(CursorPen, new Point(x, rect.Top), new Point(x, rect.Bottom));
-        dc.DrawEllipse(CursorDotBrush, null, new Point(x, rect.Top + 7), 3.8, 3.8);
-
-        var sampleRate = snapshot.SampleRateHz > 0 ? snapshot.SampleRateHz : 4000.0;
-        var timeMs = sampleIndex / sampleRate * 1000.0;
-
-        var freqText = snapshot.MeasuredFrequencyHz > 0
-            ? $"{snapshot.MeasuredFrequencyHz:0.###} Hz"
-            : "freq N/A";
-
-        var chips = new List<(string Text, Brush Brush)>
-    {
-        ($"t={timeMs:0.###} ms", LabelBrush),
-        ($"n={sampleIndex}", LabelBrush),
-        (freqText, LabelBrush)
-    };
-
+        // The cursor is snapped to the visible plot position, not to a
+        // separately sampled or fabricated set of amplitudes.
+        var count = 0;
         foreach (var item in series)
+            count = Math.Max(count, item.Samples.Count);
+        if (count < 2)
+            return;
+
+        var sampleIndex = (int)Math.Round(_cursorFraction * (count - 1));
+        var x = rect.Left + rect.Width * sampleIndex / (count - 1.0);
+        dc.DrawLine(CursorPen, new Point(x, rect.Top), new Point(x, rect.Bottom));
+
+        // Compute the *exact line-segment intersection* for each plotted phase.
+        // The same 0.37 vertical transform is used by DrawSeries. This is not
+        // a new DSP sample; the displayed value is explicitly a linear
+        // interpolation between adjacent plotted vertices at the cursor.
+        var anchors = new List<WaveformCursorCalloutLayout.Anchor>(series.Count);
+        var texts = new List<FormattedText>(series.Count);
+        var colors = new List<Pen>(series.Count);
+        for (var index = 0; index < series.Count; index++)
         {
-            if (item.Samples.Count == 0)
+            var item = series[index];
+            if (item.Samples.Count < 2)
                 continue;
 
-            var localIndex = Math.Clamp(sampleIndex, 0, item.Samples.Count - 1);
-            chips.Add(($"{item.Name}={FormatEngineeringValue(item.Samples[localIndex], item.Unit)}", GetSeriesBrush(item.Name)));
+            var samplePosition = sampleIndex / (count - 1.0) * (item.Samples.Count - 1);
+            var a = (int)Math.Floor(samplePosition);
+            var b = Math.Min(a + 1, item.Samples.Count - 1);
+            var t = samplePosition - a;
+            var value = item.Samples[a] + (item.Samples[b] - item.Samples[a]) * t;
+            if (!double.IsFinite(value))
+                continue;
+
+            var bandHeight = stacked ? rect.Height / series.Count : rect.Height;
+            var bandCenter = rect.Top + (stacked ? (index + 0.5) * bandHeight : rect.Height / 2.0);
+            var y = bandCenter - (amplitudeMax > 0 ? value / amplitudeMax : 0.0)
+                * bandHeight * 0.37;
+            y = Math.Clamp(y, rect.Top, rect.Bottom);
+
+            var color = GetSeriesBrush(item.Name);
+            var formatted = CreateText(
+                item.Name + "  " + FormatEngineeringValue(value, item.Unit),
+                10.5, color, LabelTypeface);
+            anchors.Add(new WaveformCursorCalloutLayout.Anchor(texts.Count, y, formatted.Width + 17));
+            texts.Add(formatted);
+            colors.Add(GetCursorLeaderPen(item.Name));
         }
 
-        var paddingX = 8.0;
-        var paddingY = 5.0;
-        var gap = 6.0;
-
-        var chipLayouts = chips
-            .Select(chip =>
-            {
-                var text = CreateText(chip.Text, 10.8, chip.Brush, LabelTypeface);
-                var width = text.Width + (paddingX * 2);
-                var height = text.Height + (paddingY * 2);
-                return (chip.Text, chip.Brush, Text: text, Width: width, Height: height);
-            })
-            .ToArray();
-
-        var totalWidth = chipLayouts.Sum(c => c.Width) + (gap * Math.Max(0, chipLayouts.Length - 1)) + 12;
-        var maxHeight = chipLayouts.Select(c => c.Height).DefaultIfEmpty(24).Max() + 8;
-
-        var boxWidth = Math.Min(rect.Width - 8, totalWidth);
-        var boxX = Math.Clamp(x + 10, rect.Left + 4, rect.Right - boxWidth - 4);
-        var boxY = rect.Top - (maxHeight + 6);
-
-        // kalau terlalu atas, fallback ke dalam
-        if (boxY < 4)
-            boxY = rect.Top + 6;
-
-        var box = new Rect(boxX, boxY, boxWidth, maxHeight);
-
-        dc.DrawRoundedRectangle(CloneBrushOpacity(CursorFillBrush, 0.92), CursorBorderPen, box, 8, 8);
-
-        var cx = box.Left + 6;
-        var cy = box.Top + 4;
-
-        foreach (var chip in chipLayouts)
+        var placements = WaveformCursorCalloutLayout.Arrange(rect, x, anchors);
+        // First paint leader lines, then the compact labels on top. The arrowhead
+        // tip sits precisely on the vertical cursor / phase-wave intersection.
+        foreach (var placement in placements)
         {
-            if (cx + chip.Width > box.Right - 4)
-                break;
-
-            var chipRect = new Rect(cx, cy, chip.Width, chip.Height);
-            dc.DrawRoundedRectangle(CloneBrushOpacity(chip.Brush, 0.16), null, chipRect, 7, 7);
-
-            dc.DrawEllipse(chip.Brush, null, new Point(chipRect.Left + 8, chipRect.Top + chipRect.Height / 2), 3.2, 3.2);
-            dc.DrawText(chip.Text, new Point(chipRect.Left + 14, chipRect.Top + paddingY));
-
-            cx += chip.Width + gap;
+            var tip = new Point(x, anchors[placement.Index].Y);
+            var start = new Point(placement.LabelRight ? placement.Box.Left : placement.Box.Right,
+                placement.Box.Top + placement.Box.Height / 2.0);
+            DrawCalloutArrow(dc, colors[placement.Index], start, tip);
         }
+
+        foreach (var placement in placements)
+        {
+            var box = placement.Box;
+            dc.DrawRoundedRectangle(CursorLabelSurface, CursorLabelFrame, box, 5, 5);
+            dc.DrawText(texts[placement.Index],
+                new Point(box.Left + 8, box.Top + (box.Height - texts[placement.Index].Height) / 2.0));
+        }
+
+        // One small time caption, never a row of chips over the phase legend.
+        if (snapshot.SampleRateHz > 0 && double.IsFinite(snapshot.SampleRateHz))
+        {
+            var windowSamples = Math.Min(CalculateVisibleSamples(snapshot),
+                Math.Max(2, snapshot.VoltageSeries.Concat(snapshot.CurrentSeries)
+                    .Select(item => item.Samples.Count).DefaultIfEmpty(2).Max()));
+            var timeMs = _cursorFraction * Math.Max(0, windowSamples - 1) *
+                1000.0 / snapshot.SampleRateHz;
+            var caption = CreateText("t  " + timeMs.ToString("0.00", CultureInfo.InvariantCulture) + " ms",
+                10.1, LabelBrush, LabelTypeface);
+            var width = caption.Width + 12;
+            var left = Math.Clamp(x - width / 2, rect.Left + 4,
+                Math.Max(rect.Left + 4, rect.Right - width - 4));
+            var badge = new Rect(left, rect.Bottom - 23, width, 20);
+            dc.DrawRoundedRectangle(CursorLabelSurface, CursorLabelFrame, badge, 4, 4);
+            dc.DrawText(caption, new Point(badge.Left + 6, badge.Top + 2));
+        }
+    }
+
+    private static void DrawCalloutArrow(DrawingContext dc, Pen pen, Point start, Point tip)
+    {
+        var dx = tip.X - start.X;
+        var dy = tip.Y - start.Y;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+        if (length < 1.0)
+            return;
+        var ux = dx / length;
+        var uy = dy / length;
+        dc.DrawLine(pen, start, tip);
+        // Directional open-arrow tips (no marker dot) terminate on the signal.
+        const double arrowLength = 6.5;
+        const double arrowHalfWidth = 3.0;
+        var back = new Point(tip.X - ux * arrowLength, tip.Y - uy * arrowLength);
+        dc.DrawLine(pen, tip, new Point(back.X - uy * arrowHalfWidth, back.Y + ux * arrowHalfWidth));
+        dc.DrawLine(pen, tip, new Point(back.X + uy * arrowHalfWidth, back.Y - ux * arrowHalfWidth));
     }
 
     private static string FormatEngineeringValue(double value, string unit)
