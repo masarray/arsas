@@ -162,7 +162,7 @@ public partial class BrowserBatchWriteWindow : Window
         WriteButton.IsEnabled = false;
         var selected = CheckedRows();
         if (selected.Length is 0 or > IedBrowserTypedWriteBatch.MaxSelectedAttributes ||
-            selected.Any(r => !r.Eligible || !r.HasEdited) || !CurrentAssociation)
+            selected.Any(r => !r.Eligible) || !CurrentAssociation)
         {
             StatusLabel.Text =
                 "Select 1–64 eligible DAs, explicitly edit each new value and keep the same online association. No Write sent.";
@@ -350,19 +350,27 @@ public partial class BrowserBatchWriteWindow : Window
                     row.Status += " · Readback unavailable: " + ex.Message;
                 }
             }
-            StatusLabel.Text = result.Rejected > 0 || result.Unknown > 0 ||
-                result.Unverified > 0 || result.Unattempted > 0
+            var anyFailure = result.Rejected > 0 || result.Unknown > 0 ||
+                result.Unverified > 0 || result.Unattempted > 0;
+            StatusLabel.Text = anyFailure
                 ? $"Write ditolak / belum terverifikasi · {result.Verified} verified, " +
                   $"{result.Rejected} rejected, {result.Unknown} unknown, {result.Unverified} unverified."
                 : $"Write verified · {result.Verified} DA(s) · values refreshed from IED.";
+            ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
+                anyFailure ? System.Windows.Media.Color.FromRgb(255, 242, 228)
+                           : System.Windows.Media.Color.FromRgb(232, 248, 237));
         }
         catch (OperationCanceledException)
         {
             StatusLabel.Text = "Write uncertain; read the actual IED state before manual retry.";
+            ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(255, 242, 228));
         }
         catch (Exception ex)
         {
             StatusLabel.Text = "Write ditolak / unresolved: " + ex.Message;
+            ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(255, 242, 228));
         }
         finally
         {
