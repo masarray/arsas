@@ -1,111 +1,149 @@
 <Window x:Class="ArIED61850Tester.IedBrowserWriteWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="MMS Write · IED Browser" Width="1010" Height="670"
-        MinWidth="760" MinHeight="435" WindowStartupLocation="CenterOwner"
-        Background="#F5F8FC" Loaded="Window_Loaded" Closing="Window_Closing">
-    <Grid Margin="14,12" ClipToBounds="True">
+        Title="Write Data to IED" Width="940" Height="520"
+        MinWidth="750" MinHeight="390" MaxHeight="780"
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResize"
+        Background="#F5F7FB" FontFamily="{StaticResource AppFontFamily}"
+        Icon="Assets/app-icon.ico" Loaded="Window_Loaded" Closing="Window_Closing">
+    <Grid Margin="14,11,14,11">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*" MinHeight="150"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        <StackPanel Grid.Row="0" Margin="3,0,3,12">
-            <TextBlock Text="MMS configuration Write" FontSize="16" FontWeight="SemiBold"
-                       Foreground="#24354B"/>
-            <TextBlock x:Name="IdentityText" FontSize="11.5" Foreground="#596C82"
-                       Margin="0,5,0,0" TextTrimming="CharacterEllipsis"/>
-            <TextBlock Text="Only live-discovered CF / DC / SP / SG / SE attributes. CO command services, process values and RCBs are excluded."
-                       FontSize="11" Foreground="#8A5B17" TextWrapping="Wrap" Margin="0,4,0,0"/>
+        <StackPanel Grid.Row="0" Margin="1,0,1,10">
+            <TextBlock Text="Write Data to IED" FontSize="14" FontWeight="SemiBold"
+                       Foreground="#273E58"/>
+            <TextBlock x:Name="IdentityText" FontSize="11" Foreground="#5A718A"
+                       Margin="0,4,0,0" TextTrimming="CharacterEllipsis"
+                       ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
         </StackPanel>
-        <TextBlock Grid.Row="1" Text="Select each DA, enter its typed value, then confirm. Bulk is sequential (not atomic); stops at first failure. Readback is required."
-                   FontSize="11" Foreground="#3E5671" TextWrapping="Wrap" Margin="3,0,0,9"/>
-        <DataGrid Grid.Row="2" x:Name="WriteRowsGrid"
-                  ItemsSource="{Binding Rows}"
+        <DataGrid Grid.Row="1" x:Name="WriteRowsGrid" ItemsSource="{Binding Rows}"
+                  Style="{StaticResource ModernDataGrid}"
                   AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
-                  IsReadOnly="False" RowHeight="35" ColumnHeaderHeight="33"
-                  AlternatingRowBackground="#F1F5FA" Background="White" BorderBrush="#C6D3E3"
-                  ScrollViewer.VerticalScrollBarVisibility="Visible"
+                  IsReadOnly="False" RowHeight="34" ColumnHeaderHeight="30"
+                  AlternatingRowBackground="#F5F8FC"
+                  Background="White" BorderBrush="#CCD9E8"
+                  ScrollViewer.VerticalScrollBarVisibility="Auto"
                   ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                  ScrollViewer.CanContentScroll="True"
                   VirtualizingPanel.IsVirtualizing="True"
-                  VirtualizingPanel.ScrollUnit="Pixel"
-                  EnableRowVirtualization="True" MinHeight="0" ClipToBounds="True">
+                  VirtualizingPanel.VirtualizationMode="Recycling"
+                  EnableRowVirtualization="True" MinHeight="0">
             <DataGrid.Columns>
-                <DataGridCheckBoxColumn Header="Write" Binding="{Binding Selected, Mode=TwoWay}"
-                                        Width="54"/>
-                <DataGridTextColumn Header="Exact IEC DA reference" Binding="{Binding Reference}"
-                                    Width="2.6*" MinWidth="220" IsReadOnly="True"/>
+                <DataGridCheckBoxColumn Header="" Binding="{Binding Selected, Mode=TwoWay}"
+                                        Width="42"/>
+                <DataGridTextColumn Header="Data Attribute" Binding="{Binding ShortName}"
+                                    Width="1.6*" MinWidth="132" IsReadOnly="True">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="VerticalAlignment" Value="Center"/>
+                            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                            <Setter Property="ToolTip" Value="{Binding Reference}"/>
+                            <Setter Property="Foreground" Value="#314963"/>
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
                 <DataGridTextColumn Header="FC" Binding="{Binding FunctionalConstraint}"
-                                    Width="50" IsReadOnly="True"/>
-                <DataGridTextColumn Header="Type" Binding="{Binding DataType}"
-                                    Width="100" IsReadOnly="True"/>
-                <DataGridTextColumn Header="Live before" Binding="{Binding Current}"
-                                    Width="1*" MinWidth="95" IsReadOnly="True"/>
-                <DataGridTemplateColumn Header="New value" Width="1.3*" MinWidth="132">
+                                    Width="44" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Current" Binding="{Binding Current}"
+                                    Width="1*" MinWidth="93" IsReadOnly="True">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="VerticalAlignment" Value="Center"/>
+                            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                            <Setter Property="ToolTip" Value="{Binding Current}"/>
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+                <DataGridTemplateColumn Header="Value" Width="1.45*" MinWidth="150">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <Grid Margin="1">
-                                <TextBox x:Name="ValueEditor" Text="{Binding RequestedValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                         Padding="5,3" BorderBrush="#CED7E3" Background="White">
-                                    <TextBox.Style>
-                                        <Style TargetType="TextBox">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsControlModel}" Value="True">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBox.Style>
-                                </TextBox>
-                                <ComboBox x:Name="CtlPicker"
+                            <Grid Margin="2,0" VerticalAlignment="Center">
+                                <TextBox x:Name="ValueEditor"
+                                         Height="27" Padding="6,3" FontSize="11"
+                                         Text="{Binding RequestedValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         Visibility="{Binding TextEditorVisibility}"
+                                         BorderBrush="#B9CCE1"
+                                         ToolTip="Edit the live value that was read from this IED"/>
+                                <ComboBox x:Name="BooleanPicker" Height="27" FontSize="11"
+                                          ItemsSource="{Binding BooleanOptions}"
+                                          SelectedItem="{Binding RequestedValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          Visibility="{Binding BooleanEditorVisibility}"
+                                          ToolTip="Choose true or false"/>
+                                <ComboBox x:Name="CtlPicker" Height="27" FontSize="11"
                                           SelectedValue="{Binding RequestedValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                          SelectedValuePath="Tag" FontSize="11.5">
-                                    <ComboBox.Style>
-                                        <Style TargetType="ComboBox">
-                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsControlModel}" Value="True">
-                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </ComboBox.Style>
+                                          SelectedValuePath="Tag"
+                                          Visibility="{Binding CtlModelEditorVisibility}"
+                                          ToolTip="IEC 61850 ctlModel enumeration">
                                     <ComboBoxItem Tag="0" Content="0 · status-only"/>
                                     <ComboBoxItem Tag="1" Content="1 · direct-normal"/>
                                     <ComboBoxItem Tag="2" Content="2 · sbo-normal"/>
                                     <ComboBoxItem Tag="3" Content="3 · direct-enhanced"/>
                                     <ComboBoxItem Tag="4" Content="4 · sbo-enhanced"/>
                                 </ComboBox>
+                                <TextBlock Text="{Binding PlaceholderText}" VerticalAlignment="Center"
+                                           Foreground="#8193A7" FontSize="10"
+                                           Visibility="{Binding PlaceholderVisibility}"/>
                             </Grid>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
+                <DataGridTextColumn Header="MMS type" Binding="{Binding DataType}"
+                                    Width="1*" MinWidth="88" IsReadOnly="True"/>
                 <DataGridTextColumn Header="Result" Binding="{Binding Result}"
-                                    Width="1.1*" MinWidth="140" IsReadOnly="True"/>
+                                    Width="1.7*" MinWidth="145" IsReadOnly="True">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="VerticalAlignment" Value="Center"/>
+                            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                            <Setter Property="ToolTip" Value="{Binding Result}"/>
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
             </DataGrid.Columns>
         </DataGrid>
-        <TextBlock Grid.Row="3" x:Name="StatusText" Margin="3,10,3,8"
-                   Text="No MMS operation has been sent." TextWrapping="Wrap"
-                   Foreground="#455E78" FontSize="11.5"/>
-        <Grid Grid.Row="4" Margin="0,3,0,0">
+        <Grid Grid.Row="2" Margin="2,9,2,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="Never use Write as a substitute for IEC control Operate."
-                       Foreground="#8F5B18" FontSize="10.5" VerticalAlignment="Center" TextWrapping="Wrap"/>
-            <Button Grid.Column="1" x:Name="ReadButton" Content="Read selected"
-                    Width="110" Height="31" Margin="0,0,8,0" Click="Read_Click"/>
-            <Button Grid.Column="2" x:Name="WriteButton" Content="Write selected…"
-                    Width="135" Height="31" Margin="0,0,8,0" Click="Write_Click"
-                    Background="#2762AF" Foreground="White"/>
-            <Button Grid.Column="3" Content="Close" Width="80" Height="31" Click="Close_Click"/>
+            <TextBlock x:Name="StatusText" Grid.Column="0"
+                       Foreground="#58718B" FontSize="10.5"
+                       TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                       VerticalAlignment="Center" Margin="0,0,9,0"
+                       ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
+                       Text="Reading current MMS values…"/>
+            <Button Grid.Column="1" x:Name="ReadButton" Width="82" Height="32"
+                    Margin="0,0,7,0" Style="{StaticResource SoftButton}" Click="Read_Click">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Viewbox Width="15" Height="15" Margin="0,0,5,0">
+                        <Path Data="{StaticResource MaterialRefreshIcon}" Fill="#45617C"/>
+                    </Viewbox>
+                    <TextBlock Text="Read" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <Button Grid.Column="2" x:Name="WriteButton" Width="94" Height="32"
+                    MinHeight="32" Margin="0,0,7,0" IsEnabled="False"
+                    Style="{StaticResource PrimaryButton}" Click="Write_Click">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Viewbox Width="16" Height="16" Margin="0,0,6,0">
+                        <Path Data="{StaticResource MaterialEditIcon}" Fill="White"/>
+                    </Viewbox>
+                    <TextBlock Text="Write" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <Button Grid.Column="3" Width="82" Height="32"
+                    Style="{StaticResource SoftButton}" Click="Close_Click">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Viewbox Width="12" Height="12" Margin="0,0,5,0">
+                        <Path Data="{StaticResource MaterialCloseIcon}" Fill="#415771"/>
+                    </Viewbox>
+                    <TextBlock Text="Close" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
         </Grid>
     </Grid>
 </Window>

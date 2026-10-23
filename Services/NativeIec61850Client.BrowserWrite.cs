@@ -30,6 +30,13 @@ public sealed partial class NativeIec61850Client
         string reference, string fc, MmsDataValue desired, CancellationToken cancellationToken)
     {
         ValidateBrowserConfigurationTarget(reference, fc);
+        // Only a WRITE is forbidden here; read-only inspection is unaffected.
+        var wireTarget = MmsObjectReference.FromIec61850Reference(reference, fc);
+        if (wireTarget.Item.Split((char)36).Skip(2).Any(segment =>
+                segment.Equals("ctlModel", StringComparison.OrdinalIgnoreCase) ||
+                segment is "Oper" or "SBO" or "SBOw" or "Cancel"))
+            throw new InvalidOperationException(
+                "Control service and ctlModel configuration require dedicated native APIs; generic MMS Write forbidden.");
         ArgumentNullException.ThrowIfNull(desired);
         if (desired.Kind is MmsDataKind.Array or MmsDataKind.Structure or
             MmsDataKind.Unknown or MmsDataKind.BitString or MmsDataKind.UtcTime)

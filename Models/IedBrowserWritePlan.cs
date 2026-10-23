@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
+using System.Windows;
 using AR.Iec61850.Discovery;
 using AR.Iec61850.Mms;
 
@@ -33,6 +34,9 @@ public static class IedBrowserWritePlan
             return []; // Refuse huge LN-wide selections; focus the exact DO.
         var admitted = candidates
             .Where(target => ConfigurationFc.Contains(target.FunctionalConstraint))
+            // ctlModel has a dedicated native Control-model configuration service.
+            // Never send it through the Browser primitive MMS Write path.
+            .Where(target => !target.Reference.EndsWith(".ctlModel", StringComparison.OrdinalIgnoreCase))
             .Where(target => !target.Reference.EndsWith(".q", StringComparison.OrdinalIgnoreCase) &&
                              !target.Reference.EndsWith(".t", StringComparison.OrdinalIgnoreCase))
             .Where(target => IsSupported(target.DataType))
@@ -65,12 +69,8 @@ public static class IedBrowserWritePlan
         var t = (type ?? "").Trim().ToUpperInvariant();
         var invariant = CultureInfo.InvariantCulture;
         if (reference.EndsWith(".ctlModel", StringComparison.OrdinalIgnoreCase))
-        {
-            if (!int.TryParse(raw.Trim(), NumberStyles.Integer, invariant, out var ctl) ||
-                ctl is < 0 or > 4)
-                throw new FormatException("ctlModel requires the exact enumerated integer 0–4.");
-            return MmsDataValue.Integer(ctl);
-        }
+            throw new NotSupportedException(
+                "ctlModel requires the dedicated verified native ControlModel configuration service.");
         return t switch
         {
             "BOOLEAN" or "BOOL" => raw.Trim().ToLowerInvariant() switch
@@ -79,12 +79,14 @@ public static class IedBrowserWritePlan
                 "false" or "0" => MmsDataValue.Boolean(false),
                 _ => throw new FormatException("Boolean must be true/false or 1/0.")
             },
-            "ENUM" or "ENUMERATED" or "INT8" or "INT16" or "INT32" or "INT64" or
-                "INTEGER" => MmsDataValue.Integer(
-                    long.Parse(raw.Trim(), NumberStyles.Integer, invariant)),
+            // MMS integer representation does not prove an SCL EnumType mapping.
+            // Until symbol/ordinal evidence is available, never guess an enum.
+            "ENUM" or "ENUMERATED" => throw new NotSupportedException(
+                "Enumerated Write requires exact verified SCL EnumType metadata."),
+            "INT8" or "INT16" or "INT32" or "INT64" or
+                "INTEGER" => EncodeSignedInteger(raw, t, invariant),
             "INT8U" or "INT16U" or "INT24U" or "INT32U" or "INT64U" or
-                "UNSIGNED" => MmsDataValue.Unsigned(
-                    ulong.Parse(raw.Trim(), NumberStyles.Integer, invariant)),
+                "UNSIGNED" => EncodeUnsignedInteger(raw, t, invariant),
             // Engine MmsDataCodec currently emits IEEE-754 binary32 only.
             // Do NOT silently narrow a double/IEEE-754 binary64 MMS DA.
             "FLOAT32" or "FLOAT" => EncodeFloat(raw, invariant),
@@ -96,6 +98,40 @@ public static class IedBrowserWritePlan
             _ => throw new NotSupportedException(
                 "No verified safe primitive MMS encoder for this DA type: " + type)
         };
+    }
+
+    private static MmsDataValue EncodeSignedInteger(string raw, string declaredType,
+        CultureInfo culture)
+    {
+        var value = long.Parse(raw.Trim(), NumberStyles.Integer, culture);
+        var (min, max) = declaredType switch
+        {
+            "INT8" => ((long)sbyte.MinValue, sbyte.MaxValue),
+            "INT16" => ((long)short.MinValue, short.MaxValue),
+            "INT32" => ((long)int.MinValue, int.MaxValue),
+            _ => (long.MinValue, long.MaxValue)
+        };
+        if (value < min || value > max)
+            throw new OverflowException("Integer is outside the declared " + declaredType + " range.");
+        return MmsDataValue.Integer(value);
+    }
+
+    private static MmsDataValue EncodeUnsignedInteger(string raw, string declaredType,
+        CultureInfo culture)
+    {
+        var value = ulong.Parse(raw.Trim(), NumberStyles.Integer, culture);
+        var max = declaredType switch
+        {
+            "INT8U" => (ulong)byte.MaxValue,
+            "INT16U" => ushort.MaxValue,
+            "INT24U" => 0xFFFFFFUL,
+            "INT32U" => uint.MaxValue,
+            _ => ulong.MaxValue
+        };
+        if (value > max)
+            throw new OverflowException("Unsigned integer exceeds the declared " +
+                                        declaredType + " range.");
+        return MmsDataValue.Unsigned(value);
     }
 
     private static MmsDataValue EncodeFloat(string raw, CultureInfo culture)
@@ -130,6 +166,74 @@ public sealed class IedBrowserWriteRow : INotifyPropertyChanged
     private string _requestedValue = "";
     private string _current = "Not read";
     private string _result = "Pending";
+    private bool _hasVerifiedRead;
+    public MmsDataValue? LiveBeforeValue { get; private set; }
+    public bool HasEdited { get; private set; }
+    public bool HasVerifiedRead
+    {
+        get => _hasVerifiedRead;
+        private set
+        {
+            if (_hasVerifiedRead == value) return;
+            _hasVerifiedRead = value;
+            Notify(nameof(HasVerifiedRead));
+            Notify(nameof(TextEditorVisibility));
+            Notify(nameof(BooleanEditorVisibility));
+            Notify(nameof(CtlModelEditorVisibility));
+            Notify(nameof(PlaceholderVisibility));
+            Notify(nameof(PlaceholderText));
+        }
+    }
+    public string ShortName =>
+        Reference.Split('.').LastOrDefault() ?? Reference;
+    public bool IsBoolean => DataType.Equals("BOOLEAN", StringComparison.OrdinalIgnoreCase) ||
+                             DataType.Equals("BOOL", StringComparison.OrdinalIgnoreCase);
+    public bool IsUnverifiedEnum => !IsControlModel &&
+        (DataType.Equals("ENUM", StringComparison.OrdinalIgnoreCase) ||
+         DataType.Equals("ENUMERATED", StringComparison.OrdinalIgnoreCase));
+    public string PlaceholderText => IsUnverifiedEnum
+        ? "Enum mapping unverified — Write disabled"
+        : "Read to edit";
+    public IReadOnlyList<string> BooleanOptions { get; } = new[] { "false", "true" };
+    public Visibility TextEditorVisibility =>
+        HasVerifiedRead && !IsBoolean && !IsControlModel && !IsUnverifiedEnum
+            ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility BooleanEditorVisibility =>
+        HasVerifiedRead && IsBoolean && !IsControlModel
+            ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility CtlModelEditorVisibility =>
+        HasVerifiedRead && IsControlModel
+            ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility PlaceholderVisibility =>
+        HasVerifiedRead && !IsUnverifiedEnum ? Visibility.Collapsed : Visibility.Visible;
+
+    public void ApplyLiveRead(MmsDataValue value)
+    {
+        LiveBeforeValue = value;
+        Current = MmsDataCodec.ToDisplayString(value);
+        _requestedValue = value.Value switch
+        {
+            bool b => b ? "true" : "false",
+            string text => text,
+            long or ulong or int or uint or float or double =>
+                Convert.ToString(value.Value, CultureInfo.InvariantCulture) ?? "",
+            _ => ""
+        };
+        HasEdited = false;
+        Notify(nameof(RequestedValue));
+        HasVerifiedRead = true;
+    }
+
+    public void ExpireLiveRead()
+    {
+        HasVerifiedRead = false;
+        HasEdited = false;
+        LiveBeforeValue = null;
+    }
+
+    private void Notify(string field) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(field));
+
     public IedBrowserWriteRow(string reference, string fc, string type)
     {
         Reference = reference;
@@ -162,7 +266,8 @@ public sealed class IedBrowserWriteRow : INotifyPropertyChanged
     {
         get => _requestedValue;
         set { if (_requestedValue == value) return; _requestedValue = value;
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RequestedValue))); }
+            if (HasVerifiedRead) HasEdited = true;
+            Notify(nameof(RequestedValue)); }
     }
     public event PropertyChangedEventHandler? PropertyChanged;
 }

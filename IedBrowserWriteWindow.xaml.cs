@@ -38,6 +38,8 @@ public partial class IedBrowserWriteWindow : Window
         ArgumentNullException.ThrowIfNull(rows);
         _association = device.LiveValues.Association;
         Rows = new ObservableCollection<IedBrowserWriteRow>(rows);
+        foreach (var row in Rows)
+            row.PropertyChanged += (_, _) => UpdateWriteEnabled();
         InitializeComponent();
         DataContext = this;
         IdentityText.Text = _device.Name + " · " + _device.IpAddress +
@@ -45,8 +47,22 @@ public partial class IedBrowserWriteWindow : Window
             " live-verified configuration DA(s)";
     }
 
-    private void Window_Loaded(object sender, RoutedEventArgs e)
-        => StatusText.Text = "Select only the DA(s) you intend to change. Read selected to inspect current live values.";
+    private async void Window_Loaded(object sender, RoutedEventArgs e)
+    {
+        var work = SystemParameters.WorkArea;
+        Height = Math.Max(MinHeight, Math.Min(520, work.Height - 26));
+        Width = Math.Max(MinWidth, Math.Min(940, work.Width - 26));
+        // operator-friendly editor: preload bounded current values from this live
+        // association. Read-only traffic only; never write on opening.
+        await ReadRowsAsync(Rows.Take(24).ToArray());
+    }
+
+    private void UpdateWriteEnabled()
+    {
+        if (WriteButton is null) return;
+        WriteButton.IsEnabled = !_busy && CurrentAssociation &&
+            Rows.Any(row => row.Selected && row.HasVerifiedRead && row.HasEdited);
+    }
 
     private bool CurrentAssociation =>
         _device.IsConnected && !_device.IsDemo &&
@@ -58,7 +74,7 @@ public partial class IedBrowserWriteWindow : Window
     {
         _busy = busy;
         ReadButton.IsEnabled = !busy;
-        WriteButton.IsEnabled = !busy;
+        UpdateWriteEnabled();
         WriteRowsGrid.IsEnabled = !busy;
     }
 
@@ -66,13 +82,19 @@ public partial class IedBrowserWriteWindow : Window
     {
         if (_busy || !CurrentAssociation) return;
         WriteRowsGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        WriteRowsGrid.CommitEdit(DataGridEditingUnit.Row, true);
         var selected = Rows.Where(row => row.Selected).ToArray();
         if (selected.Length == 0)
         {
-            StatusText.Text = "Select one or more DA rows for an explicit live MMS Read.";
+            StatusText.Text = "Select the Data Attributes you want to read.";
             return;
         }
+        await ReadRowsAsync(selected);
+    }
 
+    private async Task ReadRowsAsync(IedBrowserWriteRow[] selected)
+    {
+        if (_busy || !CurrentAssociation || selected.Length == 0) return;
         SetBusy(true);
         try
         {
@@ -81,17 +103,25 @@ public partial class IedBrowserWriteWindow : Window
             {
                 _lifetime.Token.ThrowIfCancellationRequested();
                 if (!CurrentAssociation)
-                    throw new InvalidOperationException("The association changed. Close and reopen the editor.");
-                StatusText.Text = "Reading " + (++i) + "/" + selected.Length + " · " + row.Reference;
+                    throw new InvalidOperationException("IED association changed. Reopen Write.");
+                StatusText.Text = "Reading " + (++i) + "/" + selected.Length + " · " + row.ShortName;
                 var observation = await _runtime.ReadBrowserConfigurationAsync(
                     _device.DeviceId, _model, _association, row, _lifetime.Token);
-                row.Current = observation.IsSuccess && observation.Value is not null
-                    ? MmsDataCodec.ToDisplayString(observation.Value)
-                    : "Read failed";
-                row.Result = observation.IsSuccess ? "Live Read OK" :
-                    "Read rejected: " + observation.Message;
+                if (!CurrentAssociation)
+                    throw new InvalidOperationException("IED association changed. Reopen Write.");
+                if (observation.IsSuccess && observation.Value is not null)
+                {
+                    row.ApplyLiveRead(observation.Value);
+                    row.Result = "Ready to edit";
+                }
+                else
+                {
+                    row.ExpireLiveRead();
+                    row.Current = "Read unavailable";
+                    row.Result = "Read failed: " + observation.Message;
+                }
             }
-            StatusText.Text = "Live MMS Read completed; no configuration was changed.";
+            StatusText.Text = "Choose a value, tick its row and click Write. No Write sent.";
         }
         catch (OperationCanceledException)
         {
@@ -115,6 +145,12 @@ public partial class IedBrowserWriteWindow : Window
             StatusText.Text = "Select at least one DA; no Write was sent.";
             return;
         }
+        if (selected.Any(row => !row.HasVerifiedRead || !row.HasEdited ||
+                              row.LiveBeforeValue is null))
+        {
+            StatusText.Text = "Read the selected DAs and choose a different value before Write.";
+            return;
+        }
         if (selected.Length > 16)
         {
             StatusText.Text = "At most 16 explicitly staged DA(s) per supervised Write. Refine the selection.";
@@ -125,8 +161,17 @@ public partial class IedBrowserWriteWindow : Window
         try
         {
             foreach (var row in selected)
-                staged.Add((row, IedBrowserWritePlan.EncodeValue(
-                    row.DataType, row.RequestedValue, row.Reference)));
+            {
+                var candidate = IedBrowserWritePlan.EncodeValue(
+                    row.DataType, row.RequestedValue, row.Reference);
+                if (MmsDataCodec.Encode(candidate).AsSpan().SequenceEqual(
+                        MmsDataCodec.Encode(row.LiveBeforeValue!)))
+                {
+                    StatusText.Text = row.ShortName + ": unchanged value. No Write sent.";
+                    return;
+                }
+                staged.Add((row, candidate));
+            }
         }
         catch (Exception ex) when (ex is FormatException or OverflowException or NotSupportedException)
         {
@@ -165,6 +210,7 @@ public partial class IedBrowserWriteWindow : Window
                 StatusText.Text = "Writing " + (passed + 1) + "/" + staged.Count +
                     " · " + row.Reference;
                 row.Result = "Write / readback pending…";
+                row.ExpireLiveRead(); // each attempt requires a NEW explicit Read
                 if (row.IsControlModel)
                     PotentiallyChangedControlModels.Add(row.Reference[..^".ctlModel".Length]);
                 var result = await _runtime.WriteBrowserConfigurationAsync(
