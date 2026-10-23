@@ -282,7 +282,9 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             CommandStage = result.IsSuccess
                 ? result.FeedbackConfirmed ? "Feedback confirmed" : "Command accepted"
                 : result.CompletionState.Equals("NotSent", StringComparison.OrdinalIgnoreCase)
-                    ? "Not sent" : "Control unsuccessful";
+                    ? "Not sent"
+                    : result.CompletionState is "Unknown" or "TimedOut" or "AssociationLost"
+                        ? "Outcome uncertain" : "Control rejected";
             CommandStatus = result.IsSuccess
                 ? result.FeedbackConfirmed
                     ? "IED response and independent process feedback verified."
@@ -310,9 +312,10 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
         }
         catch (Exception ex)
         {
-            CommandStage = "Control unsuccessful";
-            CommandStatus = $"{ex.GetType().Name}: {ex.Message}";
-            SetResultTone("Error");
+            // An unexpected failure after dispatch cannot prove the command was NOT sent.
+            CommandStage = "Outcome unresolved";
+            CommandStatus = $"{ex.GetType().Name}: {ex.Message}. Verify IED state before retry.";
+            SetResultTone("Warning");
         }
         finally
         {
