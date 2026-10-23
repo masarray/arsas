@@ -10,6 +10,24 @@ public sealed record Iec61850ControlOutcomeView(
 
 public static class Iec61850ControlOutcomePresentation
 {
+    /// <summary>
+    /// Compact user-facing wire sequence derived only from actual reported steps.
+    /// Does not imply that a physical breaker/contact position changed.
+    /// </summary>
+    public static string WireTimeline(Iec61850ControlCommandResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        var stages = result.WireSteps.Select(step =>
+        {
+            var action = step.Action.Equals("SelectWithValue", StringComparison.OrdinalIgnoreCase)
+                ? "SBOw" : step.Action;
+            return action + (step.RequestAccepted ? " ✓" : " rejected");
+        }).ToList();
+        if (result.CommandTerminationReceived)
+            stages.Add(result.PositiveTermination ? "Termination ✓" : "Termination negative");
+        return string.Join("  →  ", stages);
+    }
+
     public static Iec61850ControlOutcomeView From(
         Iec61850ControlCommandResult result, bool testMode)
     {
