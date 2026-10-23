@@ -1027,12 +1027,7 @@ public partial class MainWindow
         // adding another subscription. They do not claim consumer comparison
         // until distinct consumer projections have actually been compared.
         if (ReferenceEquals(model, device.LiveDiscoveryModel) && model is not null)
-        {
-            var failures = _iedBrowserReadFailureEvidence?.SnapshotCurrent(device, 32);
-            IedBrowserSubtitle.ToolTip = IedBrowserAcceptanceMetrics.Capture(
-                model, device.LiveValues, _iedBrowserSclEnumEvidence,
-                failures).Summary;
-        }
+            QueueIedBrowserAcceptanceMetrics(device, model);
         else
             IedBrowserSubtitle.ToolTip =
                 "Offline/SCL declarations are not proof of fresh IEC MMS observations.";
@@ -1974,11 +1969,9 @@ public partial class MainWindow
         catch (IOException) { /* An unavailable source file cannot poison in-memory browsing. */ }
         catch (UnauthorizedAccessException) { /* Still show the cached/discovered model. */ }
 
-        // Model index is immutable and independent from transient report/RCB
-        // refreshes. Build once per actual engineering schema object.
-        if (!ReferenceEquals(_iedBrowserValueSchemaIndex?.SourceModel, model))
-            _iedBrowserValueSchemaIndex = model is null
-                ? null : new IedBrowserSchemaIndex(model);
+        // Heavy schema indexing must never block the WPF selection dispatcher.
+        if (!TryActivateIedBrowserSchema(device, model))
+            return;
 
         var changed = _iedBrowserForceRefresh ||
                       !ReferenceEquals(device, _iedBrowserCachedDevice) ||
