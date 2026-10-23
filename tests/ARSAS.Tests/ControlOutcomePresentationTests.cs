@@ -106,6 +106,33 @@ public sealed class ControlOutcomePresentationTests
     }
 
     [Fact]
+    public void AlreadyInPosition_IsVerifiedLiveNoOp_NotACommandOrWireSuccess()
+    {
+        var result = new Iec61850ControlCommandResult
+        {
+            IsSuccess = true,
+            ServiceAccepted = false,
+            FeedbackConfirmed = true,
+            CompletionState = "NotSent",
+            Stage = "Already at requested state"
+        };
+        var view = Iec61850ControlOutcomePresentation.From(result, false);
+        Assert.Equal("Already in position", view.Stage);
+        Assert.Equal("Ready", view.Tone);
+        Assert.Contains("No Select or Operate was sent", view.Summary);
+        Assert.Empty(result.WireSteps);
+    }
+
+    [Fact]
+    public void EncodedControlButNoProvenResponse_IsNotRejection()
+    {
+        var view = Iec61850ControlOutcomePresentation.From(
+            Outcome(completion: "WireStateUnknown", service: false), false);
+        Assert.Equal("Outcome uncertain", view.Stage);
+        Assert.Equal("Warning", view.Tone);
+    }
+
+    [Fact]
     public void NoDispatchAndNoKnownOutcome_AreDifferent()
     {
         Assert.Equal("Not sent",

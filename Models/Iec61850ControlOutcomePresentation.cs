@@ -35,8 +35,16 @@ public static class Iec61850ControlOutcomePresentation
         static Iec61850ControlOutcomeView View(string stage, string summary, string tone)
             => new(stage, summary, tone);
 
+        // A live preflight can discover that the requested position already
+        // matches the IED. This is a verified no-op, not an Operate success.
+        if (result.CompletionState.Equals("NotSent", StringComparison.OrdinalIgnoreCase) &&
+            result.IsSuccess && result.FeedbackConfirmed &&
+            result.Stage.Equals("Already at requested state", StringComparison.OrdinalIgnoreCase))
+            return View("Already in position",
+                "Live IED preflight matched the requested value. No Select or Operate was sent.", "Ready");
+
         if (result.CompletionState.Equals("NotSent", StringComparison.OrdinalIgnoreCase))
-            return View("Not sent", "No MMS control request reached the dispatch path.", "Warning");
+            return View("Not sent", "No MMS control request was sent.", "Warning");
 
         if (result.CommandTerminationReceived && !result.PositiveTermination)
             return View("Negative termination",
@@ -46,7 +54,8 @@ public static class Iec61850ControlOutcomePresentation
             result.CompletionState.Equals("Rejected", StringComparison.OrdinalIgnoreCase))
             return View("IED rejected", "The IED rejected a control-service request. Check diagnostics.", "Error");
 
-        if (result.CompletionState is "TimedOut" or "AssociationLost" or "Unknown" ||
+        if (result.CompletionState is "TimedOut" or "AssociationLost" or "Unknown" or
+            "WireStateUnknown" ||
             result.CompletionState.Equals("Cancelled", StringComparison.OrdinalIgnoreCase))
             return View("Outcome uncertain",
                 "The request may have reached the IED. Verify its state before retry.", "Warning");
