@@ -41,6 +41,9 @@ public sealed class WaveformPanelControl : FrameworkElement
     private static readonly Typeface LabelTypeface = new((FontFamily)System.Windows.Application.Current.FindResource("AppFontFamily"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
     private double _cursorFraction = 0.5;
     private bool _isDraggingCursor;
+    private bool _cursorVisible;
+    private int _cursorLane = -1;
+    private int _cursorSampleIndex = -1;
     private double _voltageAutoPeak;
     private double _currentAutoPeak;
     private DateTime _voltagePeakUpdatedUtc = DateTime.MinValue;
@@ -252,15 +255,15 @@ public sealed class WaveformPanelControl : FrameworkElement
         var laneWidth = Math.Max(120, bounds.Width - (outerPadding * 2));
         var top = outerPadding;
 
-        foreach (var lane in visibleLanes)
+        for (var laneIndex = 0; laneIndex < visibleLanes.Count; laneIndex++)
         {
             var laneRect = new Rect(outerPadding, top, laneWidth, laneHeight);
-            DrawLane(dc, laneRect, lane, snapshot);
+            DrawLane(dc, laneRect, visibleLanes[laneIndex], snapshot, laneIndex);
             top += laneHeight + laneGap;
         }
     }
 
-    private void DrawLane(DrawingContext dc, Rect rect, LaneDefinition lane, WaveformSnapshot snapshot)
+    private void DrawLane(DrawingContext dc, Rect rect, LaneDefinition lane, WaveformSnapshot snapshot, int laneIndex)
     {
         dc.DrawRoundedRectangle(PlotBackgroundBrush, BorderPen, rect, 10, 10);
 
@@ -310,8 +313,9 @@ public sealed class WaveformPanelControl : FrameworkElement
                 dc.DrawText(held, new Point(rect.Right - held.Width - 12, rect.Top + 8));
         }
 
-        DrawGrid(dc, innerRect);
-        DrawYAxisScale(dc, innerRect, amplitudeMax, lane.Unit);
+        var stacked = string.Equals(LayoutMode, "Stacked", StringComparison.OrdinalIgnoreCase);
+        DrawGrid(dc, innerRect, stacked, laneSeries.Count);
+        DrawYAxisScale(dc, innerRect, amplitudeMax, lane.Unit, stacked, laneSeries.Count);
 
         if (laneSeries.Count == 0 || laneSeries.All(item => item.Samples.Count < 2))
         {
@@ -319,7 +323,6 @@ public sealed class WaveformPanelControl : FrameworkElement
             return;
         }
 
-        var stacked = string.Equals(LayoutMode, "Stacked", StringComparison.OrdinalIgnoreCase);
         for (var index = 0; index < laneSeries.Count; index++)
         {
             var trace = laneSeries[index];
@@ -330,7 +333,7 @@ public sealed class WaveformPanelControl : FrameworkElement
 
         // Inspection overlay is interactive only: never obstruct live curves
         // with a permanent cursor/tooltip when the operator is not inspecting.
-        if (MarkersEnabled && _isDraggingCursor)
+        if (MarkersEnabled && _cursorVisible && _cursorLane == laneIndex)
             DrawCursor(dc, innerRect, laneSeries, amplitudeMax, stacked, snapshot);
 
         DrawTimebaseLabel(dc, innerRect, snapshot);
@@ -722,51 +725,59 @@ public sealed class WaveformPanelControl : FrameworkElement
         return samplesPerCycle * cycles;
     }
 
-    private void DrawGrid(DrawingContext dc, Rect rect)
+    private static void DrawGrid(DrawingContext dc, Rect rect, bool stacked, int traces)
     {
-        // vertical minor grid
+        // Fast retained pens: no allocations and no permanent zero-axis overlay.
         for (var i = 1; i < 10; i++)
         {
             var x = rect.Left + (rect.Width * i / 10.0);
-            var pen = i == 5 ? MajorGridPen : GridPen;
-            dc.DrawLine(pen, new Point(x, rect.Top), new Point(x, rect.Bottom));
+            dc.DrawLine(i == 5 ? MajorGridPen : GridPen,
+                new Point(x, rect.Top), new Point(x, rect.Bottom));
         }
 
-        // horizontal grid
-        for (var i = 1; i < 4; i++)
+        // In overlay, a permanent heavy zero line obscures low-level channels.
+        // Stacked traces have independent baselines instead of one false global zero.
+        if (stacked && traces > 0)
         {
-            var y = rect.Top + (rect.Height * i / 4.0);
-            var pen = i == 2 ? ZeroPen : GridPen;
-            dc.DrawLine(pen, new Point(rect.Left, y), new Point(rect.Right, y));
+            var band = rect.Height / traces;
+            for (var i = 0; i < traces; i++)
+            {
+                var y = rect.Top + (i + 0.5) * band;
+                dc.DrawLine(ZeroPen, new Point(rect.Left, y), new Point(rect.Right, y));
+                dc.DrawText(CreateText("0", 9.6, AxisTextBrush, LabelTypeface),
+                    new Point(rect.Left + 3, y - 13));
+            }
+            for (var i = 1; i < traces; i++)
+            {
+                var y = rect.Top + i * band;
+                dc.DrawLine(GridPen, new Point(rect.Left, y), new Point(rect.Right, y));
+            }
+        }
+        else
+        {
+            // Nonzero subdivisions only: the waveform itself defines the shape.
+            for (var i = 1; i < 4; i += 2)
+            {
+                var y = rect.Top + rect.Height * i / 4.0;
+                dc.DrawLine(GridPen, new Point(rect.Left, y), new Point(rect.Right, y));
+            }
         }
 
-        var zeroY = rect.Top + (rect.Height / 2.0);
-
-        // top/bottom subtle frame
         dc.DrawLine(HighlightPen, new Point(rect.Left, rect.Top + 1), new Point(rect.Right, rect.Top + 1));
         dc.DrawLine(HighlightPen, new Point(rect.Left, rect.Bottom - 1), new Point(rect.Right, rect.Bottom - 1));
-
-        // zero axis stronger
-        dc.DrawLine(ZeroPen, new Point(rect.Left, zeroY), new Point(rect.Right, zeroY));
     }
 
-    private static void DrawYAxisScale(DrawingContext dc, Rect rect, double peak, string unit)
+    private static void DrawYAxisScale(DrawingContext dc, Rect rect, double peak, string unit, bool stacked, int traces)
     {
-        if (peak <= 0)
-            return;
+        if (peak <= 0 || stacked)
+            return; // stacked uses per-phase zero axes; global ±peak labels are misleading.
 
         var topText = FormatAxisLabelSigned(peak, unit, positive: true);
-        var zeroText = "0";
         var bottomText = FormatAxisLabelSigned(peak, unit, positive: false);
-
         var top = CreateText(topText, 10.2, AxisTextBrush, LabelTypeface);
-        var zero = CreateText(zeroText, 10.2, AxisTextBrush, LabelTypeface);
         var bottom = CreateText(bottomText, 10.2, AxisTextBrush, LabelTypeface);
-
         var x = rect.Left + 4;
-
         dc.DrawText(top, new Point(x, rect.Top + 4));
-        dc.DrawText(zero, new Point(x, rect.Top + (rect.Height / 2.0) - (zero.Height / 2.0)));
         dc.DrawText(bottom, new Point(x, rect.Bottom - bottom.Height - 4));
     }
 
@@ -1121,24 +1132,29 @@ public sealed class WaveformPanelControl : FrameworkElement
     protected override void OnMouseDown(MouseButtonEventArgs e)
     {
         base.OnMouseDown(e);
-        if (e.ChangedButton != MouseButton.Left)
+        if (e.ChangedButton != MouseButton.Left || !MarkersEnabled)
             return;
-
         Focus();
-        CaptureMouse();
         _isDraggingCursor = true;
-        UpdateCursorPosition(e.GetPosition(this).X);
+        CaptureMouse();
+        UpdateCursorPosition(e.GetPosition(this));
         e.Handled = true;
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        if (!_isDraggingCursor)
-            return;
+        // Passive hover costs nothing until the nearest *source sample* changes.
+        // The control has at most two lanes and already owns this drawing surface.
+        if (MarkersEnabled)
+            UpdateCursorPosition(e.GetPosition(this));
+    }
 
-        UpdateCursorPosition(e.GetPosition(this).X);
-        e.Handled = true;
+    protected override void OnMouseLeave(MouseEventArgs e)
+    {
+        base.OnMouseLeave(e);
+        if (!_isDraggingCursor)
+            HideCursor();
     }
 
     protected override void OnMouseUp(MouseButtonEventArgs e)
@@ -1146,18 +1162,80 @@ public sealed class WaveformPanelControl : FrameworkElement
         base.OnMouseUp(e);
         if (e.ChangedButton != MouseButton.Left)
             return;
-
         _isDraggingCursor = false;
-        ReleaseMouseCapture();
-        InvalidateVisual();
+        if (IsMouseCaptured)
+            ReleaseMouseCapture();
+        UpdateCursorPosition(e.GetPosition(this));
         e.Handled = true;
     }
 
-    private void UpdateCursorPosition(double x)
+    protected override void OnLostMouseCapture(MouseEventArgs e)
     {
-        const double horizontalPadding = 22.0;
-        var width = Math.Max(1.0, ActualWidth - (horizontalPadding * 2.0));
-        _cursorFraction = Math.Clamp((x - horizontalPadding) / width, 0.0, 1.0);
+        base.OnLostMouseCapture(e);
+        _isDraggingCursor = false;
+        if (!IsMouseOver)
+            HideCursor();
+    }
+
+    private void HideCursor()
+    {
+        if (!_cursorVisible) return;
+        _cursorVisible = false;
+        _cursorLane = -1;
+        _cursorSampleIndex = -1;
+        InvalidateVisual();
+    }
+
+    private void UpdateCursorPosition(Point mouse)
+    {
+        var snapshot = Snapshot;
+        if (snapshot is null)
+        {
+            HideCursor();
+            return;
+        }
+
+        const double outerPadding = 10;
+        const double laneGap = 12;
+        const double plotInsetX = 12;
+        var availableWidth = ActualWidth - 2 * (outerPadding + plotInsetX);
+        var showBoth = string.Equals(ShowMode, "Both", StringComparison.OrdinalIgnoreCase);
+        var lanes = showBoth ? 2 : 1;
+        var laneHeight = Math.Max(110, (ActualHeight - 2 * outerPadding - laneGap * (lanes - 1)) / lanes);
+
+        if (availableWidth <= 20 || mouse.X < outerPadding + plotInsetX ||
+            mouse.X > ActualWidth - outerPadding - plotInsetX)
+        {
+            HideCursor();
+            return;
+        }
+        var lane = -1;
+        for (var i = 0; i < lanes; i++)
+        {
+            var laneTop = outerPadding + i * (laneHeight + laneGap);
+            if (mouse.Y >= laneTop + 38 && mouse.Y <= laneTop + laneHeight - 12)
+            {
+                lane = i;
+                break;
+            }
+        }
+        if (lane < 0)
+        {
+            HideCursor();
+            return;
+        }
+
+        var fraction = Math.Clamp((mouse.X - outerPadding - plotInsetX) / availableWidth, 0.0, 1.0);
+        var count = Math.Max(2, snapshot.VoltageSeries.Concat(snapshot.CurrentSeries)
+            .Select(series => series.Samples.Count).DefaultIfEmpty(2).Max());
+        var sampleIndex = (int)Math.Round(fraction * (count - 1));
+        if (_cursorVisible && _cursorLane == lane && _cursorSampleIndex == sampleIndex)
+            return; // sample quantization avoids per-pixel redraw on high-rate mouse moves.
+
+        _cursorFraction = fraction;
+        _cursorVisible = true;
+        _cursorLane = lane;
+        _cursorSampleIndex = sampleIndex;
         InvalidateVisual();
     }
 
