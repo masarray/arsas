@@ -43,7 +43,8 @@ public sealed class IedBrowserLiveControlWriteFatRegressionTests
         Assert.Contains("source.Attributes.Any", ctx);
         Assert.Contains("new ControlModelWriteWindow(_runtime, device, modelSignal)", write);
         Assert.Contains("ctlModel requires the existing guarded ConfigureControlModel workflow", safety);
-        Assert.Contains("selectedDo is not null ? \"Write DAs…\" : \"Write DA…\"", write);
+        Assert.DoesNotContain("IedBrowserWriteButton.Content =", write);
+        Assert.Contains("new ControlModelWriteWindow(_runtime, device, modelSignal)", write);
     }
 
     [Fact]
