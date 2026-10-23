@@ -143,6 +143,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public MainWindow()
     {
         InitializeComponent();
+        // Register before first WPF layout; initial realized row events can
+        // precede Loaded, while the existing Loaded hooks stay idempotent.
+        AttachLivePointViewportPriority(ExplorerLiveValuesGrid);
+        AttachLivePointViewportPriority(GlobalLiveGrid);
         // The actual deployed assembly version, never an invented UI number.
         var assembly = typeof(MainWindow).Assembly;
         var compiled = assembly.GetCustomAttributes(
@@ -2632,8 +2636,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             processedPoints++;
             var snapshot = pending.Snapshot;
             var point = snapshot.Point;
-            if (!deviceOwners.TryGetValue(point.DeviceId, out var observedOwner))
-                continue;
+            if (!deviceOwners.TryGetValue(point.DeviceId, out var observedOwner) ||
+                !string.Equals(observedOwner.DeviceId, point.DeviceId,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                // DeviceId is project-deserializable. If it was rebound
+                // in-place without an ObservableCollection mutation, rebuild
+                // once instead of dropping valid session observations.
+                _uiPointOwnersDirty = true;
+                deviceOwners = UiPointOwners();
+                if (!deviceOwners.TryGetValue(point.DeviceId, out observedOwner))
+                    continue;
+            }
             // Reject queued frames from an earlier MMS connection even if
             // the new session resets its point Sequence counter to zero.
             // Never re-activate Paused/Offline rows from late runtime callbacks.
