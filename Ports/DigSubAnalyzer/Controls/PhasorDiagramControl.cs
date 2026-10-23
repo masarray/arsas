@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 using ProcessBus.Core.Models;
+using ArIED61850Tester.Views;
 using ProcessBus.Core.Presentation;
 
 namespace ProcessBus.App.Wpf.Controls;
@@ -286,11 +287,19 @@ public sealed class PhasorDiagramControl : FrameworkElement
 
     public static string FormatPhasorLabel(PhasorDisplayItem item)
     {
-        if (item.AngleDegrees is not double angle || !double.IsFinite(angle))
+        if (item.Magnitude is not double magnitude || !double.IsFinite(magnitude) ||
+            item.AngleDegrees is not double angle || !double.IsFinite(angle))
             return ToPhaseLabel(item.Name);
-        if (Math.Abs(angle) < 0.05) angle = 0.0;
-        return ToPhaseLabel(item.Name) + "  ∠" +
-            angle.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + "°";
+
+        // Magnitude is fundamental RMS (not peak nor unverified true RMS).
+        // Keep compact phase identity so longer engineering readouts still fit
+        // the reserved side rails around the vector diagram.
+        var value = SmvDisplayMeasurement.FormatMagnitude(magnitude, item.Unit);
+        if (item.Unit == "counts")
+            value = Math.Abs(magnitude) >= 1000
+                ? (magnitude / 1000.0).ToString("0.###", CultureInfo.InvariantCulture) + " kcounts"
+                : magnitude.ToString("0.###", CultureInfo.InvariantCulture) + " counts";
+        return item.Name + " " + value + " " + SmvAnglePresentation.Format(angle);
     }
 
     private static string ToPhaseLabel(string name) => name switch
