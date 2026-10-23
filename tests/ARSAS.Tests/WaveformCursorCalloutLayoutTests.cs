@@ -64,7 +64,7 @@ public sealed class WaveformCursorCalloutLayoutTests
         Assert.Contains("var zeroY = rect.Top + rect.Height / 2.0;", wave);
         Assert.Contains("dc.DrawLine(ZeroPen, new Point(rect.Left, zeroY)", wave);
         Assert.Contains("if (stacked && traces > 0)", wave);
-        Assert.Contains("if (!IsSilentZeroTrace(item.Samples))", wave);
+        Assert.Contains("&& !IsSilentZeroTrace(item.Samples)", wave);
         Assert.Contains("var value = item.Samples[a] + (item.Samples[b] - item.Samples[a]) * t;", wave);
         Assert.Contains("bandHeight * 0.37;", wave);
         Assert.Contains("var tip = new Point(x, anchors[placement.Index].Y);", wave);
