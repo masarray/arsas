@@ -1468,7 +1468,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (SelectedDevice is not { } device || EquipmentCommandGrid is null)
             return;
         var first = device.CommandSignals.FirstOrDefault(signal =>
-            Iec61850ControlIdentity.CommandDockPriority(signal) < 100);
+            signal.ControlSupportsOperate &&
+            Iec61850ControlIdentity.CommandDockDisplayPriority(signal) < 100);
         if (first is null)
             return;
         Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded,

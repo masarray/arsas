@@ -224,6 +224,35 @@ public static class Iec61850ControlIdentity
         return (150, "Other IEC control · equipment unlinked");
     }
 
+    /// <summary>
+    /// Presentation-only order: verified BSC step/tap controls first, other
+    /// verified operating controls next, unresolved last, and exact live
+    /// StatusOnly at the bottom. Never grant control from display priority.
+    /// </summary>
+    public static int CommandDockDisplayPriority(SignalDefinition signal)
+    {
+        ArgumentNullException.ThrowIfNull(signal);
+        var rolePriority = CommandDockPriority(signal);
+
+        // A proved ctlModel=0 remains in the engineering catalog, but below
+        // both operable DOs and yet-to-be-inspected candidates.
+        if (signal.ControlModelResolved &&
+            signal.ControlModelKind == Iec61850ControlModelKind.StatusOnly)
+            return 20_000 + rolePriority;
+
+        // Unverified/disabled items never displace an operable command.
+        if (!signal.ControlSupportsOperate)
+            return 10_000 + rolePriority;
+
+        // Step/tap class is live CDC=BSC, not ATCC/CSWI/brand naming.
+        var cdc = signal.VerifiedLiveControlCdc.Length > 0
+            ? signal.VerifiedLiveControlCdc : signal.ControlCdc;
+        if (string.Equals(cdc, "BSC", StringComparison.OrdinalIgnoreCase))
+            return -100 + rolePriority;
+
+        return rolePriority;
+    }
+
     public static int CommandDockPriority(SignalDefinition signal)
         => DescribeCommandRole(signal).Rank;
 

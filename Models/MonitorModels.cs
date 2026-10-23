@@ -758,11 +758,13 @@ public sealed class Iec61850MonitorDevice : ObservableObject
                 StringComparer.OrdinalIgnoreCase)
             .Select(group => group.OrderByDescending(signal => signal.IsSelected)
                 .ThenByDescending(signal => signal.ControlSupportsOperate).First())
-            .OrderBy(Iec61850ControlIdentity.CommandDockPriority)
+            .OrderBy(Iec61850ControlIdentity.CommandDockDisplayPriority)
             .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
             .ThenBy(signal => signal.ObjectReference, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
+        // Live ctlModel verification may change display priority once; no
+        // detached/rebuilt row objects, full collection Reset, or MMS write.
         // Common case: verification/report/navigation changed data, not the
         // selected DataObject membership or its order. O(N) identity check,
         // zero WPF collection events, zero row recycling and checkbox flicker.
@@ -823,7 +825,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     {
         var targets = Iec61850ControlIdentity.VerifiedCommandTargets(
                 Signals, admitDiscovered: IsConnected && LiveDiscoveryModel is not null)
-            .OrderBy(Iec61850ControlIdentity.CommandDockPriority)
+            .OrderBy(Iec61850ControlIdentity.CommandDockDisplayPriority)
             .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
             .ThenBy(signal => signal.ObjectReference, StringComparer.OrdinalIgnoreCase)
             .ToArray();
