@@ -25,7 +25,8 @@ public sealed class ControlModelWriteAcceptanceTests
     public void SingleCfEditorHasOneInlineDropdownAndPersistentMaterialActionFooter()
     {
         var window = XDocument.Parse(Source("ControlModelWriteWindow.xaml"));
-        var root = Assert.Single(window.Elements(P + "Window"));
+        var root = Assert.IsType<XElement>(window.Root);
+        Assert.Equal(P + "Window", root.Name);
         Assert.Equal("Write Data to IED", (string?)root.Attribute("Title"));
         Assert.Equal("CanResize", (string?)root.Attribute("ResizeMode"));
         Assert.Equal("{StaticResource AppFontFamily}", (string?)root.Attribute("FontFamily"));
@@ -80,7 +81,7 @@ public sealed class ControlModelWriteAcceptanceTests
         Assert.Contains("ReferenceEquals(_device.LiveDiscoveryModel, _inspectedLiveModel)", source);
         Assert.Contains("_device.LiveValues.Association == _inspectedAssociation", source);
         Assert.Contains("MessageBoxButton.OKCancel, MessageBoxImage.Warning, MessageBoxResult.Cancel", source);
-        Assert.Contains("No Write was sent.", source);
+        Assert.Contains("no Write was sent.", source);
         Assert.DoesNotContain("OperateAsync(", source);
         Assert.DoesNotContain("WriteDataAttributeAsync(", source);
 
