@@ -283,6 +283,17 @@ public partial class IpConnectWizardWindow : Window
         }
 
         var pasted = (e.SourceDataObject.GetData(DataFormats.UnicodeText) as string ?? "").Trim();
+        // A complete IPv6 paste switches editor automatically; IPv6 literals
+        // without dots must not be processed as invalid single IPv4 octets.
+        if (IPAddress.TryParse(pasted, out var fullAddress) &&
+            fullAddress.AddressFamily == AddressFamily.InterNetworkV6)
+        {
+            e.CancelCommand();
+            ApplyAddress(pasted);
+            RawIpBox.Focus();
+            RawIpBox.CaretIndex = RawIpBox.Text.Length;
+            return;
+        }
         if (pasted.Contains('.'))
         {
             e.CancelCommand();
@@ -290,13 +301,6 @@ public partial class IpConnectWizardWindow : Window
             {
                 ApplyAddress(pasted);
                 FocusOctet(3, atEnd: true);
-            }
-            else if (IPAddress.TryParse(pasted, out var parsed) &&
-                     parsed.AddressFamily == AddressFamily.InterNetworkV6)
-            {
-                ApplyAddress(pasted);
-                RawIpBox.Focus();
-                RawIpBox.CaretIndex = RawIpBox.Text.Length;
             }
             else
                 WizardStatusText.Text = "Paste a full IP address, for example 192.168.1.10.";
