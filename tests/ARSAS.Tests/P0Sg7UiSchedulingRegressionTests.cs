@@ -30,7 +30,9 @@ public sealed class P0Sg7UiSchedulingRegressionTests
         Assert.Contains("_pendingPointSnapshots.TryRemove(pointKey, out var pending)", flush);
         Assert.DoesNotContain("_pendingPointSnapshots.Keys.ToArray()", flush);
         Assert.Contains("CanonicalPointSnapshotAuthority.Project(", flush);
-        Assert.Contains("observedOwner.LiveValues.PublishReport(", flush);
+        // The receive/runtime lane owns canonical publication. A WPF frame
+        // is presentation only and cannot re-publish evidence on its timer.
+        Assert.DoesNotContain("observedOwner.LiveValues.PublishReport(", flush);
         Assert.Contains("eventBatch.Count < UiEventBatchLimit", flush);
         Assert.Contains("diagnosticBatch.Count < UiDiagnosticBatchLimit", flush);
         Assert.Contains("Events.AddRange(eventBatch)", flush); // FIFO SOE not latest-wins
