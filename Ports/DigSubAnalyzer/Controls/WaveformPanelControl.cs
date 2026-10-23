@@ -35,15 +35,16 @@ public sealed class WaveformPanelControl : FrameworkElement
     // Soft vertical guide; phase-specific leader arrows carry the information.
     // All drawing resources are frozen and shared between render frames.
     private static readonly Pen CursorPen = CreatePen("#8AA0BA", 1.05, [3.0, 4.0]);
-    private static readonly Brush CursorLabelSurface = CreateBrush("#F8FBFF");
-    private static readonly Pen CursorLabelFrame = CreatePen("#D0DCEB", 0.9);
+    private static readonly Brush CursorLabelSurface = CreateBrush("#FFFFFF");
+    private static readonly Pen CursorLabelFrame = CreatePen("#9EB5D4", 1.15);
     private static readonly Pen CursorRedLeader = CreateFrozenSeriesPen(UaBrush, 1.4);
     private static readonly Pen CursorGoldLeader = CreateFrozenSeriesPen(UbBrush, 1.4);
     private static readonly Pen CursorBlueLeader = CreateFrozenSeriesPen(UcBrush, 1.4);
     private static readonly Pen CursorNeutralLeader = CreateFrozenSeriesPen(NeutralBrush, 1.4);
     private static readonly Dictionary<string, Pen> SeriesPenCache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Typeface TitleTypeface = new((FontFamily)System.Windows.Application.Current.FindResource("AppFontFamily"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
-    private static readonly Typeface LabelTypeface = new((FontFamily)System.Windows.Application.Current.FindResource("AppFontFamily"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+    private static readonly Typeface LabelTypeface = new((FontFamily)System.Windows.Application.Current.FindResource("AppFontFamily"), FontStyles.Normal, FontWeights.Medium, FontStretches.Normal);
+    private static readonly Typeface CalloutTypeface = new((FontFamily)System.Windows.Application.Current.FindResource("AppFontFamily"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
     private double _cursorFraction = 0.5;
     private bool _isDraggingCursor;
     private bool _cursorVisible;
@@ -276,7 +277,8 @@ public sealed class WaveformPanelControl : FrameworkElement
         dc.DrawRoundedRectangle(LaneHeaderBrush, null, headerRect, 10, 10);
         dc.DrawRectangle(LaneHeaderBrush, null, new Rect(rect.Left, rect.Top + 15, rect.Width, 15));
 
-        var innerRect = new Rect(rect.Left + 12, rect.Top + 38, rect.Width - 24, rect.Height - 50);
+        // Dedicated time-axis footer prevents tick labels overlapping live traces.
+        var innerRect = new Rect(rect.Left + 12, rect.Top + 38, rect.Width - 24, rect.Height - 74);
         if (innerRect.Width <= 20 || innerRect.Height <= 20)
             return;
 
@@ -325,6 +327,7 @@ public sealed class WaveformPanelControl : FrameworkElement
             .Where(item => item.Samples.Count >= 2 && !IsSilentZeroTrace(item.Samples))
             .ToArray();
         DrawGrid(dc, innerRect, stacked, plotSeries.Length);
+        DrawMillisecondsAxis(dc, innerRect, snapshot);
         DrawYAxisScale(dc, innerRect, amplitudeMax, lane.Unit, stacked, plotSeries.Length);
 
         if (laneSeries.Count == 0 || laneSeries.All(item => item.Samples.Count < 2))
@@ -736,12 +739,8 @@ public sealed class WaveformPanelControl : FrameworkElement
     private static void DrawGrid(DrawingContext dc, Rect rect, bool stacked, int traces)
     {
         // Frozen pens and lightweight subdivisions; never remove the actual 0 axis.
-        for (var i = 1; i < 10; i++)
-        {
-            var x = rect.Left + (rect.Width * i / 10.0);
-            dc.DrawLine(i == 5 ? MajorGridPen : GridPen,
-                new Point(x, rect.Top), new Point(x, rect.Bottom));
-        }
+        // X-grid lines are the real 5ms time ticks, drawn separately from
+        // the sample-rate evidence; no arbitrary 10-column pseudo-time grid.
 
         // Stacked gets one mathematically correct baseline per *visible phase*.
         // Overlay gets exactly one shared baseline at Y=0.
@@ -1032,7 +1031,7 @@ public sealed class WaveformPanelControl : FrameworkElement
             var color = GetSeriesBrush(item.Name);
             var formatted = CreateText(
                 item.Name + "  " + FormatEngineeringValue(value, item.Unit),
-                10.5, color, LabelTypeface);
+                12.0, color, CalloutTypeface);
             anchors.Add(new WaveformCursorCalloutLayout.Anchor(texts.Count, y, formatted.Width + 17));
             texts.Add(formatted);
             colors.Add(GetCursorLeaderPen(item.Name));
@@ -1066,7 +1065,8 @@ public sealed class WaveformPanelControl : FrameworkElement
             foreach (var item in snapshot.CurrentSeries)
                 maxSourceSamples = Math.Max(maxSourceSamples, item.Samples.Count);
             var windowSamples = Math.Min(CalculateVisibleSamples(snapshot), maxSourceSamples);
-            var timeMs = _cursorFraction * Math.Max(0, windowSamples - 1) *
+            var referenceSample = SmvWaveformTimeAxis.ReferenceSample(snapshot, windowSamples);
+            var timeMs = (_cursorFraction * Math.Max(0, windowSamples - 1) - referenceSample) *
                 1000.0 / snapshot.SampleRateHz;
             var caption = CreateText("t  " + timeMs.ToString("0.00", CultureInfo.InvariantCulture) + " ms",
                 10.1, LabelBrush, LabelTypeface);
@@ -1110,12 +1110,42 @@ public sealed class WaveformPanelControl : FrameworkElement
         return $"{value:0.###} {unit}";
     }
 
+    private void DrawMillisecondsAxis(DrawingContext dc, Rect plot, WaveformSnapshot snapshot)
+    {
+        if (!(snapshot.SampleRateHz > 0) || !double.IsFinite(snapshot.SampleRateHz))
+            return; // Do not invent milliseconds from an untrusted sampling rate.
+        var visible = Math.Min(CalculateVisibleSamples(snapshot),
+            SmvWaveformTimeAxis.AvailableSamples(snapshot));
+        if (visible < 2)
+            return;
+
+        var reference = SmvWaveformTimeAxis.ReferenceSample(snapshot, visible);
+        var duration = (visible - 1.0) * 1000.0 / snapshot.SampleRateHz;
+        if (duration <= 0 || !double.IsFinite(duration))
+            return;
+        var startMs = -reference * 1000.0 / snapshot.SampleRateHz;
+        var major = duration / plot.Width * 5.0 < 0.04 ? 5.0 : 10.0;
+        var firstTick = (int)Math.Ceiling(startMs / major);
+        var lastTick = (int)Math.Floor((startMs + duration) / major);
+        for (var index = firstTick; index <= lastTick && index - firstTick < 80; index++)
+        {
+            var ms = index * major;
+            var x = plot.Left + (ms - startMs) / duration * plot.Width;
+            dc.DrawLine(MajorGridPen, new Point(x, plot.Top), new Point(x, plot.Bottom));
+            dc.DrawLine(ZeroPen, new Point(x, plot.Bottom), new Point(x, plot.Bottom + 5));
+            var label = CreateText(ms.ToString("+0.##;-0.##;0", CultureInfo.InvariantCulture) + " ms",
+                10.1, AxisTextBrush, LabelTypeface);
+            if (x + label.Width / 2 < plot.Right - 3 && x - label.Width / 2 > plot.Left + 3)
+                dc.DrawText(label, new Point(x - label.Width / 2, plot.Bottom + 7));
+        }
+    }
+
     private static void DrawTimebaseLabel(DrawingContext dc, Rect rect, WaveformSnapshot snapshot)
     {
         var sampleRateText = snapshot.SampleRateHz > 0 ? $"{snapshot.SampleRateHz:0.#} Hz sample" : "Sample rate pending";
         var frequencyText = snapshot.MeasuredFrequencyHz > 0 ? $"{snapshot.MeasuredFrequencyHz:0.###} Hz signal" : "Signal frequency pending";
-        dc.DrawText(CreateText(sampleRateText, 10.5, MutedBrush, LabelTypeface), new Point(rect.Left, rect.Bottom + 3));
-        dc.DrawText(CreateText(frequencyText, 10.5, MutedBrush, LabelTypeface), new Point(rect.Right - 106, rect.Bottom + 3));
+        dc.DrawText(CreateText(sampleRateText, 10.3, MutedBrush, LabelTypeface), new Point(rect.Left, rect.Bottom + 23));
+        dc.DrawText(CreateText(frequencyText, 10.3, MutedBrush, LabelTypeface), new Point(rect.Right - 106, rect.Bottom + 23));
     }
 
     // Presentation only: no fade animations/timers or per-sample state.
