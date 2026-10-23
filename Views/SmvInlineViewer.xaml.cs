@@ -31,6 +31,11 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
     private CancellationTokenSource? _captureCancellation;
     private SmvLiveUpdate? _pendingUpdate;
     private SmvSnapshotResult? _visibleSnapshot;
+    // Single in-flight analyzer, single pending latest snapshot. No task per
+    // packet or unbounded background queue, even under a saturated UI.
+    private PendingAnalysis? _pendingAnalysis;
+    private bool _analysisRunning;
+    private sealed record PendingAnalysis(SmvSnapshotResult Snapshot, string? SelectedKey, int Generation);
     private IReadOnlyList<SmvRawVectorMeasurement> _visibleVectors = [];
     private string? _selectedKey;
     private string _captureStatus = "Select an Ethernet adapter and press Start. No IED or SCL is required.";
@@ -395,51 +400,72 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
         BeginAnalysis(update.SelectedSnapshot, selectedKey, generation);
     }
 
-    private async void BeginAnalysis(SmvSnapshotResult snapshot, string? selectedKey, int generation)
+    private void BeginAnalysis(SmvSnapshotResult snapshot, string? selectedKey, int generation)
     {
-        var analysis = Interlocked.Increment(ref _analysisGeneration);
-        var profile = RequestedUnits;
+        // Latest-value backpressure: retain at most one waiting coherent window
+        // while the prior one is processed. Never accumulate Task.Run jobs.
+        _pendingAnalysis = new PendingAnalysis(snapshot, selectedKey, generation);
+        if (_analysisRunning)
+            return;
+        _analysisRunning = true;
+        _ = ProcessAnalysisQueueAsync();
+    }
+
+    private async Task ProcessAnalysisQueueAsync()
+    {
         try
         {
-            // One bounded immutable publication: do not render waveform from
-            // snapshot N while measurements/phasors still belong to N-1.
-            // Both DSP and the eight-channel projection stay off the UI thread.
-            var rendered = await Task.Run(() =>
+            while (_pendingAnalysis is { } pending)
             {
-                var vectors = SmvRawVectorMath.Analyze(snapshot);
-                var waveform = SmvDigSubPresentationAdapter.BuildWaveform(snapshot, profile);
-                return (vectors, waveform);
-            });
-            if (generation != _generation || analysis != _analysisGeneration ||
-                !IsLoaded || selectedKey != Volatile.Read(ref _selectedKey))
-                return;
+                _pendingAnalysis = null;
+                var snapshot = pending.Snapshot;
+                var selectedKey = pending.SelectedKey;
+                var generation = pending.Generation;
+                var analysis = Interlocked.Increment(ref _analysisGeneration);
+                var profile = RequestedUnits;
+                try
+                {
+                    // One bounded immutable publication: DSP and waveform are
+                    // calculated on the same selected snapshot off the UI thread.
+                    var rendered = await Task.Run(() =>
+                    {
+                        var vectors = SmvRawVectorMath.Analyze(snapshot);
+                        var waveform = SmvDigSubPresentationAdapter.BuildWaveform(snapshot, profile);
+                        return (vectors, waveform);
+                    });
+                    if (generation != _generation || analysis != _analysisGeneration ||
+                        !IsLoaded || !_capturing ||
+                        selectedKey != Volatile.Read(ref _selectedKey))
+                        continue;
 
-            // The WPF dispatcher paints after this synchronous update returns,
-            // ensuring all panes represent one matching selected SV snapshot.
-            _visibleSnapshot = snapshot;
-            _visibleVectors = SmvDigSubPresentationAdapter.RelativeMeasurements(rendered.vectors);
-            CurrentWaveform = rendered.waveform;
-            Notify(nameof(CurrentWaveform));
-            IsLiveSnapshot = true;
-            Notify(nameof(IsLiveSnapshot));
-            UpdateUnitPresentation(redrawWaveform: profile != RequestedUnits);
-            if (profile == RequestedUnits)
-                WaveformStatus =
-                    (snapshot.TimebaseReason.StartsWith("ASSUMED", StringComparison.OrdinalIgnoreCase)
-                        ? "ASSUMED timebase · rate/PTP unverified · " : string.Empty) +
-                    $"Received {snapshot.CapturedSamples:N0} coherent samples • {snapshot.SamplesPerCycle} samples/cycle • " +
-                    (ActiveUnits == SmvDisplayUnits.NineTwoLe
-                        ? "9-2LE operator-selected engineering display"
-                        : "raw INT32 counts");
+                    _visibleSnapshot = snapshot;
+                    _visibleVectors = SmvDigSubPresentationAdapter.RelativeMeasurements(rendered.vectors);
+                    CurrentWaveform = rendered.waveform;
+                    Notify(nameof(CurrentWaveform));
+                    IsLiveSnapshot = true;
+                    Notify(nameof(IsLiveSnapshot));
+                    UpdateUnitPresentation(redrawWaveform: profile != RequestedUnits);
+                    if (profile == RequestedUnits)
+                        WaveformStatus =
+                            (snapshot.TimebaseReason.StartsWith("ASSUMED", StringComparison.OrdinalIgnoreCase)
+                                ? "ASSUMED timebase · rate/PTP unverified · " : string.Empty) +
+                            $"Received {snapshot.CapturedSamples:N0} coherent samples • {snapshot.SamplesPerCycle} samples/cycle • " +
+                            (ActiveUnits == SmvDisplayUnits.NineTwoLe
+                                ? "9-2LE operator-selected engineering display"
+                                : "raw INT32 counts");
+                }
+                catch (Exception)
+                {
+                    if (generation != _generation || analysis != _analysisGeneration ||
+                        selectedKey != Volatile.Read(ref _selectedKey))
+                        continue;
+                    WaveformStatus = "New SV analysis unavailable; displaying last coherent snapshot.";
+                }
+            }
         }
-        catch (Exception)
+        finally
         {
-            if (generation != _generation || analysis != _analysisGeneration ||
-                selectedKey != Volatile.Read(ref _selectedKey))
-                return;
-            // Do not erase the last coherent snapshot because a later
-            // calculation failed; notify the operator instead.
-            WaveformStatus = "New SV analysis unavailable; displaying last coherent snapshot.";
+            _analysisRunning = false;
         }
     }
 
@@ -464,6 +490,8 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
 
     private void ClearPresentation(string message)
     {
+        _pendingAnalysis = null;
+        Interlocked.Increment(ref _analysisGeneration);
         _visibleSnapshot = null;
         _visibleVectors = [];
         Measurements.Clear();
