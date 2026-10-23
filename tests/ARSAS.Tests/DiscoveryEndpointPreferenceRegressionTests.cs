@@ -103,16 +103,18 @@ public sealed class DiscoveryEndpointPreferenceRegressionTests
         Assert.Contains("if (_rememberDiscoveryEndpoint &&", wizard);
         Assert.Contains("if (_rememberDiscoveryEndpoint)", wizard);
         Assert.Contains("TryLoadLastDiscoveryEndpoint(out var lastIp, out var lastPort)", wizard);
-        Assert.Contains("RelayIpAddress = lastIp;", wizard);
-        Assert.Contains("MmsPortText = lastPort.ToString(CultureInfo.InvariantCulture);", wizard);
-        Assert.Contains("RelayIpAddress = RelayIpBox.Text.Trim();", wizard);
+        Assert.Contains("UserPreferenceStore.LoadRecentEndpointDetails()", wizard);
         Assert.Contains("RecordLastDiscoveryEndpoint(RelayIpAddress, MmsPort)", wizard);
-        var validateIp = wizard.IndexOf("System.Net.IPAddress.TryParse", StringComparison.Ordinal);
+        Assert.Contains("TryNormalizeIpv4Octets(", wizard);
+        Assert.Contains("IPAddress.TryParse(submittedAddress", wizard);
+        Assert.Contains("x:Name=\"Octet1Box\"", xaml);
+        Assert.Contains("x:Name=\"Octet4Box\"", xaml);
+        Assert.Contains("x:Name=\"HistoryPopup\"", xaml);
+        Assert.Contains("UpdateSourceTrigger=LostFocus", xaml);
         var validatePort = wizard.IndexOf("port is <= 0 or > 65535", StringComparison.Ordinal);
         var commit = wizard.IndexOf("RecordLastDiscoveryEndpoint(RelayIpAddress, MmsPort)", StringComparison.Ordinal);
-        Assert.True(validateIp >= 0 && validateIp < validatePort && validatePort < commit);
-        Assert.Contains("IsEditable=\"True\" IsTextSearchEnabled=\"False\"", xaml);
-        Assert.Contains("UpdateSourceTrigger=LostFocus", xaml);
+        Assert.True(validatePort >= 0 && validatePort < commit);
+        Assert.DoesNotContain("UserPreferenceStore.RecordSuccessfulEndpoint", wizard);
     }
 
     private static void WithTemporaryPreferences(Action<string> action)
