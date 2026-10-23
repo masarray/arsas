@@ -193,6 +193,8 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
         ControlNumberText = "Auto";
         TerminationText = "—";
         WireTimelineText = string.Empty;
+        ControlEvidenceText = string.Empty; // Do not export stale association evidence.
+        if (CopyEvidenceButton is not null) CopyEvidenceButton.Content = "Copy evidence";
         IsBusy = true;
         CommandStage = "Inspecting control";
         CommandStatus = "Reading ctlModel and current status from the IED…";
