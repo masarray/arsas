@@ -179,22 +179,12 @@ public partial class IedBrowserWriteWindow : Window
             return;
         }
 
-        var review = string.Join(Environment.NewLine,
-            selected.Select(row => "  " + row.Reference + " [" + row.FunctionalConstraint +
-                                   "] = " + row.RequestedValue));
-        var notice = "IED: " + _device.Name + " (" + _device.IpAddress + ")" +
-            Environment.NewLine + Environment.NewLine +
-            "Change these " + selected.Length + " configuration DA(s)?" +
-            Environment.NewLine + review + Environment.NewLine + Environment.NewLine +
-            "These are real MMS Writes. A ctlModel change may change permitted IEC control modes." +
-            Environment.NewLine +
-            "The operation is sequential, NOT ATOMIC. Stops on the first failure; no automatic retry." +
-            Environment.NewLine + "Proceed only with authorized, isolated commissioning.";
-        if (MessageBox.Show(this, notice, "Confirm live MMS configuration Write",
-                MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) !=
-            MessageBoxResult.Yes)
+        // The enabled Write button is explicit operator intent. Native
+        // configuration admission still verifies the same association,
+        // typed before-value and readback. No second modal prompt.
+        if (!CurrentAssociation)
         {
-            StatusText.Text = "Operator cancelled. Zero Writes sent.";
+            StatusText.Text = "IED connection changed; no Write sent.";
             return;
         }
 
