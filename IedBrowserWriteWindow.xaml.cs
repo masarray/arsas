@@ -211,8 +211,10 @@ public partial class IedBrowserWriteWindow : Window
                     "NOT VERIFIED: " + result.Detail;
                 if (!result.Succeeded)
                 {
+                    var reason = string.IsNullOrWhiteSpace(result.Detail)
+                        ? "IED refused the requested value." : result.Detail;
                     StatusText.Text = "Write ditolak: " +
-                        (result.Detail.Length > 130 ? result.Detail[..127] + "…" : result.Detail) +
+                        (reason.Length > 130 ? reason[..127] + "…" : reason) +
                         $" · {passed}/{staged.Count} verified. No automatic retry.";
             ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
                 System.Windows.Media.Color.FromRgb(255, 242, 228));
