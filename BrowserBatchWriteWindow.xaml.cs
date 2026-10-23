@@ -293,11 +293,25 @@ public partial class BrowserBatchWriteWindow : Window
                 _lifetime.Token.ThrowIfCancellationRequested();
                 if (!CurrentAssociation)
                     throw new InvalidOperationException("IED association changed; no Write sent.");
+                var baseline = row.Preview;
                 var preview = await _runtime.PreviewBrowserDataAttributeWriteAsync(
                     _device, row.Reference!.Value, _lifetime.Token);
                 if (!CurrentAssociation)
                     throw new InvalidOperationException("IED association changed; no Write sent.");
-                row.Preview = preview.IsAvailable ? preview : null;
+                if (baseline is not { IsAvailable: true, OldValue: not null } ||
+                    preview is not { IsAvailable: true, OldValue: not null } ||
+                    !string.Equals(baseline.GvaSignature, preview.GvaSignature, StringComparison.Ordinal) ||
+                    !MmsDataCodec.Encode(baseline.OldValue).AsSpan()
+                        .SequenceEqual(MmsDataCodec.Encode(preview.OldValue)))
+                {
+                    row.Preview = null;
+                    row.Status = "Live DA changed; press Read and edit again.";
+                    row.NotifyEditorChanged();
+                    throw new InvalidOperationException(
+                        "Live value or MMS type changed since editing " + row.ReferenceText +
+                        ". Refresh before Write; zero Writes sent.");
+                }
+                row.Preview = preview;
                 row.Type = preview.Type?.MmsType ?? "unverified";
                 row.Old = preview.CurrentText;
                 row.ApplyLiveEditor(preview.Type?.MmsType == "boolean", preview.CurrentText);
