@@ -68,27 +68,88 @@ public static class UserPreferenceStore
         File.WriteAllText(path, JsonSerializer.Serialize(prefs, Options));
     }
 
+    public sealed record RecentEndpointDetail(
+        string IpAddress, int MmsPort, string IedName, bool ConfirmedSuccessful,
+        bool WasLastSubmitted = false)
+    {
+        public string Subtitle => WasLastSubmitted
+            ? (ConfirmedSuccessful
+                ? $"Last submitted · previously connected · MMS {MmsPort}"
+                : $"Last submitted · connection unverified · MMS {MmsPort}")
+            : ConfirmedSuccessful
+                ? $"Connected successfully · {(string.IsNullOrWhiteSpace(IedName) ? "IED" : IedName)} · MMS {MmsPort}"
+                : "Saved address · connection unverified";
+    }
+
+    // A read-only projection of the EXISTING user preference document.
+    // An endpoint is IP + MMS port, never just the IP address. This prevents
+    // a successful association on port A from authorizing a typed port B.
+    public static IReadOnlyList<RecentEndpointDetail> LoadRecentEndpointDetails(int maximum = 20)
+        => DescribeRecentEndpoints(LoadPreferences(), maximum);
+
+    internal static IReadOnlyList<RecentEndpointDetail> LoadRecentEndpointDetails(
+        string preferencesPath, int maximum = 20)
+        => DescribeRecentEndpoints(ReadPreferencesFile(preferencesPath) ?? new UserPreferences(), maximum);
+
+    private static IReadOnlyList<RecentEndpointDetail> DescribeRecentEndpoints(
+        UserPreferences preferences, int maximum)
+    {
+        var successes = preferences.SuccessfulRelays
+            .Where(e => !string.IsNullOrWhiteSpace(e.IpAddress) &&
+                        IPAddress.TryParse(e.IpAddress.Trim(), out _) &&
+                        e.MmsPort is > 0 and <= 65535)
+            .OrderByDescending(e => e.LastConnectedUtc)
+            .ToArray();
+        var records = new List<RecentEndpointDetail>();
+
+        if (IPAddress.TryParse(preferences.LastDiscoveryIpAddress?.Trim(), out _) &&
+            preferences.LastDiscoveryMmsPort is > 0 and <= 65535)
+        {
+            var ip = preferences.LastDiscoveryIpAddress.Trim();
+            var port = preferences.LastDiscoveryMmsPort;
+            var matched = successes.FirstOrDefault(e =>
+                string.Equals(e.IpAddress.Trim(), ip, StringComparison.OrdinalIgnoreCase) &&
+                e.MmsPort == port);
+            records.Add(new RecentEndpointDetail(ip, port,
+                matched?.IedName ?? string.Empty, matched is not null, WasLastSubmitted: true));
+        }
+
+        records.AddRange(successes.Select(e =>
+            new RecentEndpointDetail(e.IpAddress.Trim(), e.MmsPort,
+                e.IedName ?? string.Empty, true)));
+
+        foreach (var ip in GetRecentIpCandidates(preferences, 100))
+        {
+            if (!records.Any(e => e.IpAddress.Equals(ip, StringComparison.OrdinalIgnoreCase)))
+                records.Add(new RecentEndpointDetail(ip, 102, string.Empty, false));
+        }
+
+        return records
+            .DistinctBy(e => (e.IpAddress.Trim().ToUpperInvariant(), e.MmsPort))
+            .Take(Math.Clamp(maximum, 1, 100))
+            .ToArray();
+    }
+
     public static IReadOnlyList<string> LoadRecentEndpoints(int maximum = 20)
+        => GetRecentIpCandidates(LoadPreferences(), maximum);
+
+    private static IReadOnlyList<string> GetRecentIpCandidates(UserPreferences prefs, int maximum)
     {
         maximum = Math.Clamp(maximum, 1, 100);
-        var prefs = LoadPreferences();
         return new[] { prefs.LastDiscoveryIpAddress }
-            .Where(ip => !string.IsNullOrWhiteSpace(ip) && IPAddress.TryParse(ip.Trim(), out _))
-            .Select(ip => ip.Trim())
             .Concat(prefs.SuccessfulRelays
-            .Where(item => !string.IsNullOrWhiteSpace(item.IpAddress))
-            .OrderByDescending(item => item.LastConnectedUtc)
-            .Select(item => item.IpAddress.Trim()))
+                .OrderByDescending(item => item.LastConnectedUtc)
+                .Select(item => item.IpAddress))
             .Concat(prefs.SignalSelectionProfiles
-                .Where(item => !string.IsNullOrWhiteSpace(item.IpAddress))
                 .OrderByDescending(item => item.LastSavedUtc)
-                .Select(item => item.IpAddress.Trim()))
-            .Concat(prefs.RecentRelayIps
-                .Where(item => !string.IsNullOrWhiteSpace(item))
-                .Select(item => item.Trim()))
+                .Select(item => item.IpAddress))
+            .Concat(prefs.RecentRelayIps)
+            .Where(ip => !string.IsNullOrWhiteSpace(ip) &&
+                         IPAddress.TryParse(ip.Trim(), out _))
+            .Select(ip => ip.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(maximum)
-            .ToList();
+            .ToArray();
     }
 
     public static void RecordSuccessfulEndpoint(string ipAddress, int port, string iedName)

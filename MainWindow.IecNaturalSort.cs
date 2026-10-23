@@ -47,6 +47,13 @@ public partial class MainWindow
     private static void ApplyIecNaturalSort(DataGrid grid, IComparer comparer)
     {
         if (grid.ItemsSource is null) return;
+        // WPF CustomSort always sorts on the Dispatcher. For a fat IEC 61850
+        // model defer presentation sorting entirely: source order is retained,
+        // and protocol FCDA/report order is never changed or re-created.
+        // Small views keep natural command/telegram sorting unchanged.
+        if (grid.Name == "ExplorerLiveValuesGrid" &&
+            grid.ItemsSource is ICollection large && large.Count > 2048)
+            return;
         if (CollectionViewSource.GetDefaultView(grid.ItemsSource) is not ListCollectionView view)
             return;
         if (ReferenceEquals(view.CustomSort, comparer)) return;

@@ -131,24 +131,33 @@ public sealed class IedTaskDialogVisualRegressionTests
     }
 
     [Fact]
-    public void AddIed_PreservesSavedIpBindingValidationFeedbackAndKeyboardActions()
+    public void AddIed_PreservesHistoryValidationFeedbackAndKeyboardActions()
     {
         var xml = File.ReadAllText(Find("IpConnectWizardWindow.xaml"));
         var source = File.ReadAllText(Find("IpConnectWizardWindow.xaml.cs"));
-        Assert.Contains("x:Name=\"RelayIpBox\"", xml, StringComparison.Ordinal);
-        Assert.Contains("RecentRelayIps", xml, StringComparison.Ordinal);
-        Assert.Contains("RelayIpAddress", xml, StringComparison.Ordinal);
-        Assert.Contains("MmsPortText", xml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"WizardStatusText\"", xml, StringComparison.Ordinal);
-        Assert.Contains("Style=\"{StaticResource TaskDialogError}\"", xml, StringComparison.Ordinal);
-        Assert.Contains("IsDefault=\"True\"", xml, StringComparison.Ordinal);
-        Assert.Contains("IsCancel=\"True\"", xml, StringComparison.Ordinal);
-        Assert.Contains("Click=\"Connect_Click\"", xml, StringComparison.Ordinal);
-        Assert.Contains("Click=\"Cancel_Click\"", xml, StringComparison.Ordinal);
+        foreach (var required in new[]
+        {
+            "x:Name=\"Octet1Box\"", "x:Name=\"Octet2Box\"",
+            "x:Name=\"Octet3Box\"", "x:Name=\"Octet4Box\"",
+            "x:Name=\"HistoryPopup\"", "x:Name=\"HistorySearchBox\"",
+            "x:Name=\"RawIpBox\"", "RelayIpAddress", "MmsPortText",
+            "x:Name=\"WizardStatusText\"", "Style=\"{StaticResource TaskDialogError}\"",
+            "IsDefault=\"True\"", "IsCancel=\"True\"",
+            "Click=\"Connect_Click\"", "Click=\"Cancel_Click\""
+        })
+            Assert.Contains(required, xml, StringComparison.Ordinal);
+
+        foreach (var required in new[]
+        {
+            "UserPreferenceStore.LoadRecentEndpointDetails()",
+            "TryNormalizeIpv4Octets(", "IPAddress.TryParse",
+            "port is <= 0 or > 65535", "Octet_Pasting",
+            "Octet_PreviewKeyDown", "HistorySearchBox_TextChanged",
+            "CommitHistorySelection()"
+        })
+            Assert.Contains(required, source, StringComparison.Ordinal);
+
         Assert.DoesNotContain("Flow: TCP/TPKT/COTP", xml, StringComparison.Ordinal);
-        Assert.Contains("UserPreferenceStore.LoadRecentEndpoints()", source, StringComparison.Ordinal);
-        Assert.Contains("System.Net.IPAddress.TryParse", source, StringComparison.Ordinal);
-        Assert.Contains("port is <= 0 or > 65535", source, StringComparison.Ordinal);
     }
 
     private static string? ResourceRef(string? value, string extension = "StaticResource")

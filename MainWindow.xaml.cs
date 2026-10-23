@@ -27,6 +27,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly Dictionary<string, HashSet<string>> _pendingProjectSelections = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<SignalDefinition, Iec61850MonitorDevice> _signalOwners = new();
     private readonly ConcurrentDictionary<string, CanonicalPointSnapshotBatch> _pendingPointSnapshots = new(StringComparer.Ordinal);
+    // A point key enters this queue only when absent from the coalescing map.
+    // Large SG7 bursts are consumed in bounded slices, not a full-map UI sweep.
+    private readonly ConcurrentQueue<string> _pendingPointUiKeys = new();
+    private readonly ConcurrentQueue<string> _priorityPointUiKeys = new();
+    private const int UiPointBatchLimit = 192;
+    private const int UiEventBatchLimit = 160;
+    private const int UiDiagnosticBatchLimit = 80;
+    // Informational totals may trail process values by <1 second. Individual
+    // point bindings and lossless SOE never wait for the summary refresh.
+    private long _nextUiPointSummaryTicks;
     // Monitoring-lifetime O(1) immutable reference/FC lookup for SignalDefinition.
     // Rebuilt after the selected signal/point model is materialized.
     private readonly Dictionary<string, IedBrowserReadBindingIndex> _canonicalSignalProjections =
@@ -77,12 +87,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         set
         {
             if (ReferenceEquals(_selectedDevice, value)) return;
+            using var selectionPerf = IedBrowserPerformanceProbe.Measure(
+                "IED.Select", value?.Name, value?.Signals.Count ?? 0);
             if (_selectedDevice != null)
             {
                 _selectedDevice.IsActive = false;
                 ClearPendingControlConfirmations(_selectedDevice);
             }
             _selectedDevice = value;
+            // Make the currently selected IED's already queued visible values
+            // eligible on the next frame instead of waiting behind other IEDs.
+            if (_selectedDevice is { } priorityDevice)
+                foreach (var visible in priorityDevice.Points.Take(48))
+                {
+                    var key = CanonicalPointSnapshotAuthority.UiQueueKey(visible);
+                    if (_pendingPointSnapshots.ContainsKey(key))
+                        _priorityPointUiKeys.Enqueue(key);
+                }
             if (_selectedDevice != null)
             {
                 ClearPendingControlConfirmations(_selectedDevice);
@@ -2538,10 +2559,25 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void Runtime_PointUpdated(Iec61850PointSnapshot snapshot)
     {
-        _pendingPointSnapshots.AddOrUpdate(
-            CanonicalPointSnapshotAuthority.UiQueueKey(snapshot.Point),
-            _ => new CanonicalPointSnapshotBatch(snapshot, snapshot.IsValueEdge),
-            (_, current) => CanonicalPointSnapshotAuthority.Merge(current, snapshot));
+        var key = CanonicalPointSnapshotAuthority.UiQueueKey(snapshot.Point);
+        // AddOrUpdate's value-factory may run multiple times under contention.
+        // Only enqueue after a successful first insert; failed compare/exchange
+        // retries preserve association/revision semantics of Merge.
+        while (true)
+        {
+            if (_pendingPointSnapshots.TryGetValue(key, out var current))
+            {
+                var merged = CanonicalPointSnapshotAuthority.Merge(current, snapshot);
+                if (_pendingPointSnapshots.TryUpdate(key, merged, current))
+                    return;
+            }
+            else if (_pendingPointSnapshots.TryAdd(key,
+                new CanonicalPointSnapshotBatch(snapshot, snapshot.IsValueEdge)))
+            {
+                _pendingPointUiKeys.Enqueue(key);
+                return;
+            }
+        }
     }
 
     private void Runtime_EventRaised(Iec61850EventEntry entry)
@@ -2577,24 +2613,31 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void UiFlushTimer_Tick(object? sender, EventArgs e)
     {
+        using var flushPerf = IedBrowserPerformanceProbe.Measure(
+            "UI.Flush", SelectedDevice?.Name, _pendingPointSnapshots.Count);
         FlushGooseSubscriberUi();
 
         var pointChanged = false;
-        // One device-owner index for the entire coalesced batch: avoid scanning
-        // every IED for every reported point in a high-rate static DataSet.
-        var queuedKeys = _pendingPointSnapshots.Keys.ToArray();
-        var deviceOwners = queuedKeys.Length == 0
-            ? null
-            : Devices.GroupBy(device => device.DeviceId, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(group => group.Key, group => group.First(),
-                    StringComparer.OrdinalIgnoreCase);
-        foreach (var pointKey in queuedKeys)
+        // Strict per-dispatch budget: a large initial SG7 data image must not
+        // monopolize WPF input/rendering. Queue holds only unique pending keys;
+        // latest canonical observation remains in the coalescing map.
+        var uiStartTicks = Stopwatch.GetTimestamp();
+        var uiDeadlineTicks = uiStartTicks + Stopwatch.Frequency / 125; // ~8 ms
+        var processedPoints = 0;
+        var deviceOwners = Devices
+            .GroupBy(device => device.DeviceId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(),
+                StringComparer.OrdinalIgnoreCase);
+        while (processedPoints < UiPointBatchLimit &&
+               Stopwatch.GetTimestamp() < uiDeadlineTicks &&
+               (_priorityPointUiKeys.TryDequeue(out var pointKey) ||
+                _pendingPointUiKeys.TryDequeue(out pointKey)))
         {
             if (!_pendingPointSnapshots.TryRemove(pointKey, out var pending)) continue;
+            processedPoints++;
             var snapshot = pending.Snapshot;
             var point = snapshot.Point;
-            if (deviceOwners == null ||
-                !deviceOwners.TryGetValue(point.DeviceId, out var observedOwner))
+            if (!deviceOwners.TryGetValue(point.DeviceId, out var observedOwner))
                 continue;
             // Reject queued frames from an earlier MMS connection even if
             // the new session resets its point Sequence counter to zero.
@@ -2667,7 +2710,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         var eventBatch = new List<Iec61850EventEntry>(256);
-        while (eventBatch.Count < 1000 && _pendingEvents.TryDequeue(out var entry))
+        while (eventBatch.Count < UiEventBatchLimit && _pendingEvents.TryDequeue(out var entry))
             eventBatch.Add(entry);
         if (eventBatch.Count > 0)
         {
@@ -2692,7 +2735,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         var diagnosticBatch = new List<DiagnosticEntry>(128);
-        while (diagnosticBatch.Count < 500 && _pendingDiagnostics.TryDequeue(out var diagnostic))
+        while (diagnosticBatch.Count < UiDiagnosticBatchLimit && _pendingDiagnostics.TryDequeue(out var diagnostic))
             diagnosticBatch.Add(diagnostic);
         if (diagnosticBatch.Count > 0)
         {
@@ -2735,8 +2778,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             }
         }
 
-        if (pointChanged || eventBatch.Count > 0 || diagnosticBatch.Count > 0)
+        var nowTicks = Stopwatch.GetTimestamp();
+        if (eventBatch.Count > 0 || diagnosticBatch.Count > 0 ||
+            (pointChanged && nowTicks >= _nextUiPointSummaryTicks))
+        {
             RaiseWorkspaceCounts();
+            _nextUiPointSummaryTicks = nowTicks + Stopwatch.Frequency;
+        }
         if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
             RefreshIedBrowserVisibleValues();
     }

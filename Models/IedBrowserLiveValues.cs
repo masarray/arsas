@@ -33,9 +33,13 @@ public sealed class IedBrowserLiveValues
     private readonly Dictionary<string, IedBrowserObservationChannels> _values =
         new(StringComparer.Ordinal);
     private long _version;
+    // Only CF changes invalidate engineering-unit projection; ordinary ST/MX
+    // report traffic must not rebuild its signal/unit directory.
+    private long _configurationVersion;
     private long _association;
     private bool _offline;
     public long Version { get { lock (_gate) return _version; } }
+    public long ConfigurationVersion { get { lock (_gate) return _configurationVersion; } }
     public long Association { get { lock (_gate) return _association; } }
     public bool IsOffline { get { lock (_gate) return _offline; } }
 
@@ -63,6 +67,7 @@ public sealed class IedBrowserLiveValues
             _association++;
             _offline = false;
             _values.Clear();
+            _configurationVersion++;
             _version++;
             return _association;
         }
@@ -75,6 +80,7 @@ public sealed class IedBrowserLiveValues
         {
             _offline = true;
             _association++; // invalidate in-flight callbacks even before reconnect
+            _configurationVersion++;
             _version++;
         }
     }
@@ -86,6 +92,7 @@ public sealed class IedBrowserLiveValues
             _association++;
             _offline = true;
             _values.Clear();
+            _configurationVersion++;
             _version++;
         }
     }
@@ -231,6 +238,8 @@ public sealed class IedBrowserLiveValues
             _values[key] = isReport
                 ? channels with { Report = observed }
                 : channels with { Read = observed };
+            if (string.Equals(fc, "CF", StringComparison.OrdinalIgnoreCase))
+                _configurationVersion++;
             _version++;
             return true;
         }
