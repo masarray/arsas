@@ -53,15 +53,21 @@ public partial class MainWindow
     private static void ApplyIecNaturalSort(DataGrid grid, IComparer comparer)
     {
         if (grid.ItemsSource is null) return;
-        // WPF CustomSort always sorts on the Dispatcher. For a fat IEC 61850
-        // model defer presentation sorting entirely: source order is retained,
-        // and protocol FCDA/report order is never changed or re-created.
-        // Small views keep natural command/telegram sorting unchanged.
-        if (grid.Name == "ExplorerLiveValuesGrid" &&
-            grid.ItemsSource is ICollection large && large.Count > 2048)
-            return;
+        // WPF CustomSort performs O(N log N) work synchronously on the Dispatcher.
+        // Both process grids can hold SG7-size models (Global may contain 4 IEDs).
+        // Preserve stable source order for large lists, without changing IEC
+        // DataSet/FCDA order. Command Dock ALWAYS retains its verified ordering.
         if (CollectionViewSource.GetDefaultView(grid.ItemsSource) is not ListCollectionView view)
             return;
+        if (grid.Name is "ExplorerLiveValuesGrid" or "GlobalLiveGrid" &&
+            grid.ItemsSource is ICollection { Count: > 2048 })
+        {
+            // A live collection may grow past the threshold AFTER a previous
+            // small-grid CustomSort was installed. Remove only our own sorter.
+            if (ReferenceEquals(view.CustomSort, comparer))
+                view.CustomSort = null;
+            return;
+        }
         if (ReferenceEquals(view.CustomSort, comparer)) return;
         view.SortDescriptions.Clear();
         view.CustomSort = comparer;
