@@ -164,9 +164,11 @@
                                 Padding="9" SnapsToDevicePixels="True">
                             <StackPanel>
                                 <TextBlock Text="Recent addresses" Margin="5,0,0,6"
+                                           FontFamily="{DynamicResource AppFontFamily}"
                                            FontSize="11" FontWeight="SemiBold"
                                            Foreground="{StaticResource TaskDialogMuted}"/>
                                 <TextBox x:Name="HistorySearchBox" Height="30" Padding="8,4"
+                                         FontFamily="{DynamicResource AppFontFamily}"
                                          VerticalContentAlignment="Center" FontSize="11.5"
                                          Background="#F7FAFD"
                                          BorderBrush="{StaticResource TaskDialogBorder}"
@@ -175,6 +177,7 @@
                                          TextChanged="HistorySearchBox_TextChanged"
                                          PreviewKeyDown="HistorySearchBox_PreviewKeyDown"/>
                                 <ListBox x:Name="HistoryListBox" MaxHeight="154" Margin="0,4,0,0"
+                                         FontFamily="{DynamicResource AppFontFamily}"
                                          FontSize="11.5" BorderThickness="0" Background="Transparent"
                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                          MouseLeftButtonUp="HistoryListBox_MouseLeftButtonUp"
@@ -192,6 +195,7 @@
                                     </ListBox.ItemTemplate>
                                 </ListBox>
                                 <TextBlock x:Name="HistoryEmptyText" Margin="6,7,0,2"
+                                           FontFamily="{DynamicResource AppFontFamily}"
                                            Text="No matching addresses" Visibility="Collapsed"
                                            Style="{StaticResource TaskDialogSubtitle}"/>
                             </StackPanel>
