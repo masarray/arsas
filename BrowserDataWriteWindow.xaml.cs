@@ -76,8 +76,16 @@ public partial class BrowserDataWriteWindow : Window
             NewValueBox.Visibility = boolean ? Visibility.Collapsed : Visibility.Visible;
             if (boolean)
             {
-                BoolPicker.SelectedIndex = p.CurrentText.Equals("true", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
-                BoolPicker.IsEnabled = supported;
+                var current = p.CurrentText.Trim();
+                BoolPicker.SelectedIndex = current.Equals("true", StringComparison.OrdinalIgnoreCase) ? 0 :
+                    current.Equals("false", StringComparison.OrdinalIgnoreCase) ? 1 : -1;
+                BoolPicker.IsEnabled = supported && BoolPicker.SelectedIndex >= 0;
+                if (BoolPicker.SelectedIndex < 0)
+                {
+                    StatusLabel.Text = "Unrecognized live Boolean; Write disabled.";
+                    DiffLabel.Text = "Read a verified true/false value before Write.";
+                    return;
+                }
             }
             else
             {
