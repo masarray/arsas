@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Services;
 
@@ -30,6 +31,9 @@ public partial class MainWindow
     private string _unifiedExplorerSearchText = "";
     private string[] _unifiedLiveSearchTokens = Array.Empty<string>();
     private bool _liveSignalCountRefreshScheduled;
+    // Debounce only large point-model text edits. Switching IED and clearing
+    // the query still applies immediately so the visible workspace is current.
+    private DispatcherTimer? _liveSignalFilterDebounce;
 
     private static bool RegisterLiveSignalSearchClassHandler()
     {
@@ -208,7 +212,41 @@ public partial class MainWindow
     }
 
     private void LiveSignalSearch_TextChanged(object sender, TextChangedEventArgs e)
-        => ApplyLiveSignalSearch();
+        => ScheduleUnifiedLiveSignalSearch();
+
+    private void ScheduleUnifiedLiveSignalSearch()
+    {
+        var explorerText = ExplorerLiveSearchBox?.Text?.Trim();
+        var toolbarText = _liveSignalSearchBox?.Text?.Trim();
+        // Empty search is especially important during reconnect/IED switching:
+        // drop the old filter immediately, not after a debounce period.
+        var cleared = string.IsNullOrEmpty(explorerText) &&
+                      string.IsNullOrEmpty(toolbarText);
+        if (cleared ||
+            _liveSignalSearchGrid?.ItemsSource is not ICollection { Count: > 2048 })
+        {
+            _liveSignalFilterDebounce?.Stop();
+            ApplyExplorerLiveSearchFilter();
+            return;
+        }
+
+        if (_liveSignalFilterDebounce is null)
+        {
+            _liveSignalFilterDebounce = new DispatcherTimer(
+                DispatcherPriority.Background, Dispatcher)
+            {
+                Interval = TimeSpan.FromMilliseconds(220)
+            };
+            _liveSignalFilterDebounce.Tick += (_, _) =>
+            {
+                _liveSignalFilterDebounce.Stop();
+                ApplyExplorerLiveSearchFilter();
+            };
+        }
+        // Latest text wins. Never queue one 33k-row WPF Refresh per keystroke.
+        _liveSignalFilterDebounce.Stop();
+        _liveSignalFilterDebounce.Start();
+    }
 
     private void LiveSignalSearch_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
@@ -224,6 +262,7 @@ public partial class MainWindow
 
     private void ApplyLiveSignalSearch()
     {
+        _liveSignalFilterDebounce?.Stop();
         _unifiedExplorerSearchText = (ExplorerLiveSearchBox?.Text ?? "").Trim();
         var detailedQuery = (_liveSignalSearchBox?.Text ?? "").Trim();
         _unifiedLiveSearchTokens = detailedQuery.Split(
@@ -306,10 +345,17 @@ public partial class MainWindow
 
     private void LiveSignalSearch_BoxPreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Escape)
-            return;
-        ClearLiveSignalSearch();
-        e.Handled = true;
+        if (e.Key == Key.Enter)
+        {
+            _liveSignalFilterDebounce?.Stop();
+            ApplyLiveSignalSearch();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            ClearLiveSignalSearch();
+            e.Handled = true;
+        }
     }
 
     private void ClearLiveSignalSearch()
@@ -322,6 +368,7 @@ public partial class MainWindow
 
     private void LiveSignalSearch_WindowClosed(object? sender, EventArgs e)
     {
+        _liveSignalFilterDebounce?.Stop();
         PreviewKeyDown -= LiveSignalSearch_WindowPreviewKeyDown;
         Closed -= LiveSignalSearch_WindowClosed;
         if (_liveSignalSearchGrid != null)
