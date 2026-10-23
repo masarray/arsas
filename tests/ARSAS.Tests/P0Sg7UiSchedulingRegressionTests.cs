@@ -14,8 +14,8 @@ public sealed class P0Sg7UiSchedulingRegressionTests
         var ingress = source.Split("private void Runtime_PointUpdated(")[1]
             .Split("private void Runtime_EventRaised(")[0];
         Assert.Contains("_pendingPointSnapshots.TryAdd(key,", ingress);
-        Assert.Contains("_pendingPointSnapshots.TryUpdate(key, merged, prior)", ingress);
-        Assert.Contains("CanonicalPointSnapshotAuthority.Merge(prior, snapshot)", ingress);
+        Assert.Contains("_pendingPointSnapshots.TryUpdate(key, merged, current)", ingress);
+        Assert.Contains("CanonicalPointSnapshotAuthority.Merge(current, snapshot)", ingress);
         Assert.Contains("_pendingPointUiKeys.Enqueue(key)", ingress);
 
         var flush = source.Split("private void UiFlushTimer_Tick(")[1]
