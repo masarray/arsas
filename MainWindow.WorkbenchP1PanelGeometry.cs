@@ -317,8 +317,8 @@ public partial class MainWindow
         // Reserve real height for the live-value pane, including at 125–150% DPI.
         var measured = _persistentWorkbench?.Shell.ActualHeight ?? 0d;
         var availableHeight = measured > 0d ? measured : Math.Max(272d, ActualHeight - 130d);
-        var upper = Math.Max(112d, Math.Min(440d, availableHeight * 0.55d,
-            availableHeight - 160d));
+        var upper = Math.Max(112d, Math.Min(440d, Math.Min(availableHeight * 0.55d,
+            availableHeight - 160d)));
         var preferred = state.DockHeightByWorkspace.TryGetValue(workspaceIndex, out var stored)
             ? stored : Math.Min(336d, availableHeight * 0.46d);
         preferred = Math.Clamp(preferred, Math.Min(126d, upper), upper);
