@@ -14,7 +14,7 @@ public sealed class UnifiedSsotV2ReactiveViewportTests
     private const string OtherLn = "SG7LD/XCBR1.Pos.stVal";
 
     private static IedBrowserDetailRow Row(string reference, string fc = "MX")
-        => new("Data", reference) { ValueReference = reference, FunctionalConstraint = fc };
+        => new("Data", reference, "-") { ValueReference = reference, FunctionalConstraint = fc };
 
     [Fact]
     public void OnlyChangedDataObjectScopeUpdatesItsCurrentPageRows()
