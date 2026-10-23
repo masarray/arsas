@@ -83,11 +83,11 @@
                 <ComboBox x:Name="CommandValueBox" Height="34"
                           ItemsSource="{Binding ValueOptions}"
                           Text="{Binding SelectedValue, UpdateSourceTrigger=PropertyChanged}"
-                          IsEditable="{Binding AllowCustomValue}" IsEnabled="{Binding IsReady}"
+                          IsEditable="{Binding AllowCustomValue}" IsEnabled="{Binding CanEdit}"
                           Padding="8,4" VerticalContentAlignment="Center"
                           ToolTip="Control value according to the live CDC and MMS ctlVal type"/>
 
-                <WrapPanel Margin="0,12,0,9">
+                <WrapPanel Margin="0,12,0,9" IsEnabled="{Binding CanEdit}">
                     <CheckBox Content="Interlock" IsChecked="{Binding InterlockCheck}"
                               Style="{StaticResource ControlCheckBox}"
                               ToolTip="IEC 61850 interlock-check bit"/>
@@ -101,7 +101,8 @@
 
                 <Border x:Name="LiveCommandWarning" Background="#FFF7EA"
                         BorderBrush="#EBD7B9" BorderThickness="1"
-                        CornerRadius="6" Padding="10,9" Margin="0,0,0,9">
+                        CornerRadius="6" Padding="10,9" Margin="0,0,0,9"
+                        IsEnabled="{Binding CanEdit}">
                     <CheckBox Content="I am authorized to operate this IED"
                               IsChecked="{Binding ConfirmLiveCommand}"
                               Foreground="#795321" FontSize="11.5"
@@ -110,7 +111,7 @@
 
                 <!-- Advanced information is still accessible, never mixed into the primary task. -->
                 <Expander Header="Advanced · originator &amp; diagnostics"
-                          Foreground="{StaticResource Ink}" FontSize="11"
+                          IsEnabled="{Binding CanEdit}" Foreground="{StaticResource Ink}" FontSize="11"
                           Margin="0,3,0,0">
                     <StackPanel Margin="3,10,2,5">
                         <Grid>
