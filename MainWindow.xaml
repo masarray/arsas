@@ -2074,7 +2074,7 @@
                                         ToolTip="Open explicit native MMS configuration Write for the selected live DO/DA; never sends Operate">
                                     <StackPanel Orientation="Horizontal">
                                         <Viewbox Width="14" Height="14" Margin="0,0,5,0" IsHitTestVisible="False">
-                                            <Path Data="M167-120q-21 5-36.5-10.5T120-167l40-191 198 198-191 40Zm191-40L160-358l458-458q23-23 57-23t57 23l84 84q23 23 57t-23 57L358-160Zm317-600L261-346l85 85 414-414-85-85Z"
+                                            <Path Data="M167-120q-21 5-36.5-10.5T120-167l40-191 198 198-191 40Zm191-40L160-358l458-458q23-23 57-23t57 23l84 84q23 23 23 57t-23 57L358-160Zm317-600L261-346l85 85 414-414-85-85Z"
                                                   Fill="#365A82"/>
                                         </Viewbox>
                                         <TextBlock Text="Write" VerticalAlignment="Center"/>
