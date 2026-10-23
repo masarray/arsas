@@ -146,6 +146,7 @@ public class SignalDefinition : ObservableObject
                 return;
             if (!Set(ref _controlCdc, candidate)) return;
             Raise(nameof(ControlDockRole));
+            RefreshControlProcessValue();
             RaiseControlActionProperties();
         }
     }
@@ -213,7 +214,15 @@ public class SignalDefinition : ObservableObject
         set => Set(ref _controlInspectionEvidence, value?.Trim() ?? string.Empty);
     }
     public string ControlModelReference { get => _controlModelReference; set => Set(ref _controlModelReference, value?.Trim() ?? string.Empty); }
-    public string ControlStatusReference { get => _controlStatusReference; set => Set(ref _controlStatusReference, value?.Trim() ?? string.Empty); }
+    public string ControlStatusReference
+    {
+        get => _controlStatusReference;
+        set
+        {
+            if (Set(ref _controlStatusReference, value?.Trim() ?? string.Empty))
+                RefreshControlProcessValue();
+        }
+    }
     public string ControlModelText
     {
         get => _controlModelText;
@@ -278,20 +287,27 @@ public class SignalDefinition : ObservableObject
     {
         var position = IsPositionSemanticControl ||
             string.Equals(ControlCdc, "DPC", StringComparison.OrdinalIgnoreCase);
-        var type = position ? "Dbpos" :
+        var step = string.Equals(ControlCdc, "BSC",
+                StringComparison.OrdinalIgnoreCase) &&
+            ArIED61850Tester.Services.Iec61850ValueFormatter.IsBscStepPosition(
+                ControlStatusReference, ControlCdc);
+        var type = position ? "Dbpos" : step ? "Int8" :
             !string.IsNullOrWhiteSpace(ControlValueType) ? ControlValueType : ControlCdc;
         var boolType = type.Equals("SPS", StringComparison.OrdinalIgnoreCase) ||
                        type.Equals("SPC", StringComparison.OrdinalIgnoreCase) ||
                        type.Equals("Boolean", StringComparison.OrdinalIgnoreCase);
-        var display = position || boolType
-            ? ArIED61850Tester.Services.Iec61850ValueFormatter.FormatReportProcessValue(
-                ControlCurrentValue, type, "", position ? "Position" : "Status", ObjectReference)
-            : ControlCurrentValue;
+        var display = step
+            ? ArIED61850Tester.Services.Iec61850ValueFormatter.FormatBscStepPosition(
+                ControlCurrentValue)
+            : position || boolType
+                ? ArIED61850Tester.Services.Iec61850ValueFormatter.FormatReportProcessValue(
+                    ControlCurrentValue, type, "", position ? "Position" : "Status", ObjectReference)
+                : ControlCurrentValue;
         return new Iec61850ProcessValueBadge(
             display, type,
             Iec61850ValueStatePresentation.TypeToken(type),
             Iec61850ValueStatePresentation.ClassifyVisualKind(
-                display, type, reference: ObjectReference));
+                display, type, reference: step ? ControlStatusReference : ObjectReference));
     }
 
     private void RefreshControlProcessValue()
