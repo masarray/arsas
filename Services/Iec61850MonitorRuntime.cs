@@ -106,6 +106,11 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         public HybridReportPhysicalValidationTracker HybridValidation { get; } = new();
         public StaticDataSetReportProjectionAccumulator StaticReportProjection { get; } = new();
         public bool StaticDataSetReportOnly { get; set; }
+        // Independent canonical journal cursor: no second value store or
+        // cyclic MMS read is introduced for operator-triggered snapshots.
+        public long StaticReadJournalCursor { get; set; }
+        // Bounded recovery if a large Report storm wraps the journal ring.
+        public int StaticReadResyncIndex { get; set; } = -1;
         public Guid CurrentStaticParityAttemptId { get; set; }
     }
 
@@ -1023,6 +1028,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         session.HybridValidation.Reset(null);
         session.StaticReportProjection.Reset();
         session.StaticDataSetReportOnly = staticDataSetReportOnly;
+        session.StaticReadResyncIndex = -1;
+        session.StaticReadJournalCursor = device.LiveValues.Version;
 
         var safePollMs = Math.Clamp(pollingIntervalMs <= 0 ? 1000 : pollingIntervalMs, 50, 600000);
         foreach (var signal in selected)
@@ -1091,6 +1098,9 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                     $"Static report-only initial image: {seeded} actual association-scoped " +
                     "MMS Read scalar(s) reused; zero additional MMS requests or Report claims.");
         }
+        // Initial MMS Read reuse has finished. Only subsequent canonical
+        // revisions may produce another snapshot projection into runtime rows.
+        session.StaticReadJournalCursor = device.LiveValues.Version;
         device.Status = "Monitoring";
         if (staticDataSetReportOnly)
         {
@@ -1795,6 +1805,10 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                 }
 
                 await ReceiveReportSlicesAsync(session, cancellationToken).ConfigureAwait(false);
+                // Browser's explicit MMS Read already published SSOT before
+                // WPF. The monitor consumes only changed, exact ST/MX keys;
+                // it never repeats the network read or impersonates a Report.
+                ConsumeStaticReadJournal(session);
                 await PollDuePointsAsync(session, cancellationToken).ConfigureAwait(false);
                 await ProbeSessionHealthAsync(session, cancellationToken).ConfigureAwait(false);
                 await TryStartPendingReportSetupAsync(session, cancellationToken).ConfigureAwait(false);
@@ -2709,6 +2723,73 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
     }
 
     /// <summary>
+    /// Bounded projection of an operator's verified Browser MMS Read into an
+    /// existing static report-only runtime point. The journal is the signal,
+    /// the association-scoped canonical ledger is the only value authority.
+    /// Report observations and SOE remain exclusively receive-path owned.
+    /// </summary>
+    private void ConsumeStaticReadJournal(DeviceSession session)
+    {
+        if (!session.StaticDataSetReportOnly || !session.Device.IsMonitoring ||
+            !session.Client.IsConnected || session.BrowserObservationAssociation == 0)
+            return;
+        var ledger = session.Device.LiveValues;
+        var association = session.BrowserObservationAssociation;
+        if (ledger.IsOffline || ledger.Association != association)
+            return;
+
+        // Max 32 canonical keys per iteration, independent of model size.
+        // Overflow means journal history is incomplete: inspect the selected
+        // points in bounded batches, never pretend that missing events occurred.
+        var changes = ledger.ReadChanges(session.StaticReadJournalCursor, 32);
+        session.StaticReadJournalCursor = changes.ThroughRevision;
+        if (changes.RequiresFullRefresh)
+            session.StaticReadResyncIndex = 0;
+
+        foreach (var change in changes.Changes)
+        {
+            if (change.Kind != CanonicalValueChangeKind.Read ||
+                change.Association != association ||
+                change.FunctionalConstraint is not ("ST" or "MX"))
+                continue;
+            var pointKey = session.Device.DeviceId + "|" + NormalizeReference(change.Reference);
+            if (session.Points.TryGetValue(pointKey, out var point) &&
+                point.FunctionalConstraint.Equals(change.FunctionalConstraint,
+                    StringComparison.OrdinalIgnoreCase))
+                ProjectStaticReadSnapshot(session, point, association);
+        }
+
+        if (session.StaticReadResyncIndex < 0)
+            return;
+        // Canonical journal overrun recovery is bounded and cancellable by
+        // the owning MonitorLoop; no full-model UI refresh or new I/O.
+        var offset = session.StaticReadResyncIndex;
+        var batch = session.Points.Values.Skip(offset).Take(32).ToArray();
+        foreach (var point in batch)
+            ProjectStaticReadSnapshot(session, point, association);
+        session.StaticReadResyncIndex = batch.Length < 32
+            ? -1 : offset + batch.Length;
+    }
+
+    private void ProjectStaticReadSnapshot(
+        DeviceSession session, Iec61850MonitorPoint point, long association)
+    {
+        if (!session.States.TryGetValue(point.PointKey, out var state) ||
+            state.ReportTrafficSeen ||
+            !TryGetStaticInitialRead(session.Device.LiveValues, association,
+                point.IecReference, point.FunctionalConstraint, out var read) ||
+            !session.Device.IsConnected || !session.Client.IsConnected ||
+            session.Device.LiveValues.Association != association)
+            return;
+        ApplyValueUpdate(session, point, read.Value, read.Quality,
+            read.DeviceTimestamp, "MMS Snapshot Read",
+            $"Explicit MMS Read at {read.ObservedUtc:O}; " +
+            "awaiting first routed InformationReport",
+            read.ObservedUtc, "Snapshot / awaiting InformationReport",
+            trustReportEdge: false);
+    }
+
+    /// <summary>
     /// Reuse a previously decoded exact-reference ST/MX MMS Read as an initial
     /// static DataSet snapshot. Does not infer Report ingress, alias a sibling
     /// attribute, change RCB state or issue any network traffic.
@@ -2764,7 +2845,11 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                               !string.Equals(state.SourceMode, sourceMode, StringComparison.Ordinal) ||
                               !string.Equals(state.Reason, reason, StringComparison.Ordinal) ||
                               !string.Equals(state.Status, status, StringComparison.Ordinal);
-        var changed = hasProcessValue && hadValue && (trustReportEdge
+        // An isolated one-shot Snapshot Read is not continuous SOE
+        // evidence; never manufacture a breaker transition from its delta.
+        var changed = hasProcessValue && hadValue &&
+            !string.Equals(sourceMode, "MMS Snapshot Read", StringComparison.Ordinal) &&
+            (trustReportEdge
             ? HasExactSemanticEdge(point, oldValue, display)
             : HasMeaningfulEdge(point, oldValue, display));
 
@@ -3070,6 +3155,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         session.ContinuityUntrackedStreams = 0;
         session.Device.ReportContinuityEvidence = null;
         session.LastUnroutedReportCount = 0;
+        session.StaticReadJournalCursor = session.Device.LiveValues.Version;
+        session.StaticReadResyncIndex = -1;
         ResetAssociationReportEvidence(session);
 
         var legacyPlans = Iec61850ReportPlanner.BuildPlans(session.Device, session.Points.Values);

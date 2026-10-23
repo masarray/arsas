@@ -166,6 +166,20 @@ public sealed class Sg7IntegratedControlSsotRcbTests
     }
 
     [Fact]
+    public void StaticReportReadJournal_IsBounded_ReadOnlyAndNeverSynthesizesSoe()
+    {
+        var runtime = Read("Services/Iec61850MonitorRuntime.cs");
+        Assert.Contains("ConsumeStaticReadJournal(session);", runtime);
+        Assert.Contains("ledger.ReadChanges(session.StaticReadJournalCursor, 32)", runtime);
+        Assert.Contains("change.Kind != CanonicalValueChangeKind.Read", runtime);
+        Assert.Contains("change.Association != association", runtime);
+        Assert.Contains("state.ReportTrafficSeen", runtime);
+        Assert.Contains("TryGetStaticInitialRead(session.Device.LiveValues, association", runtime);
+        Assert.Contains("!string.Equals(sourceMode, \"MMS Snapshot Read\"", runtime);
+        Assert.DoesNotContain("PublishReport(point", runtime);
+    }
+
+    [Fact]
     public void IntegrationContract_OneIngressWriter_NoWpfPublishOrBypassedOperate()
     {
         var runtime = Read("Services/Iec61850MonitorRuntime.cs");
