@@ -145,7 +145,7 @@ public partial class IoListTestingWindow
             ? nameof(IoTestPointPlan.Value1RelayTimestampText)
             : nameof(IoTestPointPlan.Value2RelayTimestampText)));
         timestamp.SetValue(TextBlock.FontSizeProperty, 8.8);
-        timestamp.SetValue(TextBlock.FontFamilyProperty, (FontFamily)FindResource("AppFontFamily"));
+        timestamp.SetValue(TextBlock.FontFamilyProperty, (FontFamily)System.Windows.Application.Current.FindResource("AppFontFamily"));
         timestamp.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(112, 126, 145)));
         panel.AppendChild(timestamp);
 
