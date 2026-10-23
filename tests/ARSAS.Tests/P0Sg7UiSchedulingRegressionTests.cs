@@ -52,7 +52,7 @@ public sealed class P0Sg7UiSchedulingRegressionTests
         Assert.DoesNotContain("_liveSignalSearchView.Refresh()", dynamic);
         Assert.DoesNotContain("string.Join('\\n', new[]", dynamic);
         Assert.Contains("sourceCollection.Count <= 2048", dynamic);
-        Assert.Contains("large.Count > 2048", sorting);
+        Assert.Contains("Count: > 2048", sorting);
         Assert.Contains("grid.Name == \"ExplorerLiveValuesGrid\"", sorting);
     }
 
