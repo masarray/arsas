@@ -63,6 +63,26 @@ public sealed class P0Sg7UiSchedulingRegressionTests
         Assert.Contains("processed >= 64", flush);
     }
 
+    [Fact]
+    public void BrowserSelection_DetailProjectionRunsBehindSingleWorkerGate()
+    {
+        var browser = Read("MainWindow.IedBrowser.cs");
+        var worker = Read("MainWindow.IedBrowser.AsyncDetails.cs");
+        var render = browser.Split("private void RenderIedBrowserSelection(")[1];
+
+        Assert.Contains("++_iedBrowserDetailBuildGeneration", render);
+        Assert.Contains("BuildIedBrowserDetailsAsync(row, model,", render);
+        Assert.DoesNotContain("ReplaceIedBrowserDetails(IedBrowserPresentation.Details(", render);
+        Assert.Contains("SemaphoreSlim _iedBrowserDetailBuildGate = new(1, 1)", worker);
+        Assert.Contains("_iedBrowserDetailBuildGate.WaitAsync(", worker);
+        Assert.Contains("Task.Run(() =>", worker);
+        Assert.Contains("IedBrowserPresentation.Details(page, model, connected, designModel)", worker);
+        Assert.Contains("generation != _iedBrowserDetailBuildGeneration", worker);
+        Assert.Contains("owner?.LiveValues.Association != association", worker);
+        Assert.Contains("ReplaceIedBrowserDetails(rows)", worker);
+        Assert.Contains("QueueIedBrowserFocusedRead(page)", worker);
+    }
+
     private static string Read(string name)
     {
         for (DirectoryInfo? folder = new(AppContext.BaseDirectory);
