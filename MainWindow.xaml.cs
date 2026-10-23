@@ -95,15 +95,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 ClearPendingControlConfirmations(_selectedDevice);
             }
             _selectedDevice = value;
-            // Make the currently selected IED's already queued visible values
-            // eligible on the next frame instead of waiting behind other IEDs.
-            if (_selectedDevice is { } priorityDevice)
-                foreach (var visible in priorityDevice.Points.Take(48))
-                {
-                    var key = CanonicalPointSnapshotAuthority.UiQueueKey(visible);
-                    if (_pendingPointSnapshots.ContainsKey(key))
-                        _priorityPointUiKeys.Enqueue(key);
-                }
+            // WPF LoadingRow now prioritizes actual virtualized viewport rows
+            // on this device switch. Never assume the first 48 data-model rows
+            // are currently visible after scroll/filter/sort.
             if (_selectedDevice != null)
             {
                 ClearPendingControlConfirmations(_selectedDevice);
@@ -160,6 +154,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (version.Length > 0)
             Title = $"ARSAS v{version} - Smart IEC 61850 Communication Tester";
         DataContext = this;
+        Devices.CollectionChanged += (_, _) => _uiPointOwnersDirty = true;
         _controlShoutTimer.Tick += (_, _) =>
         {
             _controlShoutTimer.Stop();
@@ -2575,6 +2570,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 new CanonicalPointSnapshotBatch(snapshot, snapshot.IsValueEdge)))
             {
                 _pendingPointUiKeys.Enqueue(key);
+                // Queue urgent work only for rows WPF has actually realized.
+                // Exact FC-qualified identity; no second value store or SOE.
+                if (_livePointViewport.IsRealized(key))
+                    _priorityPointUiKeys.Enqueue(key);
                 return;
             }
         }
@@ -2624,14 +2623,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var uiStartTicks = Stopwatch.GetTimestamp();
         var uiDeadlineTicks = uiStartTicks + Stopwatch.Frequency / 125; // ~8 ms
         var processedPoints = 0;
-        var deviceOwners = Devices
-            .GroupBy(device => device.DeviceId, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.First(),
-                StringComparer.OrdinalIgnoreCase);
+        var deviceOwners = UiPointOwners();
         while (processedPoints < UiPointBatchLimit &&
                Stopwatch.GetTimestamp() < uiDeadlineTicks &&
-               (_priorityPointUiKeys.TryDequeue(out var pointKey) ||
-                _pendingPointUiKeys.TryDequeue(out pointKey)))
+               TryDequeueUiPointKey(processedPoints, out var pointKey))
         {
             if (!_pendingPointSnapshots.TryRemove(pointKey, out var pending)) continue;
             processedPoints++;
