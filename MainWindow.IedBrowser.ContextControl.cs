@@ -83,6 +83,53 @@ public partial class MainWindow
         return allow.CanControl ? (command, source) : null;
     }
 
+    // ctlModel is FC=CF CONFIGURATION, never a Control/Operate service.
+    // Reuse the proven dedicated read → exact expected model → Write → readback
+    // dialog already used by Command Dock. This selection is read-only until
+    // the operator explicitly opens the guarded configuration dialog.
+    private SignalDefinition? BrowserSelectedControlModelSignal()
+    {
+        var device = SelectedDevice;
+        if (device is not { IsConnected: true, IsDemo: false, IsBusy: false } ||
+            device.LiveDiscoveryModel is null || device.LiveValues.IsOffline ||
+            _iedBrowserReadOperation is not null ||
+            IedBrowserDetailList?.SelectedItem is not IedBrowserDetailRow
+                { Kind: "Data", IsDataObject: false,
+                  FunctionalConstraint: "CF" } row ||
+            !row.ValueReference.EndsWith("$ctlModel", StringComparison.Ordinal) &&
+            !row.ValueReference.EndsWith(".ctlModel", StringComparison.Ordinal))
+            return null;
+
+        var page = _iedBrowserNavigation.Current;
+        var focused = page?.Payload switch
+        {
+            LiveIedDataObjectModel o => o.Reference,
+            LiveIedLogicalNodeModel => _iedBrowserSelectedDoReference,
+            _ => null
+        };
+        if (string.IsNullOrWhiteSpace(focused)) return null;
+        var slash = focused.IndexOf('/');
+        var dot = slash < 0 ? -1 : focused.IndexOf('.', slash + 1);
+        if (slash < 1 || dot < slash + 2) return null;
+
+        var source = device.LiveDiscoveryModel.LogicalDevices
+            .FirstOrDefault(ld => string.Equals(ld.MmsDomain, focused[..slash],
+                StringComparison.Ordinal))?
+            .LogicalNodes.FirstOrDefault(ln => string.Equals(ln.Name,
+                focused[(slash + 1)..dot], StringComparison.Ordinal))?
+            .DataObjects.FirstOrDefault(o =>
+                string.Equals(o.Reference, focused, StringComparison.Ordinal));
+        if (source is null || !source.Attributes.Any(a =>
+                a.FunctionalConstraint == "CF" &&
+                string.Equals(a.MmsReference, row.ValueReference, StringComparison.Ordinal)))
+            return null;
+
+        return device.OperableCommandSignals.Concat(device.CommandSignals)
+            .Where(signal => signal.IsValidControlObject &&
+                string.Equals(signal.ObjectReference, focused, StringComparison.Ordinal))
+            .Distinct().Take(2).FirstOrDefault();
+    }
+
     private void RefreshIedBrowserControlButton()
     {
         if (IedBrowserControlButton is null) return;
