@@ -151,7 +151,9 @@ public sealed class StaticDataSetReportProjectionAccumulatorTests
     [Fact]
     public void StaticReportHotPath_ReusesMembershipSnapshotInsteadOfAllocatingPerFrame()
     {
-        var source = File.ReadAllText(FindRepoFile("Services/Iec61850MonitorRuntime.cs"));
+        // Test source contracts must be portable across git LF and Windows CRLF.
+        var source = File.ReadAllText(FindRepoFile("Services/Iec61850MonitorRuntime.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
         Assert.Contains("session.StaticProjectionPoints = staticDataSetReportOnly", source);
         Assert.Contains("session.StaticProjectionPoints,\n                        sourceUpdate)", source);
         Assert.Contains("session.StaticProjectionPoints = [];", source);

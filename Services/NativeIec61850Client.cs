@@ -1353,6 +1353,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         var semantic = ArControl.Iec61850ControlSemanticResolver.Resolve(
             descriptor, signal.ControlCdc, signal.ControlStatusReference);
         var effectiveCdc = semantic.Cdc;
+        var exactDpcBooleanFeedback = HasExactDpcBooleanFeedback(descriptor, effectiveCdc);
         var status = await RunMmsOperationAsync(
             () => control.ReadStatusAsync(cancellationToken),
             cancellationToken).ConfigureAwait(false);
@@ -1366,7 +1367,9 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         // TapOpR/TapOpL -> TapChg.valWTr.posVal. The native descriptor remains the source
         // of truth for the command sequence, while the preferred feedback reference makes
         // commissioning feedback more useful for pulse-style controls.
-        if (!string.IsNullOrWhiteSpace(signal.ControlStatusReference) &&
+        if (!(effectiveCdc.Equals("DPC", StringComparison.OrdinalIgnoreCase) &&
+              descriptor.CtlValSpecification.MmsType.Equals("boolean", StringComparison.OrdinalIgnoreCase)) &&
+            !string.IsNullOrWhiteSpace(signal.ControlStatusReference) &&
             !string.Equals(signal.ControlStatusReference, descriptor.StatusReference, StringComparison.OrdinalIgnoreCase))
         {
             var preferred = await ReadValueAsync(
@@ -1399,7 +1402,8 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         // Reinspection of an unchanged, already verified command must not
         // publish an interim disabled state. Only an actual semantic change
         // revokes authority. This removes avoidable Command Dock flicker.
-        var fullyVerified = semantic.IsCommandSafe && descriptor.IsOperationallyReady;
+        var fullyVerified = semantic.IsCommandSafe &&
+            descriptor.IsOperationallyReady && exactDpcBooleanFeedback;
         if (!fullyVerified ||
             (signal.VerifiedLiveControlCdc.Length > 0 &&
              !signal.VerifiedLiveControlCdc.Equals(effectiveCdc, StringComparison.OrdinalIgnoreCase)))
@@ -1415,12 +1419,13 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         signal.ControlModelText = modelText;
         // Publish operability last; a partial inspection never authorizes
         // a user action. Native Operate still validates its own descriptor.
-        signal.ControlSemanticVerified = semantic.IsCommandSafe && descriptor.IsOperationallyReady;
+        signal.ControlSemanticVerified = fullyVerified;
         signal.ControlInspectionEvidence =
             $"{descriptor.ObjectReference}.ctlModel | {modelText} | " +
             $"typedCdc={descriptor.Cdc}, effectiveCdc={effectiveCdc}, " +
             $"ctlVal={descriptor.CtlValSpecification.Signature}, status={statusReference}, " +
-            $"semanticSafe={semantic.IsCommandSafe} | {semantic.Reason} | {descriptor.DiscoveryEvidence}";
+            $"semanticSafe={semantic.IsCommandSafe}, exactDpcBooleanFeedback={exactDpcBooleanFeedback} | " +
+            $"{semantic.Reason} | {descriptor.DiscoveryEvidence}";
 
         return new Iec61850ControlCapabilities
         {
@@ -1435,17 +1440,37 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             CurrentValue = currentValue,
             CurrentState = currentState,
             EngineControlServiceAvailable = true,
-            IsOperationallyReady = descriptor.IsOperationallyReady && semantic.IsCommandSafe,
+            IsOperationallyReady = fullyVerified,
             SupportsCommandTermination = descriptor.SupportsCommandTermination,
             SupportsTimeActivatedOperate = descriptor.SupportsTimeActivatedOperate,
             SboTimeoutText = FormatControlTimeout(descriptor.SboTimeout),
             OperTimeoutText = FormatControlTimeout(descriptor.OperTimeout),
             SequenceText = FriendlyControlSequence(descriptor.ControlModel),
             DiscoveryEvidence = descriptor.DiscoveryEvidence,
-            EngineControlServiceStatus = semantic.IsCommandSafe
-                ? "ARIEC61850 Smart Control is ready. CDC, live ctlVal, status and Direct/SBO semantics agree."
-                : semantic.Reason
+            EngineControlServiceStatus = !exactDpcBooleanFeedback
+                ? "DPC Boolean blocked: live stVal is not the exact same-object status reference."
+                : fullyVerified
+                    ? "ARIEC61850 Smart Control is ready. CDC, live ctlVal, status and Direct/SBO semantics agree."
+                    : semantic.Reason
         };
+    }
+
+    /// <summary>
+    /// Consumer read-only identity fence for typed DPC Boolean Oper.ctlVal.
+    /// A lookalike status .stVal on another object cannot authorize command.
+    /// Native ARIEC semantics and Operate gating remain independent.
+    /// </summary>
+    internal static bool HasExactDpcBooleanFeedback(
+        ArControl.Iec61850ControlObjectDescriptor descriptor, string cdc)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        if (!string.Equals(cdc, "DPC", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(descriptor.CtlValSpecification.MmsType,
+                "boolean", StringComparison.OrdinalIgnoreCase))
+            return true;
+        return !string.IsNullOrWhiteSpace(descriptor.ObjectReference) &&
+            string.Equals(descriptor.StatusReference,
+                descriptor.ObjectReference + ".stVal", StringComparison.Ordinal);
     }
 
     public async Task<Iec61850ControlCommandResult> ExecuteControlAsync(
