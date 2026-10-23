@@ -40,6 +40,9 @@ public partial class MainWindow
         // Preserve its user-chosen expansion state across navigation. Replaying
         // different per-tab defaults repeatedly unloaded/reloaded command rows.
         public bool DockExpanded { get; set; } = true;
+        // SV inspection is independent of MMS command admission. Default
+        // collapsed, but retain the operator's explicit override per workspace.
+        public bool SmvDockExpanded { get; set; } = false;
     }
 
     [ModuleInitializer]
@@ -381,20 +384,26 @@ public partial class MainWindow
         if (state == null || state.ApplyingDockState || state.SuppressDockStateCapture)
             return;
 
-        state.DockExpanded = expanded;
+        if (MainTabs.SelectedIndex == EngineeringNavigationRoute.SmvWorkspaceIndex)
+            state.SmvDockExpanded = expanded;
+        else
+            state.DockExpanded = expanded;
     }
 
     private void ApplyP0CommandDockState(PersistentWorkbenchState state, int workspaceIndex)
     {
-        // Navigation is read-only to dock state. No WPF unload/reload or
-        // implicit expanded-event MMS inspection on tab change.
-        if (CommandPanelExpander.IsExpanded == state.DockExpanded)
+        // Restore the operator choice for each purpose, while initially hiding
+        // MMS commands on passive SV inspection. Do not recreate the panel or
+        // invoke any control/refresh operation as a navigation side effect.
+        var desiredExpanded = workspaceIndex == EngineeringNavigationRoute.SmvWorkspaceIndex
+            ? state.SmvDockExpanded : state.DockExpanded;
+        if (CommandPanelExpander.IsExpanded == desiredExpanded)
             return;
 
         state.ApplyingDockState = true;
         try
         {
-            CommandPanelExpander.IsExpanded = state.DockExpanded;
+            CommandPanelExpander.IsExpanded = desiredExpanded;
         }
         finally
         {
