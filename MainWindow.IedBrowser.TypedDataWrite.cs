@@ -85,6 +85,10 @@ public partial class MainWindow
             device.LiveValues.IsOffline || device.LiveDiscoveryModel is null ||
             _iedBrowserReadOperation is not null)
             return null;
+        // A focused status-only DA cannot borrow its parent DO's writable siblings.
+        if (IedBrowserDetailList?.SelectedItem is IedBrowserDetailRow
+            { Kind: "Data", IsDataObject: false })
+            return null;
 
         var page = _iedBrowserNavigation.Current;
         var focused = page?.Payload switch
@@ -121,6 +125,7 @@ public partial class MainWindow
         var selected = BrowserWritableSelectedAttribute();
         var selectedDo = selected is null ? BrowserWritableSelectedDo() : null;
         IedBrowserWriteButton.IsEnabled = selected is not null || selectedDo is not null;
+        IedBrowserWriteButton.Content = selectedDo is not null ? "Write DAs…" : "Write DA…";
         IedBrowserWriteButton.ToolTip = selected is not null
             ? "Exact DA: inspect live GVA, review old/new and confirm one MMS Write."
             : selectedDo is not null
@@ -132,7 +137,10 @@ public partial class MainWindow
         object sender, SelectionChangedEventArgs e)
     {
         if (ReferenceEquals(sender, IedBrowserDetailList))
+        {
             RefreshIedBrowserWriteButton();
+            RefreshIedBrowserControlButton();
+        }
     }
 
     private void IedBrowserWrite_Click(object sender, RoutedEventArgs e)
