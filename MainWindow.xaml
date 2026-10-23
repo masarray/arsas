@@ -2046,6 +2046,10 @@
                                 <Button Content="Refresh view" Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         Click="IedBrowserRefresh_Click"
                                         ToolTip="Rebuild view from cached SCL/discovery only; does not contact the IED"/>
+                                <Button x:Name="IedBrowserControlButton" Content="Control…"
+                                        Style="{StaticResource SoftButton}" Margin="0,0,6,0"
+                                        IsEnabled="False" Click="IedBrowserControl_Click"
+                                        ToolTip="Only enabled when this online DO has an existing live-verified native IEC Control descriptor."/>
                                 <Button x:Name="IedBrowserWriteButton" Content="Write DA…"
                                         Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         IsEnabled="False" Click="IedBrowserWrite_Click"
