@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
+using System.Windows.Media;
 using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
@@ -36,6 +37,9 @@ public partial class IpConnectWizardWindow : Window
     private readonly bool _rememberDiscoveryEndpoint;
     private readonly ICollectionView _historyView;
     private bool _updatingOctets;
+    private bool _rawAddressMode;
+    private const double CollapsedDialogHeight = 308;
+    private const double ExpandedDialogHeight = 372;
     public int MmsPort { get; private set; } = 102;
 
     // UI projection ONLY; UserPreferenceStore remains the sole persistence authority.
@@ -75,12 +79,15 @@ public partial class IpConnectWizardWindow : Window
         if (selectedPort != 102)
             MoreOptionsExpander.IsExpanded = true;
 
+        // Set final dimensions before WPF creates the HWND.
+        Height = MoreOptionsExpander.IsExpanded ? ExpandedDialogHeight : CollapsedDialogHeight;
+
         foreach (var box in Octets)
             DataObject.AddPastingHandler(box, Octet_Pasting);
 
         Loaded += (_, _) =>
         {
-            if (ManualAddressCheck.IsChecked == true) RawIpBox.Focus();
+            if (_rawAddressMode) RawIpBox.Focus();
             else Octet1Box.Focus();
         };
     }
@@ -129,7 +136,6 @@ public partial class IpConnectWizardWindow : Window
         RelayIpAddress = address;
         if (TrySplitIpv4(address, out var parts))
         {
-            ManualAddressCheck.IsChecked = false;
             _updatingOctets = true;
             try
             {
@@ -141,13 +147,12 @@ public partial class IpConnectWizardWindow : Window
         }
         else if (!string.IsNullOrWhiteSpace(address))
         {
-            ManualAddressCheck.IsChecked = true;
+            // Existing IPv6 history stays available without a visible mode toggle.
             RawIpBox.Text = address;
             SetAddressMode(true);
         }
         else
         {
-            ManualAddressCheck.IsChecked = false;
             _updatingOctets = true;
             try { foreach (var box in Octets) box.Clear(); }
             finally { _updatingOctets = false; }
@@ -156,49 +161,47 @@ public partial class IpConnectWizardWindow : Window
         WizardStatusText.Text = string.Empty;
     }
 
-    private void SetAddressMode(bool manual)
+    private void SetAddressMode(bool raw)
     {
-        IpEditorHost.Visibility = manual ? Visibility.Collapsed : Visibility.Visible;
-        OctetEditor.Visibility = manual ? Visibility.Collapsed : Visibility.Visible;
-        HistoryButton.Visibility = manual ? Visibility.Collapsed : Visibility.Visible;
-        RawIpBox.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
-        if (manual)
-            MoreOptionsExpander.IsExpanded = true;
-        AddressHintText.Text = manual
+        _rawAddressMode = raw;
+        // One field and one history dropdown remain visible in both modes.
+        OctetEditor.Visibility = raw ? Visibility.Collapsed : Visibility.Visible;
+        RawIpBox.Visibility = raw ? Visibility.Visible : Visibility.Collapsed;
+        AddressHintText.Text = raw
             ? "Enter the address exactly as provided."
             : "Example: 192.168.1.10";
     }
 
-    private void ManualAddressCheck_Click(object sender, RoutedEventArgs e)
+    private void MoreOptionsExpander_ExpandedCollapsed(object sender, RoutedEventArgs e)
     {
-        var manual = ManualAddressCheck.IsChecked == true;
-        if (manual && TryNormalizeIpv4Octets(Octets.Select(b => b.Text).ToArray(), out var ip))
+        // User disclosure may grow the dialog. No startup positioning here.
+        if (IsLoaded && ReferenceEquals(e.OriginalSource, MoreOptionsExpander))
+            Height = MoreOptionsExpander.IsExpanded ? ExpandedDialogHeight : CollapsedDialogHeight;
+    }
+
+    private void Wizard_SourceInitialized(object? sender, EventArgs e)
+    {
+        // HWND exists but is not yet painted. Position before ShowDialog displays.
+        if (Owner is { IsVisible: true } owner &&
+            owner.ActualWidth > 0 && owner.ActualHeight > 0)
         {
-            RelayIpAddress = ip;
-            RawIpBox.Text = ip;
-        }
-        else if (!manual && TrySplitIpv4(RawIpBox.Text, out var parts))
-        {
-            _updatingOctets = true;
-            try
+            var centerPx = owner.PointToScreen(
+                new Point(owner.ActualWidth / 2, owner.ActualHeight / 2));
+            var target = PresentationSource.FromVisual(this)?.CompositionTarget
+                      ?? PresentationSource.FromVisual(owner)?.CompositionTarget;
+            if (target is not null)
             {
-                var boxes = Octets;
-                for (int i = 0; i < 4; i++) boxes[i].Text = parts[i];
+                var centerDip = target.TransformFromDevice.Transform(centerPx);
+                Left = centerDip.X - Width / 2;
+                Top = centerDip.Y - Height / 2;
+                return;
             }
-            finally { _updatingOctets = false; }
-        }
-        else if (!manual && !string.IsNullOrWhiteSpace(RawIpBox.Text))
-        {
-            // Never silently truncate a valid IPv6 literal into four octets.
-            ManualAddressCheck.IsChecked = true;
-            WizardStatusText.Text = "Keep manual entry enabled for this address format.";
-            return;
         }
 
-        SetAddressMode(manual);
-        if (manual) RawIpBox.Focus();
-        else Octet1Box.Focus();
-        WizardStatusText.Text = string.Empty;
+        // Standalone test/no owner: use work area.
+        var workArea = SystemParameters.WorkArea;
+        Left = workArea.Left + (workArea.Width - Width) / 2;
+        Top = workArea.Top + (workArea.Height - Height) / 2;
     }
 
     private int OctetIndex(TextBox box) => Array.IndexOf(Octets, box);
@@ -280,6 +283,17 @@ public partial class IpConnectWizardWindow : Window
         }
 
         var pasted = (e.SourceDataObject.GetData(DataFormats.UnicodeText) as string ?? "").Trim();
+        // A complete IPv6 paste switches editor automatically; IPv6 literals
+        // without dots must not be processed as invalid single IPv4 octets.
+        if (IPAddress.TryParse(pasted, out var fullAddress) &&
+            fullAddress.AddressFamily == AddressFamily.InterNetworkV6)
+        {
+            e.CancelCommand();
+            ApplyAddress(pasted);
+            RawIpBox.Focus();
+            RawIpBox.CaretIndex = RawIpBox.Text.Length;
+            return;
+        }
         if (pasted.Contains('.'))
         {
             e.CancelCommand();
@@ -370,7 +384,7 @@ public partial class IpConnectWizardWindow : Window
         if (selection.MmsPort != 102)
             MoreOptionsExpander.IsExpanded = true;
         HistoryPopup.IsOpen = false;
-        if (ManualAddressCheck.IsChecked == true) RawIpBox.Focus();
+        if (_rawAddressMode) RawIpBox.Focus();
         else Octet1Box.Focus();
         // Recalling an endpoint is UI-only. Only Connect_Click submits.
     }
@@ -378,7 +392,7 @@ public partial class IpConnectWizardWindow : Window
     private void Connect_Click(object sender, RoutedEventArgs e)
     {
         string submittedAddress;
-        if (ManualAddressCheck.IsChecked == true)
+        if (_rawAddressMode)
         {
             submittedAddress = RawIpBox.Text.Trim();
             if (!IPAddress.TryParse(submittedAddress, out _))
