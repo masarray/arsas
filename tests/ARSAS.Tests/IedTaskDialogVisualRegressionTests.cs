@@ -21,11 +21,20 @@ public sealed class IedTaskDialogVisualRegressionTests
             var document = XDocument.Load(Find(file));
             var root = Assert.IsType<XElement>(document.Root);
             Assert.Equal("Window", root.Name.LocalName);
-            Assert.Equal("Height", (string?)root.Attribute("SizeToContent"));
+            Assert.Equal(file == "IpConnectWizardWindow.xaml" ? "Manual" : "Height",
+                (string?)root.Attribute("SizeToContent"));
             Assert.Equal("TaskDialogCanvas", ResourceRef((string?)root.Attribute("Background"), "DynamicResource"));
-            Assert.True(double.TryParse((string?)root.Attribute("MaxHeight"),
-                NumberStyles.Float, CultureInfo.InvariantCulture, out var max) && max <= 700);
-            Assert.Null(root.Attribute("Height"));
+            if (file == "IpConnectWizardWindow.xaml")
+            {
+                Assert.Equal("350", (string?)root.Attribute("Height"));
+                Assert.Equal("CenterOwner", (string?)root.Attribute("WindowStartupLocation"));
+            }
+            else
+            {
+                Assert.True(double.TryParse((string?)root.Attribute("MaxHeight"),
+                    NumberStyles.Float, CultureInfo.InvariantCulture, out var max) && max <= 700);
+                Assert.Null(root.Attribute("Height"));
+            }
             Assert.Contains(root.Descendants(Presentation + "ResourceDictionary"),
                 element => element.Attribute("Source")?.Value == "Styles/IedTaskDialogStyles.xaml");
             Assert.Contains(root.Descendants(Presentation + "ScrollViewer"),
