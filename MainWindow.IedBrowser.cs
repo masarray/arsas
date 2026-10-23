@@ -216,7 +216,17 @@ public partial class MainWindow
 
     private void IedBrowserRefresh_Click(object sender, RoutedEventArgs e)
     {
-        // The operator explicitly requested a new local projection, not MMS discovery.
+        // Explicit local refresh may retry previously faulted background metadata
+        // builds; ordinary live ticks never create retry storms.
+        if (SelectedDevice is { } selected)
+        {
+            var model = selected.LiveDiscoveryModel ?? selected.SclWorkspace?.DesignModel;
+            if (model is not null && _iedBrowserSchemaTasks.TryGetValue(model, out var indexTask) &&
+                indexTask.IsFaulted)
+                _iedBrowserSchemaTasks.Remove(model);
+        }
+        if (_iedBrowserInventoryTask?.IsFaulted == true)
+            _iedBrowserInventoryTask = null;
         _iedBrowserForceRefresh = true;
         RefreshIedBrowser();
     }
