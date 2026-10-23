@@ -223,9 +223,30 @@ def choose_artifact(payload: dict, run_id: int, *, allow_missing: bool = False) 
     ]
     if not matches and allow_missing:
         return None
-    if len(matches) != 1:
-        raise ProofError("Expected exactly one non-expired canonical test artifact")
-    return matches[0]
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        raise ProofError("Expected a non-expired canonical test artifact")
+
+    # GitHub retains each attempt's same-named artifact after a workflow rerun.
+    # Never delete old evidence, and NEVER pick an older passing attempt when
+    # the latest canonical run/attempt has failed. The caller has already
+    # required the latest run conclusion=success, and the selected artifact's
+    # embedded manifest/TRX MUST prove the exact latest run_attempt and SHA.
+    # Artifact API has no run_attempt field: order by its server-issued
+    # created_at timestamp and refuse absent/ambiguous timestamps.
+    stamped = []
+    for candidate in matches:
+        created = candidate.get("created_at")
+        if (not isinstance(created, str) or
+                not created.endswith("Z") or
+                len(created) != len("2026-10-23T00:57:03Z")):
+            raise ProofError("Multiple canonical artifacts lack trustworthy creation timestamps")
+        stamped.append((created, candidate))
+    stamped.sort(key=lambda pair: pair[0], reverse=True)
+    if stamped[0][0] == stamped[1][0]:
+        raise ProofError("Canonical artifact rerun timestamp is ambiguous")
+    return stamped[0][1]
 
 
 class StripCrossOriginAuthorization(urllib.request.HTTPRedirectHandler):
