@@ -123,8 +123,8 @@ public sealed class P0BrowserRcbEnabledTruthTests
         var rows = IedBrowserPresentation.Roots(null, [Rcb()]);
         var tree = new IedBrowserTreeProjection();
         tree.Reset(rows);
-        Assert.Equal(new[] { "GOOSE", "Reports", "Setting Groups", "Files",
-            "DataSets", "Data Model" }, tree.Rows.Select(x => x.Title));
+        Assert.Equal(new[] { "Reports", "DataSets", "Data Model", "Files",
+            "GOOSE", "Setting Groups" }, tree.Rows.Select(x => x.Title));
         Assert.All(tree.Rows, x => Assert.False(x.IsExpanded));
 
         var reports = Assert.Single(tree.Rows.Where(x => x.Key == "category/reports"));
