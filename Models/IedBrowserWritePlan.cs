@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
+using System.Windows;
 using AR.Iec61850.Discovery;
 using AR.Iec61850.Mms;
 
@@ -130,6 +131,67 @@ public sealed class IedBrowserWriteRow : INotifyPropertyChanged
     private string _requestedValue = "";
     private string _current = "Not read";
     private string _result = "Pending";
+    private bool _hasVerifiedRead;
+    public MmsDataValue? LiveBeforeValue { get; private set; }
+    public bool HasEdited { get; private set; }
+    public bool HasVerifiedRead
+    {
+        get => _hasVerifiedRead;
+        private set
+        {
+            if (_hasVerifiedRead == value) return;
+            _hasVerifiedRead = value;
+            Notify(nameof(HasVerifiedRead));
+            Notify(nameof(TextEditorVisibility));
+            Notify(nameof(BooleanEditorVisibility));
+            Notify(nameof(CtlModelEditorVisibility));
+            Notify(nameof(PlaceholderVisibility));
+        }
+    }
+    public string ShortName =>
+        Reference.Split('.').LastOrDefault() ?? Reference;
+    public bool IsBoolean => DataType.Equals("BOOLEAN", StringComparison.OrdinalIgnoreCase) ||
+                             DataType.Equals("BOOL", StringComparison.OrdinalIgnoreCase);
+    public IReadOnlyList<string> BooleanOptions { get; } = new[] { "false", "true" };
+    public Visibility TextEditorVisibility =>
+        HasVerifiedRead && !IsBoolean && !IsControlModel
+            ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility BooleanEditorVisibility =>
+        HasVerifiedRead && IsBoolean && !IsControlModel
+            ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility CtlModelEditorVisibility =>
+        HasVerifiedRead && IsControlModel
+            ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility PlaceholderVisibility =>
+        HasVerifiedRead ? Visibility.Collapsed : Visibility.Visible;
+
+    public void ApplyLiveRead(MmsDataValue value)
+    {
+        LiveBeforeValue = value;
+        Current = MmsDataCodec.ToDisplayString(value);
+        _requestedValue = value.Value switch
+        {
+            bool b => b ? "true" : "false",
+            string text => text,
+            long or ulong or int or uint or float or double =>
+                Convert.ToString(value.Value, CultureInfo.InvariantCulture) ?? "",
+            _ => ""
+        };
+        HasEdited = false;
+        Notify(nameof(RequestedValue));
+        HasVerifiedRead = true;
+    }
+
+    public void ExpireLiveRead()
+    {
+        HasVerifiedRead = false;
+        HasEdited = false;
+        LiveBeforeValue = null;
+    }
+
+    private void Notify(string field) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(field));
+
     public IedBrowserWriteRow(string reference, string fc, string type)
     {
         Reference = reference;
@@ -162,7 +224,8 @@ public sealed class IedBrowserWriteRow : INotifyPropertyChanged
     {
         get => _requestedValue;
         set { if (_requestedValue == value) return; _requestedValue = value;
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RequestedValue))); }
+            if (HasVerifiedRead) HasEdited = true;
+            Notify(nameof(RequestedValue)); }
     }
     public event PropertyChangedEventHandler? PropertyChanged;
 }
