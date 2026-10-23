@@ -171,7 +171,7 @@ public partial class IoListTestingWindow
         style.Setters.Add(new Setter(TextBlock.FontSizeProperty, 11.2));
         style.Setters.Add(new Setter(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(68, 84, 107))));
         if (monospace)
-            style.Setters.Add(new Setter(TextBlock.FontFamilyProperty, new FontFamily("Cascadia Mono, Consolas")));
+            style.Setters.Add(new Setter(TextBlock.FontFamilyProperty, (FontFamily)FindResource("AppFontFamily")));
 
         return new DataGridTextColumn
         {
@@ -234,7 +234,7 @@ public partial class IoListTestingWindow
             ? nameof(IoTestPointPlan.Value1RelayTimestampText)
             : nameof(IoTestPointPlan.Value2RelayTimestampText)));
         timestamp.SetValue(TextBlock.FontSizeProperty, 8.8);
-        timestamp.SetValue(TextBlock.FontFamilyProperty, new FontFamily("Cascadia Mono, Consolas"));
+        timestamp.SetValue(TextBlock.FontFamilyProperty, (FontFamily)FindResource("AppFontFamily"));
         timestamp.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(112, 126, 145)));
         panel.AppendChild(timestamp);
 
