@@ -18,7 +18,10 @@ public partial class MainWindow
     private readonly HashSet<DataGrid> _iecNaturallySortedGrids = new();
 
     private void ExplorerLiveGrid_Loaded(object sender, RoutedEventArgs e)
-        => AttachIecNaturalGridSort(sender as DataGrid, IecNaturalLiveMonitorSort.Instance);
+    {
+        AttachLivePointViewportPriority(sender as DataGrid);
+        AttachIecNaturalGridSort(sender as DataGrid, IecNaturalLiveMonitorSort.Instance);
+    }
 
     private void CommandGrid_Loaded(object sender, RoutedEventArgs e)
     {
@@ -29,7 +32,10 @@ public partial class MainWindow
     }
 
     private void GlobalLiveGrid_Loaded(object sender, RoutedEventArgs e)
-        => AttachIecNaturalGridSort(sender as DataGrid, IecNaturalGlobalMonitorSort.Instance);
+    {
+        AttachLivePointViewportPriority(sender as DataGrid);
+        AttachIecNaturalGridSort(sender as DataGrid, IecNaturalGlobalMonitorSort.Instance);
+    }
 
     private void AttachIecNaturalGridSort(DataGrid? grid, IComparer comparer)
     {
