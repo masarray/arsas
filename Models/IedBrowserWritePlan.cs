@@ -52,10 +52,10 @@ public static class IedBrowserWritePlan
         return t is "BOOLEAN" or "BOOL" or "ENUM" or "ENUMERATED" or
             "INT8" or "INT16" or "INT32" or "INT64" or "INTEGER" or
             "INT8U" or "INT16U" or "INT24U" or "INT32U" or "INT64U" or
-            "UNSIGNED" or "FLOAT32" or "FLOAT" or "FLOAT64" or
+            "UNSIGNED" or "FLOAT32" or "FLOAT" or
             "VISSTRING32" or "VISSTRING64" or "VISSTRING65" or
             "VISSTRING129" or "VISSTRING255" or "VISIBLESTRING" or
-            "UNICODE255" or "STRING" or "STRING255" or "MMSSTRING";
+            "STRING" or "STRING255" or "MMSSTRING";
     }
 
     public static MmsDataValue EncodeValue(string type, string raw, string reference)
@@ -85,11 +85,13 @@ public static class IedBrowserWritePlan
             "INT8U" or "INT16U" or "INT24U" or "INT32U" or "INT64U" or
                 "UNSIGNED" => MmsDataValue.Unsigned(
                     ulong.Parse(raw.Trim(), NumberStyles.Integer, invariant)),
-            "FLOAT32" or "FLOAT64" or "FLOAT" => EncodeFloat(raw, invariant),
+            // Engine MmsDataCodec currently emits IEEE-754 binary32 only.
+            // Do NOT silently narrow a double/IEEE-754 binary64 MMS DA.
+            "FLOAT32" or "FLOAT" => EncodeFloat(raw, invariant),
             "VISSTRING32" or "VISSTRING64" or "VISSTRING65" or
                 "VISSTRING129" or "VISSTRING255" or "VISIBLESTRING" =>
                     EncodeString(raw, t, mms: false),
-            "UNICODE255" or "STRING" or "STRING255" or "MMSSTRING" =>
+            "STRING" or "STRING255" or "MMSSTRING" =>
                 EncodeString(raw, t, mms: true),
             _ => throw new NotSupportedException(
                 "No verified safe primitive MMS encoder for this DA type: " + type)

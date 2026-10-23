@@ -29,16 +29,17 @@ public partial class MainWindow
         public required GridSplitter DockSplitter { get; init; }
         public required Border DockGuide { get; init; }
         public bool DockDragging { get; set; }
+        public bool ApplyingGeometry { get; set; }
         public Dictionary<int, double> DockHeightByWorkspace { get; } = new()
         {
             // First paint should expose a complete command row without forcing the operator
             // to resize the dock. Dragged heights remain authoritative for the session.
-            [0] = 336,
-            [1] = 320,
-            [2] = 336,
-            [3] = 320,
-            [4] = 320,
-            [5] = 320
+            [0] = 248,
+            [1] = 224,
+            [2] = 252,
+            [3] = 224,
+            [4] = 224,
+            [5] = 224
         };
     }
 
@@ -104,10 +105,19 @@ public partial class MainWindow
         // P0 used row 1 directly for the command Expander. Insert a real gutter row so the
         // dock can use the same quiet resizer language as the Explorer.
         var dockRow = shell.RowDefinitions[1];
+        // The workspace is the remaining star row. A fixed dock height must
+        // never be measured outside the window's real client area.
+        shell.RowDefinitions[0].Height = new GridLength(1, GridUnitType.Star);
+        shell.RowDefinitions[0].MinHeight = 0;
+        shell.ClipToBounds = true;
         var dockGutterRow = new RowDefinition { Height = new GridLength(0) };
         shell.RowDefinitions.Insert(1, dockGutterRow);
 
         CommandPanelExpander.Margin = new Thickness(0);
+        CommandPanelExpander.MinHeight = 0;
+        CommandPanelExpander.ClipToBounds = true;
+        EquipmentCommandGrid.MinHeight = 0;
+        EquipmentCommandGrid.SetValue(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Auto);
         Grid.SetRow(CommandPanelExpander, 2);
         Grid.SetRowSpan(CommandPanelExpander, 1);
 
@@ -172,9 +182,7 @@ public partial class MainWindow
         CommandPanelExpander.Collapsed += P1DockExpander_ExpandedCollapsed;
         CommandPanelExpander.IsVisibleChanged += P1DockExpander_IsVisibleChanged;
         MainTabs.SelectionChanged += P1PanelGeometry_MainTabsSelectionChanged;
-        // Recalculate against the REAL shell viewport after window/DPI changes.
-        // One layout authority (this class), no competing timers or Star-row patches.
-        shell.SizeChanged += P1DockHost_SizeChanged;
+        shell.SizeChanged += P1DockShell_SizeChanged;
         Closed += P1PanelGeometry_Closed;
 
         ApplyP1DockGeometry(state, MainTabs.SelectedIndex);
@@ -262,6 +270,7 @@ public partial class MainWindow
                 state.DockHeightByWorkspace[MainTabs.SelectedIndex] = measured;
         }
 
+        ApplyP1DockGeometry(state, MainTabs.SelectedIndex);
         var target = state.DockSplitter.IsMouseOver ? 0.96 : 0;
         AnimateP1SplitterGuide(state.DockGuide, target, 130);
     }
@@ -292,14 +301,19 @@ public partial class MainWindow
         }));
     }
 
-    private void P1DockHost_SizeChanged(object sender, SizeChangedEventArgs e)
+    private void P1DockShell_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (e.HeightChanged && _p1PanelGeometry is { DockDragging: false } state)
+        if (_p1PanelGeometry is { DockDragging: false, ApplyingGeometry: false } state &&
+            e.HeightChanged)
             ApplyP1DockGeometry(state, MainTabs.SelectedIndex);
     }
 
     private void ApplyP1DockGeometry(P1PanelGeometryState state, int workspaceIndex)
     {
+        if (state.ApplyingGeometry || state.DockDragging) return;
+        state.ApplyingGeometry = true;
+        try
+        {
         var dockActive = CommandPanelExpander.IsVisible && CommandPanelExpander.IsExpanded;
         if (!dockActive)
         {
@@ -312,22 +326,25 @@ public partial class MainWindow
             return;
         }
 
-        // A fixed Dock row without a scrollable, FINITE viewport clipped the final
-        // controls below the status bar. Never invent 520px when the window is smaller.
-        // Reserve real height for the live-value pane, including at 125–150% DPI.
-        var measured = _persistentWorkbench?.Shell.ActualHeight ?? 0d;
-        var availableHeight = measured > 0d ? measured : Math.Max(272d, ActualHeight - 130d);
-        var upper = Math.Max(112d, Math.Min(440d, Math.Min(availableHeight * 0.55d,
-            availableHeight - 160d)));
+        // ActualHeight, never a fictitious 520px minimum. The previous floor
+        // could leave the dock below the visible window at low DPI/resize.
+        var availableHeight = _persistentWorkbench?.Shell.ActualHeight ?? ActualHeight;
+        if (!double.IsFinite(availableHeight) || availableHeight <= 0) return;
         var preferred = state.DockHeightByWorkspace.TryGetValue(workspaceIndex, out var stored)
-            ? stored : Math.Min(336d, availableHeight * 0.46d);
-        preferred = Math.Clamp(preferred, Math.Min(126d, upper), upper);
+            ? stored
+            : 224d;
+        // Keep at least 120 DIP for the live workspace and 10 for the splitter.
+        // On very short windows prioritize staying on-screen over dock rows.
+        var maxDock = Math.Max(0d, Math.Min(440d, availableHeight - 130d));
+        preferred = Math.Min(Math.Max(0, preferred), maxDock);
 
         state.DockGutterRow.Height = new GridLength(10);
         state.DockSplitter.Visibility = Visibility.Visible;
-        state.DockRow.MinHeight = Math.Min(112d, upper);
-        state.DockRow.MaxHeight = upper;
+        state.DockRow.MinHeight = 0;
+        state.DockRow.MaxHeight = maxDock;
         state.DockRow.Height = new GridLength(preferred);
+        }
+        finally { state.ApplyingGeometry = false; }
     }
 
     private void P1PanelGeometry_Closed(object? sender, EventArgs e)
@@ -345,8 +362,8 @@ public partial class MainWindow
         CommandPanelExpander.Collapsed -= P1DockExpander_ExpandedCollapsed;
         CommandPanelExpander.IsVisibleChanged -= P1DockExpander_IsVisibleChanged;
         MainTabs.SelectionChanged -= P1PanelGeometry_MainTabsSelectionChanged;
-        if (_persistentWorkbench is { } host)
-            host.Shell.SizeChanged -= P1DockHost_SizeChanged;
+        if (_persistentWorkbench is { } workbench)
+            workbench.Shell.SizeChanged -= P1DockShell_SizeChanged;
         Closed -= P1PanelGeometry_Closed;
         _p1PanelGeometry = null;
     }
