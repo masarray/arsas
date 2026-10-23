@@ -35,12 +35,12 @@ public sealed class IedBrowserBatchWriteEditorTests
 
         var grid = root.Descendants(p + "DataGrid").Single(d =>
             (string?)d.Attribute(x + "Name") == "RowsGrid");
-        Assert.Equal("2", grid.Attribute("Grid.Row")?.Value);
+        Assert.Equal("1", grid.Attribute("Grid.Row")?.Value);
         Assert.Equal("Auto", grid.Attribute("ScrollViewer.VerticalScrollBarVisibility")?.Value);
         Assert.Equal("True", grid.Attribute("VirtualizingPanel.IsVirtualizing")?.Value);
 
         var footer = root.Descendants(p + "Grid").Single(d =>
-            d.Attribute("Grid.Row")?.Value == "3" && d.Descendants(p + "Button")
+            d.Attribute("Grid.Row")?.Value == "2" && d.Descendants(p + "Button")
                 .Any(b => (string?)b.Attribute(x + "Name") == "WriteButton"));
         Assert.Contains(footer.Descendants(p + "Button"), b =>
             (string?)b.Attribute(x + "Name") == "InspectButton");
