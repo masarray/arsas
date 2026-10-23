@@ -84,11 +84,9 @@ public static class IedBrowserWritePlan
             "ENUM" or "ENUMERATED" => throw new NotSupportedException(
                 "Enumerated Write requires exact verified SCL EnumType metadata."),
             "INT8" or "INT16" or "INT32" or "INT64" or
-                "INTEGER" => MmsDataValue.Integer(
-                    long.Parse(raw.Trim(), NumberStyles.Integer, invariant)),
+                "INTEGER" => EncodeSignedInteger(raw, t, invariant),
             "INT8U" or "INT16U" or "INT24U" or "INT32U" or "INT64U" or
-                "UNSIGNED" => MmsDataValue.Unsigned(
-                    ulong.Parse(raw.Trim(), NumberStyles.Integer, invariant)),
+                "UNSIGNED" => EncodeUnsignedInteger(raw, t, invariant),
             // Engine MmsDataCodec currently emits IEEE-754 binary32 only.
             // Do NOT silently narrow a double/IEEE-754 binary64 MMS DA.
             "FLOAT32" or "FLOAT" => EncodeFloat(raw, invariant),
@@ -100,6 +98,40 @@ public static class IedBrowserWritePlan
             _ => throw new NotSupportedException(
                 "No verified safe primitive MMS encoder for this DA type: " + type)
         };
+    }
+
+    private static MmsDataValue EncodeSignedInteger(string raw, string declaredType,
+        CultureInfo culture)
+    {
+        var value = long.Parse(raw.Trim(), NumberStyles.Integer, culture);
+        var (min, max) = declaredType switch
+        {
+            "INT8" => ((long)sbyte.MinValue, sbyte.MaxValue),
+            "INT16" => ((long)short.MinValue, short.MaxValue),
+            "INT32" => ((long)int.MinValue, int.MaxValue),
+            _ => (long.MinValue, long.MaxValue)
+        };
+        if (value < min || value > max)
+            throw new OverflowException("Integer is outside the declared " + declaredType + " range.");
+        return MmsDataValue.Integer(value);
+    }
+
+    private static MmsDataValue EncodeUnsignedInteger(string raw, string declaredType,
+        CultureInfo culture)
+    {
+        var value = ulong.Parse(raw.Trim(), NumberStyles.Integer, culture);
+        var max = declaredType switch
+        {
+            "INT8U" => (ulong)byte.MaxValue,
+            "INT16U" => ushort.MaxValue,
+            "INT24U" => 0xFFFFFFUL,
+            "INT32U" => uint.MaxValue,
+            _ => ulong.MaxValue
+        };
+        if (value > max)
+            throw new OverflowException("Unsigned integer exceeds the declared " +
+                                        declaredType + " range.");
+        return MmsDataValue.Unsigned(value);
     }
 
     private static MmsDataValue EncodeFloat(string raw, CultureInfo culture)

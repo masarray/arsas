@@ -37,6 +37,24 @@ public sealed class IedBrowserUnifiedWriteUxTests
         Assert.Equal(System.Windows.Visibility.Collapsed, row.TextEditorVisibility);
     }
 
+    [Theory]
+    [InlineData("INT8", "127", "128")]
+    [InlineData("INT8", "-128", "-129")]
+    [InlineData("INT16", "32767", "32768")]
+    [InlineData("INT32", "2147483647", "2147483648")]
+    [InlineData("INT8U", "255", "256")]
+    [InlineData("INT16U", "65535", "65536")]
+    [InlineData("INT24U", "16777215", "16777216")]
+    [InlineData("INT32U", "4294967295", "4294967296")]
+    public void DeclaredIntegerWidths_AreValidatedBeforeAnyNetworkWrite(
+        string declaredType, string accepted, string rejected)
+    {
+        const string reference = "LD0/LLN0.Mod.sboTimeout";
+        Assert.NotNull(IedBrowserWritePlan.EncodeValue(declaredType, accepted, reference));
+        Assert.Throws<OverflowException>(() =>
+            IedBrowserWritePlan.EncodeValue(declaredType, rejected, reference));
+    }
+
     [Fact]
     public void UnverifiedDiscreteEnumRemainsVisibleButCannotBecomeEditableOrReachWire()
     {
