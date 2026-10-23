@@ -155,6 +155,7 @@ public partial class IpConnectWizardWindow : Window
 
     private void SetAddressMode(bool manual)
     {
+        IpEditorHost.Visibility = manual ? Visibility.Collapsed : Visibility.Visible;
         OctetEditor.Visibility = manual ? Visibility.Collapsed : Visibility.Visible;
         HistoryButton.Visibility = manual ? Visibility.Collapsed : Visibility.Visible;
         RawIpBox.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
