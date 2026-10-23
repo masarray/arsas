@@ -160,7 +160,6 @@
                            Placement="Bottom" VerticalOffset="3" AllowsTransparency="True"
                            StaysOpen="False" PopupAnimation="Fade">
                         <Border Width="398" MaxHeight="230" CornerRadius="9" Background="White"
-                                FontFamily="{DynamicResource AppFontFamily}"
                                 BorderThickness="1" BorderBrush="{StaticResource TaskDialogBorder}"
                                 Padding="9" SnapsToDevicePixels="True">
                             <StackPanel>
