@@ -384,38 +384,62 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
         // no mixing old results after stream selection or captured-source changes.
         if (update.SelectedKey != selectedKey || update.SelectedSnapshot is null)
         {
-            ClearPresentation(summary.Diagnostic);
+            // A buffer in its initial warm-up window must not repeatedly blank
+            // every pane 5 times/second. Stream changes clear only once in the
+            // SelectionChanged handler. Hold the last coherent state otherwise.
+            if (_visibleSnapshot is null && Measurements.Count == 0)
+                WaveformStatus = summary.Diagnostic;
             return;
         }
 
-        var snapshot = update.SelectedSnapshot;
-        _visibleSnapshot = snapshot;
-        IsLiveSnapshot = true;
-        Notify(nameof(IsLiveSnapshot));
-        UpdateUnitPresentation(redrawWaveform: true);
-        BeginAnalysis(snapshot, selectedKey, generation);
+        BeginAnalysis(update.SelectedSnapshot, selectedKey, generation);
     }
 
     private async void BeginAnalysis(SmvSnapshotResult snapshot, string? selectedKey, int generation)
     {
         var analysis = Interlocked.Increment(ref _analysisGeneration);
+        var profile = RequestedUnits;
         try
         {
-            var vectors = await Task.Run(() => SmvRawVectorMath.Analyze(snapshot));
+            // One bounded immutable publication: do not render waveform from
+            // snapshot N while measurements/phasors still belong to N-1.
+            // Both DSP and the eight-channel projection stay off the UI thread.
+            var rendered = await Task.Run(() =>
+            {
+                var vectors = SmvRawVectorMath.Analyze(snapshot);
+                var waveform = SmvDigSubPresentationAdapter.BuildWaveform(snapshot, profile);
+                return (vectors, waveform);
+            });
             if (generation != _generation || analysis != _analysisGeneration ||
-                !ReferenceEquals(_visibleSnapshot, snapshot) || !IsLoaded ||
-                selectedKey != Volatile.Read(ref _selectedKey))
+                !IsLoaded || selectedKey != Volatile.Read(ref _selectedKey))
                 return;
-            _visibleVectors = SmvDigSubPresentationAdapter.RelativeMeasurements(vectors);
-            UpdateUnitPresentation(redrawWaveform: false);
+
+            // The WPF dispatcher paints after this synchronous update returns,
+            // ensuring all panes represent one matching selected SV snapshot.
+            _visibleSnapshot = snapshot;
+            _visibleVectors = SmvDigSubPresentationAdapter.RelativeMeasurements(rendered.vectors);
+            CurrentWaveform = rendered.waveform;
+            Notify(nameof(CurrentWaveform));
+            IsLiveSnapshot = true;
+            Notify(nameof(IsLiveSnapshot));
+            UpdateUnitPresentation(redrawWaveform: profile != RequestedUnits);
+            if (profile == RequestedUnits)
+                WaveformStatus =
+                    (snapshot.TimebaseReason.StartsWith("ASSUMED", StringComparison.OrdinalIgnoreCase)
+                        ? "ASSUMED timebase · rate/PTP unverified · " : string.Empty) +
+                    $"Received {snapshot.CapturedSamples:N0} coherent samples • {snapshot.SamplesPerCycle} samples/cycle • " +
+                    (ActiveUnits == SmvDisplayUnits.NineTwoLe
+                        ? "9-2LE operator-selected engineering display"
+                        : "raw INT32 counts");
         }
         catch (Exception)
         {
-            if (generation != _generation || analysis != _analysisGeneration)
+            if (generation != _generation || analysis != _analysisGeneration ||
+                selectedKey != Volatile.Read(ref _selectedKey))
                 return;
-            _visibleVectors = [];
-            UpdateUnitPresentation(redrawWaveform: false);
-            WaveformStatus = "Raw phasor calculation unavailable; no substitute values shown.";
+            // Do not erase the last coherent snapshot because a later
+            // calculation failed; notify the operator instead.
+            WaveformStatus = "New SV analysis unavailable; displaying last coherent snapshot.";
         }
     }
 
@@ -487,20 +511,45 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
 
         // The immutable wire/DSP vectors remain raw. Scaling is presentation-only.
         // WPF collections remain bounded to at most the 8 displayed channels.
-        Measurements.Clear();
-        // The phase reference is selected at PRESENTATION time; no received
-        // sample, total RMS or fundamental magnitude is reinterpreted.
+        // Preserve the same bounded DataGrid collection/view and replace only
+        // changed rows; Clear/Add resets WPF row containers and visibly flickers.
+        // The phase reference is selected at PRESENTATION time; no wire value
+        // or DFT result is overwritten.
         var presentationVectors = SmvDigSubPresentationAdapter.RelativeMeasurements(_visibleVectors, profile);
+        var rowIndex = 0;
         foreach (var raw in presentationVectors)
-            Measurements.Add(SmvEngineeringDisplay.Present(raw, profile));
+        {
+            var next = SmvEngineeringDisplay.Present(raw, profile);
+            if (rowIndex < Measurements.Count)
+            {
+                if (!Equals(Measurements[rowIndex], next))
+                    Measurements[rowIndex] = next;
+            }
+            else
+                Measurements.Add(next);
+            rowIndex++;
+        }
+        while (Measurements.Count > rowIndex)
+            Measurements.RemoveAt(Measurements.Count - 1);
 
         // A single two-cycle immutable snapshot is the only source of power
         // calculations; never pair samples across different publishers/frames.
         var power = SmvPowerMeasurements.Analyze(_visibleSnapshot, _visibleVectors, profile);
-        PowerPhases.Clear();
+        var phaseCount = 0;
         if (power is { } actual)
             foreach (var phase in actual.Phases)
-                PowerPhases.Add(phase);
+            {
+                if (phaseCount < PowerPhases.Count)
+                {
+                    if (!Equals(PowerPhases[phaseCount], phase))
+                        PowerPhases[phaseCount] = phase;
+                }
+                else
+                    PowerPhases.Add(phase);
+                phaseCount++;
+            }
+        while (PowerPhases.Count > phaseCount)
+            PowerPhases.RemoveAt(PowerPhases.Count - 1);
         _powerTotal = power?.Total;
         NotifyPowerStatus();
         UpdateDigSubPhasors();
