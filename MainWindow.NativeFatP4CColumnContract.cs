@@ -140,7 +140,7 @@ public partial class MainWindow
                 Text = dataItem is Iec61850MonitorPoint point
                     ? _owner.ReadNativeFatTimestamp(point, Field)
                     : string.Empty,
-                FontFamily = new FontFamily("Consolas"),
+                FontFamily = new FontFamily(new Uri("pack://application:,,,/"), "./Assets/Fonts/#Inter"),
                 FontSize = 11,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis

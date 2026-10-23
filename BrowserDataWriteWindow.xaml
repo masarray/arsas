@@ -66,9 +66,13 @@
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock x:Name="StatusLabel" Text="Reading live MMS type…"
-                       Foreground="#61758A" TextTrimming="CharacterEllipsis"
-                       VerticalAlignment="Center" FontSize="10.5" Margin="0,0,9,0"/>
+            <Border x:Name="ResultBanner" Grid.Column="0"
+                    Background="Transparent" CornerRadius="5"
+                    Padding="7,5" Margin="0,0,7,0">
+                <TextBlock x:Name="StatusLabel" Text="Reading live MMS type…"
+                           Foreground="#314B63" TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center" FontSize="10.5"/>
+            </Border>
             <Button x:Name="WriteButton" Grid.Column="1" Content="Write"
                     Width="94" Height="31" IsEnabled="False"
                     Style="{StaticResource PrimaryButton}" Click="Write_Click" Margin="0,0,7,0">

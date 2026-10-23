@@ -77,6 +77,58 @@ public sealed class TypedWriteEditorUxRegressionTests
         Assert.Contains("WriteBrowserDataAttributesAsync", code);
     }
 
+    [Fact]
+    public void BrowserWrite_ProvidesSingleAndMultiLeafWithoutSecondModalConfirmation()
+    {
+        var main = Source("MainWindow.xaml");
+        XDocument.Parse(main);
+        Assert.Contains("x:Name=\"IedBrowserWriteDoButton\"", main);
+        Assert.Contains("Click=\"IedBrowserWriteDo_Click\"", main);
+        var route = Source("MainWindow.IedBrowser.TypedDataWrite.cs");
+        Assert.Contains("BrowserWritableSelectedDo(allowLeafSelection: true)", route);
+        Assert.Contains("dialog.VerifiedWriteOccurred", route);
+        Assert.Contains("new BrowserBatchWriteWindow(", route);
+        foreach (var file in new[]
+        {
+            "ControlModelWriteWindow.xaml.cs",
+            "BrowserDataWriteWindow.xaml.cs",
+            "BrowserBatchWriteWindow.xaml.cs"
+        })
+        {
+            var code = Source(file);
+            Assert.DoesNotContain("MessageBox.Show(", code);
+            Assert.Contains("Write_Click(", code);
+        }
+        Assert.Contains("await ReadModelAsync();", Source("ControlModelWriteWindow.xaml.cs"));
+        Assert.Contains("PreviewBrowserDataAttributeWriteAsync(", Source("BrowserDataWriteWindow.xaml.cs"));
+        var batch = Source("BrowserBatchWriteWindow.xaml.cs");
+        Assert.Contains("await PrimeLiveEditorsAsync();", batch);
+        Assert.Contains("row.ResetToReadback(actual.CurrentText);", batch);
+        Assert.Contains("var readbackMismatch = false;", batch);
+        Assert.Contains("MmsDataCodec.Encode(steps[i].ProposedValue)", batch);
+        Assert.Contains("baseline.GvaSignature, preview.GvaSignature", batch);
+        Assert.Contains("MmsDataCodec.Encode(baseline.OldValue)", batch);
+        Assert.Contains("WriteBrowserDataAttributesAsync(", batch);
+        Assert.Contains("TryFreezePlan(selected,", batch);
+        Assert.Contains("No automatic retry", batch, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void EmbeddedInter_AlsoUsedForReferenceAndCodeTypography()
+    {
+        var xaml = Source("App.xaml");
+        Assert.Contains("<FontFamily x:Key=\"AppFontFamily\">./Assets/Fonts/#Inter</FontFamily>", xaml);
+        Assert.Contains("<FontFamily x:Key=\"AppCodeFontFamily\">./Assets/Fonts/#Inter</FontFamily>", xaml);
+        Assert.DoesNotContain("Cascadia Mono, Consolas</FontFamily>", xaml);
+        foreach (var file in new[]
+        {
+            "ControlModelWriteWindow.xaml",
+            "BrowserDataWriteWindow.xaml",
+            "BrowserBatchWriteWindow.xaml"
+        })
+            XDocument.Parse(Source(file));
+    }
+
     private static string Source(string filename)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

@@ -65,7 +65,9 @@ public sealed class IedBrowserBatchWriteEditorTests
         Assert.Contains("IedBrowserTypedWriteBatch.Freeze(pending)", source);
         Assert.Contains("WriteBrowserDataAttributesAsync(", source);
         Assert.Contains("PreviewBrowserDataAttributeWriteAsync(", source);
-        Assert.Contains("MessageBoxResult.Yes", source);
+        Assert.DoesNotContain("MessageBox.Show(", source);
+        Assert.Contains("TryFreezePlan(selected,", source);
+        Assert.Contains("baseline.GvaSignature, preview.GvaSignature", source);
         Assert.Contains("ReferenceEquals(_device.LiveDiscoveryModel, _model)", source);
         Assert.DoesNotContain("WriteSingleVariableAsync(", source);
         Assert.DoesNotContain("OperateAsync(", source);

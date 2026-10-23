@@ -16,7 +16,7 @@
 
         <!-- Exact IEC object identity; the only editable DA is ctlModel [CF]. -->
         <TextBlock x:Name="ReferenceLabel" Grid.Row="0" FontSize="11"
-                   Foreground="{StaticResource Ink}" FontFamily="{StaticResource AppCodeFontFamily}"
+                   Foreground="{StaticResource Ink}" FontFamily="{StaticResource AppFontFamily}"
                    TextTrimming="CharacterEllipsis"
                    ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
                    Margin="2,0,2,10"/>
@@ -60,23 +60,16 @@
             </Grid>
         </Border>
 
-        <!-- Error details may scroll; action footer never moves off screen. -->
+        <!-- Inline readback notification, no second confirmation window. -->
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled" MinHeight="0"
-                      Margin="0,10,0,3">
-            <StackPanel Margin="2,0,6,0">
-                <TextBlock x:Name="StatusLabel" FontSize="11" TextWrapping="Wrap"
-                           Foreground="{StaticResource Muted}"
+                      Margin="0,8,0,2">
+            <Border x:Name="ResultBanner" CornerRadius="6" Padding="9,7"
+                    Background="Transparent">
+                <TextBlock x:Name="StatusLabel" FontSize="11"
+                           TextWrapping="Wrap" Foreground="{StaticResource Ink}"
                            Text="Reading current ctlModel from IED…"/>
-                <TextBlock Foreground="{StaticResource Muted}" FontSize="10"
-                           Margin="0,6,0,0" TextWrapping="Wrap"
-                           Text="Only a confirmed configuration Write is sent. No Operate or automatic retry."/>
-                <TextBox x:Name="FailureDetails" Visibility="Collapsed" Margin="0,8,0,0"
-                         IsReadOnly="True" IsTabStop="False" TextWrapping="Wrap"
-                         VerticalScrollBarVisibility="Auto" MaxHeight="96" MinHeight="43"
-                         FontSize="11" Padding="8,6" BorderThickness="1" BorderBrush="#E7C4C4"
-                         Background="#FFF8F8" Foreground="#923C3C"/>
-            </StackPanel>
+            </Border>
         </ScrollViewer>
 
         <Grid Grid.Row="3" Margin="0,9,0,0">

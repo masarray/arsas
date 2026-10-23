@@ -89,7 +89,7 @@ public sealed class IedBrowserUnifiedWriteUxTests
         Assert.Contains("Take(24)", src);
         Assert.Contains("!row.HasVerifiedRead || !row.HasEdited", src);
         Assert.Contains("MmsDataCodec.Encode(row.LiveBeforeValue!)", src);
-        Assert.Contains("MessageBoxResult.Yes", src);
+        Assert.DoesNotContain("MessageBox.Show(", src);
         Assert.Contains("row.ExpireLiveRead()", src);
     }
 

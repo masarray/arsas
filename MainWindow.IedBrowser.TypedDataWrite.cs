@@ -78,7 +78,7 @@ public partial class MainWindow
 
     // A DO focus has a bounded local list of live attributes, never an IED-wide scan.
     // The dialog checks the exact same current live model and association again.
-    private LiveIedDataObjectModel? BrowserWritableSelectedDo()
+    private LiveIedDataObjectModel? BrowserWritableSelectedDo(bool allowLeafSelection = false)
     {
         if (SelectedDevice is not { IsConnected: true, IsDemo: false, IsBusy: false,
                                    IsBrowserReading: false } device ||
@@ -86,7 +86,7 @@ public partial class MainWindow
             _iedBrowserReadOperation is not null)
             return null;
         // A focused status-only DA cannot borrow its parent DO's writable siblings.
-        if (IedBrowserDetailList?.SelectedItem is IedBrowserDetailRow
+        if (!allowLeafSelection && IedBrowserDetailList?.SelectedItem is IedBrowserDetailRow
             { Kind: "Data", IsDataObject: false })
             return null;
 
@@ -121,7 +121,11 @@ public partial class MainWindow
 
     private void RefreshIedBrowserWriteButton()
     {
-        if (IedBrowserWriteButton is null) return;
+        if (IedBrowserWriteButton is null || IedBrowserWriteDoButton is null) return;
+        // Multi-DA Write is an independent explicit DO action, available
+        // even if the operator has a leaf such as ctlModel selected.
+        IedBrowserWriteDoButton.IsEnabled =
+            BrowserWritableSelectedDo(allowLeafSelection: true) is not null;
         var ctlModel = BrowserSelectedControlModelSignal();
         var selected = ctlModel is null ? BrowserWritableSelectedAttribute() : null;
         var selectedDo = ctlModel is null && selected is null ? BrowserWritableSelectedDo() : null;
@@ -170,8 +174,8 @@ public partial class MainWindow
             {
                 Owner = this
             };
-            var changed = dialog.ShowDialog() == true;
-            if (changed && device.IsConnected)
+            dialog.ShowDialog();
+            if (dialog.VerifiedWriteOccurred && device.IsConnected)
                 _ = RefreshControlValuesAsync(device, force: true);
         }
         else if (attribute is not null)
@@ -194,4 +198,23 @@ public partial class MainWindow
         // A successful MMS Write is NOT process feedback. An explicit Read or
         // subsequent verified report remains the only live value authority.
     }
+    // Visible sibling of Write: single leaf remains a focused editor, while
+    // Write DO opens the complete bounded group for explicit multi-DA editing.
+    private void IedBrowserWriteDo_Click(object sender, RoutedEventArgs e)
+    {
+        var device = SelectedDevice;
+        var owner = BrowserWritableSelectedDo(allowLeafSelection: true);
+        if (device is null || owner is null || device.LiveDiscoveryModel is not { } model)
+        {
+            RefreshIedBrowserWriteButton();
+            return;
+        }
+        var dialog = new BrowserBatchWriteWindow(_runtime, device, model, owner)
+        {
+            Owner = this
+        };
+        dialog.ShowDialog();
+        RefreshIedBrowserWriteButton();
+    }
+
 }

@@ -179,22 +179,12 @@ public partial class IedBrowserWriteWindow : Window
             return;
         }
 
-        var review = string.Join(Environment.NewLine,
-            selected.Select(row => "  " + row.Reference + " [" + row.FunctionalConstraint +
-                                   "] = " + row.RequestedValue));
-        var notice = "IED: " + _device.Name + " (" + _device.IpAddress + ")" +
-            Environment.NewLine + Environment.NewLine +
-            "Change these " + selected.Length + " configuration DA(s)?" +
-            Environment.NewLine + review + Environment.NewLine + Environment.NewLine +
-            "These are real MMS Writes. A ctlModel change may change permitted IEC control modes." +
-            Environment.NewLine +
-            "The operation is sequential, NOT ATOMIC. Stops on the first failure; no automatic retry." +
-            Environment.NewLine + "Proceed only with authorized, isolated commissioning.";
-        if (MessageBox.Show(this, notice, "Confirm live MMS configuration Write",
-                MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) !=
-            MessageBoxResult.Yes)
+        // The enabled Write button is explicit operator intent. Native
+        // configuration admission still verifies the same association,
+        // typed before-value and readback. No second modal prompt.
+        if (!CurrentAssociation)
         {
-            StatusText.Text = "Operator cancelled. Zero Writes sent.";
+            StatusText.Text = "IED connection changed; no Write sent.";
             return;
         }
 
@@ -221,20 +211,28 @@ public partial class IedBrowserWriteWindow : Window
                     "NOT VERIFIED: " + result.Detail;
                 if (!result.Succeeded)
                 {
-                    StatusText.Text = "STOP: " + passed + " of " + staged.Count +
-                        " completed; " + row.Reference + ": " + result.Detail +
-                        " Later rows were NOT sent. Verify on IED before retry.";
+                    var reason = string.IsNullOrWhiteSpace(result.Detail)
+                        ? "IED refused the requested value." : result.Detail;
+                    StatusText.Text = "Write ditolak: " +
+                        (reason.Length > 130 ? reason[..127] + "…" : reason) +
+                        $" · {passed}/{staged.Count} verified. No automatic retry.";
+            ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(255, 242, 228));
                     return;
                 }
                 passed++;
             }
             StatusText.Text = "Verified " + passed + "/" + staged.Count +
                 " configuration DA(s) using native MMS readback. No IEC Operate issued.";
+            ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(232, 248, 237));
         }
         catch (Exception ex)
         {
-            StatusText.Text = "STOP after " + passed + " completed · " + ex.Message +
-                " Outcome of interrupted Write may be UNKNOWN. Never retry automatically.";
+            StatusText.Text = "Write unresolved: " + ex.Message +
+                " · no automatic retry.";
+            ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(255, 242, 228));
         }
         finally { SetBusy(false); }
     }

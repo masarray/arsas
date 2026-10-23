@@ -91,23 +91,61 @@ public partial class BrowserBatchWriteWindow : Window
             nameof(BrowserBatchWriteRow.NewValue))
         {
             _prepared = false;
-            if (WriteButton is not null) WriteButton.IsEnabled = false;
+            if (WriteButton is not null) WriteButton.IsEnabled = CanWriteSelection;
         }
     }
+
+    private bool CanWriteSelection => !_busy && CurrentAssociation &&
+        Rows.Any(row => row.Selected && row.Eligible && row.CanEdit && row.HasEdited);
 
     private void SetBusy(bool busy)
     {
         _busy = busy;
         RowsGrid.IsEnabled = !busy;
         InspectButton.IsEnabled = !busy;
-        WriteButton.IsEnabled = !busy && _prepared;
+        WriteButton.IsEnabled = CanWriteSelection;
     }
 
-    private void Window_Loaded(object sender, RoutedEventArgs e)
+    private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
         var work = SystemParameters.WorkArea;
         Height = Math.Max(MinHeight, Math.Min(490, work.Height - 26));
         Width = Math.Max(MinWidth, Math.Min(660, work.Width - 26));
+        // A DO editor opens populated, just like a single-DA editor. Bound
+        // the initial read to prevent a large DO from blocking the operator;
+        // the Read button can inspect an additional explicit selection.
+        await PrimeLiveEditorsAsync();
+    }
+
+    private async Task PrimeLiveEditorsAsync()
+    {
+        if (!CurrentAssociation) return;
+        var visible = Rows.Where(r => r.Eligible).Take(24).ToArray();
+        SetBusy(true);
+        try
+        {
+            foreach (var row in visible)
+            {
+                _lifetime.Token.ThrowIfCancellationRequested();
+                if (!CurrentAssociation) return;
+                var preview = await _runtime.PreviewBrowserDataAttributeWriteAsync(
+                    _device, row.Reference!.Value, _lifetime.Token);
+                if (!CurrentAssociation) return;
+                row.Preview = preview.IsAvailable ? preview : null;
+                row.Type = preview.Type?.MmsType ?? "unverified";
+                row.Old = preview.CurrentText;
+                row.ApplyLiveEditor(preview.Type?.MmsType == "boolean", preview.CurrentText);
+                row.Status = preview.IsAvailable ? "Live Read" : preview.Message;
+                row.NotifyEditorChanged();
+            }
+            StatusLabel.Text = $"Read {visible.Length} DA(s). Edit and select one or more values, then Write.";
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            StatusLabel.Text = "Read unavailable: " + ex.Message;
+        }
+        finally { SetBusy(false); }
     }
 
     private BrowserBatchWriteRow[] CheckedRows()
@@ -124,7 +162,7 @@ public partial class BrowserBatchWriteWindow : Window
         WriteButton.IsEnabled = false;
         var selected = CheckedRows();
         if (selected.Length is 0 or > IedBrowserTypedWriteBatch.MaxSelectedAttributes ||
-            selected.Any(r => !r.Eligible || !r.HasEdited) || !CurrentAssociation)
+            selected.Any(r => !r.Eligible) || !CurrentAssociation)
         {
             StatusLabel.Text =
                 "Select 1–64 eligible DAs, explicitly edit each new value and keep the same online association. No Write sent.";
@@ -159,6 +197,11 @@ public partial class BrowserBatchWriteWindow : Window
                 }
             }
 
+            if (selected.All(r => !r.HasEdited))
+            {
+                StatusLabel.Text = $"Read {selected.Length} live DA(s). Edit one or more values before Write.";
+                return;
+            }
             if (!TryFreezePlan(selected, out _, out var rejection))
             {
                 StatusLabel.Text = rejection + " No Write sent.";
@@ -228,68 +271,148 @@ public partial class BrowserBatchWriteWindow : Window
 
     private async void Write_Click(object sender, RoutedEventArgs e)
     {
-        if (_busy || !_prepared || !CurrentAssociation) return;
+        if (_busy || !CurrentAssociation) return;
         var selected = CheckedRows();
-        if (!TryFreezePlan(selected, out var steps, out var reason) || steps is null)
+        if (selected.Length is 0 or > IedBrowserTypedWriteBatch.MaxSelectedAttributes ||
+            selected.Any(r => !r.Eligible || !r.HasEdited || !r.CanEdit))
         {
-            StatusLabel.Text = "Write NOT SENT: " + reason;
-            _prepared = false;
-            WriteButton.IsEnabled = false;
+            StatusLabel.Text = "Select and edit 1–64 live-readable DA values.";
             return;
         }
 
-        var diff = string.Join(Environment.NewLine, steps.Select(s =>
-            $"{s.Reference.Domain}/{s.Reference.Item} [{s.Reference.FunctionalConstraint}]" +
-            $"\n  {MmsDataCodec.ToDisplayString(s.ExpectedOldValue)} → {MmsDataCodec.ToDisplayString(s.ProposedValue)}"));
-        var confirmed = MessageBox.Show(this,
-            $"IED: {_device.Name}\nDO: {IdentityLabel.Text}\n\n" + diff +
-            $"\n\n{steps.Count} Confirmed-Write request(s), sequential, NOT ATOMIC. " +
-            "A failure stops remaining DAs. No retry or rollback. " +
-            "This can modify protection settings/configuration. Are you authorized to write?",
-            "Confirm exact live MMS Writes", MessageBoxButton.YesNo,
-            MessageBoxImage.Warning, MessageBoxResult.No);
-        if (confirmed != MessageBoxResult.Yes)
-        {
-            StatusLabel.Text = "Operator declined; zero Writes sent.";
-            return;
-        }
-        if (!CurrentAssociation)
-        {
-            StatusLabel.Text = "Association changed after review; zero Writes sent.";
-            return;
-        }
-
+        // Clicking Write is sufficient operator intent. Perform fresh GVA +
+        // current-value inspection before dispatch, freezing all target values.
+        // No extra modal confirmation, no Write on open/Read/edit.
         SetBusy(true);
         _prepared = false;
-        WriteButton.IsEnabled = false;
+        IReadOnlyList<IedBrowserTypedWriteStep>? steps = null;
         try
         {
-            StatusLabel.Text = $"Sending up to {steps.Count} individually confirmed DA Writes…";
+            foreach (var row in selected)
+            {
+                _lifetime.Token.ThrowIfCancellationRequested();
+                if (!CurrentAssociation)
+                    throw new InvalidOperationException("IED association changed; no Write sent.");
+                var baseline = row.Preview;
+                var preview = await _runtime.PreviewBrowserDataAttributeWriteAsync(
+                    _device, row.Reference!.Value, _lifetime.Token);
+                if (!CurrentAssociation)
+                    throw new InvalidOperationException("IED association changed; no Write sent.");
+                if (baseline is not { IsAvailable: true, OldValue: not null } ||
+                    preview is not { IsAvailable: true, OldValue: not null } ||
+                    !string.Equals(baseline.GvaSignature, preview.GvaSignature, StringComparison.Ordinal) ||
+                    !MmsDataCodec.Encode(baseline.OldValue).AsSpan()
+                        .SequenceEqual(MmsDataCodec.Encode(preview.OldValue)))
+                {
+                    row.Preview = null;
+                    row.Status = "Live DA changed; press Read and edit again.";
+                    row.NotifyEditorChanged();
+                    throw new InvalidOperationException(
+                        "Live value or MMS type changed since editing " + row.ReferenceText +
+                        ". Refresh before Write; zero Writes sent.");
+                }
+                row.Preview = preview;
+                row.Type = preview.Type?.MmsType ?? "unverified";
+                row.Old = preview.CurrentText;
+                row.ApplyLiveEditor(preview.Type?.MmsType == "boolean", preview.CurrentText);
+                row.NotifyEditorChanged();
+            }
+            if (!TryFreezePlan(selected, out steps, out var reason) || steps is null)
+            {
+                StatusLabel.Text = "Write ditolak: " + reason;
+                return;
+            }
+            if (!CurrentAssociation)
+                throw new InvalidOperationException("IED association changed; no Write sent.");
+
+            StatusLabel.Text = $"Writing {steps.Count} changed DA(s) and verifying readback…";
+            // Native typed admission checks every GVA/old-value/association;
+            // sequential, stop-on-failure, no automatic retry or rollback.
             var result = await _runtime.WriteBrowserDataAttributesAsync(
                 _device, steps, true, _lifetime.Token);
-            for (var i = 0; i < result.Rows.Count; i++)
+            for (var i = 0; i < selected.Length; i++)
             {
-                selected[i].Status = result.Rows[i].State?.ToString() ?? "Unattempted";
-                selected[i].Status += ": " + result.Rows[i].Message;
-                selected[i].Preview = null;
-                selected[i].NotifyEditorChanged();
+                var row = selected[i];
+                if (i < result.Rows.Count)
+                {
+                    row.Status = result.Rows[i].State + ": " + result.Rows[i].Message;
+                    row.Preview = null;
+                    row.NotifyEditorChanged();
+                }
             }
-            StatusLabel.Text =
-                $"Readback verified: {result.Verified}; rejected: {result.Rejected}; " +
-                $"unknown: {result.Unknown}; unverified: {result.Unverified}; " +
-                $"not attempted: {result.Unattempted}. " +
-                "Reinspect the IED before any new attempt; no physical operation is implied.";
+
+            // Refresh every selected DA regardless of success/rejection.
+            // Verify the newly displayed value against the staged exact MMS
+            // bytes; an independent mismatch can never earn a green toast.
+            var readbackMismatch = false;
+            for (var i = 0; i < selected.Length; i++)
+            {
+                var row = selected[i];
+                if (!CurrentAssociation)
+                {
+                    row.Status += " · connection changed";
+                    readbackMismatch = true;
+                    break;
+                }
+                try
+                {
+                    var actual = await _runtime.PreviewBrowserDataAttributeWriteAsync(
+                        _device, row.Reference!.Value, _lifetime.Token);
+                    if (!CurrentAssociation)
+                    {
+                        readbackMismatch = true;
+                        break;
+                    }
+                    if (actual is { IsAvailable: true, OldValue: not null })
+                    {
+                        var matches = MmsDataCodec.Encode(actual.OldValue).AsSpan()
+                            .SequenceEqual(MmsDataCodec.Encode(steps[i].ProposedValue));
+                        row.Old = actual.CurrentText;
+                        row.Preview = actual;
+                        row.ResetToReadback(actual.CurrentText);
+                        if (!matches)
+                        {
+                            row.Status += " · Readback differs: " + actual.CurrentText;
+                            readbackMismatch = true;
+                        }
+                        row.NotifyEditorChanged();
+                    }
+                    else
+                    {
+                        row.Status += " · Readback unavailable";
+                        readbackMismatch = true;
+                    }
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    row.Status += " · Readback unavailable: " + ex.Message;
+                    readbackMismatch = true;
+                }
+            }
+            var anyFailure = readbackMismatch ||
+                result.Rejected > 0 || result.Unknown > 0 ||
+                result.Unverified > 0 || result.Unattempted > 0;
+            var shortReason = result.Rows.LastOrDefault()?.Message ?? "IED refused the requested value.";
+            if (shortReason.Length > 110) shortReason = shortReason[..107] + "…";
+            StatusLabel.Text = anyFailure
+                ? $"Write ditolak · {result.Verified} verified, {result.Rejected} rejected, " +
+                  $"{result.Unknown} unknown · {shortReason}"
+                : $"Write verified · {result.Verified} DA(s) · values refreshed from IED.";
+            ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
+                anyFailure ? System.Windows.Media.Color.FromRgb(255, 242, 228)
+                           : System.Windows.Media.Color.FromRgb(232, 248, 237));
         }
         catch (OperationCanceledException)
         {
-            StatusLabel.Text =
-                "Interrupted write; wire outcome may be UNKNOWN. Read actual IED before manual retry.";
+            StatusLabel.Text = "Write uncertain; read the actual IED state before manual retry.";
+            ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(255, 242, 228));
         }
         catch (Exception ex)
         {
-            StatusLabel.Text =
-                "Write stopped/refused: " + ex.Message +
-                ". Some in-flight outcomes may be unknown; do not retry automatically.";
+            StatusLabel.Text = "Write ditolak / unresolved: " + ex.Message;
+            ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(255, 242, 228));
         }
         finally
         {
@@ -315,7 +438,16 @@ public sealed class BrowserBatchWriteRow : INotifyPropertyChanged
     public string DisplayName { get; }
     public string Fc { get; }
     public bool Eligible { get; }
-    public bool CanEdit => Eligible && Preview is { IsAvailable: true, Type: not null };
+    public bool CanEdit => Eligible &&
+        Preview is { IsAvailable: true, Type: not null } p &&
+        (p.Type.MmsType switch
+        {
+            "boolean" => p.CurrentText.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+                         p.CurrentText.Equals("false", StringComparison.OrdinalIgnoreCase),
+            "integer" or "unsigned" or "visible-string" or "mms-string" => true,
+            "floating-point" when p.Type.Size == 32 => true,
+            _ => false // Unknown enum/struct/FLOAT64 is not a qualified editable leaf.
+        });
     public bool HasEdited { get; private set; }
     public IedBrowserNativeWritePreview? Preview { get; set; }
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -352,6 +484,14 @@ public sealed class BrowserBatchWriteRow : INotifyPropertyChanged
             Changed(nameof(NewValue));
         }
         Changed(nameof(CanEdit));
+    }
+
+    public void ResetToReadback(string actual)
+    {
+        _newValue = actual;
+        HasEdited = false;
+        Selected = false;
+        Changed(nameof(NewValue));
     }
 
     public bool Selected

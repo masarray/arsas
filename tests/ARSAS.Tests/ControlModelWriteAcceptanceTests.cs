@@ -66,27 +66,31 @@ public sealed class ControlModelWriteAcceptanceTests
     }
 
     [Fact]
-    public void ControlModelWriteRequiresVerifiedLiveAssociationAndAnExplicitPostConfirmationCheck()
+    public void ControlModelWriteUsesOneExplicitClick_LiveAssociationAndReadbackToast()
     {
         var source = Source("ControlModelWriteWindow.xaml.cs");
         var requireRead = source.IndexOf("_inspectedAssociation = association", StringComparison.Ordinal);
         var requireModel = source.IndexOf("_inspectedLiveModel = model", StringComparison.Ordinal);
-        var confirmation = source.IndexOf("MessageBox.Show(", StringComparison.Ordinal);
-        var afterConfirm = source.IndexOf("if (!InspectionIsCurrent", confirmation, StringComparison.Ordinal);
+        var dispatchGuard = source.IndexOf("if (!InspectionIsCurrent", StringComparison.Ordinal);
         var dispatch = source.IndexOf("ConfigureExactModelAsync(expected, selected.Model", StringComparison.Ordinal);
         Assert.True(requireRead >= 0 && requireModel >= 0);
-        Assert.True(confirmation > requireModel);
-        Assert.True(afterConfirm > confirmation);
-        Assert.True(dispatch > afterConfirm);
+        Assert.True(dispatchGuard > requireModel);
+        Assert.True(dispatch > dispatchGuard);
         Assert.Contains("ReferenceEquals(_device.LiveDiscoveryModel, _inspectedLiveModel)", source);
         Assert.Contains("_device.LiveValues.Association == _inspectedAssociation", source);
-        Assert.Contains("MessageBoxButton.OKCancel, MessageBoxImage.Warning, MessageBoxResult.Cancel", source);
-        Assert.Contains("no Write was sent.", source);
+        Assert.DoesNotContain("MessageBox.Show(", source);
+        Assert.Contains("await ReadModelAsync();", source);
+        Assert.Contains("VerifiedWriteOccurred = true;", source);
+        Assert.Contains("ResultBanner.Background", source);
         Assert.DoesNotContain("OperateAsync(", source);
         Assert.DoesNotContain("WriteDataAttributeAsync(", source);
 
+        var xaml = Source("ControlModelWriteWindow.xaml");
+        Assert.Contains("x:Name=\"ResultBanner\"", xaml);
+        Assert.DoesNotContain("x:Name=\"FailureDetails\"", xaml);
         var bridge = Source("Services/Iec61850ControlModelWriteDispatcher.cs");
         Assert.Contains("runtime.ConfigureControlModelAsync", bridge);
         Assert.DoesNotContain("WriteDataAttributeAsync(", bridge);
     }
+
 }
