@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using ArIED61850Tester.Models;
+using ArIED61850Tester.Services;
 
 namespace ArIED61850Tester;
 
@@ -32,10 +33,15 @@ public partial class MainWindow
         var query = ExplorerLiveSearchBox?.Text?.Trim() ?? string.Empty;
         if (query.Length == 0)
         {
-            view.Filter = null;
-            view.Refresh();
+            // WPF Filter assignment itself refreshes the CollectionView.
+            // The old path refreshed twice even for an empty query on every
+            // IED selection, causing avoidable synchronous SG7 UI work.
+            if (view.Filter is not null)
+                view.Filter = null;
             return;
         }
+        using var filterPerf = IedBrowserPerformanceProbe.Measure(
+            "Explorer.Filter", device.Name, device.Points.Count);
 
         view.Filter = item =>
         {
@@ -51,7 +57,8 @@ public partial class MainWindow
                    Contains(point.Category, query) ||
                    Contains(point.IecDataType, query);
         };
-        view.Refresh();
+        // CollectionView.Filter setter already performs RefreshOrDefer.
+        // A second explicit Refresh doubles the UI enumeration/sort cost.
     }
 
     private static bool Contains(string? value, string query)
