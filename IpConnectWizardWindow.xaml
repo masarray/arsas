@@ -62,7 +62,7 @@
                         <StackPanel Grid.Column="0">
                             <TextBlock Text="IED IP address" Style="{StaticResource TaskDialogFieldLabel}" Margin="0,0,0,7"/>
                             <Border x:Name="IpEditorHost" Height="44" CornerRadius="10"
-                                    BorderThickness="1.5" BorderBrush="{StaticResource TaskDialogBorder}"
+                                    BorderThickness="1.5"
                                     Background="{StaticResource TaskDialogCard}">
                                 <Border.Style>
                                     <Style TargetType="Border">
