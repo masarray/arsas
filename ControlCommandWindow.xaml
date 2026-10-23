@@ -165,17 +165,32 @@
         <Border x:Name="ResultPanel" Grid.Row="3" Background="#F2F6FA"
                 BorderBrush="{StaticResource Line}" BorderThickness="1"
                 CornerRadius="7" Padding="10,9" Margin="0,10,0,0">
-            <StackPanel>
-                <TextBlock Text="{Binding CommandStage}" Foreground="{StaticResource Ink}"
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding CommandStage}"
+                           Foreground="{StaticResource Ink}" VerticalAlignment="Center"
                            FontWeight="SemiBold" FontSize="11.5"/>
-                <TextBlock Text="{Binding CommandStatus}" Foreground="#50647A"
-                           TextWrapping="Wrap" MaxHeight="38" FontSize="10.5"
-                           Margin="0,3,0,0"/>
-                <TextBlock Text="{Binding WireTimelineText}" Foreground="#546981"
-                           TextWrapping="Wrap" FontSize="10" MaxHeight="32"
-                           Margin="0,4,0,0"
+                <Button x:Name="CopyEvidenceButton" Grid.Row="0" Grid.Column="1"
+                        Content="Copy evidence" Style="{StaticResource SoftButton}"
+                        IsEnabled="{Binding CanCopyEvidence}" Click="CopyEvidence_Click"
+                        Padding="8,3" MinWidth="90" Height="25" FontSize="10"
+                        ToolTip="Copy IED/object, origin, command response and diagnostics for FAT; sends no MMS requests"/>
+                <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding CommandStatus}"
+                           Foreground="#50647A" TextWrapping="Wrap" MaxHeight="38"
+                           FontSize="10.5" Margin="0,3,0,0"/>
+                <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding WireTimelineText}"
+                           Foreground="#546981" TextWrapping="Wrap" FontSize="10"
+                           MaxHeight="32" Margin="0,4,0,0"
                            ToolTip="Only received native MMS control wire steps; not physical feedback"/>
-            </StackPanel>
+            </Grid>
         </Border>
 
         <Grid Grid.Row="4" Margin="0,11,0,0">
