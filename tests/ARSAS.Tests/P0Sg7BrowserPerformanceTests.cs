@@ -2,6 +2,10 @@ using ArIED61850Tester.Models;
 
 namespace ARSAS.Tests;
 
+[CollectionDefinition("SG7-Unit-Metadata-Serial", DisableParallelization = true)]
+public sealed class P0Sg7BrowserPerformanceTestCollection;
+
+[Collection("SG7-Unit-Metadata-Serial")]
 public sealed class P0Sg7BrowserPerformanceTests
 {
     [Fact]
