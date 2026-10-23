@@ -83,7 +83,7 @@
                 <ComboBox x:Name="CommandValueBox" Height="34"
                           ItemsSource="{Binding ValueOptions}"
                           Text="{Binding SelectedValue, UpdateSourceTrigger=PropertyChanged}"
-                          IsEditable="True" IsEnabled="{Binding IsReady}"
+                          IsEditable="{Binding AllowCustomValue}" IsEnabled="{Binding IsReady}"
                           Padding="8,4" VerticalContentAlignment="Center"
                           ToolTip="Control value according to the live CDC and MMS ctlVal type"/>
 
