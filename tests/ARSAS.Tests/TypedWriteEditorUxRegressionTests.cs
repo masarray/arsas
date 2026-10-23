@@ -104,6 +104,8 @@ public sealed class TypedWriteEditorUxRegressionTests
         var batch = Source("BrowserBatchWriteWindow.xaml.cs");
         Assert.Contains("await PrimeLiveEditorsAsync();", batch);
         Assert.Contains("row.ResetToReadback(actual.CurrentText);", batch);
+        Assert.Contains("var readbackMismatch = false;", batch);
+        Assert.Contains("MmsDataCodec.Encode(steps[i].ProposedValue)", batch);
         Assert.Contains("WriteBrowserDataAttributesAsync(", batch);
         Assert.Contains("TryFreezePlan(selected,", batch);
         Assert.Contains("No automatic retry", batch, StringComparison.OrdinalIgnoreCase);
