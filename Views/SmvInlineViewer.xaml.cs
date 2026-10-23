@@ -49,6 +49,7 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
     private bool _loadingAdapters;
     private bool _selectingProgrammatically;
     private bool _awaitingPublisherSwitch;
+    private SmvDisplayUnits _lastViewProfile = SmvDisplayUnits.RawCounts;
     private string _lastDisplayedPublisherKey = string.Empty;
     private long _frameCount;
 
@@ -603,6 +604,15 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
         }
         while (Measurements.Count > rowIndex)
             Measurements.RemoveAt(Measurements.Count - 1);
+
+        // Filters depend on the operator-selected profile, not each frame.
+        // Recreate the views only when the profile truly changes.
+        if (_lastViewProfile != profile)
+        {
+            _lastViewProfile = profile;
+            VoltageMeasurements.Refresh();
+            CurrentMeasurements.Refresh();
+        }
 
         // A single two-cycle immutable snapshot is the only source of power
         // calculations; never pair samples across different publishers/frames.
