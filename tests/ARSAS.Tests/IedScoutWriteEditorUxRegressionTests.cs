@@ -12,7 +12,7 @@ public sealed class IedScoutWriteEditorUxRegressionTests
         Assert.Contains("Text=\"Write\"", xaml);
         Assert.Contains("M167,840", xaml);
         var route = Source("MainWindow.IedBrowser.TypedDataWrite.cs");
-        Assert.Contains("IedBrowserWriteButton.Content = \"Write\"", route);
+        Assert.DoesNotContain("IedBrowserWriteButton.Content =", route);
         Assert.DoesNotContain("Write ctlModel…\" :", route);
     }
 
