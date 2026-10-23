@@ -49,10 +49,31 @@
                         <DataTemplate>
                             <Grid Margin="1">
                                 <TextBox x:Name="ValueEditor" Text="{Binding RequestedValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                         Padding="5,3" BorderBrush="#CED7E3" Background="White"/>
-                                <ComboBox x:Name="CtlPicker" Visibility="Collapsed"
+                                         Padding="5,3" BorderBrush="#CED7E3" Background="White">
+                                    <TextBox.Style>
+                                        <Style TargetType="TextBox">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsControlModel}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBox.Style>
+                                </TextBox>
+                                <ComboBox x:Name="CtlPicker"
                                           SelectedValue="{Binding RequestedValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                           SelectedValuePath="Tag" FontSize="11.5">
+                                    <ComboBox.Style>
+                                        <Style TargetType="ComboBox">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsControlModel}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ComboBox.Style>
                                     <ComboBoxItem Tag="0" Content="0 · status-only"/>
                                     <ComboBoxItem Tag="1" Content="1 · direct-normal"/>
                                     <ComboBoxItem Tag="2" Content="2 · sbo-normal"/>
