@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using AR.Iec61850.Discovery;
 
 namespace ArIED61850Tester.Models;
@@ -29,6 +30,47 @@ public sealed record IedBrowserAcceptanceMetrics(
         $"· q {QualityDecoded}/{QualityObserved} · t {TimestampDecoded}/{TimestampObserved} " +
         "· consumer mismatch not measured";
 
+    // Cache only immutable model declarations; never cache observed process values.
+    // A model's 25k+ attributes must not be regrouped on every WPF refresh.
+    private sealed record Target(string Reference, string Fc, bool Quality, bool Timestamp, bool SettingEnum);
+    private sealed record ModelTargets(Target[] Attributes, string[] CfPairOwners);
+    private static readonly ConditionalWeakTable<LiveIedModelDiscoveryDocument, ModelTargets>
+        TargetCache = new();
+
+    private static ModelTargets IndexModel(LiveIedModelDiscoveryDocument model)
+    {
+        var readableFc = new HashSet<string>(
+            ["ST", "MX", "CF", "DC", "SP", "SG", "SE", "EX"],
+            StringComparer.OrdinalIgnoreCase);
+        var unique = model.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
+            .SelectMany(ln => ln.DataObjects).SelectMany(o => o.Attributes)
+            .Where(a => readableFc.Contains(a.FunctionalConstraint) &&
+                !string.IsNullOrWhiteSpace(a.MmsReference))
+            .GroupBy(a => Key(a.MmsReference, a.FunctionalConstraint),
+                StringComparer.Ordinal)
+            .Where(g => g.Count() == 1).Select(g => g.Single()).ToArray();
+        var targets = unique.Select(attr =>
+        {
+            var reference = IedBrowserLiveValues.CanonicalReference(attr.MmsReference);
+            var fc = attr.FunctionalConstraint;
+            return new Target(reference, fc,
+                reference.EndsWith(".q", StringComparison.Ordinal),
+                reference.EndsWith(".t", StringComparison.Ordinal),
+                fc.Equals("SG", StringComparison.OrdinalIgnoreCase) &&
+                reference.EndsWith(".setVal", StringComparison.Ordinal) &&
+                (attr.SclBType.Equals("Enum", StringComparison.OrdinalIgnoreCase) ||
+                 attr.MmsType.Equals("enumerated", StringComparison.OrdinalIgnoreCase) ||
+                 attr.MmsType.Equals("enum", StringComparison.OrdinalIgnoreCase)));
+        }).ToArray();
+        var allCf = targets.Where(a => a.Fc.Equals("CF", StringComparison.OrdinalIgnoreCase))
+            .Select(a => a.Reference).ToHashSet(StringComparer.Ordinal);
+        var owners = allCf.Where(x =>
+            x.EndsWith(".units.SIUnit", StringComparison.Ordinal) &&
+            allCf.Contains(x[..^".SIUnit".Length] + ".multiplier"))
+            .Select(x => x[..^".SIUnit".Length]).ToArray();
+        return new ModelTargets(targets, owners);
+    }
+
     public static IedBrowserAcceptanceMetrics Capture(
         LiveIedModelDiscoveryDocument model,
         IedBrowserLiveValues ledger,
@@ -37,18 +79,7 @@ public sealed record IedBrowserAcceptanceMetrics(
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(ledger);
-        var readableFc = new HashSet<string>(
-            ["ST", "MX", "CF", "DC", "SP", "SG", "SE", "EX"],
-            StringComparer.OrdinalIgnoreCase);
-        var targets = model.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
-            .SelectMany(ln => ln.DataObjects).SelectMany(o => o.Attributes)
-            .Where(a => readableFc.Contains(a.FunctionalConstraint) &&
-                !string.IsNullOrWhiteSpace(a.MmsReference))
-            .GroupBy(a => Key(a.MmsReference, a.FunctionalConstraint),
-                StringComparer.Ordinal)
-            // Duplicate declarations are never counted as independently
-            // verified attributes, nor used to fabricate coverage.
-            .Where(g => g.Count() == 1).Select(g => g.Single()).ToArray();
+        var targets = TargetCache.GetValue(model, IndexModel);
         var fresh = 0;
         var qObserved = 0;
         var qDecoded = 0;
@@ -58,12 +89,12 @@ public sealed record IedBrowserAcceptanceMetrics(
         var sgDecoded = 0;
         var missing = 0;
 
-        foreach (var target in targets)
+        foreach (var target in targets.Attributes)
         {
-            var reference = IedBrowserLiveValues.CanonicalReference(target.MmsReference);
-            var fc = target.FunctionalConstraint;
-            var isQuality = reference.EndsWith(".q", StringComparison.Ordinal);
-            var isTime = reference.EndsWith(".t", StringComparison.Ordinal);
+            var reference = target.Reference;
+            var fc = target.Fc;
+            var isQuality = target.Quality;
+            var isTime = target.Timestamp;
             var kind = isQuality ? "Quality" : isTime ? "Timestamp" : "";
             if (!ledger.TryGet(reference, fc, out var observed,
                     requiredEvidence: kind) ||
@@ -84,26 +115,14 @@ public sealed record IedBrowserAcceptanceMetrics(
                 if (observed.TimeBits is { IsDecoded: true,
                     HasWireProvenance: true }) tDecoded++;
             }
-            if (fc.Equals("SG", StringComparison.OrdinalIgnoreCase) &&
-                reference.EndsWith(".setVal", StringComparison.Ordinal) &&
-                (target.SclBType.Equals("Enum", StringComparison.OrdinalIgnoreCase) ||
-                 target.MmsType.Equals("enumerated", StringComparison.OrdinalIgnoreCase) ||
-                 target.MmsType.Equals("enum", StringComparison.OrdinalIgnoreCase)))
+            if (target.SettingEnum)
             {
                 sgObserved++;
                 if (enumEvidence?.TryFormat(reference, fc, observed.Value,
                         out _, out _) == true) sgDecoded++;
             }
         }
-        var allCf = targets.Where(a =>
-            a.FunctionalConstraint.Equals("CF", StringComparison.OrdinalIgnoreCase))
-            .Select(a => IedBrowserLiveValues.CanonicalReference(a.MmsReference))
-            .ToHashSet(StringComparer.Ordinal);
-        var cfOwners = allCf.Where(x =>
-            x.EndsWith(".units.SIUnit", StringComparison.Ordinal) &&
-            allCf.Contains(x[..^".SIUnit".Length] + ".multiplier"))
-            .Select(x => x[..^".SIUnit".Length])
-            .ToArray();
+        var cfOwners = targets.CfPairOwners;
         var cfEvidence = new IedBrowserCfEvidencePresentation(ledger, model, null);
         var proved = cfOwners.Count(x =>
             cfEvidence.TryFormatUnitsParent(x, "CF", out _, out _, out var authority) &&
@@ -111,7 +130,7 @@ public sealed record IedBrowserAcceptanceMetrics(
         var failedSamples = failures?.Count(x =>
             x.Kind is IedBrowserReadAbsenceKind.Failed or
                 IedBrowserReadAbsenceKind.Interrupted) ?? 0;
-        return new IedBrowserAcceptanceMetrics(targets.Length, fresh,
+        return new IedBrowserAcceptanceMetrics(targets.Attributes.Length, fresh,
             missing, failedSamples, cfOwners.Length, proved,
             sgObserved, sgDecoded, qObserved, qDecoded, tObserved, tDecoded);
     }
