@@ -22,6 +22,14 @@ public partial class MainWindow
 
     private void ApplyExplorerLiveSearchFilter()
     {
+        // The runtime-installed search and the native Explorer box must share
+        // ONE ICollectionView filter owner. Two independent Filter assignments
+        // otherwise replace one another and synchronously enumerate SG7 twice.
+        if (_liveSignalSearchInstalled && _liveSignalSearchGrid is not null)
+        {
+            ApplyLiveSignalSearch();
+            return;
+        }
         var device = SelectedDevice;
         if (device == null)
             return;
