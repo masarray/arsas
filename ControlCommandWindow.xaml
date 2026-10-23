@@ -183,7 +183,8 @@
                        FontSize="10.5" VerticalAlignment="Center"
                        TextWrapping="Wrap" Margin="0,0,10,0"/>
             <Button Grid.Column="1" Content="Close" Style="{StaticResource SoftButton}"
-                    Click="Close_Click" Width="75" Height="32" Margin="0,0,7,0"/>
+                    Click="Close_Click" IsEnabled="{Binding CanClose}"
+                    Width="75" Height="32" Margin="0,0,7,0"/>
             <Button x:Name="SendCommandButton" Grid.Column="2"
                     Content="{Binding SendButtonText}" Style="{StaticResource PrimaryButton}"
                     Click="SendCommand_Click" IsEnabled="{Binding CanSend}"
