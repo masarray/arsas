@@ -917,6 +917,7 @@ public partial class MainWindow
                 _iedBrowserNavigation.Current is not null;
         IedBrowserCancelReadButton.IsEnabled = _iedBrowserReadOperation != null;
         RefreshIedBrowserWriteButton();
+        RefreshIedBrowserControlButton();
     }
 
     private bool TryGetBrowserReadFailure(
