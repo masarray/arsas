@@ -71,6 +71,10 @@ public sealed class StartupVisualStabilityRegressionTests
         var host = doc.Descendants(presentation + "Border")
             .Single(node => node.Attribute(xaml + "Name")?.Value == "IpEditorHost");
         Assert.Equal("43", (string?)host.Attribute("Height"));
+        Assert.Equal("265", (string?)host.Attribute("Width"));
+        Assert.Equal("Manual", (string?)doc.Root.Attribute("SizeToContent"));
+        Assert.Equal("350", (string?)doc.Root.Attribute("Height"));
+        Assert.DoesNotContain("ManualAddressCheck", source, StringComparison.Ordinal);
 
         var editor = doc.Descendants(presentation + "StackPanel")
             .Single(node => node.Attribute(xaml + "Name")?.Value == "OctetEditor");
