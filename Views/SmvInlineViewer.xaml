@@ -110,6 +110,9 @@
             <Setter Property="Foreground" Value="{StaticResource Ink}"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
+        <Style x:Key="SmvRmsValueText" TargetType="TextBlock" BasedOn="{StaticResource SmvNumberText}">
+            <Setter Property="ToolTip" Value="{Binding RmsDetail}"/>
+        </Style>
     </UserControl.Resources>
 
     <Grid>
@@ -460,7 +463,7 @@
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
                                         <DataGridTextColumn Header="RMS" Binding="{Binding RmsText}"
-                                                            Width="1.85*" ElementStyle="{StaticResource SmvNumberText}"/>
+                                                            Width="1.85*" ElementStyle="{StaticResource SmvRmsValueText}"/>
                                         <DataGridTextColumn Header="Angle" Binding="{Binding AngleText}"
                                                             Width="1.10*" ElementStyle="{StaticResource SmvNumberText}"/>
                                     </DataGrid.Columns>
@@ -505,7 +508,7 @@
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
                                         <DataGridTextColumn Header="RMS" Binding="{Binding RmsText}"
-                                                            Width="1.85*" ElementStyle="{StaticResource SmvNumberText}"/>
+                                                            Width="1.85*" ElementStyle="{StaticResource SmvRmsValueText}"/>
                                         <DataGridTextColumn Header="Angle" Binding="{Binding AngleText}"
                                                             Width="1.10*" ElementStyle="{StaticResource SmvNumberText}"/>
                                     </DataGrid.Columns>
