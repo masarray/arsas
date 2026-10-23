@@ -52,7 +52,7 @@ public partial class IedBrowserWriteWindow : Window
         var work = SystemParameters.WorkArea;
         Height = Math.Max(MinHeight, Math.Min(520, work.Height - 26));
         Width = Math.Max(MinWidth, Math.Min(940, work.Width - 26));
-        // IEDScout-like editor: preload bounded current values from this live
+        // operator-friendly editor: preload bounded current values from this live
         // association. Read-only traffic only; never write on opening.
         await ReadRowsAsync(Rows.Take(24).ToArray());
     }
