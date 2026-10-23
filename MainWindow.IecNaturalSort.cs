@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Threading;
 using System.Windows.Controls;
 using System.Windows.Data;
 using ArIED61850Tester.Models;
@@ -16,6 +17,7 @@ namespace ArIED61850Tester;
 public partial class MainWindow
 {
     private readonly HashSet<DataGrid> _iecNaturallySortedGrids = new();
+    private bool _globalNaturalSortThresholdQueued;
 
     private void ExplorerLiveGrid_Loaded(object sender, RoutedEventArgs e)
     {
@@ -46,6 +48,24 @@ public partial class MainWindow
                 ItemsControl.ItemsSourceProperty, typeof(DataGrid));
             descriptor?.AddValueChanged(grid, (_, _) =>
                 grid.Dispatcher.BeginInvoke(new Action(() => ApplyIecNaturalSort(grid, comparer))));
+
+            if (ReferenceEquals(grid, GlobalLiveGrid))
+            {
+                // The global ItemsSource instance is stable while device sets
+                // accumulate. ItemsSource-change alone never sees the 2,049th
+                // point; remove our old small-list sort at the growth boundary.
+                GlobalPoints.CollectionChanged += (_, _) =>
+                {
+                    if (GlobalPoints.Count <= 2048 || _globalNaturalSortThresholdQueued)
+                        return;
+                    _globalNaturalSortThresholdQueued = true;
+                    grid.Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+                    {
+                        _globalNaturalSortThresholdQueued = false;
+                        ApplyIecNaturalSort(grid, comparer);
+                    }));
+                };
+            }
         }
         ApplyIecNaturalSort(grid, comparer);
     }
@@ -59,7 +79,7 @@ public partial class MainWindow
         // DataSet/FCDA order. Command Dock ALWAYS retains its verified ordering.
         if (CollectionViewSource.GetDefaultView(grid.ItemsSource) is not ListCollectionView view)
             return;
-        if (grid.Name is "ExplorerLiveValuesGrid" or "GlobalLiveGrid" &&
+        if ((grid.Name is "ExplorerLiveValuesGrid" or "GlobalLiveGrid") &&
             grid.ItemsSource is ICollection { Count: > 2048 })
         {
             // A live collection may grow past the threshold AFTER a previous
