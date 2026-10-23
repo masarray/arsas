@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
@@ -48,6 +49,16 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
     public ObservableCollection<SmvLiveStreamSummary> Streams { get; } = [];
     public ObservableCollection<SmvDisplayMeasurement> Measurements { get; } = [];
 
+    // Two lightweight live views of the original bounded eight-row collection;
+    // no duplicate samples, DSP calculations or packet observations.
+    public ICollectionView VoltageMeasurements { get; }
+    public ICollectionView CurrentMeasurements { get; }
+
+    public string VoltageGroupHeading => ActiveUnits == SmvDisplayUnits.NineTwoLe
+        ? "Voltage · Ch5–8 (V)" : "Voltage · Ch1–4 (raw)*";
+    public string CurrentGroupHeading => ActiveUnits == SmvDisplayUnits.NineTwoLe
+        ? "Current · Ch1–4 (A)" : "Current · Ch5–8 (raw)*";
+
     // The original DigSub WPF controls repaint immutable models, not packet work.
     public WaveformSnapshot? CurrentWaveform { get; private set; }
     public IReadOnlyList<PhasorDisplayItem> CurrentPhasors { get; private set; } = [];
@@ -66,7 +77,7 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
 
     public string UnitStatus => RequestedUnits switch
     {
-        SmvDisplayUnits.RawCounts => "RAW counts · no verified U/I channel scale",
+        SmvDisplayUnits.RawCounts => "RAW counts · *Voltage/Current grouping is unverified (no SCL channel mapping)",
         _ when ActiveUnits == SmvDisplayUnits.NineTwoLe
             => "9-2LE user profile · 1 mA / 10 mV per count · verify publisher DataSet",
         _ => "9-2LE selected · need eight clean channels; displaying RAW counts"
@@ -80,6 +91,16 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
     public SmvInlineViewer()
     {
         InitializeComponent();
+        VoltageMeasurements = new ListCollectionView(Measurements)
+        {
+            Filter = item => item is SmvDisplayMeasurement row &&
+                SmvEngineeringDisplay.Describe(row.ChannelIndex, ActiveUnits).IsVoltage
+        };
+        CurrentMeasurements = new ListCollectionView(Measurements)
+        {
+            Filter = item => item is SmvDisplayMeasurement row &&
+                !SmvEngineeringDisplay.Describe(row.ChannelIndex, ActiveUnits).IsVoltage
+        };
         DataContext = this;
         _freshness = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
         {
@@ -433,6 +454,8 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
             Measurements.Add(SmvEngineeringDisplay.Present(raw, profile));
         UpdateDigSubPhasors();
         Notify(nameof(UnitStatus));
+        Notify(nameof(VoltageGroupHeading));
+        Notify(nameof(CurrentGroupHeading));
         Notify(nameof(PhaseReferenceText));
     }
 
