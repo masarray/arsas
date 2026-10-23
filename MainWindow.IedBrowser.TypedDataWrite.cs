@@ -16,7 +16,7 @@ public partial class MainWindow
     private LiveIedDataAttributeModel? BrowserWritableSelectedAttribute()
     {
         if (SelectedDevice is not { IsConnected: true, IsDemo: false, IsBusy: false,
-                                   IsMonitoring: false, IsBrowserReading: false } device ||
+                                   IsBrowserReading: false } device ||
             device.LiveDiscoveryModel is null ||
             _iedBrowserReadOperation is not null ||
             IedBrowserDetailList?.SelectedItem is not IedBrowserDetailRow
@@ -81,7 +81,7 @@ public partial class MainWindow
     private LiveIedDataObjectModel? BrowserWritableSelectedDo()
     {
         if (SelectedDevice is not { IsConnected: true, IsDemo: false, IsBusy: false,
-                                   IsMonitoring: false, IsBrowserReading: false } device ||
+                                   IsBrowserReading: false } device ||
             device.LiveValues.IsOffline || device.LiveDiscoveryModel is null ||
             _iedBrowserReadOperation is not null)
             return null;
