@@ -2474,14 +2474,32 @@
             </TabItem>
         </TabControl>
 
-        <Border Grid.Row="2" Margin="0,10,0,0" Background="#EAF1FF" BorderBrush="#CFE0FF" BorderThickness="1" CornerRadius="14" Padding="11,7">
-            <Grid>
-                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal">
-                    <Ellipse Width="8" Height="8" Fill="{StaticResource Accent}" Margin="0,0,9,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding LastStatusText}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"/>
-                </StackPanel>
-                <TextBlock Grid.Column="1" Text="{Binding RuntimeSummaryText}" FontSize="11.8" Foreground="{StaticResource Muted}" Margin="12,0,0,0"/>
+        <!-- The status strip must NEVER grow when diagnostics contain newlines or stack traces. -->
+        <Border Grid.Row="2" Height="34" MinHeight="34" MaxHeight="34"
+                Margin="0,7,0,0" Background="#EAF1FF" BorderBrush="#CFE0FF"
+                BorderThickness="1" CornerRadius="8" Padding="10,0" ClipToBounds="True">
+            <Grid Height="32" VerticalAlignment="Center" ClipToBounds="True">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Grid Grid.Column="0" MinWidth="0" ClipToBounds="True">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Ellipse Width="7" Height="7" Fill="{StaticResource Accent}"
+                             Margin="0,0,8,0" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Text="{Binding LastStatusText}"
+                               VerticalAlignment="Center" FontSize="11" FontWeight="Medium"
+                               Foreground="{StaticResource Ink}" TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis" MaxHeight="19"/>
+                </Grid>
+                <TextBlock Grid.Column="1" Text="{Binding RuntimeSummaryText}"
+                           VerticalAlignment="Center" FontSize="10.5"
+                           Foreground="{StaticResource Muted}" Margin="12,0,0,0"
+                           TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                           MaxHeight="19"/>
             </Grid>
         </Border>
 

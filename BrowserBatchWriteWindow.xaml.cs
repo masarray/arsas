@@ -80,7 +80,7 @@ public partial class BrowserBatchWriteWindow : Window
 
     private bool CurrentAssociation =>
         !_lifetime.IsCancellationRequested && _device.IsConnected &&
-        !_device.IsDemo && !_device.IsBusy && !_device.IsMonitoring &&
+        !_device.IsDemo && !_device.IsBusy &&
         !_device.LiveValues.IsOffline &&
         ReferenceEquals(_device.LiveDiscoveryModel, _model) &&
         _device.LiveValues.Association == _association;

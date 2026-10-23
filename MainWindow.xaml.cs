@@ -69,7 +69,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public string NewDeviceIp { get => _newDeviceIp; set => Set(ref _newDeviceIp, value); }
     public string NewDevicePort { get => _newDevicePort; set => Set(ref _newDevicePort, value); }
     public int PollingIntervalMs { get => _pollingIntervalMs; set => Set(ref _pollingIntervalMs, Math.Clamp(value, 50, 600000)); }
-    public string LastStatusText { get => _lastStatusText; set => Set(ref _lastStatusText, value); }
+    public string LastStatusText
+    {
+        get => _lastStatusText;
+        set => Set(ref _lastStatusText, FormatSingleLineStatus(value));
+    }
+
+    // Diagnostics owns full exceptions, including stack traces. The bottom
+    // strip is one short summary, never a resizable log or multi-line surface.
+    public static string FormatSingleLineStatus(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "Ready";
+        var first = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault()?.Trim() ?? "Ready";
+        return first.Length <= 180 ? first : first[..177] + "…";
+    }
 
     public Iec61850MonitorDevice? SelectedDevice
     {

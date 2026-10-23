@@ -136,7 +136,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(device);
         var model = device.LiveDiscoveryModel;
-        if (device.IsDemo || device.IsMonitoring || device.IsBusy ||
+        if (device.IsDemo || device.IsBusy ||
             model is null || !device.IsConnected ||
             !_sessions.TryGetValue(device.DeviceId, out var session) ||
             !ReferenceEquals(session.Device, device) || !session.Client.IsConnected ||
@@ -166,7 +166,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             ReferenceEquals(actual, session) && session.Client.IsConnected &&
             ReferenceEquals(device.LiveDiscoveryModel, model) &&
             device.LiveValues.Association == epoch && !device.LiveValues.IsOffline &&
-            device.IsConnected && !device.IsMonitoring && !device.IsBusy &&
+            device.IsConnected && !device.IsBusy &&
             !session.ControlLifetimeCancellation.IsCancellationRequested;
         return await session.Client.PreviewDataAttributeWriteAsync(
             reference, Current, cancellationToken).ConfigureAwait(false);
@@ -176,7 +176,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     /// Operator-confirmed, same-DO generic MMS data Write using the CURRENT IED
     /// association. The Browser passes an immutable per-DA plan frozen after
     /// preview; this runtime rejects SCL-only or stale attribute ownership.
-    /// No monitoring/reporting or control-flight may be in progress.
+    /// Uses the same existing serialized MMS association while RCB monitoring can continue;\n    /// never changes report ownership or triggers cyclic polling. No control flight may be active.
     /// </summary>
     public async Task<IedBrowserTypedWriteBatchResult> WriteBrowserDataAttributesAsync(
         Iec61850MonitorDevice device,
@@ -188,7 +188,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         var plan = IedBrowserTypedWriteBatch.Freeze(confirmedPlan);
         var model = device.LiveDiscoveryModel;
         if (!explicitOperatorConfirmation || device.IsDemo || device.IsBusy ||
-            device.IsMonitoring || model is null || !device.IsConnected ||
+            model is null || !device.IsConnected ||
             !_sessions.TryGetValue(device.DeviceId, out var session) ||
             !ReferenceEquals(session.Device, device) || !session.Client.IsConnected ||
             session.ControlLifetimeCancellation.IsCancellationRequested ||
@@ -230,7 +230,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             device.LiveValues.Association == epoch &&
             !device.LiveValues.IsOffline &&
             device.IsConnected && active.Client.IsConnected &&
-            !device.IsMonitoring && !device.IsBusy &&
+            !device.IsBusy &&
             !active.ControlLifetimeCancellation.IsCancellationRequested &&
             Volatile.Read(ref active.ControlCommandActive) == 0 &&
             Volatile.Read(ref active.ControlFlightQuarantined) == 0;

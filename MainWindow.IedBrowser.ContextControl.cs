@@ -19,10 +19,18 @@ public partial class MainWindow
         if (device is not { IsConnected: true, IsDemo: false, IsBusy: false } ||
             device.LiveDiscoveryModel is null || device.LiveValues.IsOffline)
             return null;
-        // A selected ST/MX/status DA is not the controlling DO. Never infer
-        // Control authority from a cached parent DO after focus moves to a leaf.
-        if (IedBrowserDetailList?.SelectedItem is IedBrowserDetailRow
-            { Kind: "Data", IsDataObject: false })
+        // A CO ctlVal leaf is a control action on its exact DO; all status
+        // leaves remain read-only. This does not send any request on selection.
+        var leaf = IedBrowserDetailList?.SelectedItem as IedBrowserDetailRow;
+        var coValue = leaf is { Kind: "Data", IsDataObject: false,
+                                FunctionalConstraint: "CO" } &&
+                      (leaf.ValueReference.EndsWith("$ctlVal", StringComparison.Ordinal) ||
+                       leaf.ValueReference.EndsWith(".ctlVal", StringComparison.Ordinal)) &&
+                      (leaf.ValueReference.Contains("$Oper$", StringComparison.Ordinal) ||
+                       leaf.ValueReference.Contains("$SBOw$", StringComparison.Ordinal) ||
+                       leaf.ValueReference.Contains(".Oper.", StringComparison.Ordinal) ||
+                       leaf.ValueReference.Contains(".SBOw.", StringComparison.Ordinal));
+        if (leaf is { Kind: "Data", IsDataObject: false } && !coValue)
             return null;
         var page = _iedBrowserNavigation.Current;
         var focused = page?.Payload switch
@@ -47,6 +55,10 @@ public partial class MainWindow
             .DataObjects.FirstOrDefault(obj =>
                 string.Equals(obj.Reference, focused, StringComparison.Ordinal));
         if (source is null) return null;
+        if (coValue && !source.Attributes.Any(a =>
+                a.FunctionalConstraint == "CO" &&
+                string.Equals(a.MmsReference, leaf!.ValueReference, StringComparison.Ordinal)))
+            return null;
 
         // This collection is already filtered by the Command Dock live
         // operational verification. All StatusOnly/unknown stay outside.
@@ -76,6 +88,52 @@ public partial class MainWindow
             currentAssociationVerified: !device.LiveValues.IsOffline,
             operatorAuthorized: true);
         return allow.CanControl ? (command, source) : null;
+    }
+
+    private SignalDefinition? BrowserSelectedControlModelSignal()
+    {
+        var device = SelectedDevice;
+        if (device is not { IsConnected: true, IsDemo: false, IsBusy: false } ||
+            device.LiveDiscoveryModel is null || device.LiveValues.IsOffline ||
+            _iedBrowserReadOperation is not null)
+            return null;
+
+        if (IedBrowserDetailList?.SelectedItem is not IedBrowserDetailRow
+                { Kind: "Data", IsDataObject: false,
+                  FunctionalConstraint: "CF" } row)
+            return null;
+        if (!row.ValueReference.EndsWith("$ctlModel", StringComparison.Ordinal) &&
+            !row.ValueReference.EndsWith(".ctlModel", StringComparison.Ordinal))
+            return null;
+
+        var page = _iedBrowserNavigation.Current;
+        var focused = page?.Payload switch
+        {
+            LiveIedDataObjectModel obj => obj.Reference,
+            LiveIedLogicalNodeModel => _iedBrowserSelectedDoReference,
+            _ => null
+        };
+        if (string.IsNullOrWhiteSpace(focused)) return null;
+        var slash = focused.IndexOf('/');
+        var dot = slash < 0 ? -1 : focused.IndexOf('.', slash + 1);
+        if (slash < 1 || dot <= slash + 1) return null;
+
+        var source = device.LiveDiscoveryModel.LogicalDevices
+            .FirstOrDefault(ld => string.Equals(ld.MmsDomain, focused[..slash],
+                StringComparison.Ordinal))?
+            .LogicalNodes.FirstOrDefault(ln => string.Equals(ln.Name,
+                focused[(slash + 1)..dot], StringComparison.Ordinal))?
+            .DataObjects.FirstOrDefault(obj =>
+                string.Equals(obj.Reference, focused, StringComparison.Ordinal));
+        if (source is null || !source.Attributes.Any(attr =>
+                attr.FunctionalConstraint == "CF" &&
+                string.Equals(attr.MmsReference, row.ValueReference, StringComparison.Ordinal)))
+            return null;
+
+        return device.OperableCommandSignals.Concat(device.CommandSignals)
+            .Where(signal => signal.IsValidControlObject &&
+                string.Equals(signal.ObjectReference, focused, StringComparison.Ordinal))
+            .Distinct().FirstOrDefault();
     }
 
     private void RefreshIedBrowserControlButton()

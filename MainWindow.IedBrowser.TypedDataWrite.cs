@@ -16,7 +16,7 @@ public partial class MainWindow
     private LiveIedDataAttributeModel? BrowserWritableSelectedAttribute()
     {
         if (SelectedDevice is not { IsConnected: true, IsDemo: false, IsBusy: false,
-                                   IsMonitoring: false, IsBrowserReading: false } device ||
+                                   IsBrowserReading: false } device ||
             device.LiveDiscoveryModel is null ||
             _iedBrowserReadOperation is not null ||
             IedBrowserDetailList?.SelectedItem is not IedBrowserDetailRow
@@ -81,7 +81,7 @@ public partial class MainWindow
     private LiveIedDataObjectModel? BrowserWritableSelectedDo()
     {
         if (SelectedDevice is not { IsConnected: true, IsDemo: false, IsBusy: false,
-                                   IsMonitoring: false, IsBrowserReading: false } device ||
+                                   IsBrowserReading: false } device ||
             device.LiveValues.IsOffline || device.LiveDiscoveryModel is null ||
             _iedBrowserReadOperation is not null)
             return null;
@@ -122,15 +122,20 @@ public partial class MainWindow
     private void RefreshIedBrowserWriteButton()
     {
         if (IedBrowserWriteButton is null) return;
-        var selected = BrowserWritableSelectedAttribute();
-        var selectedDo = selected is null ? BrowserWritableSelectedDo() : null;
-        IedBrowserWriteButton.IsEnabled = selected is not null || selectedDo is not null;
-        IedBrowserWriteButton.Content = selectedDo is not null ? "Write DAs…" : "Write DA…";
-        IedBrowserWriteButton.ToolTip = selected is not null
-            ? "Exact DA: inspect live GVA, review old/new and confirm one MMS Write."
-            : selectedDo is not null
-                ? "Exact DO: select changed attributes, inspect and confirm sequential non-atomic Writes."
-                : "Focus an online CF/SP/DC Data Attribute or its exact DO. Status, control and ctlModel use separate services.";
+        var ctlModel = BrowserSelectedControlModelSignal();
+        var selected = ctlModel is null ? BrowserWritableSelectedAttribute() : null;
+        var selectedDo = ctlModel is null && selected is null ? BrowserWritableSelectedDo() : null;
+        IedBrowserWriteButton.IsEnabled =
+            ctlModel is not null || selected is not null || selectedDo is not null;
+        IedBrowserWriteButton.Content = ctlModel is not null ? "Write ctlModel…" :
+            selectedDo is not null ? "Write DAs…" : "Write DA…";
+        IedBrowserWriteButton.ToolTip = ctlModel is not null
+            ? "Read live ctlModel, choose IEC enum 0–4, confirm a guarded CF Write and verify readback."
+            : selected is not null
+                ? "Exact DA: inspect live GVA, review old/new and confirm one MMS Write."
+                : selectedDo is not null
+                    ? "Exact DO: select changed attributes, inspect and confirm sequential non-atomic Writes."
+                    : "Select an exact CF/SP/DC DA, ctlModel CF leaf or owning DO. CO members use Control.";
     }
 
     private void IedBrowserDetailList_SelectionChanged(
@@ -146,9 +151,10 @@ public partial class MainWindow
     private void IedBrowserWrite_Click(object sender, RoutedEventArgs e)
     {
         var device = SelectedDevice;
-        var attribute = BrowserWritableSelectedAttribute();
-        var owner = attribute is null ? BrowserWritableSelectedDo() : null;
-        if (device is null || (attribute is null && owner is null))
+        var modelSignal = BrowserSelectedControlModelSignal();
+        var attribute = modelSignal is null ? BrowserWritableSelectedAttribute() : null;
+        var owner = modelSignal is null && attribute is null ? BrowserWritableSelectedDo() : null;
+        if (device is null || (modelSignal is null && attribute is null && owner is null))
         {
             IedBrowserSubtitle.Text =
                 "Write requires a current online CF/SP/DC attribute or exact owning DO.";
@@ -156,7 +162,19 @@ public partial class MainWindow
             return;
         }
 
-        if (attribute is not null)
+        if (modelSignal is not null)
+        {
+            // Route ctlModel through the existing dedicated engine service,
+            // not generic CF Write and NEVER through CO Operate.
+            var dialog = new ControlModelWriteWindow(_runtime, device, modelSignal)
+            {
+                Owner = this
+            };
+            var changed = dialog.ShowDialog() == true;
+            if (changed && device.IsConnected)
+                _ = RefreshControlValuesAsync(device, force: true);
+        }
+        else if (attribute is not null)
         {
             var dialog = new BrowserDataWriteWindow(_runtime, device, attribute)
             {
