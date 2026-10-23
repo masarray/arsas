@@ -82,7 +82,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
     }
     public string OriginValidationText => IsValidOriginator(OriginatorId)
         ? string.Empty : "Originator ID requires 1–64 printable ASCII characters.";
-    internal static bool IsValidOriginator(string? id) =>
+    public static bool IsValidOriginator(string? id) =>
         !string.IsNullOrWhiteSpace(id) && id.Length <= 64 &&
         id.All(c => c is >= ' ' and <= '~');
     public bool AllowCustomValue
