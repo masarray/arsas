@@ -978,6 +978,8 @@ public partial class MainWindow
         if (MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
             SelectedDevice is not { } device)
             return;
+        using var valuesPerf = IedBrowserPerformanceProbe.Measure(
+            "Browser.VisibleValues", device.Name, _iedBrowserDetails.Rows.Count);
         // RCB start/stop does not increment the process LiveValues ledger
         // version. Independently update just the already materialized RCB
         // row glyphs from runtime activation authority on the UI flush tick,
@@ -1031,6 +1033,8 @@ public partial class MainWindow
         else
             IedBrowserSubtitle.ToolTip =
                 "Offline/SCL declarations are not proof of fresh IEC MMS observations.";
+        using var unitsPerf = IedBrowserPerformanceProbe.Measure(
+            "Browser.Units", device.Name, device.Signals.Count);
         var engineeringUnits = cfEvidence.BuildVerifiedUnits(device.Signals, model);
         foreach (var row in _iedBrowserDetails.Rows)
         {
@@ -1915,6 +1919,8 @@ public partial class MainWindow
     {
         if (IedBrowserTab == null || MainTabs.SelectedIndex != IedBrowserWorkspaceIndex)
             return;
+        using var browserPerf = IedBrowserPerformanceProbe.Measure(
+            "Browser.Refresh", SelectedDevice?.Name, SelectedDevice?.Signals.Count ?? 0);
 
         var device = SelectedDevice;
         ObserveIedBrowserDevice(device);
