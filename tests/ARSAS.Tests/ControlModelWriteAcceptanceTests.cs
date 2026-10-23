@@ -46,7 +46,7 @@ public sealed class ControlModelWriteAcceptanceTests
         var button = Assert.Single(window.Descendants(P + "Button").Where(x =>
             (string?)x.Attribute("Click") == "Write_Click"));
         Assert.Equal("94", (string?)button.Attribute("Width"));
-        Assert.Equal("3", (string?)button.Attribute("Grid.Row"));
+        Assert.Equal("3", (string?)button.Parent?.Attribute("Grid.Row"));
         Assert.Contains(button.Descendants(P + "TextBlock"), x =>
             (string?)x.Attribute("Text") == "Write");
         Assert.Contains(button.Descendants(P + "Path"), x =>
