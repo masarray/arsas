@@ -43,6 +43,8 @@ public sealed class P0Sg7BrowserNavigationCacheTests
         Assert.Contains("new(8, StringComparer.Ordinal)", perf);
         Assert.Contains("_iedBrowserInventoryFlights.TryGetValue(key, out var task)", perf);
         Assert.Contains("_iedBrowserInventoryFlights.Set(key, task)", perf);
+        Assert.DoesNotContain("task.IsFaulted || task.IsCanceled", perf);
+        Assert.Contains("Cache failed tasks too", perf);
         Assert.Contains("QueuePendingIedBrowserMetricsAfter(flight, device, model, association)", perf);
         Assert.Contains("_iedBrowserMetricsStartedUtc = DateTime.MinValue", perf);
         Assert.Contains("ReferenceEquals(completedDevice, current)", perf);
