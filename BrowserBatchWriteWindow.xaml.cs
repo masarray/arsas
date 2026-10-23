@@ -197,6 +197,11 @@ public partial class BrowserBatchWriteWindow : Window
                 }
             }
 
+            if (selected.All(r => !r.HasEdited))
+            {
+                StatusLabel.Text = $"Read {selected.Length} live DA(s). Edit one or more values before Write.";
+                return;
+            }
             if (!TryFreezePlan(selected, out _, out var rejection))
             {
                 StatusLabel.Text = rejection + " No Write sent.";
@@ -352,9 +357,11 @@ public partial class BrowserBatchWriteWindow : Window
             }
             var anyFailure = result.Rejected > 0 || result.Unknown > 0 ||
                 result.Unverified > 0 || result.Unattempted > 0;
+            var shortReason = result.Rows.LastOrDefault()?.Message ?? "IED refused the requested value.";
+            if (shortReason.Length > 110) shortReason = shortReason[..107] + "…";
             StatusLabel.Text = anyFailure
-                ? $"Write ditolak / belum terverifikasi · {result.Verified} verified, " +
-                  $"{result.Rejected} rejected, {result.Unknown} unknown, {result.Unverified} unverified."
+                ? $"Write ditolak · {result.Verified} verified, {result.Rejected} rejected, " +
+                  $"{result.Unknown} unknown · {shortReason}"
                 : $"Write verified · {result.Verified} DA(s) · values refreshed from IED.";
             ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
                 anyFailure ? System.Windows.Media.Color.FromRgb(255, 242, 228)
