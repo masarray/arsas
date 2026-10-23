@@ -51,6 +51,18 @@ public sealed class P0Sg7BrowserNavigationCacheTests
         Assert.DoesNotContain("SclReportControlFilter.InspectFile(", browser);
     }
 
+    [Fact]
+    public void ExplorerSwitchWithEmptySearch_SkipsRedundantWpfCollectionRefresh()
+    {
+        var source = Read("MainWindow.LiveSearch.cs");
+        Assert.Contains("if (view.Filter is not null)", source);
+        Assert.Contains("view.Filter = item =>", source);
+        Assert.Contains("IedBrowserPerformanceProbe.Measure(", source);
+        Assert.DoesNotContain("view.Refresh();", source);
+        // WPF's Filter setter already RefreshOrDefer's this same CollectionView.
+        // Never change exact IEC reference or selected report membership.
+    }
+
     private static string Read(string path)
     {
         for (DirectoryInfo? dir = new(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
