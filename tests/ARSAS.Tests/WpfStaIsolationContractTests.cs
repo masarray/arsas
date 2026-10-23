@@ -8,7 +8,11 @@ public sealed class WpfStaIsolationContractTests
         var definition = (CollectionDefinitionAttribute)Assert.Single(
             typeof(WpfStaIsolationCollection).GetCustomAttributes(
                 typeof(CollectionDefinitionAttribute), inherit: false));
-        Assert.Equal("WpfStaIsolation", definition.Name);
+        Assert.Equal("WpfStaIsolation",
+            typeof(WpfStaIsolationCollection).GetCustomAttributesData()
+                .Single(attribute => attribute.AttributeType ==
+                    typeof(CollectionDefinitionAttribute))
+                .ConstructorArguments[0].Value?.ToString());
         Assert.True(definition.DisableParallelization);
 
         string[] suites =
@@ -31,7 +35,11 @@ public sealed class WpfStaIsolationContractTests
             var assigned = (CollectionAttribute)Assert.Single(
                 type.GetCustomAttributes(typeof(CollectionAttribute),
                     inherit: false));
-            Assert.Equal("WpfStaIsolation", assigned.Name);
+            Assert.Equal("WpfStaIsolation",
+                type.GetCustomAttributesData()
+                    .Single(attribute => attribute.AttributeType ==
+                        typeof(CollectionAttribute))
+                    .ConstructorArguments[0].Value?.ToString());
         }
     }
 }

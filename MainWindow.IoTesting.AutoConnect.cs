@@ -507,6 +507,11 @@ public partial class MainWindow
             if (!device.IsMonitoring || !IsSharedStaticDataSetAuthority(device))
                 return;
 
+            // One live RCB never proves the other three. Diagnose each exact
+            // DataSet/RCB against actual per-stream InformationReport ingress.
+            // This observer never drives MMS IO, GI or a cyclic fallback.
+            LogStaticRcbImageTriage(device);
+
             if (trafficObserved && device.HasReportStream)
             {
                 var reportPoints = device.Points.Count(point =>
@@ -516,7 +521,7 @@ public partial class MainWindow
                 AddLog(
                     "INFO",
                     device.Name,
-                    $"Static DataSet report evidence: actual InformationReport traffic observed after {firstReportLatency.TotalMilliseconds:0} ms; report-backed runtime point(s)={reportPoints}. RCB/GI path is alive.");
+                    $"Static DataSet report evidence: actual InformationReport traffic observed after {firstReportLatency.TotalMilliseconds:0} ms; report-backed runtime point(s)={reportPoints}. At least one RCB delivered a frame; each other RCB remains independently unverified until its actual ingress is observed.");
                 return;
             }
 
