@@ -6,7 +6,7 @@ namespace ARSAS.Tests;
 
 public sealed class IedBrowserTypedDataWriteGuardTests
 {
-    private static MmsObjectReference Cf(string name = "ctlModel")
+    private static MmsObjectReference Cf(string name = "sboTimeout")
         => MmsObjectReference.Parse("ZIVAVRLD1/ATCC1.TapChg." + name, "CF");
 
     private static MmsVariableAccessAttributesResult Gva(
@@ -37,6 +37,14 @@ public sealed class IedBrowserTypedDataWriteGuardTests
         var reference = Cf();
         Assert.Null(IedBrowserTypedWriteAdmission.RejectReason(
             reference, Gva(reference, "integer", 32), Finger("integer", 32), MmsDataValue.Integer(3)));
+    }
+
+    [Fact]
+    public void CtlModel_UsesExistingDedicatedConfigurationService()
+    {
+        var r = Cf("ctlModel");
+        Assert.Contains("ConfigureControlModel", IedBrowserTypedWriteAdmission.RejectReason(
+            r, Gva(r, "integer", 32), Finger("integer", 32), MmsDataValue.Integer(1))!);
     }
 
     [Fact]
