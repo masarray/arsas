@@ -16,7 +16,14 @@ public partial class BrowserDataWriteWindow : Window
     private readonly Iec61850MonitorRuntime _runtime;
     private readonly Iec61850MonitorDevice _device;
     private readonly MmsObjectReference _reference;
+    private readonly long _association;
+    private readonly LiveIedModelDiscoveryDocument? _model;
     private readonly CancellationTokenSource _lifetime = new();
+    private bool CurrentAssociation => _device.IsConnected && !_device.IsDemo &&
+        !_device.IsBusy && !_device.LiveValues.IsOffline &&
+        _device.LiveValues.Association == _association &&
+        ReferenceEquals(_device.LiveDiscoveryModel, _model) &&
+        !_lifetime.IsCancellationRequested;
     private IedBrowserNativeWritePreview? _preview;
     private bool _busy;
 
@@ -28,6 +35,8 @@ public partial class BrowserDataWriteWindow : Window
         InitializeComponent();
         _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         _device = device ?? throw new ArgumentNullException(nameof(device));
+        _association = device.LiveValues.Association;
+        _model = device.LiveDiscoveryModel;
         ArgumentNullException.ThrowIfNull(attribute);
         _reference = MmsObjectReference.Parse(
             attribute.MmsReference, attribute.FunctionalConstraint);
@@ -40,9 +49,11 @@ public partial class BrowserDataWriteWindow : Window
         _busy = true;
         try
         {
+            if (!CurrentAssociation)
+                throw new InvalidOperationException("IED connection changed; reopen Write.");
             _preview = await _runtime.PreviewBrowserDataAttributeWriteAsync(
                 _device, _reference, _lifetime.Token);
-            if (_lifetime.IsCancellationRequested) return;
+            if (!CurrentAssociation) return;
             if (_preview is not { IsAvailable: true, Type: not null, OldValue: not null } p)
             {
                 StatusLabel.Text = _preview?.Message ?? "Live GVA and value not available.";
@@ -104,7 +115,8 @@ public partial class BrowserDataWriteWindow : Window
     {
         if (WriteButton is null || DiffLabel is null || NewValueBox is null || BoolPicker is null) return;
         WriteButton.IsEnabled = false;
-        if (_busy || _preview is not { IsAvailable: true, Type: not null, OldValue: not null } p ||
+        if (_busy || !CurrentAssociation ||
+            _preview is not { IsAvailable: true, Type: not null, OldValue: not null } p ||
             !(BoolPicker.Visibility == Visibility.Visible ? BoolPicker.IsEnabled : NewValueBox.IsEnabled))
             return;
         if (!IedBrowserTypedWriteInput.TryParse(p.Type, SelectedInput(), out var value, out var error) || value is null)
@@ -141,52 +153,94 @@ public partial class BrowserDataWriteWindow : Window
             return;
         }
 
-        var confirm =
-            "Confirm ONE IEC 61850 MMS data Write on the connected IED?\n\n" +
-            $"IED: {_device.Name}\n" +
-            $"DA: {_reference.Domain}/{_reference.Item} [{_reference.FunctionalConstraint}]\n" +
-            $"Before: {p.CurrentText}\n" +
-            $"After: {MmsDataCodec.ToDisplayString(proposed)}\n\n" +
-            "No automatic retries, rollback, or control Operate. " +
-            "The server may reject Write; readback must independently match.";
-        if (MessageBox.Show(this, confirm, "Confirm live MMS Write",
-                MessageBoxButton.YesNo, MessageBoxImage.Warning,
-                MessageBoxResult.No) != MessageBoxResult.Yes)
+        // Write is the explicit operator action. Do not display a second
+        // confirmation or silently retry; native admission verifies typed
+        // evidence and the original association at the wire boundary.
+        if (!CurrentAssociation)
+        {
+            StatusLabel.Text = "Connection changed. Reopen Write.";
             return;
+        }
 
         _busy = true;
         WriteButton.IsEnabled = false;
         NewValueBox.IsEnabled = false;
         BoolPicker.IsEnabled = false;
         StatusLabel.Text = "Writing…";
+        string feedback = "Write not verified.";
+        bool accepted = false;
         try
         {
             var step = new IedBrowserTypedWriteStep(
                 _reference, p.GvaSignature, p.OldValue, proposed);
             var outcome = await _runtime.WriteBrowserDataAttributesAsync(
                 _device, new[] { step }, true, _lifetime.Token);
-            if (_lifetime.IsCancellationRequested) return;
+            if (!CurrentAssociation) return;
             var result = outcome.Rows.Single();
-            StatusLabel.Text = $"{result.State}: {result.Message}";
-            DiffLabel.Text =
-                "Write completed or resolved as uncertain. Close and inspect the actual IED value " +
-                "before another attempt; physical process change is NOT implied.";
-            _preview = null; // A new attempt must acquire a NEW live GVA/read + confirmation.
+            accepted = outcome.Verified == 1;
+            feedback = accepted ? "Write accepted" : "Write ditolak: " + result.Message;
         }
         catch (OperationCanceledException)
         {
-            if (!_lifetime.IsCancellationRequested)
-                StatusLabel.Text = "Write may have been dispatched: outcome UNKNOWN. Read IED manually.";
+            feedback = "Write uncertain: connection interrupted.";
         }
         catch (Exception ex)
         {
-            if (!_lifetime.IsCancellationRequested)
-                StatusLabel.Text = "Write refused or outcome unresolved: " + ex.Message;
+            feedback = "Write ditolak / unknown: " + ex.Message;
         }
         finally
         {
+            // Independent live GVA/Read after every attempted Write, even
+            // when the IED rejected it. Never send an automatic retry.
+            _preview = null;
+            if (CurrentAssociation)
+            {
+                try
+                {
+                    var readback = await _runtime.PreviewBrowserDataAttributeWriteAsync(
+                        _device, _reference, _lifetime.Token);
+                    if (CurrentAssociation && readback is
+                        { IsAvailable: true, OldValue: not null, Type: not null } live)
+                    {
+                        CurrentLabel.Text = "Current: " + live.CurrentText;
+                        TypeLabel.Text = live.Type.MmsType;
+                        _preview = live;
+                        if (live.Type.MmsType == "boolean")
+                        {
+                            BoolPicker.Visibility = Visibility.Visible;
+                            NewValueBox.Visibility = Visibility.Collapsed;
+                            BoolPicker.SelectedIndex = live.CurrentText.Equals(
+                                "true", StringComparison.OrdinalIgnoreCase) ? 0 :
+                                live.CurrentText.Equals("false", StringComparison.OrdinalIgnoreCase) ? 1 : -1;
+                            BoolPicker.IsEnabled = BoolPicker.SelectedIndex >= 0;
+                        }
+                        else
+                        {
+                            BoolPicker.Visibility = Visibility.Collapsed;
+                            NewValueBox.Visibility = Visibility.Visible;
+                            NewValueBox.Text = live.CurrentText;
+                            NewValueBox.IsEnabled = true;
+                        }
+                        var matches = MmsDataCodec.Encode(live.OldValue).AsSpan()
+                            .SequenceEqual(MmsDataCodec.Encode(proposed));
+                        feedback = accepted && matches
+                            ? "Write verified · Readback: " + live.CurrentText
+                            : accepted ? "Write not verified: readback differs (" + live.CurrentText + ")"
+                            : feedback + " · Current: " + live.CurrentText;
+                    }
+                    else
+                    {
+                        feedback += " · Readback unavailable.";
+                    }
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    feedback += " · Readback unavailable: " + ex.Message;
+                }
+            }
             _busy = false;
-            WriteButton.IsEnabled = false;
+            RefreshInput();
+            StatusLabel.Text = feedback.Length > 165 ? feedback[..162] + "…" : feedback;
         }
     }
 
