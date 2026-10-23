@@ -33,10 +33,10 @@ public sealed class CanonicalBrowserViewportIndex
                 Add(polar.MagnitudeReference);
                 Add(polar.AngleReference);
             }
-            foreach (var polar in row.PhasePlans)
+            foreach (var phasePlan in row.PhasePlans)
             {
-                Add(polar.MagnitudeReference);
-                Add(polar.AngleReference);
+                Add(phasePlan.MagnitudeReference);
+                Add(phasePlan.AngleReference);
             }
             foreach (var vector in row.VectorComponents)
             {
