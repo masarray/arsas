@@ -31,7 +31,7 @@ public static class IedBrowserWritePlan
             liveModel, page, false, focusedDoReference);
         if (candidates.Count > MaxTargets * 20)
             return []; // Refuse huge LN-wide selections; focus the exact DO.
-        return candidates
+        var admitted = candidates
             .Where(target => ConfigurationFc.Contains(target.FunctionalConstraint))
             .Where(target => !target.Reference.EndsWith(".q", StringComparison.OrdinalIgnoreCase) &&
                              !target.Reference.EndsWith(".t", StringComparison.OrdinalIgnoreCase))
@@ -39,10 +39,11 @@ public static class IedBrowserWritePlan
             .DistinctBy(target => target.Reference + "|" + target.FunctionalConstraint,
                 StringComparer.OrdinalIgnoreCase)
             .Take(MaxTargets + 1)
-            .Select(target => new IedBrowserWriteRow(
-                target.Reference, target.FunctionalConstraint, target.DataType))
-            .Take(MaxTargets)
             .ToArray();
+        if (admitted.Length > MaxTargets)
+            return []; // No silent partial bulk writes.
+        return admitted.Select(target => new IedBrowserWriteRow(
+            target.Reference, target.FunctionalConstraint, target.DataType)).ToArray();
     }
 
     public static bool IsSupported(string type)
