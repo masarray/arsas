@@ -77,6 +77,35 @@ public sealed class ControlOutcomePresentationTests
     }
 
     [Fact]
+    public void WireTimeline_UsesOnlyActualWireStepsAndTerminatesFromEvidence()
+    {
+        var result = Outcome("PositiveTermination", service: true,
+            termination: true, positive: true,
+            wire: new[]
+            {
+                new Iec61850ControlWireEvidence
+                    { Action = "SelectWithValue", RequestAccepted = true },
+                new Iec61850ControlWireEvidence
+                    { Action = "Operate", RequestAccepted = true }
+            });
+        var text = Iec61850ControlOutcomePresentation.WireTimeline(result);
+        Assert.Equal("SBOw ✓  →  Operate ✓  →  Termination ✓", text);
+        Assert.DoesNotContain("feedback", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void WireTimeline_NoReportedSteps_MustNotInventSelectOrOperate()
+    {
+        Assert.Equal("", Iec61850ControlOutcomePresentation.WireTimeline(Outcome()));
+        var negative = Outcome("Rejected", wire: new[]
+        {
+            new Iec61850ControlWireEvidence
+                { Action = "Select", RequestAccepted = false }
+        });
+        Assert.Equal("Select rejected", Iec61850ControlOutcomePresentation.WireTimeline(negative));
+    }
+
+    [Fact]
     public void NoDispatchAndNoKnownOutcome_AreDifferent()
     {
         Assert.Equal("Not sent",
