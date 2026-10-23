@@ -24,12 +24,19 @@ public sealed class IedBrowserTypedDataWriteGuardTests
             }
         };
 
+    private static string Finger(string type, int? size = null,
+        MmsTypeSizeConstraintKind constraint = MmsTypeSizeConstraintKind.None)
+        => IedBrowserTypedWriteAdmission.Fingerprint(new MmsTypeSpecificationNode
+        {
+            MmsType = type, Size = size, SizeConstraintKind = constraint
+        });
+
     [Fact]
     public void SingleCfSigned32_AcceptsExactLiveTypeAndOriginalFc()
     {
         var reference = Cf();
         Assert.Null(IedBrowserTypedWriteAdmission.RejectReason(
-            reference, Gva(reference, "integer", 32), "integer", MmsDataValue.Integer(3)));
+            reference, Gva(reference, "integer", 32), Finger("integer", 32), MmsDataValue.Integer(3)));
     }
 
     [Fact]
@@ -37,10 +44,10 @@ public sealed class IedBrowserTypedDataWriteGuardTests
     {
         var co = MmsObjectReference.Parse("LD/CSWI1.Pos.Oper.ctlVal", "CO");
         Assert.Contains("Control-service", IedBrowserTypedWriteAdmission.RejectReason(
-            co, Gva(co, "boolean"), "boolean", MmsDataValue.Boolean(true))!);
+            co, Gva(co, "boolean"), Finger("boolean"), MmsDataValue.Boolean(true))!);
         var forged = MmsObjectReference.Parse("LD/CSWI1.Pos.Oper.ctlVal", "CF");
         Assert.Contains("Control-service", IedBrowserTypedWriteAdmission.RejectReason(
-            forged, Gva(forged, "boolean"), "boolean", MmsDataValue.Boolean(true))!);
+            forged, Gva(forged, "boolean"), Finger("boolean"), MmsDataValue.Boolean(true))!);
     }
 
     [Theory]
@@ -54,7 +61,7 @@ public sealed class IedBrowserTypedDataWriteGuardTests
     {
         var r = MmsObjectReference.Parse("LD/XCBR1.Pos.stVal", fc);
         Assert.Contains("no approved", IedBrowserTypedWriteAdmission.RejectReason(
-            r, Gva(r, "boolean"), "boolean", MmsDataValue.Boolean(true))!);
+            r, Gva(r, "boolean"), Finger("boolean"), MmsDataValue.Boolean(true))!);
     }
 
     [Fact]
@@ -62,7 +69,7 @@ public sealed class IedBrowserTypedDataWriteGuardTests
     {
         var reference = new MmsObjectReference("LD", "CSWI1$ST$Pos$CF$ctlModel", "CF");
         Assert.Contains("exact requested FC", IedBrowserTypedWriteAdmission.RejectReason(
-            reference, Gva(reference, "integer", 32), "integer", MmsDataValue.Integer(3))!);
+            reference, Gva(reference, "integer", 32), Finger("integer", 32), MmsDataValue.Integer(3))!);
     }
 
     [Fact]
@@ -70,9 +77,9 @@ public sealed class IedBrowserTypedDataWriteGuardTests
     {
         var r = Cf();
         Assert.Contains("mismatched", IedBrowserTypedWriteAdmission.RejectReason(
-            r, Gva(r, "integer", 32), "boolean", MmsDataValue.Integer(2))!);
+            r, Gva(r, "integer", 32), Finger("boolean"), MmsDataValue.Integer(2))!);
         Assert.Contains("mismatched", IedBrowserTypedWriteAdmission.RejectReason(
-            r, Gva(Cf("sboTimeout"), "integer", 32), "integer", MmsDataValue.Integer(2))!);
+            r, Gva(Cf("sboTimeout"), "integer", 32), Finger("integer", 32), MmsDataValue.Integer(2))!);
     }
 
     [Fact]
@@ -81,16 +88,16 @@ public sealed class IedBrowserTypedDataWriteGuardTests
         var r = Cf();
         var signed = Gva(r, "integer", 8);
         Assert.Null(IedBrowserTypedWriteAdmission.RejectReason(
-            r, signed, "integer", MmsDataValue.Integer(-128)));
+            r, signed, Finger("integer", 8), MmsDataValue.Integer(-128)));
         Assert.Contains("outside", IedBrowserTypedWriteAdmission.RejectReason(
-            r, signed, "integer", MmsDataValue.Integer(128))!);
+            r, signed, Finger("integer", 8), MmsDataValue.Integer(128))!);
         var unsigned = Gva(r, "unsigned", 16);
         Assert.Contains("unsigned", IedBrowserTypedWriteAdmission.RejectReason(
-            r, unsigned, "unsigned", MmsDataValue.Integer(-1))!);
+            r, unsigned, Finger("unsigned", 16), MmsDataValue.Integer(-1))!);
         Assert.Contains("outside", IedBrowserTypedWriteAdmission.RejectReason(
-            r, unsigned, "unsigned", MmsDataValue.Unsigned(65536))!);
+            r, unsigned, Finger("unsigned", 16), MmsDataValue.Unsigned(65536))!);
         Assert.Null(IedBrowserTypedWriteAdmission.RejectReason(
-            r, unsigned, "unsigned", MmsDataValue.Unsigned(65535)));
+            r, unsigned, Finger("unsigned", 16), MmsDataValue.Unsigned(65535)));
     }
 
     [Fact]
@@ -98,10 +105,10 @@ public sealed class IedBrowserTypedDataWriteGuardTests
     {
         var r = Cf("setMag");
         Assert.Contains("FLOAT32", IedBrowserTypedWriteAdmission.RejectReason(
-            r, Gva(r, "floating-point", 64), "floating-point",
+            r, Gva(r, "floating-point", 64), Finger("floating-point", 64),
             MmsDataValue.FloatingPoint(1.1d))!);
         Assert.Null(IedBrowserTypedWriteAdmission.RejectReason(
-            r, Gva(r, "floating-point", 32), "floating-point",
+            r, Gva(r, "floating-point", 32), Finger("floating-point", 32),
             MmsDataValue.FloatingPoint(1.25f)));
     }
 
@@ -111,11 +118,11 @@ public sealed class IedBrowserTypedDataWriteGuardTests
         var r = Cf("d");
         var type = Gva(r, "visible-string", 5, MmsTypeSizeConstraintKind.Maximum);
         Assert.Null(IedBrowserTypedWriteAdmission.RejectReason(
-            r, type, "visible-string", MmsDataValue.VisibleString("hello")));
+            r, type, Finger("visible-string", 5, MmsTypeSizeConstraintKind.Maximum), MmsDataValue.VisibleString("hello")));
         Assert.Contains("length", IedBrowserTypedWriteAdmission.RejectReason(
-            r, type, "visible-string", MmsDataValue.VisibleString("longer"))!);
+            r, type, Finger("visible-string", 5, MmsTypeSizeConstraintKind.Maximum), MmsDataValue.VisibleString("longer"))!);
         Assert.Contains("Non-ASCII", IedBrowserTypedWriteAdmission.RejectReason(
-            r, type, "visible-string", MmsDataValue.VisibleString("é"))!);
+            r, type, Finger("visible-string", 5, MmsTypeSizeConstraintKind.Maximum), MmsDataValue.VisibleString("é"))!);
     }
 
     [Fact]
@@ -124,13 +131,13 @@ public sealed class IedBrowserTypedDataWriteGuardTests
         var r = Cf("bits");
         var type = Gva(r, "bit-string", 2, MmsTypeSizeConstraintKind.Fixed);
         Assert.Null(IedBrowserTypedWriteAdmission.RejectReason(
-            r, type, "bit-string", MmsDataValue.BitString(6, new byte[] { 0b_1000_0000 })));
+            r, type, Finger("bit-string", 2, MmsTypeSizeConstraintKind.Fixed), MmsDataValue.BitString(6, new byte[] { 0b_1000_0000 })));
         Assert.Contains("padding", IedBrowserTypedWriteAdmission.RejectReason(
-            r, type, "bit-string", MmsDataValue.BitString(6, new byte[] { 0b_1000_0001 }))!);
+            r, type, Finger("bit-string", 2, MmsTypeSizeConstraintKind.Fixed), MmsDataValue.BitString(6, new byte[] { 0b_1000_0001 }))!);
     }
 
     private static IedBrowserTypedWriteStep Step(string attribute) => new(
-        Cf(attribute), "integer", MmsDataValue.Integer(1), MmsDataValue.Integer(2));
+        Cf(attribute), Finger("integer", 32), MmsDataValue.Integer(1), MmsDataValue.Integer(2));
 
     [Fact]
     public void Plan_RejectsDuplicateAndCrossDo_WithoutDispatch()
@@ -140,7 +147,7 @@ public sealed class IedBrowserTypedDataWriteGuardTests
         Assert.Throws<ArgumentException>(() => IedBrowserTypedWriteBatch.Freeze(
             new[] { Step("a"), new IedBrowserTypedWriteStep(
                 MmsObjectReference.Parse("LD/ATCC1.Other.b", "CF"),
-                "integer", MmsDataValue.Integer(1), MmsDataValue.Integer(2)) }));
+                Finger("integer", 32), MmsDataValue.Integer(1), MmsDataValue.Integer(2)) }));
     }
 
     [Fact]
