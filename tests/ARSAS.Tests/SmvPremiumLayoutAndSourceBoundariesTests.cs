@@ -15,7 +15,10 @@ public sealed class SmvPremiumLayoutAndSourceBoundariesTests
         Assert.Contains("Text=\"{Binding PhaseReferenceText}\"", xml);
         Assert.Contains("Text=\"{Binding UnitStatus}\"", xml);
         Assert.Contains("Text=\"{Binding DisplayName}\"", xml);
-        Assert.Contains("Header=\"Unit\"", xml);
+        Assert.Contains("VoltageMeasurements", xml);
+        Assert.Contains("CurrentMeasurements", xml);
+        Assert.DoesNotContain("Header=\"Fund.\"", xml);
+        Assert.DoesNotContain("Header=\"Unit\"", xml);
     }
 
     [Fact]
