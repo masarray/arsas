@@ -444,7 +444,7 @@
                                           CanUserResizeColumns="False" CanUserSortColumns="False"
                                           SelectionUnit="FullRow" EnableRowVirtualization="True"
                                           ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                          ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                                          ScrollViewer.VerticalScrollBarVisibility="Auto">
                                     <DataGrid.Columns>
                                         <DataGridTemplateColumn Header="Channel" Width="*">
                                             <DataGridTemplateColumn.CellTemplate>
@@ -489,7 +489,7 @@
                                           CanUserResizeColumns="False" CanUserSortColumns="False"
                                           SelectionUnit="FullRow" EnableRowVirtualization="True"
                                           ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                          ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                                          ScrollViewer.VerticalScrollBarVisibility="Auto">
                                     <DataGrid.Columns>
                                         <DataGridTemplateColumn Header="Channel" Width="*">
                                             <DataGridTemplateColumn.CellTemplate>
