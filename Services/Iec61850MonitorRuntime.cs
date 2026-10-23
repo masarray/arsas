@@ -1058,6 +1058,10 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         session.StaticProjectionPoints = staticDataSetReportOnly
             ? session.Points.Values.ToArray()
             : [];
+        if (staticDataSetReportOnly)
+            session.StaticReportProjection.Prepare(
+                device.SclWorkspace?.DesignModel ?? device.LiveDiscoveryModel,
+                session.StaticProjectionPoints);
         session.HealthProbePointKey = staticDataSetReportOnly
             ? string.Empty
             : session.Points.Values
@@ -3524,6 +3528,7 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         session.ReportSetupDeadlineUtc = DateTime.MinValue;
         if (!preservePointDefinitions)
         {
+            session.StaticReportProjection.ClearPrepared();
             session.StaticProjectionPoints = [];
             session.Points.Clear();
             session.States.Clear();
