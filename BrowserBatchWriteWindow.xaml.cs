@@ -55,10 +55,10 @@ public partial class BrowserBatchWriteWindow : Window
 
             var parts = reference?.Item.Split('$') ?? [];
             var sameOwner = reference is not null && parts.Length >= 4 &&
-                string.Equals(parts[1], reference.FunctionalConstraint, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(reference.Domain + "/" + parts[0] + "." + parts[2],
+                string.Equals(parts[1], reference.Value.FunctionalConstraint, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(reference.Value.Domain + "/" + parts[0] + "." + parts[2],
                     owner.Reference, StringComparison.Ordinal);
-            var fcOk = reference?.FunctionalConstraint.ToUpperInvariant() is "CF" or "SP" or "DC";
+            var fcOk = reference is not null && reference.Value.FunctionalConstraint.ToUpperInvariant() is "CF" or "SP" or "DC";
             var isControlMember = parts.Skip(2).Any(p => p is "Oper" or "SBO" or "SBOw" or "Cancel" or "ctlModel");
             var isDuplicate = duplicated.Contains(attr.FunctionalConstraint + "|" + attr.MmsReference);
             var eligible = sameOwner && fcOk && !isControlMember && !isDuplicate;
@@ -143,7 +143,7 @@ public partial class BrowserBatchWriteWindow : Window
                 StatusLabel.Text = $"Read-only inspect {i + 1}/{selected.Length}: {row.ReferenceText}";
                 row.Preview = null;
                 var preview = await _runtime.PreviewBrowserDataAttributeWriteAsync(
-                    _device, row.Reference!, _lifetime.Token);
+                    _device, row.Reference!.Value, _lifetime.Token);
                 if (!CurrentAssociation)
                     throw new InvalidOperationException("IED association changed during inspection.");
                 row.Preview = preview.IsAvailable ? preview : null;
@@ -199,11 +199,11 @@ public partial class BrowserBatchWriteWindow : Window
             }
             var live = new MmsVariableAccessAttributesResult
             {
-                IsSuccess = true, Reference = row.Reference,
+                IsSuccess = true, Reference = row.Reference.Value,
                 TypeSpecification = preview.Type
             };
             var reject = IedBrowserTypedWriteAdmission.RejectReason(
-                row.Reference, live, preview.GvaSignature, proposed);
+                row.Reference.Value, live, preview.GvaSignature, proposed);
             if (reject is not null)
             {
                 reason = $"{row.ReferenceText}: {reject}";
@@ -215,7 +215,7 @@ public partial class BrowserBatchWriteWindow : Window
                 reason = $"{row.ReferenceText}: unchanged value is not staged.";
                 return false;
             }
-            pending.Add(new(row.Reference, preview.GvaSignature,
+            pending.Add(new(row.Reference.Value, preview.GvaSignature,
                 preview.OldValue, proposed));
         }
 
