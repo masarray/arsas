@@ -799,6 +799,12 @@ public sealed class WaveformPanelControl : FrameworkElement
         if (series.Samples.Count < 2)
             return;
 
+        // Zero neutral/disabled inputs should not impersonate a permanently
+        // enabled 0-axis when phase traces are overlaid. Keep the channel in
+        // measurements/cursor evidence; only the redundant flat ink is omitted.
+        if (!stacked && IsSilentZeroTrace(series.Samples))
+            return;
+
         var geometry = new StreamGeometry();
         using var ctx = geometry.Open();
 
@@ -827,6 +833,16 @@ public sealed class WaveformPanelControl : FrameworkElement
         // Geometry remains the exact coherent input; no smoothing or interpolation.
         dc.DrawGeometry(null, GetSeriesPen(series.Name), geometry);
 
+    }
+
+    private static bool IsSilentZeroTrace(IReadOnlyList<double> samples)
+    {
+        // Bounded one-pass numeric check. No allocations and no tolerance that
+        // could erase a physically small but nonzero engineering signal.
+        for (var i = 0; i < samples.Count; i++)
+            if (samples[i] != 0.0)
+                return false;
+        return true;
     }
 
     private static void DrawLaneShapeBadge(DrawingContext dc, Rect rect, IReadOnlyList<WaveformSeriesModel> series)
