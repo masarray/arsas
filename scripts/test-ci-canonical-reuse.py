@@ -9,6 +9,7 @@ import unittest
 import urllib.request
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent
 
@@ -278,6 +279,36 @@ class CanonicalReuseTests(unittest.TestCase):
                 FakeApi(run_status="completed", result="failure"),
                 allow_in_progress_artifact=True,
             )
+
+    def test_artifact_ready_mode_rechecks_transient_red_but_never_uses_red_proof(self):
+        class CorrectedCanonicalStatus(FakeApi):
+            def __init__(self):
+                super().__init__()
+                self.queries = 0
+                self.artifacts_during_red = 0
+
+            def get(self, url: str, binary: bool = False):
+                if "/workflows/build.yml/runs?" in url:
+                    self.queries += 1
+                    if self.queries == 1:
+                        transient = dict(self.listing[0])
+                        transient.update(status="completed", conclusion="failure")
+                        return {"workflow_runs": [transient]}
+                if "/artifacts" in url and self.queries == 1:
+                    self.artifacts_during_red += 1
+                return super().get(url, binary=binary)
+
+        api = CorrectedCanonicalStatus()
+        with patch.object(consumer.time, "sleep", return_value=None):
+            proof = consumer.verify_canonical(
+                api, repository="masarray/arsas", branch=BRANCH,
+                head_sha=HEAD, merge_sha=SOURCE, engine_sha=ENGINE,
+                wait_seconds=2, poll_seconds=1, allow_in_progress_artifact=True
+            )
+        self.assertGreaterEqual(api.queries, 2)
+        self.assertEqual(api.artifacts_during_red, 0)
+        self.assertEqual(proof["canonicalRunConclusion"], "success")
+        self.assertEqual(proof["proofStage"], "completed-workflow")
 
     def test_artifact_ready_mode_waits_when_expected_artifact_is_not_uploaded(self):
         with self.assertRaisesRegex(consumer.ProofError, "artifact-ready canonical"):

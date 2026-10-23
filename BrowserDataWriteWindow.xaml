@@ -1,125 +1,79 @@
 <Window x:Class="ArIED61850Tester.BrowserDataWriteWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Write Data to IED" Width="535" Height="338"
-        MinWidth="495" MinHeight="325" MaxHeight="450"
+        Title="Write Data to IED" Width="540" Height="315"
+        MinWidth="480" MinHeight="295" MaxHeight="440"
         WindowStartupLocation="CenterOwner" ResizeMode="CanResize"
-        Background="#F5F7FB" FontFamily="{StaticResource AppFontFamily}"
-        FontSize="11.5" Icon="Assets/app-icon.ico"
+        Background="#F7F9FC" FontFamily="{StaticResource AppFontFamily}" FontSize="11.5"
         Loaded="Window_Loaded" Closed="Window_Closed">
-    <Window.Resources>
-        <!-- Google Material Icons: edit, close, info (vector paths, no icon font). -->
-        <Style x:Key="FatActionButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
-            <Setter Property="Width" Value="94"/>
-            <Setter Property="Height" Value="32"/>
-            <Setter Property="MinHeight" Value="32"/>
-            <Setter Property="Padding" Value="9,4"/>
-        </Style>
-    </Window.Resources>
-    <Grid Margin="14,12,14,12">
+    <Grid Margin="15,13,15,12">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        <Grid Grid.Row="0" Margin="2,0,2,10">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <TextBlock Text="Write Data to IED" FontWeight="SemiBold" FontSize="14"
-                       Foreground="#273E58"/>
-        </Grid>
-        <Border Grid.Row="1" Background="White" BorderBrush="#D6E1ED"
-                BorderThickness="1" CornerRadius="7" Padding="12,10">
-            <StackPanel>
-                <TextBlock x:Name="ReferenceLabel" Foreground="#344963" FontSize="11"
-                           FontFamily="{StaticResource AppCodeFontFamily}"
-                           TextTrimming="CharacterEllipsis"
-                           ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
-                <Border Height="1" Background="#E8EDF4" Margin="0,9,0,8"/>
-                <!-- Native type-aware one-row value editor, inspired by reference engineering application. -->
-                <Grid>
+        <TextBlock x:Name="ReferenceLabel" Grid.Row="0" Margin="2,0,2,10"
+                   Foreground="#2A435F" FontFamily="{StaticResource AppCodeFontFamily}"
+                   TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+        <Border Grid.Row="1" Background="White" BorderBrush="#D8E1EC"
+                BorderThickness="1" CornerRadius="7" Padding="8">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Grid Background="#E9EEF5" Height="29">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="142"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="88"/>
+                        <ColumnDefinition Width="45*"/>
+                        <ColumnDefinition Width="55*"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock x:Name="AttributeLabel" Grid.Column="0" Text="Data Attribute"
-                               Foreground="#314963" VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis"
-                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
-                    <Grid Grid.Column="1" Margin="5,0,8,0">
-                        <TextBox x:Name="NewValueBox" Height="31" Padding="8,5"
-                                 Visibility="Collapsed" IsEnabled="False"
-                                 BorderBrush="#B7CBE1" VerticalContentAlignment="Center"
-                                 TextChanged="NewValueBox_TextChanged"
-                                 ToolTip="Edit the value initially read from the IED"/>
-                        <ComboBox x:Name="BooleanPicker" Height="31"
-                                  Visibility="Collapsed" IsEnabled="False"
-                                  SelectionChanged="BooleanPicker_SelectionChanged"
-                                  ToolTip="Select true or false; no free text"/>
-                        <TextBlock x:Name="UnsupportedLabel" Text="Reading IED…"
-                                   Foreground="#7C8DA0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Name" Margin="9,0" VerticalAlignment="Center" Foreground="#52667B"/>
+                    <TextBlock Grid.Column="1" Text="Value" Margin="9,0" VerticalAlignment="Center" Foreground="#52667B"/>
+                </Grid>
+                <Grid Grid.Row="1" Height="37" Background="#F5F8FC">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="45*"/>
+                        <ColumnDefinition Width="55*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0">
+                        <TextBlock Text="DA" Foreground="#226EB9" FontWeight="SemiBold" Margin="0,0,7,0"/>
+                        <TextBlock x:Name="AttributeLabel" Text="Value" Foreground="#293D54" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="TypeLabel" Foreground="#76879B" FontSize="10" Margin="6,0,0,0"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <Grid Grid.Column="1" Margin="4,3,5,3">
+                        <ComboBox x:Name="BoolPicker" Visibility="Collapsed" Height="29"
+                                  SelectionChanged="BoolPicker_SelectionChanged" IsEnabled="False">
+                            <ComboBoxItem Content="true" Tag="true"/>
+                            <ComboBoxItem Content="false" Tag="false"/>
+                        </ComboBox>
+                        <TextBox x:Name="NewValueBox" Height="29" Padding="7,4"
+                                 IsEnabled="False" VerticalContentAlignment="Center"
+                                 TextChanged="NewValueBox_TextChanged"/>
                     </Grid>
-                    <Button Grid.Column="2" x:Name="ReadButton"
-                            Width="80" Height="29" Click="Read_Click"
-                            Style="{StaticResource SoftButton}">
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <Viewbox Width="15" Height="15" Margin="0,0,5,0"><Path Data="M480-120q-150 0-255-105T120-480q0-150 105-255t255-105q94 0 175 45t125 122v-167h80v320H540v-80h191q-29-66-95.5-113T480-760q-116 0-198 82t-82 198q0 116 82 198t198 82q93 0 165-57t91-143h82q-20 119-114.5 199.5T480-120Z" Fill="#45617C"/></Viewbox>
-                            <TextBlock Text="Read" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
                 </Grid>
-                <Grid Margin="0,9,0,0">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="142"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="Current value" Foreground="#6F8195" VerticalAlignment="Center"/>
-                    <TextBlock Grid.Column="1" x:Name="CurrentLabel" Text="—"
-                               FontWeight="SemiBold" Foreground="#314963"
-                               TextTrimming="CharacterEllipsis"/>
-                </Grid>
-                <Grid Margin="0,5,0,0">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="142"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="MMS type" Foreground="#6F8195" VerticalAlignment="Center"/>
-                    <TextBlock Grid.Column="1" x:Name="TypeLabel" Text="Reading…"
-                               Foreground="#536981" TextTrimming="CharacterEllipsis"
-                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
-                </Grid>
-            </StackPanel>
+                <StackPanel Grid.Row="2" Margin="8,10,8,2">
+                    <TextBlock x:Name="CurrentLabel" Text="Reading IED…" Foreground="#597087" FontSize="10.5"/>
+                    <TextBlock x:Name="DiffLabel" Text="" Foreground="#55738D"
+                               TextWrapping="Wrap" FontSize="10.5" Margin="0,5,0,0"/>
+                </StackPanel>
+            </Grid>
         </Border>
-        <Border Grid.Row="2" Margin="0,9,0,0" Padding="9,6"
-                BorderBrush="#DDE7F3" BorderThickness="1" CornerRadius="6"
-                Background="#EFF5FC" VerticalAlignment="Top">
-            <TextBlock x:Name="DiffLabel" Foreground="#45617C" FontSize="10.5"
-                       TextWrapping="Wrap" Text="Inspecting current value…"/>
-        </Border>
-        <Grid Grid.Row="3" Margin="0,10,0,0">
+        <Grid Grid.Row="2" Margin="2,10,2,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock x:Name="StatusLabel" Text="Read current value before Write."
-                       FontSize="10.5" Foreground="#677F98"
-                       TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                       VerticalAlignment="Center" Margin="0,0,12,0"
-                       ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
-            <Button Grid.Column="1" Width="84" Height="32" Margin="0,0,7,0"
-                    Style="{StaticResource SoftButton}" Click="Close_Click">
-                <StackPanel Orientation="Horizontal">
-                    <Viewbox Width="12" Height="12" Margin="0,0,5,0">
-                        <Path Data="M256-200l-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z" Fill="#415771"/>
-                    </Viewbox>
-                    <TextBlock Text="Cancel" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-            <Button x:Name="WriteButton" Grid.Column="2" IsEnabled="False"
-                    Style="{StaticResource FatActionButton}" Click="Write_Click">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                    <Viewbox Width="16" Height="16" Margin="0,0,6,0">
-                        <Path Data="M167-120q-21 5-36.5-10.5T120-167l40-191 198 198-191 40Zm191-40L160-358l458-458q23-23 57-23t57 23l84 84q23 23 23 57t-23 57L358-160Zm317-600L261-346l85 85 414-414-85-85Z" Fill="White"/>
-                    </Viewbox>
-                    <TextBlock Text="Write" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
+            <TextBlock x:Name="StatusLabel" Text="Reading live MMS type…"
+                       Foreground="#61758A" TextTrimming="CharacterEllipsis"
+                       VerticalAlignment="Center" FontSize="10.5" Margin="0,0,9,0"/>
+            <Button x:Name="WriteButton" Grid.Column="1" Content="Write"
+                    Width="90" Height="31" IsEnabled="False"
+                    Style="{StaticResource PrimaryButton}" Click="Write_Click" Margin="0,0,7,0"/>
+            <Button Grid.Column="2" Content="Cancel" Width="84" Height="31"
+                    Style="{StaticResource SoftButton}" Click="Close_Click"/>
         </Grid>
     </Grid>
 </Window>

@@ -186,6 +186,13 @@ public static class Iec61850ControlIdentity
                 ? "Switch controller · CSWI"
                 : "Switch controller · CSWI · verification required");
 
+        // A name-only CSWI (even with a copied DPC label) is NOT a verified
+        // discovery candidate. Without exact CO service evidence it must not
+        // receive CSWI-front-row admission through the generic DPC branch.
+        if (ln == "CSWI" && dataObject.Equals("Pos", StringComparison.OrdinalIgnoreCase)
+            && !signal.HasControlServiceEvidence)
+            return (150, "Unverified IEC control · no CO service evidence");
+
         if (cdc == "DPC" && dataObject.Equals("Pos", StringComparison.OrdinalIgnoreCase))
             return ln switch
             {

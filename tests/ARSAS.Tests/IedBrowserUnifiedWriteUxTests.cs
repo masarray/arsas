@@ -69,7 +69,7 @@ public sealed class IedBrowserUnifiedWriteUxTests
             (string?)t.Attribute(xNs + "Name") == "WriteButton");
         Assert.True(write.Descendants(p + "TextBlock").Any(t =>
             (string?)t.Attribute("Text") == "Write"));
-        Assert.Contains("M167-120q-21 5-36.5-10.5T120-167", Read("IedBrowserWriteWindow.xaml"));
+        Assert.Contains("Data=\"{StaticResource MaterialEditIcon}\"", Read("IedBrowserWriteWindow.xaml"));
         Assert.Equal("34", (string?)x.Descendants(p + "DataGrid").Single().Attribute("RowHeight"));
     }
 

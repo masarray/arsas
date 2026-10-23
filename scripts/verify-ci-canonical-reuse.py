@@ -323,15 +323,22 @@ def verify_canonical(
             conclusion = run.get("conclusion")
             previous = f"{run_id}/{attempt} {status}/{conclusion}"
 
-            # A canonical run that has already finished red is never usable, even
-            # if an all-pass regression artifact was uploaded before a later
-            # packaging/smoke failure.
-            if status == "completed" and conclusion != "success":
+            # A failed canonical run is NEVER usable evidence. For the
+            # artifact-ready CI-P2D consumers, however, GitHub's run listing
+            # can briefly expose a red intermediate status while the same
+            # canonical attempt is still finalizing. Do not accept its
+            # artifact; re-check THIS latest run/attempt within the existing
+            # finite deadline. Strict mode and a persistently failed run
+            # remain fail-closed, never falling back to older green attempts.
+            failed_canonical = status == "completed" and conclusion != "success"
+            if failed_canonical and (
+                not allow_in_progress_artifact or time.monotonic() >= deadline
+            ):
                 raise ProofError(
                     f"Latest canonical Build ARSAS run failed: {previous}"
                 )
 
-            can_read_artifact = (
+            can_read_artifact = not failed_canonical and (
                 status == "completed"
                 or (allow_in_progress_artifact and status == "in_progress")
             )

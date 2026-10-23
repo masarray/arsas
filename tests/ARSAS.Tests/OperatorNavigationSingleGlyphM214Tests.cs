@@ -12,6 +12,7 @@ namespace ARSAS.Tests;
 /// an operator-supplied WPF SVG must not be wrapped in a second old icon.
 /// Exercise the real runtime decorator on STA, not just XAML path counts.
 /// </summary>
+[Collection("WpfStaIsolation")]
 public sealed class OperatorNavigationSingleGlyphM214Tests
 {
     private static readonly XNamespace P = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";

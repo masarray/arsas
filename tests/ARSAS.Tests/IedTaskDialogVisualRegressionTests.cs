@@ -8,6 +8,7 @@ namespace ARSAS.Tests;
 /// backgrounds and a fixed-height connect wizard clipping its final panel.
 /// This suite does not simulate IEC 61850 sessions or alter action authority.
 /// </summary>
+[Collection("WpfStaIsolation")]
 public sealed class IedTaskDialogVisualRegressionTests
 {
     private static readonly XNamespace Presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";

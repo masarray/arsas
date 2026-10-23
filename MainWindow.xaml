@@ -2052,14 +2052,14 @@
                                         Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         IsEnabled="False" Click="IedBrowserControl_Click"
                                         ToolTip="Only enabled when this online DO has an existing live-verified native IEC Control descriptor."/>
-                                <Button x:Name="IedBrowserWriteButton"
-                                        Style="{StaticResource SoftButton}" Margin="0,0,6,0"
-                                        MinWidth="79" IsEnabled="False" Click="IedBrowserWrite_Click"
-                                        ToolTip="Write exact live CF/SP/DC Data Attributes or ctlModel after review.">
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <Viewbox Width="14" Height="14" Margin="0,0,5,0" IsHitTestVisible="False">
-                                            <Path Data="M167-120q-21 5-36.5-10.5T120-167l40-191 198 198-191 40Zm191-40L160-358l458-458q23-23 57-23t57 23l84 84q23 23 23 57t-23 57L358-160Zm317-600L261-346l85 85 414-414-85-85Z"
-                                                  Fill="#365A82"/>
+                                <Button x:Name="IedBrowserWriteButton" Style="{StaticResource SoftButton}"
+                                        Margin="0,0,6,0" MinWidth="81"
+                                        IsEnabled="False" Click="IedBrowserWrite_Click"
+                                        ToolTip="Write the selected Data Attribute or focused Data Object using the exact live MMS type.">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                            <Path Width="960" Height="960" Fill="#345A83"
+                                                  Data="M167,840 Q146,845 130.5,829.5 T120,793 L160,602 358,800 167,840 Z M358,800 L160,602 618,144 Q641,121 675,121 T732,144 L816,228 Q839,251 839,285 T816,342 L358,800 Z M675,200 L261,614 346,699 760,285 675,200 Z"/>
                                         </Viewbox>
                                         <TextBlock Text="Write" VerticalAlignment="Center"/>
                                     </StackPanel>
@@ -2068,18 +2068,10 @@
                                         Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         Click="IedBrowserReadValues_Click"
                                         ToolTip="Read values for the current Browser object over MMS. Live monitoring uses the report stream."/>
-                                <Button x:Name="IedBrowserConfigWriteButton" IsEnabled="False" Visibility="Collapsed"
+                                <Button x:Name="IedBrowserConfigWriteButton" Content="Config Write…" IsEnabled="False"
                                         Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         Click="IedBrowserWriteValues_Click"
-                                        ToolTip="Open explicit native MMS configuration Write for the selected live DO/DA; never sends Operate">
-                                    <StackPanel Orientation="Horizontal">
-                                        <Viewbox Width="14" Height="14" Margin="0,0,5,0" IsHitTestVisible="False">
-                                            <Path Data="M167-120q-21 5-36.5-10.5T120-167l40-191 198 198-191 40Zm191-40L160-358l458-458q23-23 57-23t57 23l84 84q23 23 23 57t-23 57L358-160Zm317-600L261-346l85 85 414-414-85-85Z"
-                                                  Fill="#365A82"/>
-                                        </Viewbox>
-                                        <TextBlock Text="Write" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </Button>
+                                        ToolTip="Open explicit native MMS configuration Write for the selected live DO/DA; never sends Operate"/>
                                 <Button x:Name="IedBrowserReadLnButton" Content="Read LN" Tag="LN"
                                         Visibility="Collapsed" Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         Click="IedBrowserReadValues_Click"

@@ -35,12 +35,12 @@ public sealed class IedBrowserBatchWriteEditorTests
 
         var grid = root.Descendants(p + "DataGrid").Single(d =>
             (string?)d.Attribute(x + "Name") == "RowsGrid");
-        Assert.Equal("1", grid.Attribute("Grid.Row")?.Value);
+        Assert.Equal("2", grid.Attribute("Grid.Row")?.Value);
         Assert.Equal("Auto", grid.Attribute("ScrollViewer.VerticalScrollBarVisibility")?.Value);
         Assert.Equal("True", grid.Attribute("VirtualizingPanel.IsVirtualizing")?.Value);
 
         var footer = root.Descendants(p + "Grid").Single(d =>
-            d.Attribute("Grid.Row")?.Value == "2" && d.Descendants(p + "Button")
+            d.Attribute("Grid.Row")?.Value == "3" && d.Descendants(p + "Button")
                 .Any(b => (string?)b.Attribute(x + "Name") == "WriteButton"));
         Assert.Contains(footer.Descendants(p + "Button"), b =>
             (string?)b.Attribute(x + "Name") == "InspectButton");
@@ -84,11 +84,8 @@ public sealed class IedBrowserBatchWriteEditorTests
         Assert.Contains(dataLeaf, write);
         Assert.Contains(dataLeaf, control);
         Assert.Contains("RefreshIedBrowserControlButton();", write);
+        Assert.Contains("var ctlModel = BrowserSelectedControlModelSignal()", write);
         Assert.DoesNotContain("IedBrowserWriteButton.Content =", write);
-        Assert.Contains("BrowserSelectedControlModelSignal()", write);
-        var browserXaml = File.ReadAllText(Find("MainWindow.xaml"));
-        Assert.Contains("x:Name=\"IedBrowserWriteButton\"", browserXaml);
-        Assert.Contains("<TextBlock Text=\"Write\" VerticalAlignment=\"Center\"/>", browserXaml);
     }
 
     private static string Find(string relative)
