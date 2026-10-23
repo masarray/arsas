@@ -53,7 +53,9 @@ public sealed class UnifiedSsotV2Phase1Tests
         var browser = store.ReadChanges(cursor, 2);
         var explorer = store.ReadChanges(cursor, 2);
         Assert.False(browser.RequiresFullRefresh);
-        Assert.Equal(browser, explorer);
+        Assert.Equal(browser.ThroughRevision, explorer.ThroughRevision);
+        Assert.Equal(browser.LatestRevision, explorer.LatestRevision);
+        Assert.Equal(browser.Changes.ToArray(), explorer.Changes.ToArray());
         Assert.Equal(2, browser.Changes.Count);
         Assert.Equal(cursor + 2, browser.ThroughRevision);
         Assert.Equal(store.Version, browser.LatestRevision);
