@@ -110,7 +110,7 @@ public sealed class PremiumSmartIpWizardTests
         Assert.NotEqual("True", options.Attribute("IsExpanded")?.Value);
         Assert.Contains(options.Descendants(w + "TextBox"),
             box => box.Attribute(x + "Name")?.Value == "MmsPortBox");
-        Assert.DoesNotContain(options.Descendants(w + "CheckBox"));
+        Assert.Empty(options.Descendants(w + "CheckBox"));
         var roundedPort = options.Descendants(w + "Border")
             .Single(node => node.Elements(w + "TextBox")
                 .Any(box => box.Attribute(x + "Name")?.Value == "MmsPortBox"));
