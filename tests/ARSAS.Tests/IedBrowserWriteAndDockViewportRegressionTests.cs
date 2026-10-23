@@ -75,14 +75,17 @@ public sealed class IedBrowserWriteAndDockViewportRegressionTests
     }
 
     [Fact]
-    public void TypedEncoderSupportsCtlModelAndRefusesInvalidEnumsAndFloats()
+    public void TypedEncoderDelegatesCtlModelToNativeServiceAndRefusesUnverifiedEnumsAndFloats()
     {
-        Assert.Equal(MmsDataKind.Integer,
-            IedBrowserWritePlan.EncodeValue("Enum", "4", "ZIVAVRLD1/ATCC1.TapChg.ctlModel").Kind);
-        Assert.Equal(4L,
-            IedBrowserWritePlan.EncodeValue("Enum", "4", "ZIVAVRLD1/ATCC1.TapChg.ctlModel").Value);
-        Assert.Throws<FormatException>(() =>
-            IedBrowserWritePlan.EncodeValue("Enum", "7", "ZIVAVRLD1/ATCC1.TapChg.ctlModel"));
+        // ctlModel is never a generic MMS Write, even when the integer is 0–4.
+        Assert.Contains("dedicated verified native ControlModel",
+            Assert.Throws<NotSupportedException>(() =>
+                IedBrowserWritePlan.EncodeValue("Enum", "4",
+                    "ZIVAVRLD1/ATCC1.TapChg.ctlModel")).Message);
+        Assert.Contains("exact verified SCL EnumType metadata",
+            Assert.Throws<NotSupportedException>(() =>
+                IedBrowserWritePlan.EncodeValue("ENUMERATED", "2",
+                    "ZIVAVRLD1/ATCC1.TapChg.oprVal")).Message);
         Assert.Throws<FormatException>(() =>
             IedBrowserWritePlan.EncodeValue("FLOAT32", "NaN", "LD1/ATCC1.f"));
         Assert.Equal(MmsDataKind.Boolean,
@@ -106,6 +109,8 @@ public sealed class IedBrowserWriteAndDockViewportRegressionTests
         Assert.Contains("_session.WriteSingleVariableAsync(target, desired", native);
         Assert.Contains("ReadSingleVariableAsync(target, cancellationToken)", native);
         Assert.Contains("No automatic retry", native);
+        Assert.Contains("generic MMS Write forbidden.", native);
+        Assert.Contains("segment.Equals(\"ctlModel\"", native);
         Assert.Contains("ReferenceEquals(session.Device.LiveDiscoveryModel, model)", runtime);
         Assert.Contains("Iec61850ControlFlightAdmission.TryEnter(", runtime);
         Assert.Contains("Iec61850ControlFlightAdmission.Quarantine(", runtime);
