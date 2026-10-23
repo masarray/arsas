@@ -80,7 +80,10 @@ public static class SmvDigSubPresentationAdapter
         IReadOnlyList<SmvRawVectorMeasurement> vectors,
         SmvDisplayUnits profile = SmvDisplayUnits.RawCounts)
     {
-        var reference = vectors.FirstOrDefault(v => v.ChannelIndex == 1 && v.HasFundamental)
+        // 9-2LE uses Ua/Ch5 as the voltage phase reference, matching standard
+        // three-phase instrument conventions. RAW retains Ch1 as reference.
+        var referenceChannel = profile == SmvDisplayUnits.NineTwoLe ? 5 : 1;
+        var reference = vectors.FirstOrDefault(v => v.ChannelIndex == referenceChannel && v.HasFundamental)
             ?? vectors.FirstOrDefault(v => v.HasFundamental);
         if (reference is null)
             return [];
@@ -108,9 +111,11 @@ public static class SmvDigSubPresentationAdapter
     }
 
     public static IReadOnlyList<SmvRawVectorMeasurement> RelativeMeasurements(
-        IReadOnlyList<SmvRawVectorMeasurement> vectors)
+        IReadOnlyList<SmvRawVectorMeasurement> vectors,
+        SmvDisplayUnits profile = SmvDisplayUnits.RawCounts)
     {
-        var anchor = vectors.FirstOrDefault(v => v.ChannelIndex == 1 && v.HasFundamental)
+        var referenceChannel = profile == SmvDisplayUnits.NineTwoLe ? 5 : 1;
+        var anchor = vectors.FirstOrDefault(v => v.ChannelIndex == referenceChannel && v.HasFundamental)
             ?? vectors.FirstOrDefault(v => v.HasFundamental);
         if (anchor is null)
             return vectors;
