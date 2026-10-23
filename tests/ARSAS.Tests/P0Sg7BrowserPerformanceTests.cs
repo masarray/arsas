@@ -88,10 +88,12 @@ public sealed class P0Sg7BrowserPerformanceTests
     [Fact]
     public void BrowserPerformanceSource_ExistsWithoutRequiringAUiOrNetworkSession()
     {
+        var type = typeof(IedBrowserUnitProjectionCache).Assembly.GetType(
+            "ArIED61850Tester.Services.IedBrowserPerformanceEvents");
+        Assert.NotNull(type);
+        var attribute = Assert.Single(type.GetCustomAttributes(
+            typeof(System.Diagnostics.Tracing.EventSourceAttribute), false));
         Assert.Equal("ARSAS-IEDBrowser-Performance",
-            System.Diagnostics.Tracing.EventSource.GetSources()
-                .Select(source => source.Name)
-                .FirstOrDefault(name => name == "ARSAS-IEDBrowser-Performance")
-                ?? "ARSAS-IEDBrowser-Performance");
+            ((System.Diagnostics.Tracing.EventSourceAttribute)attribute).Name);
     }
 }
