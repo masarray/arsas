@@ -109,7 +109,8 @@ public static class IedBrowserSgRootProjection
             output.Add(new IedBrowserReadResult(target, accepted, "", "", "",
                 TypedBoolean: value.Kind == MmsDataKind.Boolean && value.Value is bool typed
                     ? typed : null,
-                VerifiedStringWireKind: stringKind));
+                VerifiedStringWireKind: stringKind,
+                WireShapeEvidence: IedBrowserReadWireShapeEvidence.Describe(value)));
         }
         Walk(wireType, wireData, "", 0);
         return output;

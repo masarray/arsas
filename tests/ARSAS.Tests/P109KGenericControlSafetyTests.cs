@@ -28,6 +28,30 @@ public sealed class P109KGenericControlSafetyTests
         Assert.Equal(numeric, signal.IsSetPointControl);
     }
 
+    [Theory]
+    [InlineData("SG7_BCUSystem/Bkr0XCBR2.Pos")]
+    [InlineData("SG7_BCUSystem/Disc0XSWI1.Pos")]
+    [InlineData("SG7_BCUSystem/BkrCSWI1.Pos")]
+    public void PrefixedEd2Position_LooksLikePositionButNeverOverridesUnverifiedEngine(
+        string reference)
+    {
+        var signal = new SignalDefinition
+        {
+            ObjectReference = reference,
+            Name = reference,
+            FunctionalConstraint = "CO",
+            ControlCdc = "DPC",
+            IsControlSignal = true,
+            ControlModelText = "SBO • Enhanced security"
+        };
+        Assert.True(signal.IsValidControlObject);
+        Assert.True(signal.IsPositionControl);
+        Assert.True(signal.ControlModelResolved);
+        Assert.False(signal.ControlSemanticVerified);
+        Assert.False(signal.ControlSupportsOperate);
+        Assert.True(signal.ControlCanInspectPosition);
+    }
+
     [Fact]
     public void ClaimedBscCannotOverrideLiveDpc()
     {

@@ -27,6 +27,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly Dictionary<string, HashSet<string>> _pendingProjectSelections = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<SignalDefinition, Iec61850MonitorDevice> _signalOwners = new();
     private readonly ConcurrentDictionary<string, CanonicalPointSnapshotBatch> _pendingPointSnapshots = new(StringComparer.Ordinal);
+    // A point key enters this queue only when absent from the coalescing map.
+    // Large SG7 bursts are consumed in bounded slices, not a full-map UI sweep.
+    private readonly ConcurrentQueue<string> _pendingPointUiKeys = new();
+    private readonly ConcurrentQueue<string> _priorityPointUiKeys = new();
+    private const int UiPointBatchLimit = 192;
+    private const int UiEventBatchLimit = 160;
+    private const int UiDiagnosticBatchLimit = 80;
+    // Informational totals may trail process values by <1 second. Individual
+    // point bindings and lossless SOE never wait for the summary refresh.
+    private long _nextUiPointSummaryTicks;
     // Monitoring-lifetime O(1) immutable reference/FC lookup for SignalDefinition.
     // Rebuilt after the selected signal/point model is materialized.
     private readonly Dictionary<string, IedBrowserReadBindingIndex> _canonicalSignalProjections =
@@ -69,7 +79,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public string NewDeviceIp { get => _newDeviceIp; set => Set(ref _newDeviceIp, value); }
     public string NewDevicePort { get => _newDevicePort; set => Set(ref _newDevicePort, value); }
     public int PollingIntervalMs { get => _pollingIntervalMs; set => Set(ref _pollingIntervalMs, Math.Clamp(value, 50, 600000)); }
-    public string LastStatusText { get => _lastStatusText; set => Set(ref _lastStatusText, value); }
+    public string LastStatusText
+    {
+        get => _lastStatusText;
+        set => Set(ref _lastStatusText, FormatSingleLineStatus(value));
+    }
+
+    // Diagnostics owns full exceptions, including stack traces. The bottom
+    // strip is one short summary, never a resizable log or multi-line surface.
+    public static string FormatSingleLineStatus(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "Ready";
+        var first = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault()?.Trim() ?? "Ready";
+        return first.Length <= 180 ? first : first[..177] + "…";
+    }
 
     public Iec61850MonitorDevice? SelectedDevice
     {
@@ -77,12 +101,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         set
         {
             if (ReferenceEquals(_selectedDevice, value)) return;
+            using var selectionPerf = IedBrowserPerformanceProbe.Measure(
+                "IED.Select", value?.Name, value?.Signals.Count ?? 0);
             if (_selectedDevice != null)
             {
                 _selectedDevice.IsActive = false;
                 ClearPendingControlConfirmations(_selectedDevice);
             }
             _selectedDevice = value;
+            // WPF LoadingRow now prioritizes actual virtualized viewport rows
+            // on this device switch. Never assume the first 48 data-model rows
+            // are currently visible after scroll/filter/sort.
             if (_selectedDevice != null)
             {
                 ClearPendingControlConfirmations(_selectedDevice);
@@ -128,6 +157,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public MainWindow()
     {
         InitializeComponent();
+        // Register before first WPF layout; initial realized row events can
+        // precede Loaded, while the existing Loaded hooks stay idempotent.
+        AttachLivePointViewportPriority(ExplorerLiveValuesGrid);
+        AttachLivePointViewportPriority(GlobalLiveGrid);
         // The actual deployed assembly version, never an invented UI number.
         var assembly = typeof(MainWindow).Assembly;
         var compiled = assembly.GetCustomAttributes(
@@ -139,6 +172,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (version.Length > 0)
             Title = $"ARSAS v{version} - Smart IEC 61850 Communication Tester";
         DataContext = this;
+        Devices.CollectionChanged += (_, _) => _uiPointOwnersDirty = true;
         _controlShoutTimer.Tick += (_, _) =>
         {
             _controlShoutTimer.Stop();
@@ -1422,6 +1456,29 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // The command model is preloaded on real association/selection changes.
         // A manual Refresh values remains available for explicit readback.
         ResizeCommandDockForVerifiedControls();
+        ScrollVerifiedEquipmentCommandsIntoView();
+    }
+
+    // The dock is a virtualized DataGrid: when verified equipment rows are
+    // inserted ahead of an existing generic I/O inventory, WPF can preserve
+    // the old vertical viewport at GGIO despite the sorted backing collection.
+    // Scroll to the first verified equipment DO, never manufacture a command.
+    private void ScrollVerifiedEquipmentCommandsIntoView()
+    {
+        if (SelectedDevice is not { } device || EquipmentCommandGrid is null)
+            return;
+        var first = device.CommandSignals.FirstOrDefault(signal =>
+            signal.ControlSupportsOperate &&
+            Iec61850ControlIdentity.CommandDockDisplayPriority(signal) < 100);
+        if (first is null)
+            return;
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded,
+            new Action(() =>
+            {
+                if (ReferenceEquals(SelectedDevice, device) &&
+                    device.CommandSignals.Contains(first))
+                    EquipmentCommandGrid.ScrollIntoView(first);
+            }));
     }
 
     private void CommandPanel_Collapsed(object sender, RoutedEventArgs e)
@@ -2516,10 +2573,29 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void Runtime_PointUpdated(Iec61850PointSnapshot snapshot)
     {
-        _pendingPointSnapshots.AddOrUpdate(
-            CanonicalPointSnapshotAuthority.UiQueueKey(snapshot.Point),
-            _ => new CanonicalPointSnapshotBatch(snapshot, snapshot.IsValueEdge),
-            (_, current) => CanonicalPointSnapshotAuthority.Merge(current, snapshot));
+        var key = CanonicalPointSnapshotAuthority.UiQueueKey(snapshot.Point);
+        // AddOrUpdate's value-factory may run multiple times under contention.
+        // Only enqueue after a successful first insert; failed compare/exchange
+        // retries preserve association/revision semantics of Merge.
+        while (true)
+        {
+            if (_pendingPointSnapshots.TryGetValue(key, out var current))
+            {
+                var merged = CanonicalPointSnapshotAuthority.Merge(current, snapshot);
+                if (_pendingPointSnapshots.TryUpdate(key, merged, current))
+                    return;
+            }
+            else if (_pendingPointSnapshots.TryAdd(key,
+                new CanonicalPointSnapshotBatch(snapshot, snapshot.IsValueEdge)))
+            {
+                _pendingPointUiKeys.Enqueue(key);
+                // Queue urgent work only for rows WPF has actually realized.
+                // Exact FC-qualified identity; no second value store or SOE.
+                if (_livePointViewport.IsRealized(key))
+                    _priorityPointUiKeys.Enqueue(key);
+                return;
+            }
+        }
     }
 
     private void Runtime_EventRaised(Iec61850EventEntry entry)
@@ -2555,25 +2631,38 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void UiFlushTimer_Tick(object? sender, EventArgs e)
     {
+        using var flushPerf = IedBrowserPerformanceProbe.Measure(
+            "UI.Flush", SelectedDevice?.Name, _pendingPointSnapshots.Count);
         FlushGooseSubscriberUi();
 
         var pointChanged = false;
-        // One device-owner index for the entire coalesced batch: avoid scanning
-        // every IED for every reported point in a high-rate static DataSet.
-        var queuedKeys = _pendingPointSnapshots.Keys.ToArray();
-        var deviceOwners = queuedKeys.Length == 0
-            ? null
-            : Devices.GroupBy(device => device.DeviceId, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(group => group.Key, group => group.First(),
-                    StringComparer.OrdinalIgnoreCase);
-        foreach (var pointKey in queuedKeys)
+        // Strict per-dispatch budget: a large initial SG7 data image must not
+        // monopolize WPF input/rendering. Queue holds only unique pending keys;
+        // latest canonical observation remains in the coalescing map.
+        var uiStartTicks = Stopwatch.GetTimestamp();
+        var uiDeadlineTicks = uiStartTicks + Stopwatch.Frequency / 125; // ~8 ms
+        var processedPoints = 0;
+        var deviceOwners = UiPointOwners();
+        while (processedPoints < UiPointBatchLimit &&
+               Stopwatch.GetTimestamp() < uiDeadlineTicks &&
+               TryDequeueUiPointKey(processedPoints, out var pointKey))
         {
             if (!_pendingPointSnapshots.TryRemove(pointKey, out var pending)) continue;
+            processedPoints++;
             var snapshot = pending.Snapshot;
             var point = snapshot.Point;
-            if (deviceOwners == null ||
-                !deviceOwners.TryGetValue(point.DeviceId, out var observedOwner))
-                continue;
+            if (!deviceOwners.TryGetValue(point.DeviceId, out var observedOwner) ||
+                !string.Equals(observedOwner.DeviceId, point.DeviceId,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                // DeviceId is project-deserializable. If it was rebound
+                // in-place without an ObservableCollection mutation, rebuild
+                // once instead of dropping valid session observations.
+                _uiPointOwnersDirty = true;
+                deviceOwners = UiPointOwners();
+                if (!deviceOwners.TryGetValue(point.DeviceId, out observedOwner))
+                    continue;
+            }
             // Reject queued frames from an earlier MMS connection even if
             // the new session resets its point Sequence counter to zero.
             // Never re-activate Paused/Offline rows from late runtime callbacks.
@@ -2620,7 +2709,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             // Live Monitor and SOE. Browser never has its own report decoder.
             // Canonical ingress remains first authority. The point snapshot
             // is a compatibility mirror only when Report evidence is absent.
-            observedOwner.LiveValues.PublishReport(point, snapshot.IsReportTraffic);
+            // Canonical Report compatibility mirror is admitted on the runtime
+            // ingress lane BEFORE this WPF tick, never on the Dispatcher.
             // Never mirror the payload into signals directly. Only the actual
             // canonical Report observation with matching association can feed
             // selected SignalDefinition presentation rows.
@@ -2645,7 +2735,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         var eventBatch = new List<Iec61850EventEntry>(256);
-        while (eventBatch.Count < 1000 && _pendingEvents.TryDequeue(out var entry))
+        while (eventBatch.Count < UiEventBatchLimit && _pendingEvents.TryDequeue(out var entry))
             eventBatch.Add(entry);
         if (eventBatch.Count > 0)
         {
@@ -2670,7 +2760,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         var diagnosticBatch = new List<DiagnosticEntry>(128);
-        while (diagnosticBatch.Count < 500 && _pendingDiagnostics.TryDequeue(out var diagnostic))
+        while (diagnosticBatch.Count < UiDiagnosticBatchLimit && _pendingDiagnostics.TryDequeue(out var diagnostic))
             diagnosticBatch.Add(diagnostic);
         if (diagnosticBatch.Count > 0)
         {
@@ -2713,8 +2803,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             }
         }
 
-        if (pointChanged || eventBatch.Count > 0 || diagnosticBatch.Count > 0)
+        var nowTicks = Stopwatch.GetTimestamp();
+        if (eventBatch.Count > 0 || diagnosticBatch.Count > 0 ||
+            (pointChanged && nowTicks >= _nextUiPointSummaryTicks))
+        {
             RaiseWorkspaceCounts();
+            _nextUiPointSummaryTicks = nowTicks + Stopwatch.Frequency;
+        }
         if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
             RefreshIedBrowserVisibleValues();
     }

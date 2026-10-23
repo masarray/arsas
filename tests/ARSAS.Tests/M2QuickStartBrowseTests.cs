@@ -7,6 +7,7 @@ namespace ARSAS.Tests;
 /// Source-neutral task authority contracts for imported SCL and discovered IEDs.
 /// The actual MMS and report paths remain covered by existing integration suites.
 /// </summary>
+[Collection("WpfStaIsolation")]
 public sealed class M2QuickStartBrowseTests
 {
     private static readonly XNamespace P = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";

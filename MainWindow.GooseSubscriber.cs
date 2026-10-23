@@ -452,7 +452,10 @@ public partial class MainWindow
 
         var processed = 0;
         var scopeIdentityChanged = false;
-        foreach (var pair in _pendingGooseFrames.ToArray())
+        // ConcurrentDictionary iteration is safe while ingress continues.
+        // Stop after 64 entries rather than copying the entire pending GOOSE
+        // dictionary into a new array on each WPF Dispatcher tick.
+        foreach (var pair in _pendingGooseFrames)
         {
             if (processed >= 64)
                 break;

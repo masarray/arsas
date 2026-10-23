@@ -1234,6 +1234,31 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             await stale.DisposeAsync().ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// One read-only CF ctlModel probe, using the established association and its
+    /// native MMS single-flight. Does not open Oper/SBOw, write or cache authority.
+    /// A status-only control costs one MMS Read instead of a full typed inspection.
+    /// </summary>
+    public async Task<ArControl.Iec61850ControlModelProbe> ProbeControlModelAsync(
+        SignalDefinition signal, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(signal);
+        if (!signal.IsValidControlObject || !_session.IsMmsInitiated)
+            throw new InvalidOperationException("A connected IEC control DataObject root is required.");
+        await _controlCommandGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await RunMmsOperationAsync(
+                () => new ArControl.Iec61850ControlService().ProbeControlModelAsync(
+                    _session, signal.ObjectReference, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _controlCommandGate.Release();
+        }
+    }
+
     public async Task<Iec61850ControlCapabilities> InspectControlAsync(
         SignalDefinition signal,
         CancellationToken cancellationToken)
@@ -1328,6 +1353,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         var semantic = ArControl.Iec61850ControlSemanticResolver.Resolve(
             descriptor, signal.ControlCdc, signal.ControlStatusReference);
         var effectiveCdc = semantic.Cdc;
+        var exactDpcBooleanFeedback = HasExactDpcBooleanFeedback(descriptor, effectiveCdc);
         var status = await RunMmsOperationAsync(
             () => control.ReadStatusAsync(cancellationToken),
             cancellationToken).ConfigureAwait(false);
@@ -1341,7 +1367,9 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         // TapOpR/TapOpL -> TapChg.valWTr.posVal. The native descriptor remains the source
         // of truth for the command sequence, while the preferred feedback reference makes
         // commissioning feedback more useful for pulse-style controls.
-        if (!string.IsNullOrWhiteSpace(signal.ControlStatusReference) &&
+        if (!(effectiveCdc.Equals("DPC", StringComparison.OrdinalIgnoreCase) &&
+              descriptor.CtlValSpecification.MmsType.Equals("boolean", StringComparison.OrdinalIgnoreCase)) &&
+            !string.IsNullOrWhiteSpace(signal.ControlStatusReference) &&
             !string.Equals(signal.ControlStatusReference, descriptor.StatusReference, StringComparison.OrdinalIgnoreCase))
         {
             var preferred = await ReadValueAsync(
@@ -1371,8 +1399,16 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         // Atomic visual publication boundary: after ALL awaited descriptor
         // and status reads have finished, install one complete typed proof.
         // A changed CDC cannot reuse the previous association's verified CDC.
-        signal.ClearLiveControlAuthority();
-        if (semantic.IsCommandSafe)
+        // Reinspection of an unchanged, already verified command must not
+        // publish an interim disabled state. Only an actual semantic change
+        // revokes authority. This removes avoidable Command Dock flicker.
+        var fullyVerified = semantic.IsCommandSafe &&
+            descriptor.IsOperationallyReady && exactDpcBooleanFeedback;
+        if (!fullyVerified ||
+            (signal.VerifiedLiveControlCdc.Length > 0 &&
+             !signal.VerifiedLiveControlCdc.Equals(effectiveCdc, StringComparison.OrdinalIgnoreCase)))
+            signal.ClearLiveControlAuthority();
+        if (fullyVerified)
             signal.AcceptVerifiedLiveControlCdc(effectiveCdc);
         else
             signal.ControlCdc = effectiveCdc;
@@ -1383,12 +1419,13 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         signal.ControlModelText = modelText;
         // Publish operability last; a partial inspection never authorizes
         // a user action. Native Operate still validates its own descriptor.
-        signal.ControlSemanticVerified = semantic.IsCommandSafe && descriptor.IsOperationallyReady;
+        signal.ControlSemanticVerified = fullyVerified;
         signal.ControlInspectionEvidence =
             $"{descriptor.ObjectReference}.ctlModel | {modelText} | " +
             $"typedCdc={descriptor.Cdc}, effectiveCdc={effectiveCdc}, " +
             $"ctlVal={descriptor.CtlValSpecification.Signature}, status={statusReference}, " +
-            $"semanticSafe={semantic.IsCommandSafe} | {semantic.Reason} | {descriptor.DiscoveryEvidence}";
+            $"semanticSafe={semantic.IsCommandSafe}, exactDpcBooleanFeedback={exactDpcBooleanFeedback} | " +
+            $"{semantic.Reason} | {descriptor.DiscoveryEvidence}";
 
         return new Iec61850ControlCapabilities
         {
@@ -1403,17 +1440,37 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             CurrentValue = currentValue,
             CurrentState = currentState,
             EngineControlServiceAvailable = true,
-            IsOperationallyReady = descriptor.IsOperationallyReady && semantic.IsCommandSafe,
+            IsOperationallyReady = fullyVerified,
             SupportsCommandTermination = descriptor.SupportsCommandTermination,
             SupportsTimeActivatedOperate = descriptor.SupportsTimeActivatedOperate,
             SboTimeoutText = FormatControlTimeout(descriptor.SboTimeout),
             OperTimeoutText = FormatControlTimeout(descriptor.OperTimeout),
             SequenceText = FriendlyControlSequence(descriptor.ControlModel),
             DiscoveryEvidence = descriptor.DiscoveryEvidence,
-            EngineControlServiceStatus = semantic.IsCommandSafe
-                ? "ARIEC61850 Smart Control is ready. CDC, live ctlVal, status and Direct/SBO semantics agree."
-                : semantic.Reason
+            EngineControlServiceStatus = !exactDpcBooleanFeedback
+                ? "DPC Boolean blocked: live stVal is not the exact same-object status reference."
+                : fullyVerified
+                    ? "ARIEC61850 Smart Control is ready. CDC, live ctlVal, status and Direct/SBO semantics agree."
+                    : semantic.Reason
         };
+    }
+
+    /// <summary>
+    /// Consumer read-only identity fence for typed DPC Boolean Oper.ctlVal.
+    /// A lookalike status .stVal on another object cannot authorize command.
+    /// Native ARIEC semantics and Operate gating remain independent.
+    /// </summary>
+    internal static bool HasExactDpcBooleanFeedback(
+        ArControl.Iec61850ControlObjectDescriptor descriptor, string cdc)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        if (!string.Equals(cdc, "DPC", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(descriptor.CtlValSpecification.MmsType,
+                "boolean", StringComparison.OrdinalIgnoreCase))
+            return true;
+        return !string.IsNullOrWhiteSpace(descriptor.ObjectReference) &&
+            string.Equals(descriptor.StatusReference,
+                descriptor.ObjectReference + ".stVal", StringComparison.Ordinal);
     }
 
     public async Task<Iec61850ControlCommandResult> ExecuteControlAsync(
@@ -1456,8 +1513,17 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         var semantic = ArControl.Iec61850ControlSemanticResolver.Resolve(
             descriptor, request.Signal.ControlCdc, request.Signal.ControlStatusReference);
         var effectiveCdc = semantic.Cdc;
-        request.Signal.ControlSemanticVerified = semantic.IsCommandSafe;
+        // Revalidate live typed feedback inside the FINAL native command gate,
+        // not only during Command Dock inspection. This runs before building
+        // a value, performing Select/Operate or reading substitute feedback.
+        var exactDpcBooleanFeedback = HasExactDpcBooleanFeedback(descriptor, effectiveCdc);
+        request.Signal.ControlSemanticVerified =
+            semantic.IsCommandSafe && exactDpcBooleanFeedback;
         var capabilities = BuildControlCapabilities(descriptor, request.Signal, "-", effectiveCdc);
+        if (!exactDpcBooleanFeedback)
+            return ControlFailure("Validation",
+                "DPC Boolean control NOT SENT: live stVal does not belong to this exact control object.",
+                capabilities, request.ValueText);
         if (!semantic.IsCommandSafe)
             return ControlFailure("Validation",
                 "Unsafe or ambiguous IEC 61850 control semantics: " + semantic.Reason,
@@ -3876,38 +3942,32 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         var attributes = dataObject.Attributes ?? Array.Empty<LiveIedDataAttributeModel>();
         var hasControlOperation = attributes.Any(attribute =>
         {
-            var fc = attribute.FunctionalConstraint ?? string.Empty;
-            var path = attribute.AttributePath ?? string.Empty;
-            return fc.Equals("CO", StringComparison.OrdinalIgnoreCase) &&
-                   (path.Contains("Oper", StringComparison.OrdinalIgnoreCase) ||
-                    path.Contains("SBO", StringComparison.OrdinalIgnoreCase) ||
-                    path.Contains("Cancel", StringComparison.OrdinalIgnoreCase) ||
-                    path.EndsWith("ctlVal", StringComparison.OrdinalIgnoreCase));
+            if (!string.Equals(attribute.FunctionalConstraint, "CO", StringComparison.OrdinalIgnoreCase))
+                return false;
+            var segments = (attribute.AttributePath ?? string.Empty)
+                .Replace('$', '.').Split('.', StringSplitOptions.RemoveEmptyEntries);
+            return segments.Any(segment => segment.Equals("Oper", StringComparison.OrdinalIgnoreCase) ||
+                                           segment.Equals("SBO", StringComparison.OrdinalIgnoreCase) ||
+                                           segment.Equals("SBOw", StringComparison.OrdinalIgnoreCase) ||
+                                           segment.Equals("Cancel", StringComparison.OrdinalIgnoreCase));
         });
 
         var controlModelAttribute = attributes.FirstOrDefault(attribute =>
         {
             var path = attribute.AttributePath ?? string.Empty;
             var reference = attribute.ObjectReference ?? string.Empty;
-            return path.EndsWith("ctlModel", StringComparison.OrdinalIgnoreCase) ||
-                   reference.EndsWith(".ctlModel", StringComparison.OrdinalIgnoreCase);
+            return string.Equals(attribute.FunctionalConstraint, "CF", StringComparison.OrdinalIgnoreCase) &&
+                   (path.EndsWith("ctlModel", StringComparison.OrdinalIgnoreCase) ||
+                    reference.EndsWith(".ctlModel", StringComparison.OrdinalIgnoreCase));
         });
 
-        var hasControlStateEvidence = attributes.Any(attribute =>
-        {
-            var path = attribute.AttributePath ?? string.Empty;
-            var reference = attribute.ObjectReference ?? string.Empty;
-            return path.Contains("stSeld", StringComparison.OrdinalIgnoreCase) ||
-                   path.Contains("ctlNum", StringComparison.OrdinalIgnoreCase) ||
-                   reference.Contains(".stSeld", StringComparison.OrdinalIgnoreCase) ||
-                   reference.Contains(".ctlNum", StringComparison.OrdinalIgnoreCase);
-        });
+        // ST values and inferred CDC do not authorize command candidates.
 
         var cdc = (dataObject.InferredCdc ?? string.Empty).Trim().ToUpperInvariant();
         if (string.IsNullOrWhiteSpace(cdc))
             cdc = InferControlCdc(logicalNode, dataObject, attributes, hasControlOperation);
 
-        if (!hasControlOperation && !hasControlStateEvidence && controlModelAttribute == null && !ControllableCdcs.Contains(cdc))
+        if (!hasControlOperation && controlModelAttribute == null)
             return;
 
         var reference = (dataObject.Reference ?? string.Empty).Trim().Replace('$', '.');
@@ -3946,6 +4006,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             Confidence = hasControlOperation ? "High" : "Medium",
             IsSelected = false,
             IsControlSignal = true,
+            HasControlServiceEvidence = true,
             ControlCdc = cdc,
             ControlModelReference = controlModelReference.Replace('$', '.'),
             ControlStatusReference = BuildControlStatusReference(reference, cdc),

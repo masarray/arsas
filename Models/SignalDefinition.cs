@@ -87,7 +87,23 @@ public class SignalDefinition : ObservableObject
     public string FunctionalConstraint { get; set; } = "";
     public string DataType { get; set; } = "";
     public string Category { get; set; } = "";
-    public string Unit { get; set; } = "";
+    // Monotonic generation for model metadata projection invalidation. This
+    // preserves the old plain Unit setter's UI notification behavior (none),
+    // without subscribing handlers to tens of thousands of SG7 signals.
+    private static long _unitMetadataRevision;
+    private string _unit = "";
+    public static long UnitMetadataRevision => Interlocked.Read(ref _unitMetadataRevision);
+    public string Unit
+    {
+        get => _unit;
+        set
+        {
+            var next = value ?? "";
+            if (string.Equals(_unit, next, StringComparison.Ordinal)) return;
+            _unit = next;
+            Interlocked.Increment(ref _unitMetadataRevision);
+        }
+    }
     public string Confidence { get; set; } = "Medium";
     public string DataSetReference { get; set; } = "";
     public string ReportControlReference { get; set; } = "";
@@ -102,6 +118,12 @@ public class SignalDefinition : ObservableObject
     public string TimestampReference { get; set; } = "";
     public string Source { get; set; } = "Online";
     public bool IsControlSignal { get; set; }
+    /// <summary>
+    /// Exact MMS CO service / CF ctlModel inventory evidence, never inferred from LN
+    /// names or ST feedback. Read-only candidate evidence is NOT operate authority.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool HasControlServiceEvidence { get; set; }
     public bool IsValidControlObject => IsControlSignal && IsControlObjectReference(ObjectReference);
     /// <summary>Association-scoped CDC proved by a typed live control descriptor.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
@@ -123,6 +145,8 @@ public class SignalDefinition : ObservableObject
                 !candidate.Equals(_verifiedLiveControlCdc, StringComparison.OrdinalIgnoreCase))
                 return;
             if (!Set(ref _controlCdc, candidate)) return;
+            Raise(nameof(ControlDockRole));
+            RefreshControlProcessValue();
             RaiseControlActionProperties();
         }
     }
@@ -135,15 +159,25 @@ public class SignalDefinition : ObservableObject
         var validated = cdc.Trim().ToUpperInvariant();
         // This method must only be called after the engine's typed live semantic
         // resolver succeeded; it is not an SCL authority override.
-        _verifiedLiveControlCdc = validated;
-        Raise(nameof(VerifiedLiveControlCdc));
+        // A repeated read of the same typed CDC is not an authority change.
+        // Suppress redundant WPF notifications on refresh/report traffic.
+        if (!string.Equals(_verifiedLiveControlCdc, validated, StringComparison.Ordinal))
+        {
+            _verifiedLiveControlCdc = validated;
+            Raise(nameof(VerifiedLiveControlCdc));
+            Raise(nameof(ControlDockRole));
+        }
         ControlCdc = validated;
     }
 
     public bool ApplyDataSetAdvisoryControlMetadata(string cdc, string? statusReference)
     {
-        _dataSetAdvisoryCdc = cdc?.Trim().ToUpperInvariant() ?? string.Empty;
-        Raise(nameof(DataSetAdvisoryCdc));
+        var advisory = cdc?.Trim().ToUpperInvariant() ?? string.Empty;
+        if (!string.Equals(_dataSetAdvisoryCdc, advisory, StringComparison.Ordinal))
+        {
+            _dataSetAdvisoryCdc = advisory;
+            Raise(nameof(DataSetAdvisoryCdc));
+        }
         if (_verifiedLiveControlCdc.Length > 0)
         {
             // Reporting membership is independent of the control plane. Do not
@@ -160,10 +194,16 @@ public class SignalDefinition : ObservableObject
     public void ClearLiveControlAuthority()
     {
         // Called only at MMS association teardown/new association boundary.
-        _verifiedLiveControlCdc = string.Empty;
-        _dataSetAdvisoryCdc = string.Empty;
-        Raise(nameof(VerifiedLiveControlCdc));
-        Raise(nameof(DataSetAdvisoryCdc));
+        if (_verifiedLiveControlCdc.Length > 0)
+        {
+            _verifiedLiveControlCdc = string.Empty;
+            Raise(nameof(VerifiedLiveControlCdc));
+        }
+        if (_dataSetAdvisoryCdc.Length > 0)
+        {
+            _dataSetAdvisoryCdc = string.Empty;
+            Raise(nameof(DataSetAdvisoryCdc));
+        }
         ControlSemanticVerified = false;
     }
     // Preserve exact read-only MMS proof independently of ControlLastResult,
@@ -174,7 +214,15 @@ public class SignalDefinition : ObservableObject
         set => Set(ref _controlInspectionEvidence, value?.Trim() ?? string.Empty);
     }
     public string ControlModelReference { get => _controlModelReference; set => Set(ref _controlModelReference, value?.Trim() ?? string.Empty); }
-    public string ControlStatusReference { get => _controlStatusReference; set => Set(ref _controlStatusReference, value?.Trim() ?? string.Empty); }
+    public string ControlStatusReference
+    {
+        get => _controlStatusReference;
+        set
+        {
+            if (Set(ref _controlStatusReference, value?.Trim() ?? string.Empty))
+                RefreshControlProcessValue();
+        }
+    }
     public string ControlModelText
     {
         get => _controlModelText;
@@ -239,20 +287,27 @@ public class SignalDefinition : ObservableObject
     {
         var position = IsPositionSemanticControl ||
             string.Equals(ControlCdc, "DPC", StringComparison.OrdinalIgnoreCase);
-        var type = position ? "Dbpos" :
+        var step = string.Equals(ControlCdc, "BSC",
+                StringComparison.OrdinalIgnoreCase) &&
+            ArIED61850Tester.Services.Iec61850ValueFormatter.IsBscStepPosition(
+                ControlStatusReference, ControlCdc);
+        var type = position ? "Dbpos" : step ? "Int8" :
             !string.IsNullOrWhiteSpace(ControlValueType) ? ControlValueType : ControlCdc;
         var boolType = type.Equals("SPS", StringComparison.OrdinalIgnoreCase) ||
                        type.Equals("SPC", StringComparison.OrdinalIgnoreCase) ||
                        type.Equals("Boolean", StringComparison.OrdinalIgnoreCase);
-        var display = position || boolType
-            ? ArIED61850Tester.Services.Iec61850ValueFormatter.FormatReportProcessValue(
-                ControlCurrentValue, type, "", position ? "Position" : "Status", ObjectReference)
-            : ControlCurrentValue;
+        var display = step
+            ? ArIED61850Tester.Services.Iec61850ValueFormatter.FormatBscStepPosition(
+                ControlCurrentValue)
+            : position || boolType
+                ? ArIED61850Tester.Services.Iec61850ValueFormatter.FormatReportProcessValue(
+                    ControlCurrentValue, type, "", position ? "Position" : "Status", ObjectReference)
+                : ControlCurrentValue;
         return new Iec61850ProcessValueBadge(
             display, type,
             Iec61850ValueStatePresentation.TypeToken(type),
             Iec61850ValueStatePresentation.ClassifyVisualKind(
-                display, type, reference: ObjectReference));
+                display, type, reference: step ? ControlStatusReference : ObjectReference));
     }
 
     private void RefreshControlProcessValue()
@@ -546,19 +601,11 @@ public class SignalDefinition : ObservableObject
     // ControlSupportsOperate still independently gates every staged/direct write.
     private bool CanExposeControlActions => IsValidControlObject;
 
-    private bool IsPositionSemanticControl
-    {
-        get
-        {
-            var reference = (ObjectReference ?? string.Empty).Replace('$', '.').TrimEnd('.');
-            var leaf = reference[(reference.LastIndexOf('.') + 1)..];
-            return leaf.Equals("Pos", StringComparison.OrdinalIgnoreCase) ||
-                   ((LogicalNodeClass.Equals("CSWI", StringComparison.OrdinalIgnoreCase) ||
-                     LogicalNodeClass.Equals("XCBR", StringComparison.OrdinalIgnoreCase) ||
-                     LogicalNodeClass.Equals("XSWI", StringComparison.OrdinalIgnoreCase)) &&
-                    reference.Contains(".Pos", StringComparison.OrdinalIgnoreCase));
-        }
-    }
+    // Action widgets are derived from the declared/live CDC, not the LN or
+    // data-object name. An arbitrary vendor-named DPC is still a DPC; a
+    // coincidentally named Pos object without DPC evidence is not Open/Close.
+    private bool IsPositionSemanticControl =>
+        string.Equals(ControlCdc, "DPC", StringComparison.OrdinalIgnoreCase);
 
     public bool IsPositionControl => CanExposeControlActions && IsPositionSemanticControl;
     public bool IsRaiseOnlyControl => CanExposeControlActions && (ContainsControlToken("TapOpR") || ContainsControlToken("Raise"));
@@ -821,6 +868,13 @@ public class SignalDefinition : ObservableObject
     public int SortPriority => IsControlSignal
         ? 45
         : CalculateSortPriority(LogicalNodeClass, ObjectReference, Category, Confidence, IsScadaCoreSignal);
+
+    // Non-authoritative UI role, derived from IEC object identity and typed
+    // CDC. Control readiness is still guarded solely by live MMS evidence.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string ControlDockRole =>
+        ArIED61850Tester.Services.Iec61850ControlIdentity.CommandDockRole(this);
+
 
     public string ReportCoverage
     {

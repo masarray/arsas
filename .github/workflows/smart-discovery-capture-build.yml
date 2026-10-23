@@ -2,36 +2,27 @@ name: Smart Discovery Field Capture Build
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
-      - "*.cs"
-      - "**/*.cs"
-      - "*.csproj"
-      - "**/*.csproj"
-      - "*.sln"
-      - "**/*.sln"
-      - "*.props"
-      - "**/*.props"
-      - "*.targets"
-      - "**/*.targets"
-      - "global.json"
-      - "*.xaml"
-      - "**/*.xaml"
-      - "app.manifest"
+      # Fast PR routing: only Smart Discovery authority/dependencies trigger this gate.
+      - "Services/NativeIec61850Client*.cs"
+      - "Services/*SmartDiscovery*.cs"
+      - "Services/Iec61850MonitorRuntime.cs"
+      - "Services/Iec61850DeviceIdentityResolver.cs"
+      - "Models/MonitorModels.cs"
+      - "ArIED61850Tester.csproj"
+      - "Directory.Build.*"
       - "VERSION"
-      - ".release/**"
-      - ".github/workflows/**"
-      - "Assets/**"
-      - "Resources/**"
-      - "installer/**"
-      - "engine-patches/**"
-      - "landing/release-notes*.json"
-      - "landing/latest.json"
       - "engines/**"
-      - "scripts/**"
-      - "tests/**"
-      - "evidence/**"
+      - "engine-patches/**"
+      - "scripts/*smart-discovery*"
+      - "scripts/enable-smart-discovery-capture.ps1"
+      - "tests/ARSAS.Tests/*SmartDiscovery*.cs"
+      - "evidence/smart-discovery-*.json"
+      - "evidence/interoperability-reference-target.json"
       - "docs/INTEROPERABILITY_REFERENCE_CONTRACT.md"
-      - ".github/workflows/smart-discovery-*.yml"
+      - ".github/actions/resolve-ariec-engine/**"
+      - ".github/workflows/smart-discovery-capture-build.yml"
   workflow_dispatch:
 
 permissions:
@@ -57,6 +48,7 @@ jobs:
     if: >-
       ${{
         always() &&
+        (github.event_name != 'pull_request' || !github.event.pull_request.draft) &&
         (github.event_name != 'workflow_dispatch' ||
          needs.manual-regression.result == 'success')
       }}

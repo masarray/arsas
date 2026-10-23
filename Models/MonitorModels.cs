@@ -53,6 +53,12 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     public BulkObservableCollection<SignalDefinition> Signals { get; } = new();
     public BulkObservableCollection<Iec61850MonitorPoint> Points { get; } = new();
     public BulkObservableCollection<SignalDefinition> CommandSignals { get; } = new();
+    /// <summary>
+    /// Live, verified-operable presentation only. The engineering catalog above
+    /// deliberately keeps StatusOnly/Unknown objects for model inspection.
+    /// Command Dock binds ONLY to this collection.
+    /// </summary>
+    public BulkObservableCollection<SignalDefinition> OperableCommandSignals { get; } = new();
     // Shared per-IED live model for the Browser, Explorer and all read-only
     // engineering consumers. Runtime report ingress and manual MMS reads use
     // identical reference/FC keys; not persisted across associations.
@@ -742,12 +748,23 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         // CO DataObjects including ZIV ctlModel=0 so commissioning can explicitly
         // read/configure them; every physical action is still gated by typed
         // live ctlModel + CDC proof in SignalDefinition/runtime.
+        // Cross-DataSet CSWI targets require exact live typed ctlModel/CO verification;
+        // never promote status-only XCBR/XSWI or mutate DataSet membership.
         var selected = Iec61850ControlIdentity.DistinctSelected(Signals)
-            .OrderBy(signal => signal.SortPriority)
+            .Concat(IsConnected && LiveDiscoveryModel is not null
+                ? Iec61850ControlIdentity.DiscoveredIndependentCswiControls(Signals)
+                : [])
+            .GroupBy(signal => Iec61850ControlIdentity.Normalize(signal.ObjectReference),
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.OrderByDescending(signal => signal.IsSelected)
+                .ThenByDescending(signal => signal.ControlSupportsOperate).First())
+            .OrderBy(Iec61850ControlIdentity.CommandDockDisplayPriority)
             .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(signal => signal.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(signal => signal.ObjectReference, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
+        // Live ctlModel verification may change display priority once; no
+        // detached/rebuilt row objects, full collection Reset, or MMS write.
         // Common case: verification/report/navigation changed data, not the
         // selected DataObject membership or its order. O(N) identity check,
         // zero WPF collection events, zero row recycling and checkbox flicker.
@@ -760,7 +777,11 @@ public sealed class Iec61850MonitorDevice : ObservableObject
                 same = false;
                 break;
             }
-            if (same) return;
+            if (same)
+            {
+                RefreshOperableCommandSignals();
+                return;
+            }
         }
 
         // Reconcile real membership changes by *reference identity* and keep
@@ -793,6 +814,49 @@ public sealed class Iec61850MonitorDevice : ObservableObject
                 CommandSignals.Move(existingIndex, index);
             else
                 CommandSignals.Insert(index, selected[index]);
+        }
+
+        RefreshOperableCommandSignals();
+    }
+
+    // Reconcile only actual verified command DOs. Identity-preserving, no
+    // List Reset/Replace or bound-grid row recycling on unchanged reporting.
+    private void RefreshOperableCommandSignals()
+    {
+        var targets = Iec61850ControlIdentity.VerifiedCommandTargets(
+                Signals, admitDiscovered: IsConnected && LiveDiscoveryModel is not null)
+            .OrderBy(Iec61850ControlIdentity.CommandDockDisplayPriority)
+            .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(signal => signal.ObjectReference, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (OperableCommandSignals.Count == targets.Length &&
+            OperableCommandSignals.SequenceEqual(targets, ReferenceEqualityComparer.Instance))
+            return;
+
+        var membership = new HashSet<SignalDefinition>(
+            targets, ReferenceEqualityComparer.Instance);
+        for (var i = OperableCommandSignals.Count - 1; i >= 0; i--)
+            if (!membership.Contains(OperableCommandSignals[i]))
+                OperableCommandSignals.RemoveAt(i);
+
+        for (var i = 0; i < targets.Length; i++)
+        {
+            if (i < OperableCommandSignals.Count &&
+                ReferenceEquals(OperableCommandSignals[i], targets[i]))
+                continue;
+            var existing = -1;
+            for (var j = i + 1; j < OperableCommandSignals.Count; j++)
+            {
+                if (ReferenceEquals(OperableCommandSignals[j], targets[i]))
+                {
+                    existing = j;
+                    break;
+                }
+            }
+            if (existing >= 0)
+                OperableCommandSignals.Move(existing, i);
+            else
+                OperableCommandSignals.Insert(i, targets[i]);
         }
     }
 
@@ -945,7 +1009,17 @@ public sealed class Iec61850MonitorPoint : ObservableObject
         IecDataType,
         Category,
         IecReference);
-    public string Quality { get => _quality; set => Set(ref _quality, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
+    public string Quality
+    {
+        get => _quality;
+        set
+        {
+            if (Set(ref _quality, string.IsNullOrWhiteSpace(value) ? "Unknown" : value))
+                Raise(nameof(IsInvalidQuality));
+        }
+    }
+    /// <summary>Warning glyph is a UI projection, not protocol or command authority.</summary>
+    public bool IsInvalidQuality => QualityInvalidAttention.IsInvalid(Quality);
     public string DeviceTimestamp { get => _deviceTimestamp; set => Set(ref _deviceTimestamp, string.IsNullOrWhiteSpace(value) ? "-" : value); }
     public string SourceMode
     {

@@ -51,11 +51,18 @@ public sealed class P0SiebcuReadAllAndLayoutRegressionTests
             (string?)n.Attribute("Text") == "{Binding ObservationSource}"));
         Assert.Equal("1", (string?)source.Attribute("Grid.Column"));
         Assert.Equal("CharacterEllipsis", (string?)source.Attribute("TextTrimming"));
-        var value = Assert.Single(valuePanel.Descendants().Where(n =>
+        var valueSlot = Assert.Single(valuePanel.Descendants().Where(n =>
+            n.Name.LocalName == "StackPanel" &&
+            (string?)n.Attribute("Grid.Column") == "0"));
+        var value = Assert.Single(valueSlot.Descendants().Where(n =>
             n.Name.LocalName == "TextBlock" &&
             (string?)n.Attribute("Text") == "{Binding Value}"));
-        Assert.Equal("0", (string?)value.Attribute("Grid.Column"));
         Assert.Equal("{Binding Value}", (string?)value.Attribute("ToolTip"));
+        var qualityWarning = Assert.Single(valueSlot.Elements().Where(n =>
+            n.Name.LocalName == "Path" &&
+            (string?)n.Attribute("Data") == "{StaticResource InvalidQualityWarningGeometry}"));
+        Assert.Equal("{StaticResource InvalidQualityWarningIconStyle}",
+            (string?)qualityWarning.Attribute("Style"));
     }
 
     [Fact]
@@ -70,9 +77,16 @@ public sealed class P0SiebcuReadAllAndLayoutRegressionTests
         {
             var button = Assert.Single(controls.Where(n =>
                 (string?)n.Attribute("CommandParameter") == action));
-            Assert.Equal("72", (string?)button.Attribute("Width"));
+            var grid = Assert.IsType<XElement>(button.Parent);
+            Assert.Equal("Grid", grid.Name.LocalName);
+            var columns = Assert.Single(grid.Elements().Where(n =>
+                n.Name.LocalName == "Grid.ColumnDefinitions")).Elements()
+                .Select(n => (string?)n.Attribute("Width")).ToArray();
+            Assert.Equal(new[] { "72", "7", "72" }, columns);
+            Assert.Equal(action == "Open [01]" ? "0" : "2",
+                (string?)button.Attribute("Grid.Column"));
             Assert.Equal("72", (string?)button.Attribute("MinWidth"));
-            Assert.Equal("Left", (string?)button.Attribute("HorizontalAlignment"));
+            Assert.Equal("Stretch", (string?)button.Attribute("HorizontalAlignment"));
             Assert.Equal("{Binding ControlCanInspectPosition}",
                 (string?)button.Attribute("IsEnabled"));
         }

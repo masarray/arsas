@@ -333,6 +333,9 @@
                                   Style="{StaticResource QuickFilterChip}" Click="QuickFilter_Click"/>
                     <ToggleButton x:Name="QuickControlButton" Content="Control" Tag="Control"
                                   Style="{StaticResource QuickFilterChip}" Click="QuickFilter_Click"/>
+                    <ToggleButton x:Name="QuickCswiButton" Content="CSWI" Tag="CSWI"
+                                  ToolTip="Show discovered CSWI control objects from this IED. Selection does not authorize a command; ctlModel/CDC must still be verified live."
+                                  Style="{StaticResource QuickFilterChip}" Click="QuickFilter_Click"/>
                     <ToggleButton x:Name="QuickSelectedButton" Content="Selected" Tag="Selected"
                                   Style="{StaticResource QuickFilterChip}" Click="QuickFilter_Click"/>
                 </StackPanel>

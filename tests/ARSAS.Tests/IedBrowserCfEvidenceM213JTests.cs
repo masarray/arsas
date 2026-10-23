@@ -226,7 +226,14 @@ public sealed class IedBrowserCfEvidenceM213JTests
         Assert.NotNull(cursor);
         var source = File.ReadAllText(
             Path.Combine(cursor!.FullName, "MainWindow.IedBrowser.cs"));
-        Assert.Contains("cfEvidence.BuildVerifiedUnits(device.Signals, model)", source);
+        // The semantic bridge must still be used, but no longer rescan all
+        // SG7 signals directly on every WPF value refresh.
+        Assert.Contains("_iedBrowserUnitCache.Resolve(device, model, cfEvidence)", source);
+        var cache = File.ReadAllText(Path.Combine(cursor.FullName,
+            "Models", "IedBrowserUnitProjectionCache.cs"));
+        Assert.Contains("evidence.BuildVerifiedUnits(device.Signals, model)", cache);
+        Assert.Contains("device.LiveValues.ConfigurationVersion", cache);
+        Assert.Contains("SignalDefinition.UnitMetadataRevision", cache);
         Assert.Contains("IedBrowserCfEvidencePresentation.RenderCfValue(", source);
         Assert.Contains("Discovery snapshot", source);
     }

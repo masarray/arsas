@@ -126,7 +126,7 @@
              Static faces are intentional because WPF does not provide reliable variable-font
              axis selection. Ideal metrics + ClearType keep compact engineering text smooth. -->
         <FontFamily x:Key="AppFontFamily">./Assets/Fonts/#Inter</FontFamily>
-        <FontFamily x:Key="AppCodeFontFamily">Cascadia Mono, Consolas</FontFamily>
+        <FontFamily x:Key="AppCodeFontFamily">./Assets/Fonts/#Inter</FontFamily>
 
         <Style TargetType="{x:Type Window}">
             <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}"/>
@@ -689,7 +689,9 @@
                         <Grid Background="Transparent" SnapsToDevicePixels="True">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
+                                <!-- Critical: bounded * viewport rather than Auto-size content which
+                                     overflows the fixed Dock row and defeats DataGrid scrolling. -->
+                                <RowDefinition Height="*" MinHeight="0"/>
                             </Grid.RowDefinitions>
                             <ToggleButton x:Name="CommandDockHeaderToggle" Grid.Row="0"
                                           Content="{TemplateBinding Header}"
@@ -734,6 +736,7 @@
                                 </ToggleButton.Template>
                             </ToggleButton>
                             <ContentPresenter x:Name="CommandDockContentHost" Grid.Row="1"
+                                              MinHeight="0" VerticalAlignment="Stretch"
                                               ContentSource="Content" Visibility="Collapsed"/>
                         </Grid>
                         <ControlTemplate.Triggers>

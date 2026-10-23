@@ -216,7 +216,18 @@ public partial class MainWindow
 
     private void IedBrowserRefresh_Click(object sender, RoutedEventArgs e)
     {
-        // The operator explicitly requested a new local projection, not MMS discovery.
+        // Explicit local refresh may retry previously faulted background metadata
+        // builds; ordinary live ticks never create retry storms.
+        if (SelectedDevice is { } selected)
+        {
+            var model = selected.LiveDiscoveryModel ?? selected.SclWorkspace?.DesignModel;
+            if (model is not null)
+                SharedIedSchemaIndex.ForgetFaulted(model);
+        }
+        // Explicit refresh deliberately discards cached local SCL inventories.
+        // Routine IED switching keeps the bounded per-source cache warm.
+        _iedBrowserInventoryFlights.Clear();
+        _iedBrowserInventoryTask = null;
         _iedBrowserForceRefresh = true;
         RefreshIedBrowser();
     }
@@ -301,6 +312,16 @@ public partial class MainWindow
                     target.Reference, target.FunctionalConstraint, reason, kind);
             return null;
         }
+        // Validate the EXACT same bounded selection used for exported rows.
+        // A category, Report control or stale/no-target page is not a read.
+        var exportTargets = IedBrowserReadEvidenceCsv.Plan(model, page);
+        if (exportTargets.Count == 0)
+        {
+            IedBrowserSubtitle.Text =
+                $"ZERO_TARGETS · {page.Kind}: {page.Title} · " +
+                "No verified FC attributes for this page. Select a DataSet, LD, LN, DO or DA.";
+            return;
+        }
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             FileName = "ARSAS-IEC-read-evidence-" +
@@ -313,8 +334,8 @@ public partial class MainWindow
         if (dialog.ShowDialog(this) != true) return;
         try
         {
-            var csv = IedBrowserReadEvidenceCsv.Build(
-                model, page, device.LiveValues, ResolveAbsence);
+            var csv = IedBrowserReadEvidenceCsv.BuildSelection(
+                exportTargets, device.LiveValues, ResolveAbsence);
             if (dialog.FilterIndex == 2)
             {
                 var appVersion = typeof(MainWindow).Assembly
@@ -339,8 +360,8 @@ public partial class MainWindow
                     new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
             }
             IedBrowserSubtitle.Text =
-                "Read evidence exported · exact FC, ledger, failures and deferrals; " +
-                "GVA/invoke not instrumented (never inferred).";
+                $"Read evidence exported · {exportTargets.Count} exact FC targets · " +
+                "ledger/failure evidence; GVA/invoke not instrumented.";
         }
         catch (Exception ex)
         {
@@ -578,7 +599,8 @@ public partial class MainWindow
                     result.UtcTimeEvidence, result.QualityEvidence,
                     typedBoolean: result.TypedBoolean,
                     verifiedStringWireKind: result.VerifiedStringWireKind,
-                    declaredDataType: result.Target.DataType);
+                    declaredDataType: result.Target.DataType,
+                    readWireShapeEvidence: result.WireShapeEvidence);
                 if (!accepted) return;
                 _iedBrowserReadFailureEvidence?.ClearFailure(result.Target);
                 successes++;
@@ -900,11 +922,23 @@ public partial class MainWindow
             IedBrowserReadPageButton.Content = "Read LN";
         IedBrowserReadPageButton.IsEnabled = ready;
         IedBrowserReadAllButton.IsEnabled = ready;
+        // Native Browser configuration editor is distinct from the FAT
+        // typed multi-attribute Write tool. Never share their enabled state.
+        if (IedBrowserConfigWriteButton is not null)
+        {
+            var current = _iedBrowserNavigation.Current;
+            IedBrowserConfigWriteButton.IsEnabled = device is { IsConnected: true, IsDemo: false } &&
+                device.LiveDiscoveryModel is not null && _iedBrowserReadOperation is null &&
+                (current?.Kind is "DO" or "DA" ||
+                 current?.Kind == "LN" && !string.IsNullOrWhiteSpace(_iedBrowserSelectedDoReference));
+        }
         if (IedBrowserExportReadEvidenceButton is not null)
             IedBrowserExportReadEvidenceButton.IsEnabled =
                 device?.LiveDiscoveryModel is not null &&
                 _iedBrowserNavigation.Current is not null;
         IedBrowserCancelReadButton.IsEnabled = _iedBrowserReadOperation != null;
+        RefreshIedBrowserWriteButton();
+        RefreshIedBrowserControlButton();
     }
 
     private bool TryGetBrowserReadFailure(
@@ -959,6 +993,8 @@ public partial class MainWindow
         if (MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
             SelectedDevice is not { } device)
             return;
+        using var valuesPerf = IedBrowserPerformanceProbe.Measure(
+            "Browser.VisibleValues", device.Name, _iedBrowserDetails.Rows.Count);
         // RCB start/stop does not increment the process LiveValues ledger
         // version. Independently update just the already materialized RCB
         // row glyphs from runtime activation authority on the UI flush tick,
@@ -996,6 +1032,10 @@ public partial class MainWindow
                 UpdateIedBrowserRcbReportDetails();
             return;
         }
+        // SSOT v2: consume exactly this page's independent canonical cursor.
+        // Null means an unsafe/unknown dependency or missed journal revision:
+        // preserve the original complete projection without skipping evidence.
+        var reactiveRows = SelectIedBrowserReactiveRows(device, version);
         _iedBrowserLastLiveVersion = version;
         _iedBrowserLastCfCanonicalModel = device.LiveCanonicalModel;
         // No MMS call occurs during navigation or refresh. Exact CF/DC
@@ -1008,18 +1048,20 @@ public partial class MainWindow
         // adding another subscription. They do not claim consumer comparison
         // until distinct consumer projections have actually been compared.
         if (ReferenceEquals(model, device.LiveDiscoveryModel) && model is not null)
-        {
-            var failures = _iedBrowserReadFailureEvidence?.SnapshotCurrent(device, 32);
-            IedBrowserSubtitle.ToolTip = IedBrowserAcceptanceMetrics.Capture(
-                model, device.LiveValues, _iedBrowserSclEnumEvidence,
-                failures).Summary;
-        }
+            QueueIedBrowserAcceptanceMetrics(device, model);
         else
             IedBrowserSubtitle.ToolTip =
                 "Offline/SCL declarations are not proof of fresh IEC MMS observations.";
-        var engineeringUnits = cfEvidence.BuildVerifiedUnits(device.Signals, model);
+        IReadOnlyDictionary<string, string?> engineeringUnits;
+        using (IedBrowserPerformanceProbe.Measure(
+            "Browser.Units", device.Name, device.Signals.Count))
+        {
+            engineeringUnits = _iedBrowserUnitCache.Resolve(device, model, cfEvidence);
+        }
         foreach (var row in _iedBrowserDetails.Rows)
         {
+            if (reactiveRows is not null && !reactiveRows.Contains(row))
+                continue; // unrelated current-page rows produce zero WPF bindings
             if (string.IsNullOrWhiteSpace(row.ValueReference)) continue;
             // An IEC NamPlt DO has DC children, not a fictional scalar under
             // NamPlt [DC]. Show the exact vendor/d/swRev leaf already observed
@@ -1901,6 +1943,8 @@ public partial class MainWindow
     {
         if (IedBrowserTab == null || MainTabs.SelectedIndex != IedBrowserWorkspaceIndex)
             return;
+        using var browserPerf = IedBrowserPerformanceProbe.Measure(
+            "Browser.Refresh", SelectedDevice?.Name, SelectedDevice?.Signals.Count ?? 0);
 
         var device = SelectedDevice;
         ObserveIedBrowserDevice(device);
@@ -1955,11 +1999,9 @@ public partial class MainWindow
         catch (IOException) { /* An unavailable source file cannot poison in-memory browsing. */ }
         catch (UnauthorizedAccessException) { /* Still show the cached/discovered model. */ }
 
-        // Model index is immutable and independent from transient report/RCB
-        // refreshes. Build once per actual engineering schema object.
-        if (!ReferenceEquals(_iedBrowserValueSchemaIndex?.SourceModel, model))
-            _iedBrowserValueSchemaIndex = model is null
-                ? null : new IedBrowserSchemaIndex(model);
+        // Heavy schema indexing must never block the WPF selection dispatcher.
+        if (!TryActivateIedBrowserSchema(device, model))
+            return;
 
         var changed = _iedBrowserForceRefresh ||
                       !ReferenceEquals(device, _iedBrowserCachedDevice) ||
@@ -1981,20 +2023,10 @@ public partial class MainWindow
                 ? _iedBrowserTree.ExpandedKeys()
                 : new HashSet<string>(StringComparer.Ordinal);
 
-            SclReportControlInventoryResult? inventory = null;
-            if (stamp != DateTime.MinValue)
-            {
-                try
-                {
-                    inventory = SclReportControlFilter.InspectFile(
-                        sourcePath, EffectiveSclIedName(device), device.SclAccessPointName);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
-                                             or InvalidDataException or ArgumentException)
-                {
-                    IedBrowserDetailStatus.Text = "Source inventory unavailable: " + ex.Message;
-                }
-            }
+            // Source inspection parses SCL XML; never perform it inside a click handler.
+            if (!TryResolveIedBrowserSclInventory(
+                    device, model, sourcePath, stamp, out var inventory))
+                return;
 
             var rcbs = BuildRcbExportRows(device, inventory, _iedBrowserSnapshot);
             if (rcbs.Count == 0 && model != null)
@@ -2233,6 +2265,7 @@ public partial class MainWindow
         IedBrowserDetailList.SelectedItem = null;
         IedBrowserDetailList.ItemsSource = null;
         _iedBrowserDetails.Reset(rows);
+        RebuildIedBrowserViewportIndex();
         IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
     }
 
@@ -2247,6 +2280,7 @@ public partial class MainWindow
             IedBrowserDetailList.SelectedItem = null;
             IedBrowserDetailList.ItemsSource = null;
             _iedBrowserDetails.Toggle(row);
+            RebuildIedBrowserViewportIndex();
             IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
             _iedBrowserLastLiveVersion = -1;
             RefreshIedBrowserVisibleValues();
@@ -2375,6 +2409,7 @@ public partial class MainWindow
             _iedBrowserSelectedDoReference = null;
         _iedBrowserRenderedPage = row;
         _iedBrowserRenderedConnected = connected;
+        var detailGeneration = ++_iedBrowserDetailBuildGeneration;
         _iedBrowserGooseExpected = null;
         _iedBrowserGooseDirectory = null;
         if (row is { Kind: "GoCB", Payload: LiveIedControlBlockModel gooseBlock } &&
@@ -2410,17 +2445,17 @@ public partial class MainWindow
             ? r.Inspection.Summary(connected)
             : connected ? "Connected · Report values shown; use Read for CF/DC configuration values"
                         : "Offline · cached SCL/discovery model";
-        ReplaceIedBrowserDetails(IedBrowserPresentation.Details(row, model,
-            connected, SelectedDevice?.SclWorkspace?.DesignModel));
-        _iedBrowserLastLiveVersion = -1;
-        RefreshIedBrowserVisibleValues();
-        RefreshIedBrowserReadButtons();
-        QueueIedBrowserFocusedRead(row);
-        QueueIedBrowserRcbFocusedRead(row);
-        // Folder entry opens at its first child, regardless of the scroll
-        // position in the previously inspected RCB, LN or DataSet.
-        if (_iedBrowserDetails.Rows.Count > 0)
-            IedBrowserDetailList.ScrollIntoView(_iedBrowserDetails.Rows[0]);
+        var detailDevice = SelectedDevice;
+        var association = detailDevice?.LiveValues.Association ?? -1;
+        var detailStatus = IedBrowserDetailStatus.Text;
+        // Show the selected location immediately; populate only its details
+        // after a bounded worker has constructed the immutable row projection.
+        // This keeps WPF input/rendering free even for fat SG7 LN/DO directories.
+        ReplaceIedBrowserDetails([]);
+        IedBrowserDetailStatus.Text = "Preparing selected engineering details…";
+        _ = BuildIedBrowserDetailsAsync(row, model,
+            detailDevice?.SclWorkspace?.DesignModel, detailDevice, connected,
+            detailStatus, detailGeneration, association);
     }
 
 }
