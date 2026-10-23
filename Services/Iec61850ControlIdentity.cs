@@ -182,7 +182,9 @@ public static class Iec61850ControlIdentity
         if (ln == "CSWI" &&
             dataObject.Equals("Pos", StringComparison.OrdinalIgnoreCase) &&
             (signal.HasControlServiceEvidence || signal.ControlModelResolved))
-            return (0, "Switch controller · CSWI · verification required");
+            return (0, signal.ControlSupportsOperate
+                ? "Switch controller · CSWI"
+                : "Switch controller · CSWI · verification required");
 
         if (cdc == "DPC" && dataObject.Equals("Pos", StringComparison.OrdinalIgnoreCase))
             return ln switch
