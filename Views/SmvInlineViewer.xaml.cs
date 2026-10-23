@@ -48,6 +48,19 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
     public ObservableCollection<GooseAdapterOption> Adapters { get; } = [];
     public ObservableCollection<SmvLiveStreamSummary> Streams { get; } = [];
     public ObservableCollection<SmvDisplayMeasurement> Measurements { get; } = [];
+    public ObservableCollection<SmvPowerMeasurements.Phase> PowerPhases { get; } = [];
+    private SmvPowerMeasurements.Phase? _powerTotal;
+    public string PowerP => _powerTotal?.PText ?? "—";
+    public string PowerQ => _powerTotal?.QText ?? "—";
+    public string PowerS => _powerTotal?.SText ?? "—";
+    public string PowerPf => _powerTotal?.PfText ?? "—";
+    public string PowerStatus => _powerTotal is null
+        ? "Power unavailable · requires clean 9-2LE U/I sample pairing"
+        : "P true · Q₁ fundamental · S true RMS · PF true (operator-selected U/I)";
+    public string SyncLabel => SmvSyncPresentation.Label(_visibleSnapshot);
+    public string SyncDetail => SmvSyncPresentation.Detail(_visibleSnapshot);
+    public Brush SyncBackground => SmvSyncPresentation.Background(_visibleSnapshot);
+    public Brush SyncForeground => SmvSyncPresentation.Foreground(_visibleSnapshot);
 
     // Two lightweight live views of the original bounded eight-row collection;
     // no duplicate samples, DSP calculations or packet observations.
@@ -408,6 +421,9 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
         _visibleSnapshot = null;
         _visibleVectors = [];
         Measurements.Clear();
+        PowerPhases.Clear();
+        _powerTotal = null;
+        NotifyPowerStatus();
         WaveformStatus = message;
         CurrentWaveform = null;
         Notify(nameof(CurrentWaveform));
@@ -455,11 +471,34 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
         var presentationVectors = SmvDigSubPresentationAdapter.RelativeMeasurements(_visibleVectors, profile);
         foreach (var raw in presentationVectors)
             Measurements.Add(SmvEngineeringDisplay.Present(raw, profile));
+
+        // A single two-cycle immutable snapshot is the only source of power
+        // calculations; never pair samples across different publishers/frames.
+        var power = SmvPowerMeasurements.Analyze(_visibleSnapshot, _visibleVectors, profile);
+        PowerPhases.Clear();
+        if (power is { } actual)
+            foreach (var phase in actual.Phases)
+                PowerPhases.Add(phase);
+        _powerTotal = power?.Total;
+        NotifyPowerStatus();
         UpdateDigSubPhasors();
         Notify(nameof(UnitStatus));
         Notify(nameof(VoltageGroupHeading));
         Notify(nameof(CurrentGroupHeading));
         Notify(nameof(PhaseReferenceText));
+        Notify(nameof(SyncLabel));
+        Notify(nameof(SyncDetail));
+        Notify(nameof(SyncBackground));
+        Notify(nameof(SyncForeground));
+    }
+
+    private void NotifyPowerStatus()
+    {
+        Notify(nameof(PowerP));
+        Notify(nameof(PowerQ));
+        Notify(nameof(PowerS));
+        Notify(nameof(PowerPf));
+        Notify(nameof(PowerStatus));
     }
 
     private void WaveformOptionsChanged(object sender, SelectionChangedEventArgs e)
