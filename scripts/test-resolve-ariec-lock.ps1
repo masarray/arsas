@@ -202,6 +202,31 @@ try {
         Assert-Rejects $invalidSuccessor 'physical-tested'
     }
 
+    # Candidate staging SHA must be exact, fail-closed and NEVER conflated
+    # with physically accepted baseline. Invalid metadata cannot unlock it.
+    foreach ($field in @('typedStatusReadRequired',
+                         'sameDataObjectFeedbackRequired',
+                         'ctlModelAndOperShapeRequired',
+                         'sbowEnhancedSafetyRequired',
+                         'noAutomaticOperate',
+                         'physicalQualificationRequired',
+                         'mainlinePromotionForbidden')) {
+        $invalidTyped = New-TrackedP10Fixture
+        $invalidTyped.globalTypedControlStageTrial.$field = $false
+        Assert-Rejects $invalidTyped 'physical-tested'
+    }
+    $wrongStageSha = New-TrackedP10Fixture
+    $wrongStageSha.globalTypedControlStageTrial.exactCommit = ('e' * 40)
+    Assert-Rejects $wrongStageSha 'physical-tested'
+
+    $wrongStageCi = New-TrackedP10Fixture
+    $wrongStageCi.globalTypedControlStageTrial.engineCiRun = 0
+    Assert-Rejects $wrongStageCi 'physical-tested'
+
+    $wrongStageParent = New-TrackedP10Fixture
+    $wrongStageParent.globalTypedControlStageTrial.baseEngineCommit = ('f' * 40)
+    Assert-Rejects $wrongStageParent 'physical-tested'
+
     Write-Host "CI-P1 immutable engine resolver: $checks synthetic cases PASS."
 }
 finally {

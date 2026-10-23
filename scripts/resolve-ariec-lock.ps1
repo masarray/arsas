@@ -127,6 +127,29 @@ if ($null -ne $lock.sclAssociationInteroperability) {
             $p0BRcbTrialValid = Test-P0BRcbPlannerTrial -Lock $lock
             . (Join-Path $PSScriptRoot 'test-p0-c-typed-read-trial.ps1')
             $p0CTypedReadTrialValid = Test-P0CTypedReadTrial -Lock $lock
+            # Only this exact, reviewed staging ancestry can be assembled
+            # as a DRAFT Windows FAT candidate. The historical physical
+            # engine and P0-C provenance stay unchanged, and neither passing
+            # CI nor reading a status bit grants a real-world Operate.
+            $typedControl = $lock.globalTypedControlStageTrial
+            $typedControlValid = (
+                $null -ne $typedControl -and
+                [string]$lock.commit -ceq 'f75e323e9f8443aa20e0a3818a1d5d77255b2c0f' -and
+                [int]$lock.sourcePullRequest -eq 192 -and
+                [string]$typedControl.baseEngineCommit -ceq '9c7cb40364023a7b217e5ec31ab3105ba90142eb' -and
+                [string]$typedControl.exactCommit -ceq [string]$lock.commit -and
+                [int]$typedControl.enginePullRequest -eq 192 -and
+                [int]$typedControl.engineCiRun -eq 39909260816 -and
+                [string]$typedControl.status -ceq 'engine-ci-success-consumer-trial-not-physical' -and
+                [bool]$typedControl.typedStatusReadRequired -and
+                [bool]$typedControl.sameDataObjectFeedbackRequired -and
+                [bool]$typedControl.ctlModelAndOperShapeRequired -and
+                [bool]$typedControl.sbowEnhancedSafetyRequired -and
+                [bool]$typedControl.noAutomaticOperate -and
+                [bool]$typedControl.physicalQualificationRequired -and
+                [bool]$typedControl.mainlinePromotionForbidden -and
+                [string]$lock.p0CStageObservationTrial.exactCommit -ceq [string]$typedControl.baseEngineCommit
+            )
             $acceptedTrial = (
                 ($trialValid -and [string]$lock.commit -ceq [string]$trial.exactCommit -and [int]$lock.sourcePullRequest -eq 148) -or
                 ($serverAtValid -and [string]$lock.commit -ceq [string]$serverAt.exactCommit -and [int]$lock.sourcePullRequest -eq 153) -or
@@ -136,7 +159,8 @@ if ($null -ne $lock.sclAssociationInteroperability) {
                 $m217KTrialValid -or
                 $p0AIdentityTrialValid -or
                 $p0BRcbTrialValid -or
-                $p0CTypedReadTrialValid
+                $p0CTypedReadTrialValid -or
+                $typedControlValid
             )
             if (-not $historicalAnchorValid -or -not $acceptedTrial) {
                 throw 'SCL association physical-tested engine head differs from integration lock.'

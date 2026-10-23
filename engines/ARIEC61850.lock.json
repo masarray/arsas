@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "9c7cb40364023a7b217e5ec31ab3105ba90142eb",
-  "sourcePullRequest": 184,
-  "purpose": "P0-C stage-attributed SBOw asynchronous-error observation trial on engine #183 ancestry; delayed rejection regression code-qualified; no performance or physical acceptance yet.",
+  "commit": "f75e323e9f8443aa20e0a3818a1d5d77255b2c0f",
+  "sourcePullRequest": 192,
+  "purpose": "EXPLICIT DRAFT TRIAL ONLY: code-green engine staging #192 typed same-object control semantics. Original P0-C #184 pin retained below; field control and release physical acceptance NOT asserted.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
@@ -346,6 +346,20 @@
     "negativeAndDelayedLastApplErrorRegression": true,
     "noUnqualifiedImmediateOperate": true,
     "physicalLatencyQualificationRequired": true,
+    "mainlinePromotionForbidden": true
+  },
+  "globalTypedControlStageTrial": {
+    "status": "engine-ci-success-consumer-trial-not-physical",
+    "baseEngineCommit": "9c7cb40364023a7b217e5ec31ab3105ba90142eb",
+    "exactCommit": "f75e323e9f8443aa20e0a3818a1d5d77255b2c0f",
+    "enginePullRequest": 192,
+    "engineCiRun": 39909260816,
+    "typedStatusReadRequired": true,
+    "sameDataObjectFeedbackRequired": true,
+    "ctlModelAndOperShapeRequired": true,
+    "sbowEnhancedSafetyRequired": true,
+    "noAutomaticOperate": true,
+    "physicalQualificationRequired": true,
     "mainlinePromotionForbidden": true
   }
 }
