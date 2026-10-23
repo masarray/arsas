@@ -42,7 +42,7 @@ public sealed class SmvP3PresentationSourceRegressionTests
 
         var diagram = Source("Ports/DigSubAnalyzer/Controls/PhasorDiagramControl.cs");
         Assert.Contains("CreateText(FormatPhasorLabel(item)", diagram);
-        Assert.Contains("return ToPhaseLabel(item.Name) + \"  ∠\"", diagram);
+        Assert.Contains("SmvAnglePresentation.Format(angle)", diagram);
 
         foreach (var path in new[]
         {
