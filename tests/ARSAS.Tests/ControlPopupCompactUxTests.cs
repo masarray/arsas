@@ -92,6 +92,24 @@ public sealed class ControlPopupCompactUxTests
         Assert.Contains("ConfirmLiveCommand = false;", code);
     }
 
+    [Fact]
+    public void ControlAttempt_ConsumesAuthorizationUntilFreshReadOnlyInspection()
+    {
+        var xaml = Source("ControlCommandWindow.xaml");
+        var code = Source("ControlCommandWindow.xaml.cs");
+        Assert.Contains("Content=\"Reinspect\"", xaml);
+        Assert.Contains("Click=\"Reinspect_Click\"", xaml);
+        Assert.Contains("IsEnabled=\"{Binding CanReinspect}\"", xaml);
+        Assert.Contains("_commandAttempted = true;", code);
+        Assert.Contains("!_commandAttempted", code);
+        Assert.Contains("private async void Reinspect_Click(", code);
+        Assert.Contains("await InspectAsync();", code);
+        Assert.Contains("_commandAttempted = false;", code);
+        Assert.Contains("SelectedValue = string.Empty;", code);
+        Assert.Contains("ConfirmLiveCommand = false;", code);
+        Assert.DoesNotContain("SelectedValue = ValueOptions.FirstOrDefault()", code);
+    }
+
     [Theory]
     [InlineData("ARSAS", true)]
     [InlineData("Station-Engineer_1", true)]
