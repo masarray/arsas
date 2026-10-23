@@ -1033,9 +1033,12 @@ public partial class MainWindow
         else
             IedBrowserSubtitle.ToolTip =
                 "Offline/SCL declarations are not proof of fresh IEC MMS observations.";
-        using var unitsPerf = IedBrowserPerformanceProbe.Measure(
-            "Browser.Units", device.Name, device.Signals.Count);
-        var engineeringUnits = _iedBrowserUnitCache.Resolve(device, model, cfEvidence);
+        IReadOnlyDictionary<string, string?> engineeringUnits;
+        using (IedBrowserPerformanceProbe.Measure(
+            "Browser.Units", device.Name, device.Signals.Count))
+        {
+            engineeringUnits = _iedBrowserUnitCache.Resolve(device, model, cfEvidence);
+        }
         foreach (var row in _iedBrowserDetails.Rows)
         {
             if (string.IsNullOrWhiteSpace(row.ValueReference)) continue;
