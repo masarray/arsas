@@ -33,6 +33,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
     private bool _testMode;
     private bool _confirmLiveCommand;
     private bool _isBusy;
+    private bool _commandFlightActive;
     private bool _isReady;
     private string _commandStage = "Ready to inspect";
     private string _commandStatus = "ArIED will read the live control model and current status before enabling Send Command.";
@@ -119,7 +120,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             Raise(nameof(SendButtonText));
         }
     }
-    public bool CanClose => !IsBusy;
+    public bool CanClose => !_commandFlightActive;
     public bool IsReady
     {
         get => _isReady;
@@ -247,6 +248,8 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             MessageBoxImage.Warning, MessageBoxResult.No);
         if (confirm != MessageBoxResult.Yes) return;
 
+        _commandFlightActive = true;
+        Raise(nameof(CanClose));
         IsBusy = true;
         CommandStage = TestMode ? "Sending test command" : "Sending live command";
         CommandStatus = "Executing the IEC 61850 control sequence selected from ctlModel…";
@@ -309,6 +312,8 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
         }
         finally
         {
+            _commandFlightActive = false;
+            Raise(nameof(CanClose));
             IsBusy = false;
         }
     }
@@ -469,7 +474,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
     {
         // Never abandon a dispatched native control flight by simply closing
         // its UI. Late responses need the owning session to resolve/quarantine.
-        if (IsBusy)
+        if (_commandFlightActive)
         {
             e.Cancel = true;
             CommandStatus = "IED operation still resolving. Close after the result is known.";
