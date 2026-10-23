@@ -27,6 +27,9 @@ public partial class MainWindow
     private INotifyCollectionChanged? _liveSignalSearchCollection;
     private DependencyPropertyDescriptor? _liveSignalItemsSourceDescriptor;
     private bool _liveSignalSearchInstalled;
+    private string _unifiedExplorerSearchText = "";
+    private string[] _unifiedLiveSearchTokens = Array.Empty<string>();
+    private bool _liveSignalCountRefreshScheduled;
 
     private static bool RegisterLiveSignalSearchClassHandler()
     {
@@ -181,7 +184,7 @@ public partial class MainWindow
     {
         if (_liveSignalSearchCollection != null)
             _liveSignalSearchCollection.CollectionChanged -= LiveSignalSearch_CollectionChanged;
-        if (_liveSignalSearchView != null)
+        if (_liveSignalSearchView?.Filter != null)
             _liveSignalSearchView.Filter = null;
 
         var source = _liveSignalSearchGrid?.ItemsSource;
@@ -194,7 +197,11 @@ public partial class MainWindow
             : CollectionViewSource.GetDefaultView(source);
         // Natural ordering is presentation-only. The underlying static DataSet
         // descriptors and MMS/GOOSE FCDA order must remain untouched.
+        // WPF CustomSort is O(N log N) on the Dispatcher. On large models,
+        // retain deterministic source order rather than freezing the IED switch.
         if (_liveSignalSearchView is ListCollectionView listView &&
+            _liveSignalSearchGrid?.ItemsSource is ICollection sourceCollection &&
+            sourceCollection.Count <= 2048 &&
             listView.SortDescriptions.Count == 0 && listView.CustomSort is null)
             listView.CustomSort = IecNaturalLiveMonitorSort.Instance;
         ApplyLiveSignalSearch();
@@ -204,62 +211,83 @@ public partial class MainWindow
         => ApplyLiveSignalSearch();
 
     private void LiveSignalSearch_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-        => Dispatcher.BeginInvoke(new Action(UpdateLiveSignalSearchCount));
+    {
+        if (_liveSignalCountRefreshScheduled) return;
+        _liveSignalCountRefreshScheduled = true;
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
+            new Action(() =>
+            {
+                _liveSignalCountRefreshScheduled = false;
+                UpdateLiveSignalSearchCount();
+            }));
+    }
 
     private void ApplyLiveSignalSearch()
     {
+        _unifiedExplorerSearchText = (ExplorerLiveSearchBox?.Text ?? "").Trim();
+        var detailedQuery = (_liveSignalSearchBox?.Text ?? "").Trim();
+        _unifiedLiveSearchTokens = detailedQuery.Split(
+            new[] { ' ', '\t', '\r', '\n' },
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (_liveSignalSearchView == null)
         {
             UpdateLiveSignalSearchCount();
             return;
         }
-
-        _liveSignalSearchView.Filter = LiveSignalSearch_Matches;
-        _liveSignalSearchView.Refresh();
+        using var filterPerf = IedBrowserPerformanceProbe.Measure(
+            "Explorer.UnifiedFilter", SelectedDevice?.Name,
+            _liveSignalSearchGrid?.Items.Count ?? 0);
+        if (_unifiedExplorerSearchText.Length == 0 && _unifiedLiveSearchTokens.Length == 0)
+        {
+            if (_liveSignalSearchView.Filter is not null)
+                _liveSignalSearchView.Filter = null;
+        }
+        else
+        {
+            // Filter assignment refreshes the view; never Refresh() again.
+            _liveSignalSearchView.Filter = LiveSignalSearch_Matches;
+        }
         UpdateLiveSignalSearchCount();
     }
 
     private bool LiveSignalSearch_Matches(object item)
     {
-        var query = (_liveSignalSearchBox?.Text ?? string.Empty).Trim();
-        if (query.Length == 0)
-            return true;
-        if (item is not Iec61850MonitorPoint point)
-            return true;
-
-        var searchable = string.Join('\n', new[]
-        {
-            point.DeviceName,
-            point.SignalName,
-            point.IecTelegram,
-            point.IecReference,
-            point.Value,
-            point.Quality,
-            point.DeviceTimestamp,
-            point.SourceMode
-        }.Where(value => !string.IsNullOrWhiteSpace(value)));
-
-        // Multiple terms use AND semantics: "MMXU instCVal" quickly narrows large workspaces.
-        var tokens = query.Split(
-            new[] { ' ', '\t', '\r', '\n' },
-            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return tokens.All(token => searchable.Contains(token, StringComparison.OrdinalIgnoreCase));
+        if (item is not Iec61850MonitorPoint point) return false;
+        if (_unifiedExplorerSearchText.Length > 0 &&
+            !LiveSignalSearchContains(point, _unifiedExplorerSearchText))
+            return false;
+        foreach (var token in _unifiedLiveSearchTokens)
+            if (!LiveSignalSearchContains(point, token))
+                return false;
+        return true;
     }
+
+    private static bool LiveSignalSearchContains(Iec61850MonitorPoint point, string token)
+        => Contains(point.DeviceName, token) ||
+           Contains(point.SignalName, token) ||
+           Contains(point.IecTelegram, token) ||
+           Contains(point.IecReference, token) ||
+           Contains(point.DisplayValue, token) ||
+           Contains(point.Quality, token) ||
+           Contains(point.DeviceTimestamp, token) ||
+           Contains(point.SourceMode, token) ||
+           Contains(point.Category, token) ||
+           Contains(point.IecDataType, token);
 
     private void UpdateLiveSignalSearchCount()
     {
-        if (_liveSignalSearchCount == null)
+        if (_liveSignalSearchCount is null)
             return;
 
         var source = _liveSignalSearchGrid?.ItemsSource;
-        var total = source switch
-        {
-            ICollection collection => collection.Count,
-            IEnumerable<object> enumerable => enumerable.Count(),
-            _ => 0
-        };
-        var visible = _liveSignalSearchView?.Cast<object>().Count() ?? total;
-        var filtered = !string.IsNullOrWhiteSpace(_liveSignalSearchBox?.Text);
+        var total = source is ICollection collection ? collection.Count : 0;
+        // Unfiltered view count equals source count; do not enumerate all SG7
+        // points merely to update a small toolbar caption on each notification.
+        var filtered = _unifiedExplorerSearchText.Length > 0 ||
+                       _unifiedLiveSearchTokens.Length > 0;
+        var visible = filtered
+            ? (_liveSignalSearchView?.Cast<object>().Count() ?? total)
+            : total;
         _liveSignalSearchCount.Text = filtered
             ? $"{visible:N0} of {total:N0} shown"
             : $"{total:N0} signals";
@@ -300,7 +328,7 @@ public partial class MainWindow
             _liveSignalItemsSourceDescriptor?.RemoveValueChanged(_liveSignalSearchGrid, LiveSignalSearch_ItemsSourceChanged);
         if (_liveSignalSearchCollection != null)
             _liveSignalSearchCollection.CollectionChanged -= LiveSignalSearch_CollectionChanged;
-        if (_liveSignalSearchView != null)
+        if (_liveSignalSearchView?.Filter != null)
             _liveSignalSearchView.Filter = null;
     }
 
