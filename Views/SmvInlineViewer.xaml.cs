@@ -9,6 +9,7 @@ using System.Windows.Threading;
 using ArIED61850Tester.Services;
 using ArIED61850Tester.Models;
 using ProcessBus.Core.Models;
+using ProcessBus.App.Wpf.Controls;
 
 namespace ArIED61850Tester.Views;
 
@@ -84,6 +85,21 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
 
     private SmvDisplayUnits ActiveUnits
         => SmvEngineeringDisplay.Effective(_visibleSnapshot, RequestedUnits);
+
+    public string TimeAxisCaption
+    {
+        get
+        {
+            if (CurrentWaveform is not { } wave || wave.SampleRateHz <= 0)
+                return "2 cycles · timebase pending";
+            var count = Math.Min(2 * Math.Max(1, wave.SamplesPerCycle),
+                SmvWaveformTimeAxis.AvailableSamples(wave));
+            return ActiveUnits == SmvDisplayUnits.NineTwoLe &&
+                SmvWaveformTimeAxis.ReferenceSample(wave, count) > 0.01
+                ? "2 cycles · Ua↑ = 0 ms"
+                : "2 cycles · first sample = 0 ms";
+        }
+    }
 
     public string PhaseReferenceText => ActiveUnits == SmvDisplayUnits.NineTwoLe
         ? "Ua (Ch5) · ∠0° reference" : "Ch1 · ∠0° reference";
@@ -486,6 +502,7 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
         Notify(nameof(VoltageGroupHeading));
         Notify(nameof(CurrentGroupHeading));
         Notify(nameof(PhaseReferenceText));
+        Notify(nameof(TimeAxisCaption));
         Notify(nameof(SyncLabel));
         Notify(nameof(SyncDetail));
         Notify(nameof(SyncBackground));
