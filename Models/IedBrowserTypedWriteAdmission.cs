@@ -11,6 +11,13 @@ namespace ArIED61850Tester.Models;
 /// </summary>
 public static class IedBrowserTypedWriteAdmission
 {
+    /// <summary>Exact scalar descriptor fingerprint, including wire size/constraint.</summary>
+    public static string Fingerprint(MmsTypeSpecificationNode type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        return $"{type.Signature}|{type.MmsType}|{type.Size?.ToString() ?? "?"}|{type.SizeConstraintKind}|{type.RawSizeConstraint?.ToString() ?? "?"}";
+    }
+
     public static string? RejectReason(
         MmsObjectReference reference,
         MmsVariableAccessAttributesResult live,
@@ -44,7 +51,7 @@ public static class IedBrowserTypedWriteAdmission
         if (!live.IsSuccess || live.TypeSpecification is null ||
             live.Reference != reference ||
             string.IsNullOrWhiteSpace(expectedSignature) ||
-            !string.Equals(expectedSignature, live.TypeSignature, StringComparison.Ordinal))
+            !string.Equals(expectedSignature, Fingerprint(live.TypeSpecification), StringComparison.Ordinal))
             return "Current live GVA type or exact expected signature is unavailable/mismatched.";
 
         var type = live.TypeSpecification;
