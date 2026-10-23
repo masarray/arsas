@@ -34,6 +34,9 @@ public static class IedBrowserWritePlan
             return []; // Refuse huge LN-wide selections; focus the exact DO.
         var admitted = candidates
             .Where(target => ConfigurationFc.Contains(target.FunctionalConstraint))
+            // ctlModel has a dedicated native Control-model configuration service.
+            // Never send it through the Browser primitive MMS Write path.
+            .Where(target => !target.Reference.EndsWith(".ctlModel", StringComparison.OrdinalIgnoreCase))
             .Where(target => !target.Reference.EndsWith(".q", StringComparison.OrdinalIgnoreCase) &&
                              !target.Reference.EndsWith(".t", StringComparison.OrdinalIgnoreCase))
             .Where(target => IsSupported(target.DataType))
@@ -66,12 +69,8 @@ public static class IedBrowserWritePlan
         var t = (type ?? "").Trim().ToUpperInvariant();
         var invariant = CultureInfo.InvariantCulture;
         if (reference.EndsWith(".ctlModel", StringComparison.OrdinalIgnoreCase))
-        {
-            if (!int.TryParse(raw.Trim(), NumberStyles.Integer, invariant, out var ctl) ||
-                ctl is < 0 or > 4)
-                throw new FormatException("ctlModel requires the exact enumerated integer 0–4.");
-            return MmsDataValue.Integer(ctl);
-        }
+            throw new NotSupportedException(
+                "ctlModel requires the dedicated verified native ControlModel configuration service.");
         return t switch
         {
             "BOOLEAN" or "BOOL" => raw.Trim().ToLowerInvariant() switch
@@ -80,7 +79,11 @@ public static class IedBrowserWritePlan
                 "false" or "0" => MmsDataValue.Boolean(false),
                 _ => throw new FormatException("Boolean must be true/false or 1/0.")
             },
-            "ENUM" or "ENUMERATED" or "INT8" or "INT16" or "INT32" or "INT64" or
+            // MMS integer representation does not prove an SCL EnumType mapping.
+            // Until symbol/ordinal evidence is available, never guess an enum.
+            "ENUM" or "ENUMERATED" => throw new NotSupportedException(
+                "Enumerated Write requires exact verified SCL EnumType metadata."),
+            "INT8" or "INT16" or "INT32" or "INT64" or
                 "INTEGER" => MmsDataValue.Integer(
                     long.Parse(raw.Trim(), NumberStyles.Integer, invariant)),
             "INT8U" or "INT16U" or "INT24U" or "INT32U" or "INT64U" or
@@ -146,15 +149,22 @@ public sealed class IedBrowserWriteRow : INotifyPropertyChanged
             Notify(nameof(BooleanEditorVisibility));
             Notify(nameof(CtlModelEditorVisibility));
             Notify(nameof(PlaceholderVisibility));
+            Notify(nameof(PlaceholderText));
         }
     }
     public string ShortName =>
         Reference.Split('.').LastOrDefault() ?? Reference;
     public bool IsBoolean => DataType.Equals("BOOLEAN", StringComparison.OrdinalIgnoreCase) ||
                              DataType.Equals("BOOL", StringComparison.OrdinalIgnoreCase);
+    public bool IsUnverifiedEnum => !IsControlModel &&
+        (DataType.Equals("ENUM", StringComparison.OrdinalIgnoreCase) ||
+         DataType.Equals("ENUMERATED", StringComparison.OrdinalIgnoreCase));
+    public string PlaceholderText => IsUnverifiedEnum
+        ? "Enum mapping unverified — Write disabled"
+        : "Read to edit";
     public IReadOnlyList<string> BooleanOptions { get; } = new[] { "false", "true" };
     public Visibility TextEditorVisibility =>
-        HasVerifiedRead && !IsBoolean && !IsControlModel
+        HasVerifiedRead && !IsBoolean && !IsControlModel && !IsUnverifiedEnum
             ? Visibility.Visible : Visibility.Collapsed;
     public Visibility BooleanEditorVisibility =>
         HasVerifiedRead && IsBoolean && !IsControlModel
@@ -163,7 +173,7 @@ public sealed class IedBrowserWriteRow : INotifyPropertyChanged
         HasVerifiedRead && IsControlModel
             ? Visibility.Visible : Visibility.Collapsed;
     public Visibility PlaceholderVisibility =>
-        HasVerifiedRead ? Visibility.Collapsed : Visibility.Visible;
+        HasVerifiedRead && !IsUnverifiedEnum ? Visibility.Collapsed : Visibility.Visible;
 
     public void ApplyLiveRead(MmsDataValue value)
     {
