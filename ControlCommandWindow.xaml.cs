@@ -34,6 +34,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
     private bool _confirmLiveCommand;
     private bool _isBusy;
     private bool _commandFlightActive;
+    private bool _commandAttempted;
     private bool _isReady;
     private string _commandStage = "Ready to inspect";
     private string _commandStatus = "ArIED will read the live control model and current status before enabling Send Command.";
@@ -118,12 +119,14 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             if (!Set(ref _isBusy, value)) return;
             Raise(nameof(CanSend));
             Raise(nameof(CanClose));
+            Raise(nameof(CanReinspect));
             Raise(nameof(CanEdit));
             Raise(nameof(SendButtonText));
         }
     }
     public bool CanClose => !_commandFlightActive;
-    public bool CanEdit => IsReady && !IsBusy;
+    public bool CanReinspect => !_commandFlightActive && !IsBusy;
+    public bool CanEdit => IsReady && !IsBusy && !_commandAttempted;
     public bool IsReady
     {
         get => _isReady;
@@ -140,7 +143,8 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
     public string SendButtonText => IsBusy ? "Working…" : TestMode ? "Send test" :
         _liveControlModel is Iec61850ControlModelKind.SboNormal or
             Iec61850ControlModelKind.SboEnhanced ? "Select → Operate" : "Operate";
-    public bool CanSend => IsReady && !IsBusy && !string.IsNullOrWhiteSpace(SelectedValue) &&
+    public bool CanSend => IsReady && !IsBusy && !_commandAttempted &&
+        !string.IsNullOrWhiteSpace(SelectedValue) &&
         IsValidOriginator(OriginatorId) && OriginCategories.Contains(SelectedOriginCategory) &&
         ConfirmLiveCommand;
 
@@ -169,6 +173,13 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
 
     private async Task InspectAsync()
     {
+        if (_commandFlightActive || IsBusy) return;
+        _commandAttempted = false;
+        ConfirmLiveCommand = false;
+        IsReady = false;
+        SelectedValue = string.Empty;
+        ControlNumberText = "Auto";
+        TerminationText = "—";
         IsBusy = true;
         CommandStage = "Inspecting control";
         CommandStatus = "Reading ctlModel and current status from the IED…";
@@ -252,8 +263,13 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             MessageBoxImage.Warning, MessageBoxResult.No);
         if (confirm != MessageBoxResult.Yes) return;
 
+        // One explicit wire attempt consumes the preview. Subsequent commands
+        // need a fresh typed ctlModel / state inspection on this association.
+        _commandAttempted = true;
+        Raise(nameof(CanSend));
         _commandFlightActive = true;
         Raise(nameof(CanClose));
+        Raise(nameof(CanReinspect));
         IsBusy = true;
         CommandStage = TestMode ? "Sending test command" : "Sending live command";
         CommandStatus = "Executing the IEC 61850 control sequence selected from ctlModel…";
@@ -279,21 +295,13 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             ControlNumberText = result.ControlNumber;
             TerminationText = result.CommandTerminationReceived
                 ? result.PositiveTermination ? "Positive" : "Negative" : "Not reported";
-            CommandStage = result.IsSuccess
-                ? result.FeedbackConfirmed ? "Feedback confirmed" : "Command accepted"
-                : result.CompletionState.Equals("NotSent", StringComparison.OrdinalIgnoreCase)
-                    ? "Not sent"
-                    : result.CompletionState is "Unknown" or "TimedOut" or "AssociationLost"
-                        ? "Outcome uncertain" : "Control rejected";
-            CommandStatus = result.IsSuccess
-                ? result.FeedbackConfirmed
-                    ? "IED response and independent process feedback verified."
-                    : "IED accepted. Waiting for independent IED process feedback."
-                : Iec61850ControlFailureReason.Explain(result).Summary;
-            // Accepted MMS response is not process-image authority. Full stage,
-            // LastApplError, termination and wire details stay in diagnostics.
+            var outcome = Iec61850ControlOutcomePresentation.From(result, TestMode);
+            CommandStage = outcome.Stage;
+            CommandStatus = outcome.Summary;
+            // IEC 61850 service acceptance is not process-image authority.
+            // Wire steps, termination, LastApplError and timeout remain inspectable.
             ControlEvidenceText += "\n\nRESULT\n" + BuildCommandResultText(result);
-            SetResultTone(result.IsSuccess ? "Success" : "Error");
+            SetResultTone(outcome.Tone);
         }
         catch (OperationCanceledException)
         {
@@ -321,8 +329,19 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
         {
             _commandFlightActive = false;
             Raise(nameof(CanClose));
+            Raise(nameof(CanReinspect));
             IsBusy = false;
+            Raise(nameof(CanSend));
+            Raise(nameof(CanEdit));
         }
+    }
+
+    private async void Reinspect_Click(object sender, RoutedEventArgs e)
+    {
+        // Only a read-only live reinspection can re-arm the command action.
+        // Never retry a timed out or ambiguous native command automatically.
+        if (!CanReinspect) return;
+        await InspectAsync();
     }
 
     private void PopulateValueOptions(string cdc, string currentValue)
@@ -374,7 +393,9 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
                 break;
         }
 
-        SelectedValue = ValueOptions.FirstOrDefault() ?? string.Empty;
+        // Never pre-select Open, Close, Raise, or a numeric setpoint.
+        // The operator must deliberately choose an action after inspection.
+        SelectedValue = string.Empty;
     }
 
 
