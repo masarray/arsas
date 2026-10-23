@@ -2398,6 +2398,7 @@ public partial class MainWindow
             _iedBrowserSelectedDoReference = null;
         _iedBrowserRenderedPage = row;
         _iedBrowserRenderedConnected = connected;
+        var detailGeneration = ++_iedBrowserDetailBuildGeneration;
         _iedBrowserGooseExpected = null;
         _iedBrowserGooseDirectory = null;
         if (row is { Kind: "GoCB", Payload: LiveIedControlBlockModel gooseBlock } &&
@@ -2433,17 +2434,17 @@ public partial class MainWindow
             ? r.Inspection.Summary(connected)
             : connected ? "Connected · Report values shown; use Read for CF/DC configuration values"
                         : "Offline · cached SCL/discovery model";
-        ReplaceIedBrowserDetails(IedBrowserPresentation.Details(row, model,
-            connected, SelectedDevice?.SclWorkspace?.DesignModel));
-        _iedBrowserLastLiveVersion = -1;
-        RefreshIedBrowserVisibleValues();
-        RefreshIedBrowserReadButtons();
-        QueueIedBrowserFocusedRead(row);
-        QueueIedBrowserRcbFocusedRead(row);
-        // Folder entry opens at its first child, regardless of the scroll
-        // position in the previously inspected RCB, LN or DataSet.
-        if (_iedBrowserDetails.Rows.Count > 0)
-            IedBrowserDetailList.ScrollIntoView(_iedBrowserDetails.Rows[0]);
+        var owner = SelectedDevice;
+        var association = owner?.LiveValues.Association ?? -1;
+        var detailStatus = IedBrowserDetailStatus.Text;
+        // Show the selected location immediately; populate only its details
+        // after a bounded worker has constructed the immutable row projection.
+        // This keeps WPF input/rendering free even for fat SG7 LN/DO directories.
+        ReplaceIedBrowserDetails([]);
+        IedBrowserDetailStatus.Text = "Preparing selected engineering details…";
+        _ = BuildIedBrowserDetailsAsync(row, model,
+            owner?.SclWorkspace?.DesignModel, owner, connected,
+            detailStatus, detailGeneration, association);
     }
 
 }
