@@ -16,6 +16,28 @@ public sealed class TypedWriteEditorUxRegressionTests
         Assert.DoesNotContain("Write ctlModel…\" :", route);
     }
 
+    [Theory]
+    [InlineData("BrowserDataWriteWindow.xaml")]
+    [InlineData("BrowserBatchWriteWindow.xaml")]
+    public void MaterialPencilInWriteFooter_RetainsFixedLabelAndWidth(string file)
+    {
+        var doc = XDocument.Parse(Source(file));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var button = Assert.Single(doc.Descendants(presentation + "Button").Where(
+            element => (string?)element.Attribute(x + "Name") == "WriteButton"));
+        Assert.Equal("Write", (string?)button.Attribute("Content"));
+        Assert.Equal("94", (string?)button.Attribute("Width"));
+        Assert.Equal("{StaticResource MaterialEditIcon}",
+            (string?)Assert.Single(button.Descendants(presentation + "Path")).Attribute("Data"));
+        Assert.Contains(button.Descendants(presentation + "TextBlock"),
+            child => (string?)child.Attribute("Text") == "{Binding}");
+        var footer = Assert.Single(doc.Descendants(presentation + "Grid").Where(grid =>
+            grid.Descendants(presentation + "Button").Contains(button) &&
+            (string?)grid.Attribute("Grid.Row") is "2" or "3"));
+        Assert.NotNull(footer);
+    }
+
     [Fact]
     public void SingleDaEditor_HasInlineTypedDropdownAndNoEmptyBooleanInput()
     {
