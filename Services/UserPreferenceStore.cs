@@ -69,16 +69,21 @@ public static class UserPreferenceStore
     }
 
     public sealed record RecentEndpointDetail(
-        string IpAddress, int MmsPort, string IedName, bool ConfirmedSuccessful)
+        string IpAddress, int MmsPort, string IedName, bool ConfirmedSuccessful,
+        bool WasLastSubmitted = false)
     {
-        public string Subtitle => ConfirmedSuccessful
-            ? $"Connected successfully · {IedName} · MMS {MmsPort}"
-            : "Saved address · connection not verified";
+        public string Subtitle => WasLastSubmitted
+            ? (ConfirmedSuccessful
+                ? $"Last submitted · previously connected · MMS {MmsPort}"
+                : $"Last submitted · connection unverified · MMS {MmsPort}")
+            : ConfirmedSuccessful
+                ? $"Connected successfully · {(string.IsNullOrWhiteSpace(IedName) ? "IED" : IedName)} · MMS {MmsPort}"
+                : "Saved address · connection unverified";
     }
 
     // A read-only projection of the EXISTING user preference document.
-    // Discovery submissions and connection successes remain separate facts;
-    // opening this picker never writes or attempts a connection.
+    // An endpoint is IP + MMS port, never just the IP address. This prevents
+    // a successful association on port A from authorizing a typed port B.
     public static IReadOnlyList<RecentEndpointDetail> LoadRecentEndpointDetails(int maximum = 20)
         => DescribeRecentEndpoints(LoadPreferences(), maximum);
 
@@ -95,17 +100,33 @@ public static class UserPreferenceStore
                         e.MmsPort is > 0 and <= 65535)
             .OrderByDescending(e => e.LastConnectedUtc)
             .ToArray();
+        var records = new List<RecentEndpointDetail>();
 
-        return GetRecentIpCandidates(preferences, maximum)
-            .Select(ip =>
-            {
-                var success = successes.FirstOrDefault(e =>
-                    string.Equals(e.IpAddress.Trim(), ip, StringComparison.OrdinalIgnoreCase));
-                return success is null
-                    ? new RecentEndpointDetail(ip, 102, string.Empty, false)
-                    : new RecentEndpointDetail(ip, success.MmsPort,
-                        success.IedName ?? string.Empty, true);
-            })
+        if (IPAddress.TryParse(preferences.LastDiscoveryIpAddress?.Trim(), out _) &&
+            preferences.LastDiscoveryMmsPort is > 0 and <= 65535)
+        {
+            var ip = preferences.LastDiscoveryIpAddress.Trim();
+            var port = preferences.LastDiscoveryMmsPort;
+            var matched = successes.FirstOrDefault(e =>
+                string.Equals(e.IpAddress.Trim(), ip, StringComparison.OrdinalIgnoreCase) &&
+                e.MmsPort == port);
+            records.Add(new RecentEndpointDetail(ip, port,
+                matched?.IedName ?? string.Empty, matched is not null, WasLastSubmitted: true));
+        }
+
+        records.AddRange(successes.Select(e =>
+            new RecentEndpointDetail(e.IpAddress.Trim(), e.MmsPort,
+                e.IedName ?? string.Empty, true)));
+
+        foreach (var ip in GetRecentIpCandidates(preferences, 100))
+        {
+            if (!records.Any(e => e.IpAddress.Equals(ip, StringComparison.OrdinalIgnoreCase)))
+                records.Add(new RecentEndpointDetail(ip, 102, string.Empty, false));
+        }
+
+        return records
+            .DistinctBy(e => (e.IpAddress.Trim().ToUpperInvariant(), e.MmsPort))
+            .Take(Math.Clamp(maximum, 1, 100))
             .ToArray();
     }
 
