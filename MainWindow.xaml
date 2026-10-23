@@ -765,9 +765,9 @@
                                                                             <ColumnDefinition Width="*"/>
                                                                             <ColumnDefinition Width="Auto"/>
                                                                         </Grid.ColumnDefinitions>
-                                                                        <StackPanel Orientation="Horizontal">
-                                                                            <StackPanel.Style>
-                                                                                <Style TargetType="StackPanel">
+                                                                        <Grid>
+                                                                            <Grid.Style>
+                                                                                <Style TargetType="Grid">
                                                                                     <Setter Property="Visibility" Value="Collapsed"/>
                                                                                     <Style.Triggers>
                                                                                         <MultiDataTrigger>
@@ -779,14 +779,15 @@
                                                                                         </MultiDataTrigger>
                                                                                     </Style.Triggers>
                                                                                 </Style>
-                                                                            </StackPanel.Style>
-                                                                            <Button Content="Open" Tag="{Binding}" CommandParameter="Open [01]" Click="ControlStageAction_Click"
-                                                                                    Style="{StaticResource CommandOpenButton}" Margin="0,0,7,0"
-                                                                                    Width="72" MinWidth="72" HorizontalAlignment="Left" IsEnabled="{Binding ControlCanInspectPosition}" Height="29" MinHeight="29" Padding="10,3"/>
-                                                                            <Button Content="Close" Tag="{Binding}" CommandParameter="Closed [10]" Click="ControlStageAction_Click"
-                                                                                    Style="{StaticResource CommandCloseButton}" Margin="0,0,7,0"
-                                                                                    Width="72" MinWidth="72" HorizontalAlignment="Left" IsEnabled="{Binding ControlCanInspectPosition}" Height="29" MinHeight="29" Padding="10,3"/>
-                                                                        </StackPanel>
+                                                                            </Grid.Style>
+                                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="72"/><ColumnDefinition Width="7"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
+                                                                            <Button Grid.Column="0" Content="Open" Tag="{Binding}" CommandParameter="Open [01]" Click="ControlStageAction_Click"
+                                                                                    Style="{StaticResource CommandOpenButton}" Margin="0"
+                                                                                    HorizontalAlignment="Stretch" IsEnabled="{Binding ControlCanInspectPosition}" Height="29" MinHeight="29" MinWidth="72" Padding="6,3"/>
+                                                                            <Button Grid.Column="2" Content="Close" Tag="{Binding}" CommandParameter="Closed [10]" Click="ControlStageAction_Click"
+                                                                                    Style="{StaticResource CommandCloseButton}" Margin="0"
+                                                                                    HorizontalAlignment="Stretch" IsEnabled="{Binding ControlCanInspectPosition}" Height="29" MinHeight="29" MinWidth="72" Padding="6,3"/>
+                                                                        </Grid>
 
                                                                         <StackPanel Orientation="Horizontal">
                                                                             <StackPanel.Style>
@@ -829,29 +830,31 @@
                                                                                     IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
                                                                         </StackPanel>
 
-                                                                        <StackPanel Orientation="Horizontal">
-                                                                            <StackPanel.Style>
-                                                                                <Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/>
+                                                                        <Grid>
+                                                                            <Grid.Style>
+                                                                                <Style TargetType="Grid"><Setter Property="Visibility" Value="Collapsed"/>
                                                                                     <Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsRaiseLowerControl}" Value="True"/><Condition Binding="{Binding ControlConfirmationPending}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers>
                                                                                 </Style>
-                                                                            </StackPanel.Style>
-                                                                            <Button Content="Raise" Tag="{Binding}" CommandParameter="Raise" Click="ControlStageAction_Click" Style="{StaticResource CommandRaiseButton}" Margin="0,0,7,0"
-                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
-                                                                            <Button Content="Lower" Tag="{Binding}" CommandParameter="Lower" Click="ControlStageAction_Click" Style="{StaticResource CommandLowerButton}"
-                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
-                                                                        </StackPanel>
+                                                                            </Grid.Style>
+                                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="72"/><ColumnDefinition Width="7"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
+                                                                            <Button Grid.Column="0" Content="Raise" Tag="{Binding}" CommandParameter="Raise" Click="ControlStageAction_Click" Style="{StaticResource CommandRaiseButton}" Margin="0"
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" MinWidth="72" Padding="6,3"/>
+                                                                            <Button Grid.Column="2" Content="Lower" Tag="{Binding}" CommandParameter="Lower" Click="ControlStageAction_Click" Style="{StaticResource CommandLowerButton}"
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" MinWidth="72" Padding="6,3"/>
+                                                                        </Grid>
 
-                                                                        <StackPanel Orientation="Horizontal">
-                                                                            <StackPanel.Style>
-                                                                                <Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/>
+                                                                        <Grid>
+                                                                            <Grid.Style>
+                                                                                <Style TargetType="Grid"><Setter Property="Visibility" Value="Collapsed"/>
                                                                                     <Style.Triggers><DataTrigger Binding="{Binding IsBooleanControl}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
                                                                                 </Style>
-                                                                            </StackPanel.Style>
-                                                                            <Button Content="True" Tag="{Binding}" CommandParameter="True" Click="ControlQuickAction_Click" Style="{StaticResource CommandCloseButton}" Margin="0,0,7,0"
-                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
-                                                                            <Button Content="False" Tag="{Binding}" CommandParameter="False" Click="ControlQuickAction_Click" Style="{StaticResource CommandOpenButton}"
-                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
-                                                                        </StackPanel>
+                                                                            </Grid.Style>
+                                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="72"/><ColumnDefinition Width="7"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
+                                                                            <Button Grid.Column="0" Content="True" Tag="{Binding}" CommandParameter="True" Click="ControlQuickAction_Click" Style="{StaticResource CommandCloseButton}" Margin="0"
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" MinWidth="72" Padding="6,3"/>
+                                                                            <Button Grid.Column="2" Content="False" Tag="{Binding}" CommandParameter="False" Click="ControlQuickAction_Click" Style="{StaticResource CommandOpenButton}"
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" MinWidth="72" Padding="6,3"/>
+                                                                        </Grid>
 
                                                                         <StackPanel Orientation="Horizontal">
                                                                             <StackPanel.Style>
