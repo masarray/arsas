@@ -352,6 +352,24 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         return succeeded;
     }
 
+    /// <summary>
+    /// Before the first actual InformationReport, show the exact declared
+    /// DataSet/RCB routing context. This is not proof that RptEna/GI succeeded
+    /// or that the server has ever emitted a process observation. Do not
+    /// synthesise current values, alter any wire setting, or start polling.
+    /// </summary>
+    internal static string StaticReportAwaitingReason(SignalDefinition signal)
+    {
+        ArgumentNullException.ThrowIfNull(signal);
+        var dataSet = signal.DataSetReference?.Trim() ?? "";
+        var control = signal.ReportControlReference?.Trim() ?? "";
+        if (dataSet.Length == 0)
+            return "No verified static DataSet member; Report-only mode does not poll";
+        if (control.Length == 0)
+            return $"Static DataSet {dataSet}: no matched RCB; awaiting live routing evidence (polling disabled)";
+        return $"Static DataSet {dataSet} / RCB {control}: awaiting first routed InformationReport (RptEna/GI not yet proven; polling disabled)";
+    }
+
     private const int InitialHydrationMaxTargets = 32;
     private static readonly TimeSpan InitialHydrationTotalBudget = TimeSpan.FromSeconds(10);
 
@@ -1020,9 +1038,9 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                     ? "Static DataSet report pending"
                     : signal.IsReportCapable ? "Report pending / polling fallback" : "MMS polling",
                 Reason = staticDataSetReportOnly
-                    ? "configured static DataSet / RCB required; cyclic MMS process polling disabled"
+                    ? StaticReportAwaitingReason(signal)
                     : signal.IsReportCapable ? "report plan pending" : "cyclic",
-                Status = staticDataSetReportOnly ? "Waiting for static RCB" : "Queued"
+                Status = staticDataSetReportOnly ? "Awaiting first static InformationReport" : "Queued"
             };
         }
 
