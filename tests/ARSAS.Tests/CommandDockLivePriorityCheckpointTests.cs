@@ -9,12 +9,10 @@ public sealed class CommandDockLivePriorityCheckpointTests
     private static SignalDefinition Control(
         string reference, string cdc, string model, bool verified = false)
     {
-        var slash = reference.LastIndexOf('/');
         var dot = reference.LastIndexOf('.');
         var signal = new SignalDefinition
         {
             Name = reference[(dot + 1)..],
-            LogicalNode = reference[(slash + 1)..dot],
             ObjectReference = reference,
             FunctionalConstraint = "CO",
             IsControlSignal = true,
