@@ -84,8 +84,11 @@ public sealed class IedBrowserBatchWriteEditorTests
         Assert.Contains(dataLeaf, write);
         Assert.Contains(dataLeaf, control);
         Assert.Contains("RefreshIedBrowserControlButton();", write);
-        Assert.Contains("IedBrowserWriteButton.Content = ctlModel is not null", write);
-        Assert.Contains("selectedDo is not null ? \"Write DAs…\" : \"Write DA…\"", write);
+        Assert.DoesNotContain("IedBrowserWriteButton.Content =", write);
+        Assert.Contains("BrowserSelectedControlModelSignal()", write);
+        var browserXaml = File.ReadAllText(Find("MainWindow.xaml"));
+        Assert.Contains("x:Name=\"IedBrowserWriteButton\"", browserXaml);
+        Assert.Contains("<TextBlock Text=\"Write\" VerticalAlignment=\"Center\"/>", browserXaml);
     }
 
     private static string Find(string relative)
