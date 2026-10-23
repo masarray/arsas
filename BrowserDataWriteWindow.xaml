@@ -36,7 +36,7 @@
                            TextTrimming="CharacterEllipsis"
                            ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                 <Border Height="1" Background="#E8EDF4" Margin="0,9,0,8"/>
-                <!-- Native type-aware one-row value editor, inspired by IEDScout. -->
+                <!-- Native type-aware one-row value editor, inspired by reference engineering application. -->
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="142"/>
