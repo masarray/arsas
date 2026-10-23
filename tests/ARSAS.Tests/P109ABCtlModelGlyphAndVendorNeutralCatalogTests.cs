@@ -30,7 +30,7 @@ public sealed class P109ABCtlModelGlyphAndVendorNeutralCatalogTests
     {
         var window = XDocument.Parse(Source("MainWindow.xaml"));
         var mainGrid = window.Descendants(P + "DataGrid").Single(g =>
-            (string?)g.Attribute("ItemsSource") == "{Binding SelectedDevice.OperableCommandSignals}");
+            (string?)g.Attribute("ItemsSource") == "{Binding SelectedDevice.CommandSignals}");
         Assert.Equal("Recycling", (string?)mainGrid.Attribute("VirtualizingPanel.VirtualizationMode"));
         var modelButtons = mainGrid.Descendants(P + "Button").Where(b =>
             (string?)b.Attribute("Click") == "ControlDetails_Click").ToArray();
