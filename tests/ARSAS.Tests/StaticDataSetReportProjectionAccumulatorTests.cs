@@ -165,7 +165,7 @@ public sealed class StaticDataSetReportProjectionAccumulatorTests
     [Fact]
     public void PreparedStaticReportIndex_UsesExactMembershipAndResetsLeafEvidence()
     {
-        const string parent = "SG7_BCUMeter/ACsrcMHAI1.ThdA";
+        const string parent = "IEDLD0/I_MHAI1.ThdA";
         var model = Model(DataObject(parent, "ThdA",
             Attribute(parent + ".phsA.cVal.mag.f", "phsA.cVal.mag.f"),
             Attribute(parent + ".phsB.cVal.mag.f", "phsB.cVal.mag.f"),
@@ -198,6 +198,27 @@ public sealed class StaticDataSetReportProjectionAccumulatorTests
         var nonIndexed = Assert.Single(projection.Project(model, points,
             Update(parent + ".phsC.cVal.mag.f", "7")));
         Assert.Equal("A=5, B=6, C=7", nonIndexed.Value);
+    }
+
+    [Fact]
+    public void PreparedStaticReportIndex_DuplicateParentAndOverdeepLeafFailClosed()
+    {
+        const string parent = "IEDLD0/I_MHAI1.ThdA";
+        const string leaf = parent + ".phsA.cVal.mag.f";
+        var model = Model(DataObject(parent, "ThdA",
+            Attribute(leaf, "phsA.cVal.mag.f")));
+        // A malformed selection containing two claims for one aggregate
+        // must not turn a descendant into an unverified independent value.
+        var duplicated = new[] { Point(parent), Point(parent) };
+        var index = new StaticDataSetReportProjectionAccumulator();
+        index.Prepare(model, duplicated);
+        Assert.Empty(index.Project(model, duplicated, Update(leaf, "42")));
+
+        var normal = new[] { Point(parent) };
+        index.Reset();
+        index.Prepare(model, normal);
+        var suspicious = parent + string.Concat(Enumerable.Repeat(".x", 35));
+        Assert.Empty(index.Project(model, normal, Update(suspicious, "777")));
     }
 
     [Fact]
