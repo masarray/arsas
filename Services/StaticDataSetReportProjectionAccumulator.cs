@@ -50,7 +50,7 @@ public sealed class StaticDataSetReportProjectionAccumulator
     private IReadOnlyCollection<Iec61850MonitorPoint>? _preparedPoints;
     private LiveIedModelDiscoveryDocument? _preparedModel;
     private HashSet<string>? _exactSelected;
-    private Dictionary<string, Iec61850MonitorPoint>? _aggregateByReference;
+    private Dictionary<string, Iec61850MonitorPoint[]>? _aggregateByReference;
     private readonly Dictionary<string, SchemaSafeAggregateProjectionService.ReadPlan>
         _plannedAggregates = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _unsupportedAggregates =
@@ -68,11 +68,11 @@ public sealed class StaticDataSetReportProjectionAccumulator
         _aggregateByReference = monitoredPoints
             .Where(point => IsAggregate(point.IecReference))
             .GroupBy(point => NormalizeReference(point.IecReference), StringComparer.Ordinal)
-            // Multiple bindings with the same IEC reference are ambiguous.
-            // The fast path refuses to choose one by arbitrary array order.
-            .Where(group => group.Count() == 1)
-            .ToDictionary(group => group.Key, group => group.Single(),
-                StringComparer.Ordinal);
+            // Retain up to two claims: ambiguous identities MUST stay
+            // ambiguous. Dropping duplicates would mistakenly pass the
+            // incoming leaf as if it had no known aggregate parent.
+            .ToDictionary(group => group.Key,
+                group => group.Take(2).ToArray(), StringComparer.Ordinal);
     }
 
     public void ClearPrepared()
@@ -123,6 +123,14 @@ public sealed class StaticDataSetReportProjectionAccumulator
             ? _exactSelected!.Contains(updateReference)
             : monitoredPoints.Any(point =>
                 ReferencesEqual(point.IecReference, effectiveUpdate.Reference));
+
+        // Bounded reference-depth guard: an abnormal wire path must not
+        // escape parent validation by overflowing the fast ancestor search.
+        if (usePrepared && (updateReference.Length > 1024 ||
+                            updateReference.Count(ch => ch == '.') > 32))
+            return exactSelected
+                ? new[] { effectiveUpdate }
+                : Array.Empty<NativeReportValueUpdate>();
 
         var aggregateParents = usePrepared
             ? FindPreparedAggregateParents(updateReference)
@@ -203,10 +211,13 @@ public sealed class StaticDataSetReportProjectionAccumulator
         {
             if (++depth > 32)
                 return [];
-            if (!_aggregateByReference.TryGetValue(descendant[..dot], out var parent))
+            if (!_aggregateByReference.TryGetValue(descendant[..dot], out var candidates))
                 continue;
+            if (candidates.Length > 1)
+                return candidates; // duplicate selected parent: fail closed
+            var parent = candidates[0];
             if (first is not null)
-                return [first, parent]; // ambiguous; caller rejects both
+                return [first, parent]; // overlapping selected parents: fail closed
             first = parent;
         }
         return first is null ? [] : [first];

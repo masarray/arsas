@@ -201,6 +201,27 @@ public sealed class StaticDataSetReportProjectionAccumulatorTests
     }
 
     [Fact]
+    public void PreparedStaticReportIndex_DuplicateParentAndOverdeepLeafFailClosed()
+    {
+        const string parent = "IEDLD0/I_MHAI1.ThdA";
+        const string leaf = parent + ".phsA.cVal.mag.f";
+        var model = Model(DataObject(parent, "ThdA",
+            Attribute(leaf, "phsA.cVal.mag.f")));
+        // A malformed selection containing two claims for one aggregate
+        // must not turn a descendant into an unverified independent value.
+        var duplicated = new[] { Point(parent), Point(parent) };
+        var index = new StaticDataSetReportProjectionAccumulator();
+        index.Prepare(model, duplicated);
+        Assert.Empty(index.Project(model, duplicated, Update(leaf, "42")));
+
+        var normal = new[] { Point(parent) };
+        index.Reset();
+        index.Prepare(model, normal);
+        var suspicious = parent + string.Concat(Enumerable.Repeat(".x", 35));
+        Assert.Empty(index.Project(model, normal, Update(suspicious, "777")));
+    }
+
+    [Fact]
     public void RuntimeSource_StaticMode_UsesSchemaSafeReportAuthority_AndNoMmsFallback()
     {
         var source = File.ReadAllText(FindRepoFile("Services/Iec61850MonitorRuntime.cs"));
