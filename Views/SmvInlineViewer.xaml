@@ -330,7 +330,7 @@
                                 <TextBlock Text="{Binding SyncLabel}" Foreground="{Binding SyncForeground}"
                                            FontSize="10.5" FontWeight="SemiBold"/>
                             </Border>
-                            <TextBlock Text="2 cycles · selected stream"
+                            <TextBlock Text="{Binding TimeAxisCaption}" ToolTip="{Binding TimeAxisCaption}"
                                        Style="{StaticResource SvCaption}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Grid>
