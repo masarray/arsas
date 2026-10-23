@@ -36,6 +36,7 @@ public partial class IpConnectWizardWindow : Window
     private readonly bool _rememberDiscoveryEndpoint;
     private readonly ICollectionView _historyView;
     private bool _updatingOctets;
+    private bool _rawAddressMode;
     public int MmsPort { get; private set; } = 102;
 
     // UI projection ONLY; UserPreferenceStore remains the sole persistence authority.
@@ -80,7 +81,7 @@ public partial class IpConnectWizardWindow : Window
 
         Loaded += (_, _) =>
         {
-            if (ManualAddressCheck.IsChecked == true) RawIpBox.Focus();
+            if (_rawAddressMode) RawIpBox.Focus();
             else Octet1Box.Focus();
         };
     }
@@ -129,7 +130,7 @@ public partial class IpConnectWizardWindow : Window
         RelayIpAddress = address;
         if (TrySplitIpv4(address, out var parts))
         {
-            ManualAddressCheck.IsChecked = false;
+            _rawAddressMode = false;
             _updatingOctets = true;
             try
             {
@@ -141,13 +142,13 @@ public partial class IpConnectWizardWindow : Window
         }
         else if (!string.IsNullOrWhiteSpace(address))
         {
-            ManualAddressCheck.IsChecked = true;
+            _rawAddressMode = true;
             RawIpBox.Text = address;
             SetAddressMode(true);
         }
         else
         {
-            ManualAddressCheck.IsChecked = false;
+            _rawAddressMode = false;
             _updatingOctets = true;
             try { foreach (var box in Octets) box.Clear(); }
             finally { _updatingOctets = false; }
@@ -162,43 +163,10 @@ public partial class IpConnectWizardWindow : Window
         OctetEditor.Visibility = manual ? Visibility.Collapsed : Visibility.Visible;
         HistoryButton.Visibility = manual ? Visibility.Collapsed : Visibility.Visible;
         RawIpBox.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
-        if (manual)
-            MoreOptionsExpander.IsExpanded = true;
+        _rawAddressMode = manual;
         AddressHintText.Text = manual
             ? "Enter the address exactly as provided."
             : "Example: 192.168.1.10";
-    }
-
-    private void ManualAddressCheck_Click(object sender, RoutedEventArgs e)
-    {
-        var manual = ManualAddressCheck.IsChecked == true;
-        if (manual && TryNormalizeIpv4Octets(Octets.Select(b => b.Text).ToArray(), out var ip))
-        {
-            RelayIpAddress = ip;
-            RawIpBox.Text = ip;
-        }
-        else if (!manual && TrySplitIpv4(RawIpBox.Text, out var parts))
-        {
-            _updatingOctets = true;
-            try
-            {
-                var boxes = Octets;
-                for (int i = 0; i < 4; i++) boxes[i].Text = parts[i];
-            }
-            finally { _updatingOctets = false; }
-        }
-        else if (!manual && !string.IsNullOrWhiteSpace(RawIpBox.Text))
-        {
-            // Never silently truncate a valid IPv6 literal into four octets.
-            ManualAddressCheck.IsChecked = true;
-            WizardStatusText.Text = "Keep manual entry enabled for this address format.";
-            return;
-        }
-
-        SetAddressMode(manual);
-        if (manual) RawIpBox.Focus();
-        else Octet1Box.Focus();
-        WizardStatusText.Text = string.Empty;
     }
 
     private int OctetIndex(TextBox box) => Array.IndexOf(Octets, box);
@@ -370,7 +338,7 @@ public partial class IpConnectWizardWindow : Window
         if (selection.MmsPort != 102)
             MoreOptionsExpander.IsExpanded = true;
         HistoryPopup.IsOpen = false;
-        if (ManualAddressCheck.IsChecked == true) RawIpBox.Focus();
+        if (_rawAddressMode) RawIpBox.Focus();
         else Octet1Box.Focus();
         // Recalling an endpoint is UI-only. Only Connect_Click submits.
     }
@@ -378,7 +346,7 @@ public partial class IpConnectWizardWindow : Window
     private void Connect_Click(object sender, RoutedEventArgs e)
     {
         string submittedAddress;
-        if (ManualAddressCheck.IsChecked == true)
+        if (_rawAddressMode)
         {
             submittedAddress = RawIpBox.Text.Trim();
             if (!IPAddress.TryParse(submittedAddress, out _))
