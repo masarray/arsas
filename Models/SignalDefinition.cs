@@ -87,7 +87,23 @@ public class SignalDefinition : ObservableObject
     public string FunctionalConstraint { get; set; } = "";
     public string DataType { get; set; } = "";
     public string Category { get; set; } = "";
-    public string Unit { get; set; } = "";
+    // Monotonic generation for model metadata projection invalidation. This
+    // preserves the old plain Unit setter's UI notification behavior (none),
+    // without subscribing handlers to tens of thousands of SG7 signals.
+    private static long _unitMetadataRevision;
+    private string _unit = "";
+    public static long UnitMetadataRevision => Interlocked.Read(ref _unitMetadataRevision);
+    public string Unit
+    {
+        get => _unit;
+        set
+        {
+            var next = value ?? "";
+            if (string.Equals(_unit, next, StringComparison.Ordinal)) return;
+            _unit = next;
+            Interlocked.Increment(ref _unitMetadataRevision);
+        }
+    }
     public string Confidence { get; set; } = "Medium";
     public string DataSetReference { get; set; } = "";
     public string ReportControlReference { get; set; } = "";
