@@ -16,12 +16,22 @@ namespace ArIED61850Tester;
 /// </summary>
 internal static class P2BlueSteelGreigeUx
 {
+    // Each WPF window receives its visual adapter exactly once. A later
+    // dialog activation must never restyle the already-visible MainWindow.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Window, object>
+        AppliedWindows = new();
+
     public static void ApplyToOpenWindows(Application application)
     {
         ArgumentNullException.ThrowIfNull(application);
 
         foreach (Window window in application.Windows)
+        {
+            if (!window.IsLoaded || AppliedWindows.TryGetValue(window, out _))
+                continue;
             Apply(window);
+            AppliedWindows.Add(window, new object());
+        }
     }
 
     private static void Apply(Window window)
