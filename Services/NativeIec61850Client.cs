@@ -1513,8 +1513,17 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         var semantic = ArControl.Iec61850ControlSemanticResolver.Resolve(
             descriptor, request.Signal.ControlCdc, request.Signal.ControlStatusReference);
         var effectiveCdc = semantic.Cdc;
-        request.Signal.ControlSemanticVerified = semantic.IsCommandSafe;
+        // Revalidate live typed feedback inside the FINAL native command gate,
+        // not only during Command Dock inspection. This runs before building
+        // a value, performing Select/Operate or reading substitute feedback.
+        var exactDpcBooleanFeedback = HasExactDpcBooleanFeedback(descriptor, effectiveCdc);
+        request.Signal.ControlSemanticVerified =
+            semantic.IsCommandSafe && exactDpcBooleanFeedback;
         var capabilities = BuildControlCapabilities(descriptor, request.Signal, "-", effectiveCdc);
+        if (!exactDpcBooleanFeedback)
+            return ControlFailure("Validation",
+                "DPC Boolean control NOT SENT: live stVal does not belong to this exact control object.",
+                capabilities, request.ValueText);
         if (!semantic.IsCommandSafe)
             return ControlFailure("Validation",
                 "Unsafe or ambiguous IEC 61850 control semantics: " + semantic.Reason,

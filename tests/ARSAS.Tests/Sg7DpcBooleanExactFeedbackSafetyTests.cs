@@ -38,7 +38,7 @@ public sealed class Sg7DpcBooleanExactFeedbackSafetyTests
         var descriptor = Descriptor(reference, reference + ".stVal");
         var semantic = Iec61850ControlSemanticResolver.Resolve(
             descriptor, "DPC", reference + ".stVal");
-        Assert.True(semantic.IsCommandSafe);
+        Assert.False(semantic.IsCommandSafe);
         Assert.Equal("DPC", semantic.Cdc);
         Assert.True(NativeIec61850Client.HasExactDpcBooleanFeedback(
             descriptor, semantic.Cdc));
@@ -62,7 +62,7 @@ public sealed class Sg7DpcBooleanExactFeedbackSafetyTests
             descriptor, "DPC");
         // This intentionally proves the consumer adds a stronger exact object
         // check without weakening or assuming the engine's suffix-based logic.
-        Assert.True(semantic.IsCommandSafe);
+        Assert.False(semantic.IsCommandSafe);
         Assert.False(NativeIec61850Client.HasExactDpcBooleanFeedback(
             descriptor, semantic.Cdc));
     }
@@ -76,6 +76,38 @@ public sealed class Sg7DpcBooleanExactFeedbackSafetyTests
         var descriptor = Descriptor("SG7_BCUSystem/BkrCSWI1.Pos", feedback);
         Assert.False(NativeIec61850Client.HasExactDpcBooleanFeedback(
             descriptor, "DPC"));
+    }
+
+    [Fact]
+    public void FinalNativeControlCommandGateAlsoRejectsCrossObjectDpcBoolean()
+    {
+        var source = File.ReadAllText(LocateNativeClient());
+        var start = source.IndexOf(
+            "private async Task<Iec61850ControlCommandResult> ExecuteControlCoreAsync(",
+            StringComparison.Ordinal);
+        var stop = source.IndexOf("private ", start + 74, StringComparison.Ordinal);
+        Assert.True(start >= 0 && stop > start);
+        var native = source[start..stop];
+        var gate = native.IndexOf(
+            "exactDpcBooleanFeedback = HasExactDpcBooleanFeedback(descriptor, effectiveCdc)",
+            StringComparison.Ordinal);
+        var rejection = native.IndexOf("if (!exactDpcBooleanFeedback)", StringComparison.Ordinal);
+        var encode = native.IndexOf("TryBuildNativeControlValue(", StringComparison.Ordinal);
+        var wire = native.IndexOf("control.OperateAsync(", StringComparison.Ordinal);
+        Assert.True(gate > 0 && rejection > gate && encode > rejection && wire > encode);
+        Assert.Contains("DPC Boolean control NOT SENT:", native);
+        Assert.Contains("semantic.IsCommandSafe && exactDpcBooleanFeedback", native);
+    }
+
+    private static string LocateNativeClient()
+    {
+        for (DirectoryInfo? dir = new(AppContext.BaseDirectory);
+             dir != null; dir = dir.Parent)
+        {
+            var file = Path.Combine(dir.FullName, "Services", "NativeIec61850Client.cs");
+            if (File.Exists(file)) return file;
+        }
+        throw new FileNotFoundException("NativeIec61850Client.cs");
     }
 
     [Fact]
