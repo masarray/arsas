@@ -33,6 +33,25 @@ public partial class MainWindow
             Owner = this
         };
         editor.ShowDialog();
+        if (editor.PotentiallyChangedControlModels.Count > 0 &&
+            device.IsConnected && ReferenceEquals(device.LiveDiscoveryModel, liveModel))
+        {
+            // Once a configuration Write was attempted, the previous live
+            // ctlModel evidence is no longer authoritative for Operate.
+            // Refuse stale green command buttons until fresh typed inspection.
+            foreach (var signal in device.Signals.Where(signal =>
+                         editor.PotentiallyChangedControlModels.Contains(signal.ObjectReference)))
+            {
+                signal.ClearLiveControlAuthority();
+                signal.ControlModelText = "Auto-detect";
+                signal.ControlInspectionEvidence =
+                    "ctlModel Write attempted in Browser; fresh typed inspection required.";
+                signal.ClearControlConfirmation();
+            }
+            device.RefreshCommandSignalProjection();
+            ResetControlPreloadAttempts(device);
+            _ = PreloadControlModelsAsync();
+        }
         IedBrowserDetailStatus.Text =
             "MMS configuration editor closed. Use explicit Read to refresh visible live values.";
     }
