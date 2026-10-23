@@ -87,9 +87,9 @@ public sealed class PremiumSmartIpWizardTests
         var root = Assert.IsType<XElement>(doc.Root);
 
         Assert.InRange(int.Parse(root.Attribute("Width")!.Value), 460, 530);
-        Assert.True(int.Parse(root.Attribute("MaxHeight")!.Value) <= 480);
+        Assert.Equal("350", root.Attribute("Height")?.Value);
         Assert.Contains("AppFontFamily", root.Attribute("FontFamily")!.Value);
-        Assert.Equal("Height", root.Attribute("SizeToContent")?.Value);
+        Assert.Equal("Manual", root.Attribute("SizeToContent")?.Value);
 
         var octetStyle = doc.Descendants(w + "Style")
             .Single(style => style.Attribute(x + "Key")?.Value == "SmartIpOctet");
@@ -104,8 +104,12 @@ public sealed class PremiumSmartIpWizardTests
         Assert.NotEqual("True", options.Attribute("IsExpanded")?.Value);
         Assert.Contains(options.Descendants(w + "TextBox"),
             box => box.Attribute(x + "Name")?.Value == "MmsPortBox");
-        Assert.Contains(options.Descendants(w + "CheckBox"),
+        Assert.DoesNotContain(doc.Descendants(w + "CheckBox"),
             box => box.Attribute(x + "Name")?.Value == "ManualAddressCheck");
+        Assert.Equal("265", doc.Descendants(w + "Border")
+            .Single(e => e.Attribute(x + "Name")?.Value == "IpEditorHost")
+            .Attribute("Width")?.Value);
+        Assert.Contains("expand_circle_down", File.ReadAllText(Find("IpConnectWizardWindow.xaml")));
 
         var xaml = File.ReadAllText(Find("IpConnectWizardWindow.xaml"));
         Assert.DoesNotContain("Smart discovery", xaml, StringComparison.Ordinal);
@@ -152,19 +156,23 @@ public sealed class PremiumSmartIpWizardTests
 
                     var options = Assert.IsType<Expander>(wizard.FindName("MoreOptionsExpander"));
                     Assert.False(options.IsExpanded);
-                    var advanced = Assert.IsType<CheckBox>(wizard.FindName("ManualAddressCheck"));
                     var raw = Assert.IsType<TextBox>(wizard.FindName("RawIpBox"));
                     var host = Assert.IsType<Border>(wizard.FindName("IpEditorHost"));
-                    var mode = typeof(IpConnectWizardWindow).GetMethod(
-                        "ManualAddressCheck_Click", BindingFlags.Instance | BindingFlags.NonPublic);
-                    Assert.NotNull(mode);
-                    advanced.IsChecked = true;
-                    mode.Invoke(wizard, [advanced, new RoutedEventArgs()]);
-                    Assert.True(options.IsExpanded);
-                    Assert.Equal(Visibility.Visible, raw.Visibility);
-                    Assert.Equal(Visibility.Collapsed, host.Visibility);
-                    raw.Text = "2001:db8::2";
-                    Assert.True(System.Net.IPAddress.TryParse(raw.Text, out _));
+                    Assert.Equal(Visibility.Collapsed, raw.Visibility);
+                    Assert.Equal(Visibility.Visible, host.Visibility);
+                    Assert.Null(wizard.FindName("ManualAddressCheck"));
+
+                    // IPv6 has no visible toggle; it activates via the caller's
+                    // initial address or a history recall, without losing data.
+                    var ipv6Wizard = new IpConnectWizardWindow("2001:db8::2");
+                    try
+                    {
+                        Assert.Equal(Visibility.Visible,
+                            Assert.IsType<TextBox>(ipv6Wizard.FindName("RawIpBox")).Visibility);
+                        Assert.Equal(Visibility.Collapsed,
+                            Assert.IsType<Border>(ipv6Wizard.FindName("IpEditorHost")).Visibility);
+                    }
+                    finally { ipv6Wizard.Close(); }
 
                     Assert.NotNull(wizard.FindName("HistorySearchBox"));
                     Assert.NotNull(wizard.FindName("HistoryListBox"));
