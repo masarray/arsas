@@ -71,6 +71,9 @@ public partial class IpConnectWizardWindow : Window
         }
         MmsPortText = selectedPort.ToString(CultureInfo.InvariantCulture);
         ApplyAddress(selectedIp);
+        // Never conceal a nonstandard port in the collapsed expert section.
+        if (selectedPort != 102)
+            MoreOptionsExpander.IsExpanded = true;
 
         foreach (var box in Octets)
             DataObject.AddPastingHandler(box, Octet_Pasting);
@@ -364,6 +367,8 @@ public partial class IpConnectWizardWindow : Window
         // Selecting history restores the exact saved IP:port, even when unverified.
         // This is recall only; the connection still requires explicit submission.
         MmsPortText = selection.MmsPort.ToString(CultureInfo.InvariantCulture);
+        if (selection.MmsPort != 102)
+            MoreOptionsExpander.IsExpanded = true;
         HistoryPopup.IsOpen = false;
         if (ManualAddressCheck.IsChecked == true) RawIpBox.Focus();
         else Octet1Box.Focus();
