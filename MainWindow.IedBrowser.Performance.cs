@@ -128,10 +128,11 @@ public partial class MainWindow
         var accessPoint = device.SclAccessPointName;
         var key = string.Join("|", sourcePath, sourceStamp.Ticks,
             iedName, accessPoint);
-        if (!_iedBrowserInventoryFlights.TryGetValue(key, out var task) ||
-            task.IsFaulted || task.IsCanceled)
+        if (!_iedBrowserInventoryFlights.TryGetValue(key, out var task))
         {
-            // Only a new or faulted exact source identity needs XML inspection.
+            // Cache failed tasks too: bad/unavailable XML must not launch an
+            // endless retry/Refresh loop. Source stamp change or explicit
+            // operator Refresh is the only retry trigger for the same key.
             // A completed task is reused when the operator returns to the IED.
             task = Task.Run(() =>
             {
