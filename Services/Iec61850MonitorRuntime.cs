@@ -126,6 +126,137 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     public int MonitoringDeviceCount => _sessions.Values.Count(session => session.Device.IsMonitoring);
 
     /// <summary>
+    /// Read-only preview for a single exact live model DA; no re-discovery,
+    /// client creation or Write. Frozen with the current association epoch.
+    /// </summary>
+    public async Task<IedBrowserNativeWritePreview> PreviewBrowserDataAttributeWriteAsync(
+        Iec61850MonitorDevice device,
+        AR.Iec61850.Mms.MmsObjectReference reference,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        var model = device.LiveDiscoveryModel;
+        if (device.IsDemo || device.IsMonitoring || device.IsBusy ||
+            model is null || !device.IsConnected ||
+            !_sessions.TryGetValue(device.DeviceId, out var session) ||
+            !ReferenceEquals(session.Device, device) || !session.Client.IsConnected ||
+            session.ControlLifetimeCancellation.IsCancellationRequested)
+            throw new InvalidOperationException(
+                "Data Write preview requires a current, idle, online IED model.");
+
+        var parts = reference.Item.Split('$');
+        var ld = model.LogicalDevices.FirstOrDefault(x =>
+            string.Equals(x.MmsDomain, reference.Domain, StringComparison.Ordinal));
+        var ln = parts.Length > 0 ? ld?.LogicalNodes.FirstOrDefault(x =>
+            string.Equals(x.Name, parts[0], StringComparison.Ordinal)) : null;
+        var objRef = parts.Length > 2
+            ? reference.Domain + "/" + parts[0] + "." + parts[2] : "";
+        var obj = ln?.DataObjects.FirstOrDefault(x =>
+            string.Equals(x.Reference, objRef, StringComparison.Ordinal));
+        if (parts.Length < 4 || obj is null || !obj.Attributes.Any(attr =>
+                string.Equals(attr.FunctionalConstraint, reference.FunctionalConstraint,
+                    StringComparison.OrdinalIgnoreCase) &&
+                MmsReferenceMatches(attr.MmsReference, attr.FunctionalConstraint, reference)))
+            throw new InvalidOperationException(
+                "The selected DA/FC is not declared in this exact current online DO.");
+
+        var epoch = device.LiveValues.Association;
+        bool Current() =>
+            _sessions.TryGetValue(device.DeviceId, out var actual) &&
+            ReferenceEquals(actual, session) && session.Client.IsConnected &&
+            ReferenceEquals(device.LiveDiscoveryModel, model) &&
+            device.LiveValues.Association == epoch && !device.LiveValues.IsOffline &&
+            device.IsConnected && !device.IsMonitoring && !device.IsBusy &&
+            !session.ControlLifetimeCancellation.IsCancellationRequested;
+        return await session.Client.PreviewDataAttributeWriteAsync(
+            reference, Current, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Operator-confirmed, same-DO generic MMS data Write using the CURRENT IED
+    /// association. The Browser passes an immutable per-DA plan frozen after
+    /// preview; this runtime rejects SCL-only or stale attribute ownership.
+    /// No monitoring/reporting or control-flight may be in progress.
+    /// </summary>
+    public async Task<IedBrowserTypedWriteBatchResult> WriteBrowserDataAttributesAsync(
+        Iec61850MonitorDevice device,
+        IReadOnlyList<IedBrowserTypedWriteStep> confirmedPlan,
+        bool explicitOperatorConfirmation,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        var plan = IedBrowserTypedWriteBatch.Freeze(confirmedPlan);
+        var model = device.LiveDiscoveryModel;
+        if (!explicitOperatorConfirmation || device.IsDemo || device.IsBusy ||
+            device.IsMonitoring || model is null || !device.IsConnected ||
+            !_sessions.TryGetValue(device.DeviceId, out var session) ||
+            !ReferenceEquals(session.Device, device) || !session.Client.IsConnected ||
+            session.ControlLifetimeCancellation.IsCancellationRequested ||
+            Volatile.Read(ref session.ControlCommandActive) != 0 ||
+            Volatile.Read(ref session.ControlFlightQuarantined) != 0)
+            throw new InvalidOperationException(
+                "Generic data Write requires explicit confirmation, current live model, " +
+                "idle IED association and no active/unresolved command.");
+
+        var epoch = device.LiveValues.Association;
+        var first = plan[0].Reference;
+        var parts = first.Item.Split('$');
+        // Validate in exactly one owner LN/DO instead of scanning the whole IED.
+        var ld = model.LogicalDevices.FirstOrDefault(x =>
+            string.Equals(x.MmsDomain, first.Domain, StringComparison.Ordinal));
+        var ln = ld?.LogicalNodes.FirstOrDefault(x =>
+            string.Equals(x.Name, parts[0], StringComparison.Ordinal));
+        var exactDoReference = first.Domain + "/" + parts[0] + "." + parts[2];
+        var owner = ln?.DataObjects.FirstOrDefault(x =>
+            string.Equals(x.Reference, exactDoReference, StringComparison.Ordinal));
+        if (owner is null)
+            throw new InvalidOperationException("Selected DO is not in the current live IEC model.");
+
+        foreach (var step in plan)
+        {
+            if (!owner.Attributes.Any(a =>
+                    string.Equals(a.FunctionalConstraint,
+                        step.Reference.FunctionalConstraint, StringComparison.OrdinalIgnoreCase) &&
+                    MmsReferenceMatches(a.MmsReference, a.FunctionalConstraint, step.Reference)))
+                throw new InvalidOperationException(
+                    "One or more selected DAs are not exact live model attributes of this DO.");
+        }
+
+        bool Current() =>
+            _sessions.TryGetValue(device.DeviceId, out var active) &&
+            ReferenceEquals(active, session) &&
+            ReferenceEquals(active.Device, device) &&
+            ReferenceEquals(device.LiveDiscoveryModel, model) &&
+            device.LiveValues.Association == epoch &&
+            !device.LiveValues.IsOffline &&
+            device.IsConnected && active.Client.IsConnected &&
+            !device.IsMonitoring && !device.IsBusy &&
+            !active.ControlLifetimeCancellation.IsCancellationRequested &&
+            Volatile.Read(ref active.ControlCommandActive) == 0 &&
+            Volatile.Read(ref active.ControlFlightQuarantined) == 0;
+
+        return await IedBrowserTypedWriteBatch.ExecuteAsync(
+            plan,
+            (step, token) => session.Client.WriteVerifiedDataAttributeAsync(
+                step.Reference, step.ExpectedGvaSignature, step.ExpectedOldValue,
+                step.ProposedValue, Current, explicitOperatorConfirmation, token),
+            Current, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static bool MmsReferenceMatches(
+        string modelReference, string declaredFc,
+        AR.Iec61850.Mms.MmsObjectReference target)
+    {
+        if (string.IsNullOrWhiteSpace(modelReference)) return false;
+        var candidate = AR.Iec61850.Mms.MmsObjectReference.Parse(
+            modelReference, declaredFc);
+        return string.Equals(candidate.Domain, target.Domain, StringComparison.Ordinal) &&
+               string.Equals(candidate.Item, target.Item, StringComparison.Ordinal) &&
+               string.Equals(candidate.FunctionalConstraint, target.FunctionalConstraint,
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Explicit operator-commanded read-only MMS sweep. Uses the existing
     /// association and a single sequential request lane. No report subscription,
     /// GI, DataSet modification, control write or background verification polling.
