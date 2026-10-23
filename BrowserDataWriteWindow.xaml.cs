@@ -32,7 +32,8 @@ public partial class BrowserDataWriteWindow : Window
         _reference = MmsObjectReference.Parse(
             attribute.MmsReference, attribute.FunctionalConstraint);
         ReferenceLabel.Text = $"{_device.Name}  ·  {_reference.Domain}/{_reference.Item} [{_reference.FunctionalConstraint}]";
-        AttributeLabel.Text = _reference.Item.Split('
+        AttributeLabel.Text = _reference.Item.Split((char)36).Last() +
+            " [" + _reference.FunctionalConstraint + "]";
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
