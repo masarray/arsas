@@ -33,12 +33,12 @@ public partial class MainWindow
         {
             // First paint should expose a complete command row without forcing the operator
             // to resize the dock. Dragged heights remain authoritative for the session.
-            [0] = 248,
-            [1] = 224,
-            [2] = 252,
-            [3] = 224,
-            [4] = 224,
-            [5] = 224
+            [0] = 336,
+            [1] = 320,
+            [2] = 336,
+            [3] = 320,
+            [4] = 320,
+            [5] = 320
         };
     }
 
@@ -172,6 +172,9 @@ public partial class MainWindow
         CommandPanelExpander.Collapsed += P1DockExpander_ExpandedCollapsed;
         CommandPanelExpander.IsVisibleChanged += P1DockExpander_IsVisibleChanged;
         MainTabs.SelectionChanged += P1PanelGeometry_MainTabsSelectionChanged;
+        // Recalculate against the REAL shell viewport after window/DPI changes.
+        // One layout authority (this class), no competing timers or Star-row patches.
+        shell.SizeChanged += P1DockHost_SizeChanged;
         Closed += P1PanelGeometry_Closed;
 
         ApplyP1DockGeometry(state, MainTabs.SelectedIndex);
@@ -289,6 +292,12 @@ public partial class MainWindow
         }));
     }
 
+    private void P1DockHost_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (e.HeightChanged && _p1PanelGeometry is { DockDragging: false } state)
+            ApplyP1DockGeometry(state, MainTabs.SelectedIndex);
+    }
+
     private void ApplyP1DockGeometry(P1PanelGeometryState state, int workspaceIndex)
     {
         var dockActive = CommandPanelExpander.IsVisible && CommandPanelExpander.IsExpanded;
@@ -303,16 +312,21 @@ public partial class MainWindow
             return;
         }
 
-        var availableHeight = Math.Max(520, _persistentWorkbench?.Shell.ActualHeight ?? ActualHeight);
+        // A fixed Dock row without a scrollable, FINITE viewport clipped the final
+        // controls below the status bar. Never invent 520px when the window is smaller.
+        // Reserve real height for the live-value pane, including at 125–150% DPI.
+        var measured = _persistentWorkbench?.Shell.ActualHeight ?? 0d;
+        var availableHeight = measured > 0d ? measured : Math.Max(272d, ActualHeight - 130d);
+        var upper = Math.Max(112d, Math.Min(440d, availableHeight * 0.55d,
+            availableHeight - 160d));
         var preferred = state.DockHeightByWorkspace.TryGetValue(workspaceIndex, out var stored)
-            ? stored
-            : 224d;
-        preferred = Math.Clamp(preferred, 126d, Math.Min(430d, availableHeight * 0.48d));
+            ? stored : Math.Min(336d, availableHeight * 0.46d);
+        preferred = Math.Clamp(preferred, Math.Min(126d, upper), upper);
 
         state.DockGutterRow.Height = new GridLength(10);
         state.DockSplitter.Visibility = Visibility.Visible;
-        state.DockRow.MinHeight = 112;
-        state.DockRow.MaxHeight = Math.Min(440, availableHeight * 0.52d);
+        state.DockRow.MinHeight = Math.Min(112d, upper);
+        state.DockRow.MaxHeight = upper;
         state.DockRow.Height = new GridLength(preferred);
     }
 
@@ -331,6 +345,7 @@ public partial class MainWindow
         CommandPanelExpander.Collapsed -= P1DockExpander_ExpandedCollapsed;
         CommandPanelExpander.IsVisibleChanged -= P1DockExpander_IsVisibleChanged;
         MainTabs.SelectionChanged -= P1PanelGeometry_MainTabsSelectionChanged;
+        _persistentWorkbench?.Shell.SizeChanged -= P1DockHost_SizeChanged;
         Closed -= P1PanelGeometry_Closed;
         _p1PanelGeometry = null;
     }
