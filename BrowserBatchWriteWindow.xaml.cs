@@ -424,7 +424,16 @@ public sealed class BrowserBatchWriteRow : INotifyPropertyChanged
     public string DisplayName { get; }
     public string Fc { get; }
     public bool Eligible { get; }
-    public bool CanEdit => Eligible && Preview is { IsAvailable: true, Type: not null };
+    public bool CanEdit => Eligible &&
+        Preview is { IsAvailable: true, Type: not null } p &&
+        (p.Type.MmsType switch
+        {
+            "boolean" => p.CurrentText.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+                         p.CurrentText.Equals("false", StringComparison.OrdinalIgnoreCase),
+            "integer" or "unsigned" or "visible-string" or "mms-string" => true,
+            "floating-point" when p.Type.Size == 32 => true,
+            _ => false // Unknown enum/struct/FLOAT64 is not a qualified editable leaf.
+        });
     public bool HasEdited { get; private set; }
     public IedBrowserNativeWritePreview? Preview { get; set; }
     public event PropertyChangedEventHandler? PropertyChanged;
