@@ -2565,10 +2565,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // retries preserve association/revision semantics of Merge.
         while (true)
         {
-            if (_pendingPointSnapshots.TryGetValue(key, out var prior))
+            if (_pendingPointSnapshots.TryGetValue(key, out var current))
             {
-                var merged = CanonicalPointSnapshotAuthority.Merge(prior, snapshot);
-                if (_pendingPointSnapshots.TryUpdate(key, merged, prior))
+                var merged = CanonicalPointSnapshotAuthority.Merge(current, snapshot);
+                if (_pendingPointSnapshots.TryUpdate(key, merged, current))
                     return;
             }
             else if (_pendingPointSnapshots.TryAdd(key,
