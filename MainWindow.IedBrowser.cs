@@ -225,8 +225,10 @@ public partial class MainWindow
                 indexTask.IsFaulted)
                 _iedBrowserSchemaTasks.Remove(model);
         }
-        if (_iedBrowserInventoryTask?.IsFaulted == true)
-            _iedBrowserInventoryTask = null;
+        // Explicit refresh deliberately discards cached local SCL inventories.
+        // Routine IED switching keeps the bounded per-source cache warm.
+        _iedBrowserInventoryFlights.Clear();
+        _iedBrowserInventoryTask = null;
         _iedBrowserForceRefresh = true;
         RefreshIedBrowser();
     }
