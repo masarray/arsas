@@ -34,6 +34,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private const int UiPointBatchLimit = 192;
     private const int UiEventBatchLimit = 160;
     private const int UiDiagnosticBatchLimit = 80;
+    // Informational totals may trail process values by <1 second. Individual
+    // point bindings and lossless SOE never wait for the summary refresh.
+    private long _nextUiPointSummaryTicks;
     // Monitoring-lifetime O(1) immutable reference/FC lookup for SignalDefinition.
     // Rebuilt after the selected signal/point model is materialized.
     private readonly Dictionary<string, IedBrowserReadBindingIndex> _canonicalSignalProjections =
@@ -2775,8 +2778,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             }
         }
 
-        if (pointChanged || eventBatch.Count > 0 || diagnosticBatch.Count > 0)
+        var nowTicks = Stopwatch.GetTimestamp();
+        if (eventBatch.Count > 0 || diagnosticBatch.Count > 0 ||
+            (pointChanged && nowTicks >= _nextUiPointSummaryTicks))
+        {
             RaiseWorkspaceCounts();
+            _nextUiPointSummaryTicks = nowTicks + Stopwatch.Frequency;
+        }
         if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
             RefreshIedBrowserVisibleValues();
     }
