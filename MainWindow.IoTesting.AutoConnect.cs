@@ -497,6 +497,11 @@ public partial class MainWindow
         TimeSpan proofWindow)
     {
         var startedUtc = DateTime.UtcNow;
+        // A single A01 frame is NOT proof that B01, D01 and I01 have also
+        // delivered their initial GI image. Keep one bounded observation
+        // window for all four RCBs before logging their individual truth.
+        // This is timer-only diagnostics: no MMS Read, Write, GI or retry.
+        var association = device.LiveValues.Association;
         try
         {
             var trafficObserved = await WaitForReportStreamAsync(
@@ -504,7 +509,14 @@ public partial class MainWindow
                 proofWindow,
                 _applicationCancellation.Token).ConfigureAwait(true);
 
-            if (!device.IsMonitoring || !IsSharedStaticDataSetAuthority(device))
+            var remaining = proofWindow - (DateTime.UtcNow - startedUtc);
+            if (remaining > TimeSpan.Zero)
+                await Task.Delay(remaining, _applicationCancellation.Token)
+                    .ConfigureAwait(true);
+
+            if (!device.IsMonitoring ||
+                device.LiveValues.Association != association ||
+                !IsSharedStaticDataSetAuthority(device))
                 return;
 
             // One live RCB never proves the other three. Diagnose each exact
