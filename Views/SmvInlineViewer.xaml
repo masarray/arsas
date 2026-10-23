@@ -61,11 +61,52 @@
                 <DataTrigger Binding="{Binding ChannelIndex}" Value="7"><Setter Property="Fill" Value="#257ADE"/></DataTrigger>
             </Style.Triggers>
         </Style>
+        <!-- Measurements intentionally keeps the official ARSAS DataGrid template,
+             but overrides native/system beige backgrounds with the same cool
+             white / blue-white surface used by the adjacent waveform panel. -->
+        <Style x:Key="SmvMeasurementGrid" TargetType="DataGrid"
+               BasedOn="{StaticResource ModernDataGrid}">
+            <Setter Property="Background" Value="#F8FBFF"/>
+            <Setter Property="RowBackground" Value="#F8FBFF"/>
+            <Setter Property="AlternatingRowBackground" Value="#EDF5FF"/>
+            <Setter Property="BorderBrush" Value="#D7E5F6"/>
+            <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+        </Style>
+        <Style x:Key="SmvMeasurementHeader" TargetType="DataGridColumnHeader"
+               BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+            <Setter Property="Background" Value="#E8F2FF"/>
+            <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+            <Setter Property="BorderBrush" Value="#D5E4F6"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        </Style>
+        <Style x:Key="SmvMeasurementCell" TargetType="DataGridCell"
+               BasedOn="{StaticResource {x:Type DataGridCell}}">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="#E2EBF7"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Padding" Value="7,0"/>
+        </Style>
+        <Style x:Key="SmvMeasurementRow" TargetType="DataGridRow"
+               BasedOn="{StaticResource {x:Type DataGridRow}}">
+            <Setter Property="BorderBrush" Value="#E2EBF7"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Style.Triggers>
+                <Trigger Property="ItemsControl.AlternationIndex" Value="0">
+                    <Setter Property="Background" Value="#F8FBFF"/>
+                </Trigger>
+                <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                    <Setter Property="Background" Value="#EDF5FF"/>
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#E4F0FF"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
         <Style x:Key="SmvNumberText" TargetType="TextBlock">
             <Setter Property="HorizontalAlignment" Value="Right"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="FontFamily" Value="{StaticResource AppCodeFontFamily}"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="12.5"/>
             <Setter Property="Foreground" Value="{StaticResource Ink}"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
@@ -368,43 +409,109 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Measurements" Style="{StaticResource SvHeading}"/>
-                            <TextBlock Grid.Column="2" Text="RMS · fundamental"
+                            <TextBlock Grid.Column="2" Text="RMS · phase"
                                        Style="{StaticResource SvCaption}" Margin="12,0,0,0"
                                        VerticalAlignment="Center"/>
                         </Grid>
-                        <DataGrid Grid.Row="2"
-                                  ItemsSource="{Binding Measurements}" IsReadOnly="True"
-                                  Style="{StaticResource ModernDataGrid}"
-                                  FontSize="11" RowHeight="31" ColumnHeaderHeight="30"
-                                  BorderThickness="0" GridLinesVisibility="None"
-                                  CanUserResizeColumns="False" CanUserSortColumns="False"
-                                  SelectionUnit="FullRow" EnableRowVirtualization="True"
-                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                  ScrollViewer.VerticalScrollBarVisibility="Auto">
-                            <DataGrid.Columns>
-                                <DataGridTemplateColumn Header="Channel" Width="*">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                <Ellipse Style="{StaticResource SmvChannelDot}"
-                                                         VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                                <TextBlock Text="{Binding DisplayName}"
-                                                           Foreground="{StaticResource Ink}" FontSize="11.3"
-                                                           ToolTip="{Binding Label}" VerticalAlignment="Center"/>
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-                                <DataGridTextColumn Header="RMS" Binding="{Binding RmsText}"
-                                                    Width="75" ElementStyle="{StaticResource SmvNumberText}"/>
-                                <DataGridTextColumn Header="Fund." Binding="{Binding FundamentalRmsText}"
-                                                    Width="76" ElementStyle="{StaticResource SmvNumberText}"/>
-                                <DataGridTextColumn Header="Angle" Binding="{Binding AngleText}"
-                                                    Width="68" ElementStyle="{StaticResource SmvNumberText}"/>
-                                <DataGridTextColumn Header="Unit" Binding="{Binding Unit}"
-                                                    Width="59" ElementStyle="{StaticResource SmvNumberText}"/>
-                            </DataGrid.Columns>
-                        </DataGrid>
+                        <!-- The two views filter the same eight immutable measurement rows.
+                             RAW group titles are presentation-only, not verified U/I metadata. -->
+                        <Grid Grid.Row="2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid Grid.Column="0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="4"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="{Binding VoltageGroupHeading}" FontSize="11.5"
+                                           FontWeight="SemiBold" Foreground="#31567F" Margin="5,0,0,0"
+                                           ToolTip="{Binding UnitStatus}" TextTrimming="CharacterEllipsis"/>
+                                <DataGrid x:Name="SmvVoltageMeasurementsGrid" Grid.Row="2"
+                                          ItemsSource="{Binding VoltageMeasurements}" IsReadOnly="True"
+                                          AutoGenerateColumns="False" HeadersVisibility="Column"
+                                          Style="{StaticResource SmvMeasurementGrid}"
+                                          ColumnHeaderStyle="{StaticResource SmvMeasurementHeader}"
+                                          CellStyle="{StaticResource SmvMeasurementCell}"
+                                          RowStyle="{StaticResource SmvMeasurementRow}"
+                                          RowBackground="#F8FBFF" AlternatingRowBackground="#EDF5FF"
+                                          Background="#F8FBFF" AlternationCount="2"
+                                          FontSize="12.5" RowHeight="36" ColumnHeaderHeight="29"
+                                          BorderThickness="0" GridLinesVisibility="None"
+                                          CanUserResizeColumns="False" CanUserSortColumns="False"
+                                          SelectionUnit="FullRow" EnableRowVirtualization="True"
+                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                          ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="Channel" Width="*">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <Ellipse Style="{StaticResource SmvChannelDot}"
+                                                                 VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                                        <TextBlock Text="{Binding DisplayName}"
+                                                                   Foreground="{StaticResource Ink}" FontSize="12.5"
+                                                                   ToolTip="{Binding Label}" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="RMS" Binding="{Binding RmsText}"
+                                                            Width="1.55*" ElementStyle="{StaticResource SmvNumberText}"/>
+                                        <DataGridTextColumn Header="Angle" Binding="{Binding AngleText}"
+                                                            Width="1.25*" ElementStyle="{StaticResource SmvNumberText}"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                            <Grid Grid.Column="2">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="4"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="{Binding CurrentGroupHeading}" FontSize="11.5"
+                                           FontWeight="SemiBold" Foreground="#31567F" Margin="5,0,0,0"
+                                           ToolTip="{Binding UnitStatus}" TextTrimming="CharacterEllipsis"/>
+                                <DataGrid x:Name="SmvCurrentMeasurementsGrid" Grid.Row="2"
+                                          ItemsSource="{Binding CurrentMeasurements}" IsReadOnly="True"
+                                          AutoGenerateColumns="False" HeadersVisibility="Column"
+                                          Style="{StaticResource SmvMeasurementGrid}"
+                                          ColumnHeaderStyle="{StaticResource SmvMeasurementHeader}"
+                                          CellStyle="{StaticResource SmvMeasurementCell}"
+                                          RowStyle="{StaticResource SmvMeasurementRow}"
+                                          RowBackground="#F8FBFF" AlternatingRowBackground="#EDF5FF"
+                                          Background="#F8FBFF" AlternationCount="2"
+                                          FontSize="12.5" RowHeight="36" ColumnHeaderHeight="29"
+                                          BorderThickness="0" GridLinesVisibility="None"
+                                          CanUserResizeColumns="False" CanUserSortColumns="False"
+                                          SelectionUnit="FullRow" EnableRowVirtualization="True"
+                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                          ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="Channel" Width="*">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <Ellipse Style="{StaticResource SmvChannelDot}"
+                                                                 VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                                        <TextBlock Text="{Binding DisplayName}"
+                                                                   Foreground="{StaticResource Ink}" FontSize="12.5"
+                                                                   ToolTip="{Binding Label}" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="RMS" Binding="{Binding RmsText}"
+                                                            Width="1.55*" ElementStyle="{StaticResource SmvNumberText}"/>
+                                        <DataGridTextColumn Header="Angle" Binding="{Binding AngleText}"
+                                                            Width="1.25*" ElementStyle="{StaticResource SmvNumberText}"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </Grid>
                         <TextBlock Grid.Row="4" Text="{Binding UnitStatus}"
                                    Style="{StaticResource SvCaption}" FontSize="9.5"
                                    Margin="3,1,0,0" TextTrimming="CharacterEllipsis"
