@@ -75,6 +75,18 @@ public sealed class IedBrowserBatchWriteEditorTests
         Assert.DoesNotContain("WriteBrowserDataAttributesAsync(", inspect);
     }
 
+    [Fact]
+    public void StatusDaSelectionRevokesParentWriteAndControlAuthority()
+    {
+        var write = File.ReadAllText(Find("MainWindow.IedBrowser.TypedDataWrite.cs"));
+        var control = File.ReadAllText(Find("MainWindow.IedBrowser.ContextControl.cs"));
+        const string dataLeaf = "Kind: \"Data\", IsDataObject: false";
+        Assert.Contains(dataLeaf, write);
+        Assert.Contains(dataLeaf, control);
+        Assert.Contains("RefreshIedBrowserControlButton();", write);
+        Assert.Contains("IedBrowserWriteButton.Content = selectedDo is not null", write);
+    }
+
     private static string Find(string relative)
     {
         DirectoryInfo? dir = new(AppContext.BaseDirectory);
