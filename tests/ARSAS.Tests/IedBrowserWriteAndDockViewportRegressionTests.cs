@@ -86,6 +86,12 @@ public sealed class IedBrowserWriteAndDockViewportRegressionTests
             IedBrowserWritePlan.EncodeValue("FLOAT32", "NaN", "LD1/ATCC1.f"));
         Assert.Equal(MmsDataKind.Boolean,
             IedBrowserWritePlan.EncodeValue("BOOLEAN", "true", "LD1/ATCC1.b").Kind);
+        // Native codec encodes FLOAT32 only; writing FLOAT64 or Unicode as
+        // 32-bit float/ASCII would silently mutate an incompatible DA.
+        Assert.False(IedBrowserWritePlan.IsSupported("FLOAT64"));
+        Assert.False(IedBrowserWritePlan.IsSupported("UNICODE255"));
+        Assert.Throws<NotSupportedException>(() =>
+            IedBrowserWritePlan.EncodeValue("FLOAT64", "123.45", "LD1/ATCC1.x"));
         Assert.False(IedBrowserWritePlan.IsSupported("Quality"));
         Assert.Empty(IedBrowserWritePlan.Build(null, null));
     }
