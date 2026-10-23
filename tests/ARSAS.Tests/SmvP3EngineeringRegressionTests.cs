@@ -107,8 +107,11 @@ public sealed class SmvP3EngineeringRegressionTests
         };
         Assert.Equal(160, SmvWaveformTimeAxis.AvailableSamples(snapshot));
         Assert.InRange(SmvWaveformTimeAxis.ReferenceSample(snapshot, 160), 19.999, 20.001);
-        var raw = snapshot with { CurrentSeries =
-            [new WaveformSeriesModel { Name = "Ch5", Unit = "counts", Samples = ua }] };
+        var raw = new WaveformSnapshot
+        {
+            CurrentSeries = [new WaveformSeriesModel { Name = "Ch5", Unit = "counts", Samples = ua }],
+            SamplesPerCycle = 80, SampleRateHz = 4000
+        };
         Assert.Equal(0, SmvWaveformTimeAxis.ReferenceSample(raw, 160));
     }
 
