@@ -18,7 +18,10 @@ public partial class MainWindow
     private Iec61850MonitorDevice? _iedBrowserPreparingDevice;
     private LiveIedModelDiscoveryDocument? _iedBrowserPreparingModel;
 
-    private string _iedBrowserInventoryKey = "";
+    // Keep a small bounded pool of completed/in-flight SCL inventories across
+    // IED switching: BCUGE -> SG7 -> BCUGE must not reparse unchanged SCL.
+    private readonly BoundedFifoCache<string, Task<SclReportControlInventoryResult>>
+        _iedBrowserInventoryFlights = new(8, StringComparer.Ordinal);
     private Task<SclReportControlInventoryResult>? _iedBrowserInventoryTask;
     private Task<SclReportControlInventoryResult>? _iedBrowserAwaitedInventory;
     private Iec61850MonitorDevice? _iedBrowserAwaitedInventoryDevice;
@@ -30,11 +33,15 @@ public partial class MainWindow
     private DateTime _iedBrowserMetricsStartedUtc;
 
     private void ShowIedBrowserPreparing(Iec61850MonitorDevice device,
-        LiveIedModelDiscoveryDocument model)
+        LiveIedModelDiscoveryDocument model,
+        string stage = "Indexing model on background worker…")
     {
         if (ReferenceEquals(_iedBrowserPreparingDevice, device) &&
             ReferenceEquals(_iedBrowserPreparingModel, model))
+        {
+            IedBrowserDetailStatus.Text = stage;
             return;
+        }
         _iedBrowserPreparingDevice = device;
         _iedBrowserPreparingModel = model;
         // Never leave the previous IED's tree clickable during model preparation.
@@ -51,7 +58,7 @@ public partial class MainWindow
         }
         finally { _iedBrowserSyncingSelection = false; }
         IedBrowserObjectPath.Text = device.Name + " · preparing engineering model";
-        IedBrowserDetailStatus.Text = "Indexing model on background worker…";
+        IedBrowserDetailStatus.Text = stage;
     }
 
     private bool TryActivateIedBrowserSchema(
@@ -121,21 +128,25 @@ public partial class MainWindow
         var accessPoint = device.SclAccessPointName;
         var key = string.Join("|", sourcePath, sourceStamp.Ticks,
             iedName, accessPoint);
-        if (!string.Equals(_iedBrowserInventoryKey, key, StringComparison.Ordinal) ||
-            _iedBrowserInventoryTask is null)
+        if (!_iedBrowserInventoryFlights.TryGetValue(key, out var task) ||
+            task.IsFaulted || task.IsCanceled)
         {
-            _iedBrowserInventoryKey = key;
-            _iedBrowserInventoryTask = Task.Run(() =>
+            // Only a new or faulted exact source identity needs XML inspection.
+            // A completed task is reused when the operator returns to the IED.
+            task = Task.Run(() =>
             {
                 using var measure = IedBrowserPerformanceProbe.Measure(
                     "SCL.Inventory", device.Name);
                 return SclReportControlFilter.InspectFile(sourcePath, iedName, accessPoint);
             });
+            _iedBrowserInventoryFlights.Set(key, task);
         }
-        var task = _iedBrowserInventoryTask;
+        _iedBrowserInventoryTask = task;
         if (!task.IsCompleted)
         {
-            if (model is not null) ShowIedBrowserPreparing(device, model);
+            if (model is not null)
+                ShowIedBrowserPreparing(device, model,
+                    "Reading SCL inventory on background worker…");
             else IedBrowserDetailStatus.Text = "Reading SCL inventory on background worker…";
             if (!ReferenceEquals(_iedBrowserAwaitedInventory, task) ||
                 !ReferenceEquals(_iedBrowserAwaitedInventoryDevice, device))
@@ -186,6 +197,9 @@ public partial class MainWindow
             _iedBrowserMetricsDevice = device;
             _iedBrowserMetricsModel = model;
             _iedBrowserMetricsAssociation = association;
+            // A scope switch must not inherit the previous IED's five-second
+            // throttle; an older in-flight calculation may finish first.
+            _iedBrowserMetricsStartedUtc = DateTime.MinValue;
             IedBrowserSubtitle.ToolTip = "IEC SSOT · calculating read-only coverage…";
         }
         if (_iedBrowserMetricsFlight is { IsCompleted: false } ||
@@ -207,6 +221,32 @@ public partial class MainWindow
             flight, device, model, association);
     }
 
+    // If selection changes while an old full-model coverage flight is running,
+    // schedule exactly the *latest* requested IED once that flight completes.
+    // Without this handoff a quiet IED can stay on "calculating" indefinitely.
+    private void QueuePendingIedBrowserMetricsAfter(
+        Task<IedBrowserAcceptanceMetrics> completed,
+        Iec61850MonitorDevice completedDevice,
+        LiveIedModelDiscoveryDocument completedModel, long completedAssociation)
+    {
+        if (!ReferenceEquals(_iedBrowserMetricsFlight, completed) ||
+            MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
+            _applicationCancellation.IsCancellationRequested ||
+            SelectedDevice is not { } current)
+            return;
+        var currentModel = current.LiveDiscoveryModel;
+        if (currentModel is null ||
+            !ReferenceEquals(current, _iedBrowserMetricsDevice) ||
+            !ReferenceEquals(currentModel, _iedBrowserMetricsModel) ||
+            current.LiveValues.Association != _iedBrowserMetricsAssociation)
+            return;
+        if (ReferenceEquals(completedDevice, current) &&
+            ReferenceEquals(completedModel, currentModel) &&
+            completedAssociation == current.LiveValues.Association)
+            return;
+        QueueIedBrowserAcceptanceMetrics(current, currentModel);
+    }
+
     private async Task PublishIedBrowserAcceptanceMetricsAsync(
         Task<IedBrowserAcceptanceMetrics> flight,
         Iec61850MonitorDevice device, LiveIedModelDiscoveryDocument model, long association)
@@ -216,10 +256,13 @@ public partial class MainWindow
         catch (Exception ex)
         {
             if (ReferenceEquals(SelectedDevice, device) &&
-                ReferenceEquals(_iedBrowserMetricsFlight, flight))
+                ReferenceEquals(_iedBrowserMetricsFlight, flight) &&
+                _iedBrowserMetricsAssociation == association)
                 IedBrowserSubtitle.ToolTip = "IEC SSOT coverage unavailable · " + ex.Message;
+            QueuePendingIedBrowserMetricsAfter(flight, device, model, association);
             return;
         }
+        QueuePendingIedBrowserMetricsAfter(flight, device, model, association);
         if (_applicationCancellation.IsCancellationRequested ||
             MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
             !ReferenceEquals(SelectedDevice, device) ||
