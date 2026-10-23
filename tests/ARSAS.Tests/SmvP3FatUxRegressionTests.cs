@@ -58,6 +58,10 @@ public sealed class SmvP3FatUxRegressionTests
         Assert.Contains("var waveform = SmvDigSubPresentationAdapter.BuildWaveform(snapshot, profile);", code);
         Assert.Contains("if (generation != _generation || analysis != _analysisGeneration", code);
         Assert.Contains("CurrentWaveform = rendered.waveform;", code);
+        Assert.Contains("if (_analysisRunning)", code);
+        Assert.Contains("_pendingAnalysis = new PendingAnalysis(snapshot, selectedKey, generation);", code);
+        Assert.Contains("while (_pendingAnalysis is { } pending)", code);
+        Assert.Contains("if (generation != _generation || analysis != _analysisGeneration", code);
         Assert.Contains("Measurements[rowIndex] = next;", code);
         Assert.Contains("if (!Equals(Measurements[rowIndex], next))", code);
         Assert.Contains("selectedKey != Volatile.Read(ref _selectedKey)", code);
