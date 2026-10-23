@@ -460,9 +460,9 @@
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
                                         <DataGridTextColumn Header="RMS" Binding="{Binding RmsText}"
-                                                            Width="1.55*" ElementStyle="{StaticResource SmvNumberText}"/>
+                                                            Width="1.85*" ElementStyle="{StaticResource SmvNumberText}"/>
                                         <DataGridTextColumn Header="Angle" Binding="{Binding AngleText}"
-                                                            Width="1.25*" ElementStyle="{StaticResource SmvNumberText}"/>
+                                                            Width="1.10*" ElementStyle="{StaticResource SmvNumberText}"/>
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </Grid>
@@ -505,9 +505,9 @@
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
                                         <DataGridTextColumn Header="RMS" Binding="{Binding RmsText}"
-                                                            Width="1.55*" ElementStyle="{StaticResource SmvNumberText}"/>
+                                                            Width="1.85*" ElementStyle="{StaticResource SmvNumberText}"/>
                                         <DataGridTextColumn Header="Angle" Binding="{Binding AngleText}"
-                                                            Width="1.25*" ElementStyle="{StaticResource SmvNumberText}"/>
+                                                            Width="1.10*" ElementStyle="{StaticResource SmvNumberText}"/>
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </Grid>
