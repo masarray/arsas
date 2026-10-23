@@ -50,12 +50,12 @@
                         <DataTemplate>
                             <Grid>
                                 <TextBox Text="{Binding NewValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                         IsEnabled="{Binding Eligible}" Visibility="{Binding TextEditorVisibility}"
+                                         IsEnabled="{Binding CanEdit}" Visibility="{Binding TextEditorVisibility}"
                                          Padding="6,3" ToolTip="{Binding Status}"/>
                                 <ComboBox ItemsSource="{Binding BooleanChoices}"
                                           SelectedItem="{Binding NewValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                           Visibility="{Binding BooleanEditorVisibility}"
-                                          IsEnabled="{Binding Eligible}" Padding="5,1"/>
+                                          IsEnabled="{Binding CanEdit}" Padding="5,1"/>
                             </Grid>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
