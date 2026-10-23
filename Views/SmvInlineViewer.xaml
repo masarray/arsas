@@ -324,9 +324,15 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="Waveforms" Style="{StaticResource SvHeading}"/>
-                        <TextBlock Grid.Column="2" Text="2 cycles · selected stream"
-                                   Style="{StaticResource SvCaption}" Margin="12,0,0,0"
-                                   VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Background="{Binding SyncBackground}" CornerRadius="8"
+                                    Padding="8,3" Margin="0,0,9,0" ToolTip="{Binding SyncDetail}">
+                                <TextBlock Text="{Binding SyncLabel}" Foreground="{Binding SyncForeground}"
+                                           FontSize="10.5" FontWeight="SemiBold"/>
+                            </Border>
+                            <TextBlock Text="2 cycles · selected stream"
+                                       Style="{StaticResource SvCaption}" VerticalAlignment="Center"/>
+                        </StackPanel>
                     </Grid>
                     <WrapPanel Grid.Row="2" VerticalAlignment="Center" Margin="2,0,0,0">
                         <TextBlock Text="Show" Style="{StaticResource SvCaption}"
@@ -515,7 +521,64 @@
                                 </DataGrid>
                             </Grid>
                         </Grid>
-                        <TextBlock Grid.Row="4" Text="{Binding UnitStatus}"
+                        <!-- Compact totals consume previously unused space; expandable per-phase
+                             P/Q1/S/PF remains optional at smaller workstation heights. -->
+                        <Border Grid.Row="4" Background="#F4F8FE" BorderBrush="#D8E6F7"
+                                BorderThickness="1" CornerRadius="5" Padding="7,5">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="3φ POWER" FontSize="10.5" FontWeight="SemiBold"
+                                               Foreground="#305B8A"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding PowerStatus}"
+                                               FontSize="9.5" Foreground="#607A98" TextAlignment="Right"
+                                               TextTrimming="CharacterEllipsis" ToolTip="{Binding PowerStatus}"/>
+                                </Grid>
+                                <UniformGrid Columns="4" Margin="0,4,0,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="P  " FontSize="11" Foreground="#547090"/>
+                                        <TextBlock Text="{Binding PowerP}" FontSize="11.5" FontWeight="SemiBold"
+                                                   Foreground="#183A65"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="Q₁  " FontSize="11" Foreground="#547090"/>
+                                        <TextBlock Text="{Binding PowerQ}" FontSize="11.5" FontWeight="SemiBold"
+                                                   Foreground="#183A65"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="S  " FontSize="11" Foreground="#547090"/>
+                                        <TextBlock Text="{Binding PowerS}" FontSize="11.5" FontWeight="SemiBold"
+                                                   Foreground="#183A65"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="PF  " FontSize="11" Foreground="#547090"/>
+                                        <TextBlock Text="{Binding PowerPf}" FontSize="11.5" FontWeight="SemiBold"
+                                                   Foreground="#183A65"/>
+                                    </StackPanel>
+                                </UniformGrid>
+                                <Expander Header="Per-phase P / Q₁ / S / PF" FontSize="10"
+                                          Foreground="#47688B" Margin="0,4,0,0"
+                                          IsExpanded="False">
+                                    <ItemsControl ItemsSource="{Binding PowerPhases}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <UniformGrid Columns="5" Margin="0,2,0,0">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                                    <TextBlock Text="{Binding PText}" />
+                                                    <TextBlock Text="{Binding QText}" />
+                                                    <TextBlock Text="{Binding SText}" />
+                                                    <TextBlock Text="{Binding PfText}" />
+                                                </UniformGrid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Expander>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Grid.Row="6" Text="{Binding UnitStatus}"
                                    Style="{StaticResource SvCaption}" FontSize="9.5"
                                    Margin="3,1,0,0" TextTrimming="CharacterEllipsis"
                                    ToolTip="{Binding UnitStatus}"/>
