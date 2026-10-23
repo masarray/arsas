@@ -139,7 +139,7 @@ if ($null -ne $lock.sclAssociationInteroperability) {
                 [string]$typedControl.baseEngineCommit -ceq '9c7cb40364023a7b217e5ec31ab3105ba90142eb' -and
                 [string]$typedControl.exactCommit -ceq [string]$lock.commit -and
                 [int]$typedControl.enginePullRequest -eq 192 -and
-                [int]$typedControl.engineCiRun -eq 39909260816 -and
+                [long]$typedControl.engineCiRun -eq 39909260816L -and
                 [string]$typedControl.status -ceq 'engine-ci-success-consumer-trial-not-physical' -and
                 [bool]$typedControl.typedStatusReadRequired -and
                 [bool]$typedControl.sameDataObjectFeedbackRequired -and
