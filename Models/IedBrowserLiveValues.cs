@@ -33,6 +33,21 @@ public sealed class IedBrowserLiveValues
     private readonly Dictionary<string, IedBrowserObservationChannels> _values =
         new(StringComparer.Ordinal);
     private long _version;
+    // One bounded cursor-based change journal for every workspace. SSOT holds
+    // the actual immutable observations; the journal holds only dirty keys.
+    private readonly CanonicalValueChangeJournal _changeJournal = new();
+    public CanonicalValueChangeBatch ReadChanges(long afterRevision, int maxChanges = 256)
+    {
+        lock (_gate) return _changeJournal.Read(afterRevision, maxChanges);
+    }
+
+    private void RecordChange(string reference, string fc, CanonicalValueChangeKind kind)
+    {
+        // Called only while holding _gate, after _version advances exactly once.
+        _changeJournal.Append(new CanonicalValueChange(
+            _version, _association, CanonicalReference(reference),
+            (fc ?? "").Trim().ToUpperInvariant(), kind));
+    }
     // Only CF changes invalidate engineering-unit projection; ordinary ST/MX
     // report traffic must not rebuild its signal/unit directory.
     private long _configurationVersion;
@@ -69,6 +84,7 @@ public sealed class IedBrowserLiveValues
             _values.Clear();
             _configurationVersion++;
             _version++;
+            RecordChange("", "", CanonicalValueChangeKind.AssociationInvalidated);
             return _association;
         }
     }
@@ -82,6 +98,7 @@ public sealed class IedBrowserLiveValues
             _association++; // invalidate in-flight callbacks even before reconnect
             _configurationVersion++;
             _version++;
+            RecordChange("", "", CanonicalValueChangeKind.AssociationInvalidated);
         }
     }
 
@@ -94,6 +111,7 @@ public sealed class IedBrowserLiveValues
             _values.Clear();
             _configurationVersion++;
             _version++;
+            RecordChange("", "", CanonicalValueChangeKind.AssociationInvalidated);
         }
     }
 
@@ -162,6 +180,7 @@ public sealed class IedBrowserLiveValues
             };
             _values[key] = channels with { Report = updated };
             _version++;
+            RecordChange(processReference, fc, CanonicalValueChangeKind.ReportCompanion);
             return true;
         }
     }
@@ -241,6 +260,9 @@ public sealed class IedBrowserLiveValues
             if (string.Equals(fc, "CF", StringComparison.OrdinalIgnoreCase))
                 _configurationVersion++;
             _version++;
+            RecordChange(reference, fc, isReport
+                ? CanonicalValueChangeKind.Report
+                : CanonicalValueChangeKind.Read);
             return true;
         }
     }

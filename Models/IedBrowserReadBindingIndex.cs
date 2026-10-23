@@ -22,7 +22,9 @@ public sealed class IedBrowserReadBindingIndex
     {
         _device = device ?? throw new ArgumentNullException(nameof(device));
         var model = device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel;
-        var schema = model is null ? null : new IedBrowserSchemaIndex(model);
+        // Same immutable schema instance as IED Browser and future consumers.
+        // Existing synchronous read-binding admission semantics are preserved.
+        var schema = model is null ? null : SharedIedSchemaIndex.GetForBinding(model);
         // Optional, strictly model-proven DO -> process leaf lookup. No
         // first-child heuristics and never borrow another FC's value.
         var signalsByKey = new Dictionary<string, List<SignalDefinition>>(StringComparer.Ordinal);

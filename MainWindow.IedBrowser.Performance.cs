@@ -9,10 +9,7 @@ namespace ArIED61850Tester;
 public partial class MainWindow
 {
     private readonly IedBrowserUnitProjectionCache _iedBrowserUnitCache = new();
-    // Weak model keys: indexed declarations are reused when returning to SG7_BCU,
-    // without retaining replaced engineering models indefinitely.
-    private readonly ConditionalWeakTable<LiveIedModelDiscoveryDocument, Task<IedBrowserSchemaIndex>>
-        _iedBrowserSchemaTasks = new();
+    // Schema tasks are shared with Read bindings through SharedIedSchemaIndex.
     private Task<IedBrowserSchemaIndex>? _iedBrowserAwaitedSchema;
     private Iec61850MonitorDevice? _iedBrowserAwaitedSchemaDevice;
     private Iec61850MonitorDevice? _iedBrowserPreparingDevice;
@@ -71,13 +68,7 @@ public partial class MainWindow
             _iedBrowserValueSchemaIndex = null;
             return true;
         }
-        var task = _iedBrowserSchemaTasks.GetValue(model, source =>
-            Task.Run(() =>
-            {
-                using var measure = IedBrowserPerformanceProbe.Measure(
-                    "Schema.Index", device.Name);
-                return new IedBrowserSchemaIndex(source);
-            }));
+        var task = SharedIedSchemaIndex.PrepareAsync(model);
         if (task.IsCompletedSuccessfully)
         {
             _iedBrowserValueSchemaIndex = task.Result;

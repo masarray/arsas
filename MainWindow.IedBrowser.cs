@@ -221,9 +221,8 @@ public partial class MainWindow
         if (SelectedDevice is { } selected)
         {
             var model = selected.LiveDiscoveryModel ?? selected.SclWorkspace?.DesignModel;
-            if (model is not null && _iedBrowserSchemaTasks.TryGetValue(model, out var indexTask) &&
-                indexTask.IsFaulted)
-                _iedBrowserSchemaTasks.Remove(model);
+            if (model is not null)
+                SharedIedSchemaIndex.ForgetFaulted(model);
         }
         // Explicit refresh deliberately discards cached local SCL inventories.
         // Routine IED switching keeps the bounded per-source cache warm.

@@ -23,6 +23,9 @@ internal static class P2IndustrialWorkstationUx
     private static readonly ConditionalWeakTable<MainWindow, MainSearchState> MainStates = new();
     private static readonly ConditionalWeakTable<IoListTestingWindow, FatSearchState> FatStates = new();
 
+    // Resolve control templates before any visible window is constructed.
+    public static void PreloadResources() => EnsureResources();
+
     public static void Apply(Window window)
     {
         EnsureResources();
@@ -62,13 +65,14 @@ internal static class P2IndustrialWorkstationUx
         {
             navShell.CornerRadius = new CornerRadius(6);
             navShell.BorderThickness = new Thickness(1);
-            navShell.Height = 52;
+            // NavigationLayoutFix is the sole authority for shell height.
+            // An activation/Loaded adapter must not fight that layout owner.
         }
 
         if (window.FindName("WorkflowPill") is Border pill)
         {
             pill.CornerRadius = new CornerRadius(5);
-            pill.Height = 34;
+            // Selection pill height is owned by NavigationLayoutFix.
         }
 
         InstallMainIedSearch(window);

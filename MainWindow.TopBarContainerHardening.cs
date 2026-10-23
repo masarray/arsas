@@ -67,10 +67,9 @@ internal static class MainWindowTopBarContainerHardening
 
         if (window.FindName("WorkflowNavShell") is Border shell)
         {
-            shell.Height = 64d;
-            shell.MinHeight = 64d;
+            // NavigationLayoutFix owns shell height (60) and padding. The
+            // container guard only prevents clipping/Z-order mistakes.
             shell.Margin = new Thickness(0, 2, 0, 2);
-            shell.Padding = new Thickness(5, 7, 5, 7);
             shell.ClipToBounds = false;
             Panel.SetZIndex(shell, 60);
         }

@@ -61,7 +61,11 @@ public sealed class FieldRegressionFixTests
         Assert.Contains("root.ClipToBounds = false", source, StringComparison.Ordinal);
         Assert.Contains("header.ClipToBounds = false", source, StringComparison.Ordinal);
         Assert.Contains("header.MinHeight = 68d", source, StringComparison.Ordinal);
-        Assert.Contains("shell.Height = 64d", source, StringComparison.Ordinal);
+        // NavigationLayoutFix is the sole geometry authority (60px).
+        // The clipping guard may not reassert a competing 64px height.
+        var navigation = File.ReadAllText(FindRepoFile("MainWindow.NavigationLayoutFix.cs"));
+        Assert.Contains("shell.Height = 60;", navigation, StringComparison.Ordinal);
+        Assert.DoesNotContain("shell.Height = 64d", source, StringComparison.Ordinal);
         Assert.Contains("shell.ClipToBounds = false", source, StringComparison.Ordinal);
         Assert.Contains("DispatcherPriority.ContextIdle", source, StringComparison.Ordinal);
     }

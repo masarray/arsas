@@ -48,12 +48,21 @@ public partial class App : Application
         // smoke test validate that the vector ResourceDictionary is packaged.
         InstallArvrelMiniIedFascia();
 
+        // Install workstation templates before StartupUri creates its first visual
+        // tree. No theme/style dictionary should be injected on window activation.
+        P2IndustrialWorkstationUx.PreloadResources();
+
         if (Array.Exists(e.Args, argument =>
                 string.Equals(argument, "--portable-smoke-test", StringComparison.OrdinalIgnoreCase)))
         {
             Shutdown(RunPortableSmokeTest());
             return;
         }
+
+        // Loaded runs before the initial ContentRendered frame. Apply the
+        // legacy-only chrome once per real window, not on every focus change.
+        EventManager.RegisterClassHandler(typeof(Window), FrameworkElement.LoadedEvent,
+            new RoutedEventHandler(AppWindow_Loaded), handledEventsToo: true);
 
         GridUxBehavior.Install();
         P2InteractionBehavior.Install();
@@ -71,19 +80,24 @@ public partial class App : Application
             new Action(() => _ = AppUpdateCoordinator.RunLazyAsync(_updateCancellation.Token)));
     }
 
-    protected override void OnActivated(EventArgs e)
+    // Style installation on every Activated/focus return used to overwrite the
+    // bundled Inter font and re-template live controls, causing visible repaint.
+    // The one-time Loaded path handles both MainWindow and independently opened FAT.
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Window, object> _styledWindows = new();
+
+    private void AppWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        base.OnActivated(e);
+        if (sender is not Window window || !ReferenceEquals(e.OriginalSource, window))
+            return;
+        if (_styledWindows.TryGetValue(window, out _))
+            return;
 
-        // A handful of legacy controls own local visual resources. Re-apply the
-        // tiny P2 adapter when windows activate so newly opened FAT workspaces also
-        // inherit the selected industrial theme without touching engine workflows.
         P2BlueSteelGreigeUx.ApplyToOpenWindows(this);
+        _styledWindows.Add(window, new object());
 
-        // Keep onboarding task-first while preserving the existing protocol handlers:
-        // Add IED exposes SCL/CID/ICD or IP discovery, and bulk connect appears only
-        // when multiple loaded IEDs make the action useful. The behavior is dispatcher-safe.
-        if (Current?.MainWindow is MainWindow mainWindow)
+        // One onboarding install per MainWindow: model/collection notifications
+        // continue refreshing after the window is displayed.
+        if (window is MainWindow mainWindow)
             SmartIedOnboardingBehavior.Install(mainWindow);
     }
 
