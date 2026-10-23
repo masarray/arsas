@@ -43,6 +43,7 @@ public sealed class TypedWriteEditorUxRegressionTests
         var xaml = Source("BrowserBatchWriteWindow.xaml");
         XDocument.Parse(xaml);
         Assert.Contains("BooleanEditorVisibility", xaml);
+        Assert.Contains("IsEnabled=\"{Binding CanEdit}\"", xaml);
         Assert.Contains("TextEditorVisibility", xaml);
         Assert.Contains("DisplayName", xaml);
         Assert.Contains("Content=\"Write\"", xaml);
