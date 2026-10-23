@@ -435,7 +435,7 @@ public partial class IoListTestingWindow
         text.SetValue(TextBlock.FontSizeProperty, fontSize);
         text.SetValue(TextBlock.FontWeightProperty, fontWeight);
         if (mono)
-            text.SetValue(TextBlock.FontFamilyProperty, (FontFamily)FindResource("AppFontFamily"));
+            text.SetValue(TextBlock.FontFamilyProperty, (FontFamily)System.Windows.Application.Current.FindResource("AppFontFamily"));
         return new DataTemplate { VisualTree = text };
     }
 
