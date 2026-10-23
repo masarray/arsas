@@ -129,7 +129,9 @@ public sealed class G1ControlCorrectnessRegressionTests
         var runtime = File.ReadAllText(Path.Combine(RepoRoot(), "Services", "Iec61850MonitorRuntime.cs"));
 
         Assert.Contains("OriginCategory { get; init; } = \"StationControl\"", model, StringComparison.Ordinal);
-        Assert.Contains("OriginCategory = \"StationControl\"", dialog, StringComparison.Ordinal);
+        Assert.Contains("_selectedOriginCategory = \"StationControl\"", dialog, StringComparison.Ordinal);
+        Assert.Contains("OriginCategory = SelectedOriginCategory", dialog, StringComparison.Ordinal);
+        Assert.Contains("Originator = OriginatorId.Trim()", dialog, StringComparison.Ordinal);
         Assert.Contains("OriginCategory = \"StationControl\"", main, StringComparison.Ordinal);
         Assert.DoesNotContain("OriginCategory = \"Maintenance\"", dialog, StringComparison.Ordinal);
         Assert.DoesNotContain("OriginCategory = \"Maintenance\"", main, StringComparison.Ordinal);
