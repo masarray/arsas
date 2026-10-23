@@ -782,10 +782,10 @@
                                                                             </StackPanel.Style>
                                                                             <Button Content="Open" Tag="{Binding}" CommandParameter="Open [01]" Click="ControlStageAction_Click"
                                                                                     Style="{StaticResource CommandOpenButton}" Margin="0,0,7,0"
-                                                                                    Width="72" MinWidth="72" HorizontalAlignment="Left" IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
+                                                                                    Width="72" MinWidth="72" HorizontalAlignment="Left" IsEnabled="{Binding ControlCanInspectPosition}" Height="29" MinHeight="29" Padding="10,3"/>
                                                                             <Button Content="Close" Tag="{Binding}" CommandParameter="Closed [10]" Click="ControlStageAction_Click"
                                                                                     Style="{StaticResource CommandCloseButton}" Margin="0,0,7,0"
-                                                                                    Width="72" MinWidth="72" HorizontalAlignment="Left" IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
+                                                                                    Width="72" MinWidth="72" HorizontalAlignment="Left" IsEnabled="{Binding ControlCanInspectPosition}" Height="29" MinHeight="29" Padding="10,3"/>
                                                                         </StackPanel>
 
                                                                         <StackPanel Orientation="Horizontal">
