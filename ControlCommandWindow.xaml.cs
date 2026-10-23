@@ -98,6 +98,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             if (!Set(ref _testMode, value)) return;
             UpdateLiveWarning();
             Raise(nameof(CanSend));
+            Raise(nameof(SendButtonText));
         }
     }
     public bool ConfirmLiveCommand
