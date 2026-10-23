@@ -19,6 +19,11 @@ public partial class MainWindow
         if (device is not { IsConnected: true, IsDemo: false, IsBusy: false } ||
             device.LiveDiscoveryModel is null || device.LiveValues.IsOffline)
             return null;
+        // A selected ST/MX/status DA is not the controlling DO. Never infer
+        // Control authority from a cached parent DO after focus moves to a leaf.
+        if (IedBrowserDetailList?.SelectedItem is IedBrowserDetailRow
+            { Kind: "Data", IsDataObject: false })
+            return null;
         var page = _iedBrowserNavigation.Current;
         var focused = page?.Payload switch
         {
