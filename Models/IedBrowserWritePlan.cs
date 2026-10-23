@@ -116,8 +116,8 @@ public static class IedBrowserWritePlan
         };
         if (raw.Length > limit)
             throw new FormatException("String exceeds the declared length " + limit + ".");
-        if (!mms && raw.Any(c => c > 0x7F))
-            throw new FormatException("VisibleString requires ASCII characters.");
+        if (raw.Any(c => c > 0x7F))
+            throw new FormatException("This MMS string encoder supports ASCII only.");
         return mms ? MmsDataValue.MmsString(raw) : MmsDataValue.VisibleString(raw);
     }
 }
