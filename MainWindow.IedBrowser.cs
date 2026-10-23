@@ -916,6 +916,7 @@ public partial class MainWindow
                 device?.LiveDiscoveryModel is not null &&
                 _iedBrowserNavigation.Current is not null;
         IedBrowserCancelReadButton.IsEnabled = _iedBrowserReadOperation != null;
+        RefreshIedBrowserWriteButton();
     }
 
     private bool TryGetBrowserReadFailure(
