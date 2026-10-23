@@ -1060,9 +1060,12 @@ public sealed class WaveformPanelControl : FrameworkElement
         // One small time caption, never a row of chips over the phase legend.
         if (snapshot.SampleRateHz > 0 && double.IsFinite(snapshot.SampleRateHz))
         {
-            var windowSamples = Math.Min(CalculateVisibleSamples(snapshot),
-                Math.Max(2, snapshot.VoltageSeries.Concat(snapshot.CurrentSeries)
-                    .Select(item => item.Samples.Count).DefaultIfEmpty(2).Max()));
+            var maxSourceSamples = 2;
+            foreach (var item in snapshot.VoltageSeries)
+                maxSourceSamples = Math.Max(maxSourceSamples, item.Samples.Count);
+            foreach (var item in snapshot.CurrentSeries)
+                maxSourceSamples = Math.Max(maxSourceSamples, item.Samples.Count);
+            var windowSamples = Math.Min(CalculateVisibleSamples(snapshot), maxSourceSamples);
             var timeMs = _cursorFraction * Math.Max(0, windowSamples - 1) *
                 1000.0 / snapshot.SampleRateHz;
             var caption = CreateText("t  " + timeMs.ToString("0.00", CultureInfo.InvariantCulture) + " ms",
