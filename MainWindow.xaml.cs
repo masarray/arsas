@@ -2621,8 +2621,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var uiStartTicks = Stopwatch.GetTimestamp();
         var uiDeadlineTicks = uiStartTicks + Stopwatch.Frequency / 125; // ~8 ms
         var processedPoints = 0;
-        var deviceOwners = Devices.ToDictionary(
-            device => device.DeviceId, StringComparer.OrdinalIgnoreCase);
+        var deviceOwners = Devices
+            .GroupBy(device => device.DeviceId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(),
+                StringComparer.OrdinalIgnoreCase);
         while (processedPoints < UiPointBatchLimit &&
                Stopwatch.GetTimestamp() < uiDeadlineTicks &&
                (_priorityPointUiKeys.TryDequeue(out var pointKey) ||
