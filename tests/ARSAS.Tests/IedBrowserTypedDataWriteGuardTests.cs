@@ -87,7 +87,7 @@ public sealed class IedBrowserTypedDataWriteGuardTests
         Assert.Contains("mismatched", IedBrowserTypedWriteAdmission.RejectReason(
             r, Gva(r, "integer", 32), Finger("boolean"), MmsDataValue.Integer(2))!);
         Assert.Contains("mismatched", IedBrowserTypedWriteAdmission.RejectReason(
-            r, Gva(Cf("sboTimeout"), "integer", 32), Finger("integer", 32), MmsDataValue.Integer(2))!);
+            r, Gva(Cf("differentAttribute"), "integer", 32), Finger("integer", 32), MmsDataValue.Integer(2))!);
     }
 
     [Fact]
