@@ -326,20 +326,18 @@ public sealed class BrowserBatchWriteRow : INotifyPropertyChanged
     {
         Reference = reference;
         ReferenceText = referenceText;
-        DisplayName = referenceText.Split('
+        DisplayName = referenceText.Split((char)36).LastOrDefault() ?? referenceText;
+        Fc = fc;
         Eligible = eligible;
         _status = reason;
     }
 
     public void NotifyEditorChanged() => Changed(nameof(CanEdit));
-
     public IReadOnlyList<string> BooleanChoices { get; } = new[] { "true", "false" };
     public Visibility BooleanEditorVisibility => _booleanEditor ? Visibility.Visible : Visibility.Collapsed;
     public Visibility TextEditorVisibility => _booleanEditor ? Visibility.Collapsed : Visibility.Visible;
     private bool _booleanEditor;
 
-    // A verified live read decides the editor. Never assume BOOLEAN from the
-    // SCL label or a cached string; never overwrite a user's explicit edit.
     public void ApplyLiveEditor(bool boolean, string actualValue)
     {
         if (_booleanEditor != boolean)
@@ -354,46 +352,6 @@ public sealed class BrowserBatchWriteRow : INotifyPropertyChanged
             Changed(nameof(NewValue));
         }
         Changed(nameof(CanEdit));
-    }
-
-    public bool Selected
-    {
-        get => _selected;
-        set { if (_selected != value) { _selected = value; Changed(); } }
-    }
-    public string NewValue
-    {
-        get => _newValue;
-        set
-        {
-            if (_newValue == value) return;
-            _newValue = value;
-            HasEdited = true;
-            Changed();
-        }
-    }
-    public string Status
-    {
-        get => _status;
-        set { _status = value; Changed(); }
-    }
-    public string Type
-    {
-        get => _type;
-        set { _type = value; Changed(); }
-    }
-    public string Old
-    {
-        get => _old;
-        set { _old = value; Changed(); }
-    }
-    private void Changed([CallerMemberName] string? propertyName = null)
-        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-}
-).LastOrDefault() ?? referenceText;
-        Fc = fc;
-        Eligible = eligible;
-        _status = reason;
     }
 
     public bool Selected
