@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "product": "ARSAS",
+  "version": "1.6.40",
+  "title": "ARSAS 1.6.40 stable release",
+  "titleId": "Stable release ARSAS 1.6.40",
+  "summary": "ARSAS 1.6.40 is the latest verified stable Windows release. Package identity, download links, checksums and publication evidence are synchronized automatically from the tagged GitHub Release.",
+  "summaryId": "ARSAS 1.6.40 adalah stable release Windows terverifikasi terbaru. Identitas paket, link download, checksum, dan publication evidence disinkronkan otomatis dari GitHub Release bertag.",
+  "highlights": [
+    "hotfix: make physical-proven Smart Discovery the only production build route",
+    "The verified Windows installer is published as the stable ARSAS 1.6.40 package.",
+    "The portable single EXE is published from the same verified stable release.",
+    "SHA-256 checksums, SPDX SBOM and release provenance are published alongside the Windows binaries."
+  ],
+  "highlightsId": [
+    "Perubahan rilis: hotfix: make physical-proven Smart Discovery the only production build route",
+    "Installer Windows terverifikasi dipublikasikan sebagai paket stabil ARSAS 1.6.40.",
+    "Portable single EXE dipublikasikan dari stable release terverifikasi yang sama.",
+    "Checksum SHA-256, SPDX SBOM, dan provenance release dipublikasikan bersama binary Windows."
+  ],
+  "improvements": [
+    "Stable release identity, publish date, package size and SHA-256 are sourced from verified release evidence rather than hand-maintained version text.",
+    "The Windows installer and portable download URLs use GitHub's releases/latest/download endpoints so the public buttons always resolve to the newest stable assets.",
+    "Release notes are synchronized before website deployment, preventing a newer binary release from being blocked by stale landing-page metadata.",
+    "The website deployment is explicitly dispatched after release synchronization so GitHub Actions token commits cannot leave Pages behind the published release."
+  ],
+  "improvementsId": [
+    "Identitas stable release, tanggal publikasi, ukuran paket, dan SHA-256 diambil dari evidence release terverifikasi, bukan teks versi yang dipelihara manual.",
+    "URL installer Windows dan portable memakai endpoint releases/latest/download GitHub sehingga tombol publik selalu menuju asset stabil terbaru.",
+    "Catatan rilis disinkronkan sebelum deployment website agar binary release baru tidak terblokir metadata landing page yang tertinggal.",
+    "Deployment website dipicu eksplisit setelah sinkronisasi release sehingga commit dari GitHub Actions token tidak membuat Pages tertinggal dari release publik."
+  ],
+  "knownLimitations": [
+    "Physical relay validation remains necessary for vendor-specific values, report behavior and field network conditions that cannot be reproduced by CI.",
+    "Windows x64 is the only packaged desktop platform in this stable release.",
+    "The public portable binary is not Authenticode code-signed; Windows SmartScreen may show an unrecognized-publisher warning.",
+    "Raw-Ethernet GOOSE and Sampled Values workflows require an administrator-installed and approved Npcap driver, suitable capture permission and visibility of the relevant multicast traffic."
+  ],
+  "knownLimitationsId": [
+    "Validasi relay fisik tetap diperlukan untuk value vendor-specific, perilaku report, dan kondisi network lapangan yang tidak dapat direproduksi oleh CI.",
+    "Windows x64 adalah satu-satunya platform desktop yang dipaketkan pada stable release ini.",
+    "Binary portable publik belum ditandatangani dengan Authenticode; Windows SmartScreen dapat menampilkan peringatan unrecognized publisher.",
+    "Workflow raw-Ethernet GOOSE dan Sampled Values memerlukan driver Npcap yang telah dipasang dan disetujui administrator, capture permission yang sesuai, serta visibility traffic multicast terkait."
+  ],
+  "codeSigning": {
+    "status": "unsigned",
+    "label": "Not Authenticode-signed",
+    "labelId": "Belum ditandatangani dengan Authenticode",
+    "detail": "The current public Windows installer and portable binaries do not carry a commercial Authenticode publisher signature. Verify the published SHA-256 value before use. SmartScreen warnings are therefore possible and are not hidden from users.",
+    "detailId": "Installer Windows dan portable EXE publik saat ini belum memiliki commercial Authenticode publisher signature. Verifikasi nilai SHA-256 yang dipublikasikan sebelum digunakan. Karena itu peringatan SmartScreen masih mungkin muncul dan status ini tidak disembunyikan dari user."
+  },
+  "screenshot": {
+    "src": "assets/screenshots/arsas-ied-explorer-command-v1.6.40.webp",
+    "width": 1920,
+    "height": 1032,
+    "alt": "ARSAS 1.6.40 multi-IED Explorer with live IEC 61850 values and guarded command dock",
+    "altId": "IED Explorer multi-IED ARSAS 1.6.40 dengan live value IEC 61850 dan guarded command dock",
+    "caption": "ARSAS 1.6.40 keeps live values, acquisition evidence and validated command objects in one selected-IED shell.",
+    "captionId": "ARSAS 1.6.40 menyatukan live value, acquisition evidence, dan validated command object dalam satu shell selected-IED."
+  },
+  "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.40"
+}

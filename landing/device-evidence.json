@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 2,
+  "product": "ARSAS",
+  "updatedAt": "2026-09-23",
+  "namedDeviceCount": 0,
+  "statusVocabulary": {
+    "verified": "Repeated evidence exists for the declared historical service scope. The tested ARSAS version must be disclosed when known; this is not IEC 61850 conformance certification.",
+    "conditional": "The workflow succeeded only under the stated conditions, permissions, paths or server behavior.",
+    "observed": "A real protocol behavior was captured and used to improve the implementation. Broad compatibility is not claimed.",
+    "not-tested": "No public evidence is available for this service or profile.",
+    "known-issue": "A reproducible limitation is documented and remains bounded by linked evidence."
+  },
+  "profiles": [
+    {
+      "id": "field-profile-a-file-service",
+      "publicLabel": "Anonymized field profile A — MMS file-service transport",
+      "identityDisclosure": "Vendor, model, installation and firmware are not published.",
+      "evidenceDate": "2026-07",
+      "services": {
+        "mmsAssociation": "observed",
+        "liveModel": "not-tested",
+        "reporting": "not-tested",
+        "fileDirectory": "verified",
+        "fileTransfer": "conditional",
+        "goose": "not-tested",
+        "control": "not-tested"
+      },
+      "conditions": [
+        "The server returned nested FileDirectory entries and rooted file paths.",
+        "FileOpen could return a signed Integer32 FRSM identifier, including negative values.",
+        "Large FileRead responses required segmented COTP reassembly.",
+        "Record completeness and COMTRADE scaling remain independent engineering checks."
+      ],
+      "evidenceLinks": [
+        "https://github.com/masarray/ARIEC61850/pull/36",
+        "https://github.com/masarray/ARIEC61850/pull/38",
+        "https://github.com/masarray/ARIEC61850/pull/40",
+        "https://github.com/masarray/ARIEC61850/pull/42",
+        "https://github.com/masarray/arsas/pull/79",
+        "https://github.com/masarray/arsas/pull/84",
+        "https://github.com/masarray/arsas/pull/89"
+      ],
+      "testedArsasVersion": null,
+      "lastRetest": null,
+      "publicRecordType": "engineering-implementation-trail",
+      "rawFieldCaptureLinked": false,
+      "serviceRecords": {
+        "mmsAssociation": [
+          "https://github.com/masarray/ARIEC61850/pull/36"
+        ],
+        "fileDirectory": [
+          "https://github.com/masarray/ARIEC61850/pull/36"
+        ],
+        "fileTransfer": [
+          "https://github.com/masarray/ARIEC61850/pull/38",
+          "https://github.com/masarray/ARIEC61850/pull/40",
+          "https://github.com/masarray/ARIEC61850/pull/42"
+        ]
+      }
+    },
+    {
+      "id": "field-profile-b-rcb-export",
+      "publicLabel": "Anonymized field profile B — RCB and SCL export evidence",
+      "identityDisclosure": "Vendor, model, installation and firmware are not published.",
+      "evidenceDate": "2026-07",
+      "services": {
+        "mmsAssociation": "observed",
+        "liveModel": "observed",
+        "reporting": "conditional",
+        "fileDirectory": "not-tested",
+        "fileTransfer": "not-tested",
+        "goose": "not-tested",
+        "control": "not-tested",
+        "selectedRcbExport": "verified"
+      },
+      "conditions": [
+        "Live RCB names, TriggerOptions, OptionalFields, BufTm and IntgPd were preserved as read-only evidence.",
+        "Selected-RCB export retained the exact live MMS RCB identity and avoided duplicate instance suffixes.",
+        "Exported SCL remains an engineering baseline and requires independent schema, project and vendor validation.",
+        "No runtime RCB reservation or write is implied by this evidence profile."
+      ],
+      "evidenceLinks": [
+        "https://github.com/masarray/ARIEC61850/pull/36",
+        "https://github.com/masarray/arsas/pull/79",
+        "https://github.com/masarray/arsas/pull/101"
+      ],
+      "testedArsasVersion": null,
+      "lastRetest": null,
+      "publicRecordType": "engineering-implementation-trail",
+      "rawFieldCaptureLinked": false,
+      "serviceRecords": {
+        "mmsAssociation": [
+          "https://github.com/masarray/ARIEC61850/pull/36"
+        ],
+        "liveModel": [
+          "https://github.com/masarray/ARIEC61850/pull/36",
+          "https://github.com/masarray/arsas/pull/79"
+        ],
+        "reporting": [
+          "https://github.com/masarray/ARIEC61850/pull/36"
+        ],
+        "selectedRcbExport": [
+          "https://github.com/masarray/ARIEC61850/pull/36",
+          "https://github.com/masarray/arsas/pull/79"
+        ]
+      }
+    }
+  ],
+  "freshnessPolicy": {
+    "stableVersionSource": "latest.json",
+    "missingTestVersion": "Not publicly recorded; do not infer the current stable version.",
+    "missingRetest": "No public retest on the current stable release is documented.",
+    "recordScope": "Linked pull requests form a public engineering and implementation trail, not raw relay capture or independent field retest.",
+    "registryUpdate": "A registry edit or website deployment does not change the evidence date or establish a retest."
+  },
+  "coveragePlan": {
+    "scope": "published-anonymized-profiles-only",
+    "serviceOrder": [
+      "mmsAssociation",
+      "liveModel",
+      "reporting",
+      "fileDirectory",
+      "fileTransfer",
+      "goose",
+      "control",
+      "selectedRcbExport"
+    ],
+    "noPublishedTestAcrossProfiles": [
+      "goose",
+      "control"
+    ],
+    "nextEvidence": {
+      "goose": "Sanitized capture showing publisher identity, GoID/AppID, stNum/sqNum, TAL, payload order and expected DataSet mapping; include negative or missing-frame findings.",
+      "control": "Approved non-energized test showing ctlModel, Direct/SBO sequence, service and CommandTermination results, rejection/AddCause and independently checked process feedback."
+    },
+    "stableRetest": {
+      "state": "not-publicly-documented",
+      "requirements": [
+        "Exact stable tag and ARSAS version",
+        "Test date and anonymized IED model/firmware or disclosure boundary",
+        "Positive and negative service result with sanitized diagnostics and acquisition conditions"
+      ]
+    }
+  },
+  "releaseTraceability": {
+    "schemaVersion": 1,
+    "currentStableSource": "latest.json",
+    "reviewPolicyPath": "docs/evidence-intake-review.md",
+    "currentStableFieldTestState": "not-publicly-documented",
+    "reviewedTests": [],
+    "requiredRecordFields": [
+      "id",
+      "profileId",
+      "service",
+      "testDate",
+      "arsasVersion",
+      "releaseTag",
+      "sourceCommit",
+      "releaseUrl",
+      "result",
+      "evidenceKind",
+      "expectedObserved",
+      "conditions",
+      "deviceDisclosure",
+      "publicEvidenceUrl",
+      "reviewIssueUrl",
+      "reviewPrUrl"
+    ],
+    "claimBoundary": "A release package identity, green CI, an issue, and implementation history are not evidence of a field test. Only a separately reviewed service-specific public test can enter reviewedTests; absence of entries is not a product failure."
+  }
+}

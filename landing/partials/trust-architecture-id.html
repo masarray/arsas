@@ -1,0 +1,16 @@
+<section class="section section-tight trust-architecture" data-trust-architecture="true" data-reveal>
+  <div class="container">
+    <div class="section-head center">
+      <span class="kicker">Reliability open-source</span>
+      <h2>Percaya pada release exact karena evidence-nya dapat diperiksa.</h2>
+      <p>ARSAS tidak meminta Anda mempercayai logo atau black box. Source, identity package, evidence regression otomatis, dan batas field tetap dapat direview secara independen.</p>
+    </div>
+    <div class="trust-proof-grid">
+      <article class="trust-proof-card"><span class="trust-proof-number">01</span><h3>Periksa source</h3><p>Aplikasi ARSAS, engine ARIEC61850, commit history, dan public issue trail terlihat. Open source berarti implementasinya dapat direview—bukan berarti correctness diasumsikan.</p><a class="text-link" href="{{REPOSITORY_URL}}" target="_blank" rel="noopener">Buka source ARSAS →</a></article>
+      <article class="trust-proof-card"><span class="trust-proof-number">02</span><h3>Verifikasi package exact</h3><p>Stable v{{STABLE_VERSION}} terikat ke source commit <code>{{STABLE_SOURCE_COMMIT}}</code>. Tagged release mempublikasikan checksum SHA-256, SPDX SBOM, dan provenance evidence untuk asset release.</p><a class="text-link" href="{{RELEASE_URL}}" target="_blank" rel="noopener">Periksa tagged release ini →</a></article>
+      <article class="trust-proof-card"><span class="trust-proof-number">03</span><h3>Setiap perubahan harus membuktikan diri</h3><p>Regression test aplikasi, guard production-route Smart Discovery, validator website/evidence, dan release checks berjalan di CI. Guard ini menangkap regression dalam scope yang dinyatakan; bukan simulasi semua relay fisik.</p><a class="text-link" href="{{REPOSITORY_URL}}/actions" target="_blank" rel="noopener">Periksa history CI →</a></article>
+      <article class="trust-proof-card"><span class="trust-proof-number">04</span><h3>Jaga klaim field tetap bounded</h3><p>Evidence kompatibilitas dipublikasikan per service dan kondisi. Known limitation, negative outcome, dan kasus yang membutuhkan validasi relay fisik tetap terlihat—bukan diubah menjadi klaim kompatibilitas luas.</p><a class="text-link" href="bukti-kompatibilitas.html">Review evidence field →</a></article>
+    </div>
+    <div class="trust-proof-boundary"><strong>Yang tidak boleh disimpulkan:</strong><span>Open source bukan jaminan correctness otomatis. CI bukan acceptance FAT/SAT. Supply-chain attestation bukan klaim reproducible build. ARSAS membuka cukup evidence agar engineer dapat mereview exact release dan menentukan apa yang tetap memerlukan verifikasi lapangan independen.</span></div>
+  </div>
+</section>

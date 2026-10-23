@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "tag": "v1.6.38",
+  "actionsArtifactId": 10549589733,
+  "artifactName": "ARSAS-r7-scl-interoperability-win-x64",
+  "goldenZipSha256": "d68b9e89487cfd71bf92ac181e5abed35106ea65776a6005eaa863eb6cdc0068",
+  "goldenExeSha256": "555c3d91dbda85cb1b3de453266b33dd26a95cd06fe6805ccb973ed62d19487a",
+  "goldenExePath": "dist/ARSAS-1.6.37-win-x64-portable.exe",
+  "applicationCommit": "eb8eb13d491f9aa265205852b8a4bab07af440ff",
+  "engineCommit": "9935d6902d786cc69b299260fe36b835944d5e81",
+  "reason": "Restore the exact retained field-verified runtime artifact to the stable v1.6.38 release without rewriting tag history."
+}

@@ -1,0 +1,34 @@
+name: File transfer or fault-record problem
+description: Report FileDirectory, FileOpen, FileRead, COMTRADE grouping or local-save failures.
+title: "[File transfer] "
+labels: ["file-transfer", "needs-evidence"]
+body:
+  - type: input
+    id: arsas-version
+    attributes: {label: ARSAS version, placeholder: 1.6.18}
+    validations: {required: true}
+  - type: input
+    id: device
+    attributes: {label: Device and firmware, description: Anonymize when required.}
+    validations: {required: true}
+  - type: dropdown
+    id: stage
+    attributes: {label: Failing stage, options: [Directory discovery, Record grouping, FileOpen, FileRead, FileClose, Local write or validation, Redownload or overwrite, Other]}
+    validations: {required: true}
+  - type: textarea
+    id: files
+    attributes: {label: Sanitized remote paths, companion names and known sizes, description: Do not upload confidential disturbance contents.}
+    validations: {required: true}
+  - type: textarea
+    id: diagnostics
+    attributes: {label: Exact transfer diagnostics, description: Include invoke ID, FRSM, stage, session state and bounded request or response evidence when available.}
+    validations: {required: true}
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: I understand transfer success does not prove record completeness or COMTRADE scaling.
+          required: true
+        - label: I removed credentials and confidential files or identifiers.
+          required: true

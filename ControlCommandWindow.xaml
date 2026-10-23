@@ -1,0 +1,219 @@
+<Window x:Class="ArIED61850Tester.ControlCommandWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Control · IEC 61850" Width="565" Height="500"
+        MinWidth="505" MinHeight="390" MaxHeight="670"
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResize"
+        Background="{StaticResource Bg}" FontFamily="{StaticResource AppFontFamily}"
+        FontSize="11.5" Icon="Assets/app-icon.ico"
+        Loaded="Window_Loaded" Closing="Window_Closing">
+    <Window.Resources>
+        <Style x:Key="ControlCheckBox" TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+            <Setter Property="Margin" Value="0,0,17,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+            <Setter Property="FontSize" Value="11.5"/>
+        </Style>
+        <Style x:Key="ControlFieldLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="Margin" Value="0,0,0,5"/>
+        </Style>
+    </Window.Resources>
+    <Grid Margin="17,13,17,13">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*" MinHeight="75"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Compact identity bar: one current association and exact control object. -->
+        <Grid Grid.Row="0" Margin="0,0,0,11">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="Control" Foreground="{StaticResource Ink}"
+                           FontWeight="SemiBold" FontSize="15"/>
+                <TextBlock Text="{Binding DeviceSummary}" Foreground="{StaticResource Muted}"
+                           TextTrimming="CharacterEllipsis" FontSize="10.5" Margin="0,3,0,0"/>
+                <TextBlock Text="{Binding Telegram}" Foreground="{StaticResource Ink}"
+                           TextTrimming="CharacterEllipsis" FontWeight="Medium"
+                           FontSize="11.5" Margin="0,4,0,0"/>
+            </StackPanel>
+            <Border Grid.Column="1" Background="#EAF1FA" BorderBrush="#CCDCEF"
+                    BorderThickness="1" CornerRadius="6" Padding="9,5"
+                    Margin="12,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="{Binding ControlCdcText}" FontWeight="SemiBold"
+                           Foreground="#245480" FontSize="10.5"/>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="1" Background="White" BorderBrush="{StaticResource Line}"
+                BorderThickness="1" CornerRadius="7" Padding="11,9" Margin="0,0,0,11">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="CONTROL MODEL" FontSize="9" Foreground="{StaticResource Muted}"/>
+                    <TextBlock Text="{Binding ModelShortText}" FontSize="11.5"
+                               FontWeight="SemiBold" Foreground="{StaticResource Ink}"
+                               Margin="0,3,0,0"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                    <TextBlock Text="CURRENT" FontSize="9" Foreground="{StaticResource Muted}"
+                               HorizontalAlignment="Right"/>
+                    <TextBlock Text="{Binding CurrentValue}" FontWeight="SemiBold"
+                               Foreground="{StaticResource Ink}" FontSize="12.5"
+                               HorizontalAlignment="Right" Margin="0,2,0,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Scrollable details; status and actions never disappear below the screen. -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled" MinHeight="0">
+            <StackPanel Margin="1,0,6,1">
+                <TextBlock Text="Command value" Style="{StaticResource ControlFieldLabel}"/>
+                <ComboBox x:Name="CommandValueBox" Height="34"
+                          ItemsSource="{Binding ValueOptions}"
+                          Text="{Binding SelectedValue, UpdateSourceTrigger=PropertyChanged}"
+                          IsEditable="{Binding AllowCustomValue}" IsEnabled="{Binding CanEdit}"
+                          Padding="8,4" VerticalContentAlignment="Center"
+                          ToolTip="Control value according to the live CDC and MMS ctlVal type"/>
+
+                <WrapPanel Margin="0,12,0,9" IsEnabled="{Binding CanEdit}">
+                    <CheckBox Content="Interlock" IsChecked="{Binding InterlockCheck}"
+                              Style="{StaticResource ControlCheckBox}"
+                              ToolTip="IEC 61850 interlock-check bit"/>
+                    <CheckBox Content="Synchrocheck" IsChecked="{Binding SynchroCheck}"
+                              Style="{StaticResource ControlCheckBox}"
+                              ToolTip="IEC 61850 synchrocheck bit"/>
+                    <CheckBox Content="Test" IsChecked="{Binding TestMode}"
+                              Style="{StaticResource ControlCheckBox}"
+                              ToolTip="Test flag is sent to the IED; it does not simulate success"/>
+                </WrapPanel>
+
+                <Border x:Name="LiveCommandWarning" Background="#FFF7EA"
+                        BorderBrush="#EBD7B9" BorderThickness="1"
+                        CornerRadius="6" Padding="10,9" Margin="0,0,0,9"
+                        IsEnabled="{Binding CanEdit}">
+                    <CheckBox Content="I am authorized to operate this IED"
+                              IsChecked="{Binding ConfirmLiveCommand}"
+                              Foreground="#795321" FontSize="11.5"
+                              ToolTip="Live command may operate primary equipment"/>
+                </Border>
+
+                <!-- Advanced information is still accessible, never mixed into the primary task. -->
+                <Expander Header="Advanced · originator &amp; diagnostics"
+                          IsEnabled="{Binding CanEdit}" Foreground="{StaticResource Ink}" FontSize="11"
+                          Margin="0,3,0,0">
+                    <StackPanel Margin="3,10,2,5">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,7,0">
+                                <TextBlock Text="Origin category" Style="{StaticResource ControlFieldLabel}"/>
+                                <ComboBox ItemsSource="{Binding OriginCategories}"
+                                          SelectedItem="{Binding SelectedOriginCategory}"
+                                          Height="30" Padding="5,3"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="7,0,0,0">
+                                <TextBlock Text="Originator ID" Style="{StaticResource ControlFieldLabel}"/>
+                                <TextBox Text="{Binding OriginatorId, UpdateSourceTrigger=PropertyChanged}"
+                                         MaxLength="64" Height="30" Padding="7,5"/>
+                            </StackPanel>
+                        </Grid>
+                        <Grid Margin="0,9,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,7,0">
+                                <TextBlock Text="ctlNum" Style="{StaticResource ControlFieldLabel}"/>
+                                <TextBox Text="{Binding ControlNumberText, Mode=OneWay}" IsReadOnly="True"
+                                         Height="30" Padding="7,5"
+                                         ToolTip="Assigned by the native IEC control service; never guessed"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="7,0,0,0">
+                                <TextBlock Text="Termination" Style="{StaticResource ControlFieldLabel}"/>
+                                <TextBox Text="{Binding TerminationText, Mode=OneWay}" IsReadOnly="True"
+                                         Height="30" Padding="7,5"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="{Binding SequenceText}" Foreground="{StaticResource Muted}"
+                                   TextWrapping="Wrap" FontSize="10.5" Margin="0,9,0,0"/>
+                        <TextBlock Text="{Binding OriginValidationText}" Foreground="#A43B32"
+                                   TextWrapping="Wrap" FontSize="10.5" Margin="0,6,0,0"/>
+                        <Expander Header="Wire response · LastApplError" Margin="0,9,0,0">
+                            <TextBlock Text="{Binding ControlEvidenceText}" FontFamily="{StaticResource AppCodeFontFamily}"
+                                       Foreground="{StaticResource Ink}" TextWrapping="Wrap"
+                                       FontSize="10" Margin="5,7,0,0"/>
+                        </Expander>
+                    </StackPanel>
+                </Expander>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border x:Name="ResultPanel" Grid.Row="3" Background="#F2F6FA"
+                BorderBrush="{StaticResource Line}" BorderThickness="1"
+                CornerRadius="7" Padding="10,9" Margin="0,10,0,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding CommandStage}"
+                           Foreground="{StaticResource Ink}" VerticalAlignment="Center"
+                           FontWeight="SemiBold" FontSize="11.5"/>
+                <Button x:Name="CopyEvidenceButton" Grid.Row="0" Grid.Column="1"
+                        Content="Copy evidence" Style="{StaticResource SoftButton}"
+                        IsEnabled="{Binding CanCopyEvidence}" Click="CopyEvidence_Click"
+                        Padding="8,3" MinWidth="90" Height="25" FontSize="10"
+                        ToolTip="Copy IED/object, origin, command response and diagnostics for FAT; sends no MMS requests"/>
+                <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding CommandStatus}"
+                           Foreground="#50647A" TextWrapping="Wrap" MaxHeight="38"
+                           FontSize="10.5" Margin="0,3,0,0"/>
+                <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding WireTimelineText}"
+                           Foreground="#546981" TextWrapping="Wrap" FontSize="10"
+                           MaxHeight="32" Margin="0,4,0,0"
+                           ToolTip="Only received native MMS control wire steps; not physical feedback"/>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="4" Margin="0,11,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding SequenceHint}" Foreground="{StaticResource Muted}"
+                       FontSize="10.5" VerticalAlignment="Center"
+                       TextWrapping="Wrap" Margin="0,0,10,0"/>
+            <Button Grid.Column="1" Content="Reinspect" Style="{StaticResource SoftButton}"
+                    Click="Reinspect_Click" IsEnabled="{Binding CanReinspect}"
+                    Width="89" Height="32" Margin="0,0,7,0"
+                    ToolTip="Read current live ctlModel and IED state before a new command"/>
+            <Button Grid.Column="2" Content="Close" Style="{StaticResource SoftButton}"
+                    Click="Close_Click" IsEnabled="{Binding CanClose}"
+                    Width="75" Height="32" Margin="0,0,7,0"/>
+            <Button x:Name="SendCommandButton" Grid.Column="3"
+                    Content="{Binding SendButtonText}" Style="{StaticResource PrimaryButton}"
+                    Click="SendCommand_Click" IsEnabled="{Binding CanSend}"
+                    MinWidth="145" Height="32"/>
+        </Grid>
+    </Grid>
+</Window>

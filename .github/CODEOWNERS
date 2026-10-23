@@ -1,0 +1,10 @@
+# Default stewardship for the public ARSAS repository.
+* @masarray
+
+# Changes in these areas affect release trust, protocol integration, or field evidence.
+/.github/ @masarray
+/engines/ @masarray
+/scripts/ @masarray
+/Services/ @masarray
+/tests/ @masarray
+/evidence/ @masarray

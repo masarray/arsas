@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ARSAS Architecture — IEC 61850 Application and Engine</title>
+  <meta name="description" content="Explore the ARSAS architecture: independent IED sessions above the ARIEC61850 engine for MMS, reporting, GOOSE, files, SCL, control, diagnostics and scale." />
+  <meta name="author" content="{{AUTHOR_NAME}}" />
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+  <meta name="theme-color" content="#07111f" />
+  <meta name="color-scheme" content="dark" />
+  <link rel="canonical" href="{{CANONICAL_ROOT}}architecture.html" />
+  <link rel="manifest" href="site.webmanifest" />
+  <link rel="icon" href="assets/app-icon.png" type="image/png" sizes="256x256" />
+  <link rel="apple-touch-icon" href="assets/app-icon.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="audit.css" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="ARSAS" />
+  <meta property="og:title" content="ARSAS and ARIEC61850 Architecture" />
+  <meta property="og:description" content="Independent IED sessions above reusable typed services for MMS, reporting, GOOSE, files, SCL, control and diagnostics." />
+  <meta property="og:url" content="{{CANONICAL_ROOT}}architecture.html" />
+  <meta property="og:image" content="{{CANONICAL_ROOT}}assets/social-card.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="ARSAS IEC 61850 software architecture" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="ARSAS Architecture" />
+  <meta name="twitter:description" content="Independent device ownership above reusable ARIEC61850 protocol services." />
+  <meta name="twitter:image" content="{{CANONICAL_ROOT}}assets/social-card.png" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {"@type": "TechArticle", "headline": "ARSAS Architecture — IEC 61850 Application and Engine", "url": "{{CANONICAL_ROOT}}architecture.html", "author": {"@id": "{{CANONICAL_ROOT}}about.html#ari-sulistiono"}, "about": ["IEC 61850 software architecture", "MMS", "GOOSE", "multi-IED sessions"]},
+      {"@type": "BreadcrumbList", "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "{{CANONICAL_ROOT}}"},
+        {"@type": "ListItem", "position": 2, "name": "Architecture", "item": "{{CANONICAL_ROOT}}architecture.html"}
+      ]}
+    ]
+  }
+  </script>
+</head>
+<body data-page="architecture">
+  {{> header}}
+  <main id="main">
+    <section class="page-hero"><div class="container"><div class="breadcrumbs"><a href="./">Home</a> / Architecture</div><span class="eyebrow">Application boundary · protocol engine · independent IED ownership</span><h1>Independent device sessions above a <span class="gradient-text">reusable IEC 61850 engine.</span></h1><p>ARSAS keeps the engineer-facing Windows workflow separate from protocol implementation. Every IED owns an independent runtime session while ARIEC61850 provides typed services for transport, MMS, reporting, GOOSE, Sampled Values, files, SCL, control and protocol diagnostics.</p><div class="hero-actions"><a class="btn btn-primary" href="download.html">Download ARSAS</a><a class="btn" href="#boundaries">Review boundaries</a></div></div></section>
+
+    <section class="section section-tight"><div class="container code-panel"><div class="code-head"><span>System boundary</span><span class="traffic-lights"><i></i><i></i><i></i></span></div><pre>┌──────────────────────────────────────────────────────────────┐
+│                            ARSAS                             │
+│ Explorer · Monitor · SOE · GOOSE · Files · SCL · Control   │
+│ Diagnostics · Project state · Engineer-facing evidence       │
+└──────────────────────────────┬───────────────────────────────┘
+                               │ typed application services
+┌──────────────────────────────▼───────────────────────────────┐
+│                         ARIEC61850                           │
+│ Transport · MMS · Reporting · GOOSE · SMV · Files · SCL    │
+│ Control · Type system · Protocol diagnostics                 │
+└──────────────────────┬────────────────────┬──────────────────┘
+                       │ TCP/102            │ process bus
+                  Approved IEDs       Approved capture network</pre></div></section>
+
+    <section class="section" id="boundaries"><div class="container"><div class="section-head center"><span class="kicker">Separation of concerns</span><h2>Protocol behavior remains testable outside the UI.</h2><p>The application can evolve its workflow and visualization without duplicating protocol rules, while the engine can be validated with deterministic fixtures and reused by other engineering tools.</p></div><div class="feature-grid">
+      <article class="card"><span class="kicker">ARSAS</span><h3>Project and workflow</h3><p>Device cards, SCL context, signal selection, persistence, navigation and task orchestration.</p></article>
+      <article class="card"><span class="kicker">ARSAS</span><h3>Visualization and evidence</h3><p>Live grids, events, GOOSE and SMV views, file UX, control staging and communication diagnostics.</p></article>
+      <article class="card"><span class="kicker">ARIEC61850</span><h3>Protocol services</h3><p>Transport, association, MMS, reporting, GOOSE, Sampled Values, files, SCL and control.</p></article>
+      <article class="card"><span class="kicker">ARIEC61850</span><h3>Type and model handling</h3><p>Live descriptors, object references, DataSets, control blocks, value decoding and validation.</p></article>
+      <article class="card"><span class="kicker">Shared boundary</span><h3>Typed contracts</h3><p>Explicit capabilities and errors rather than UI assumptions leaking into protocol behavior.</p></article>
+      <article class="card"><span class="kicker">CI</span><h3>Compatibility gates</h3><p>Build-time checks fail explicitly when required application or engine contracts are missing.</p></article>
+    </div></div></section>
+
+    <section class="section section-tight"><div class="container"><div class="section-head center"><span class="kicker">Per-device ownership</span><h2>One IED, one session, one attributable lifecycle.</h2><p>Connecting, monitoring, transferring files or staging control for one device must not silently alter another device.</p></div><div class="feature-grid">
+      <article class="card"><h3>Endpoint and identity</h3><p>IP, port, SCL context, discovered identity, capability state and reconnect information belong to the device.</p></article>
+      <article class="card"><h3>MMS association</h3><p>Association, discovery, requests, reports, file services and cleanup remain scoped to the IED.</p></article>
+      <article class="card"><h3>Acquisition plan</h3><p>Static reports, dynamic recovery, polling points, aliases and source evidence are maintained per session.</p></article>
+      <article class="card"><h3>Process-bus context</h3><p>GOOSE and SMV actions open with the selected IED and available model context.</p></article>
+      <article class="card"><h3>Control context</h3><p>Control descriptors and command sessions stay with the live association that produced them.</p></article>
+      <article class="card"><h3>Diagnostics and events</h3><p>Connection, report, file, sequence and command evidence retains the affected IED identity.</p></article>
+    </div></div></section>
+
+    <section class="section"><div class="container workflow"><div class="section-head"><span class="kicker">Bounded runtime work</span><h2>Scale without one background task per signal.</h2><p>ARSAS uses per-IED loops, bounded queues, coalesced values and virtualized grids to keep large engineering workspaces responsive.</p></div><div class="step-list">
+      <article class="step"><span class="step-number">01</span><div><h3>One monitoring loop per IED</h3><p>Selected values share a controlled acquisition lifecycle instead of spawning unbounded tasks.</p></div></article>
+      <article class="step"><span class="step-number">02</span><div><h3>Priority polling for uncovered points</h3><p>Only points that still require polling are scheduled in a bounded queue.</p></div></article>
+      <article class="step"><span class="step-number">03</span><div><h3>Latest-value coalescing</h3><p>Rapid updates can be combined before the UI receives a bounded batch.</p></div></article>
+      <article class="step"><span class="step-number">04</span><div><h3>Bounded history</h3><p>Events and diagnostics retain useful evidence without growing indefinitely.</p></div></article>
+      <article class="step"><span class="step-number">05</span><div><h3>Virtualized grids</h3><p>Large live models remain navigable without rendering every row at once.</p></div></article>
+    </div></div></section>
+
+    <section class="section section-tight"><div class="container split-panel"><article class="panel"><span class="kicker">Public product route</span><h2>Users do not need the source tree to use ARSAS.</h2><p>The landing website provides downloads, capabilities, engineering boundaries and workflow guidance. Repository detail remains available for developers and technical reviewers.</p><div class="section-actions"><a class="btn" href="about.html">About the project</a></div></article><article class="panel"><span class="kicker">Technical transparency</span><h2>Source remains available for deeper review.</h2><p>Developers can inspect the ARSAS application and reusable ARIEC61850 engine when architecture, contribution or implementation detail is required.</p><div class="section-actions"><a class="btn" href="{{REPOSITORY_URL}}" target="_blank" rel="noopener">ARSAS source</a><a class="btn" href="{{ENGINE_REPOSITORY_URL}}" target="_blank" rel="noopener">Engine source</a></div></article></div></section>
+
+    {{> download-cta}}
+  </main>
+  {{> footer}}
+</body>
+</html>

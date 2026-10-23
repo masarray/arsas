@@ -1,0 +1,640 @@
+namespace ARSAS.Tests;
+
+public sealed class CanonicalLiveSclExportRegressionTests
+{
+    [Fact]
+    public void NativeClient_RetainsAcceptedAssociationCanonicalSnapshot()
+    {
+        var canonical = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.CanonicalModel.cs"));
+        var lifecycle = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SmartDiscoveryLifecycle.cs"));
+
+        Assert.Contains("public LiveIedCanonicalModel? LastCanonicalModel", canonical, StringComparison.Ordinal);
+        Assert.Contains("_session.GetAcceptedCommunicationEvidence", canonical, StringComparison.Ordinal);
+        Assert.Contains("LiveIedCanonicalModelBuilder.Build(model, communication, initialRead)", canonical, StringComparison.Ordinal);
+        Assert.Contains("PublishCanonicalModel(model, initialRead);", lifecycle, StringComparison.Ordinal);
+        Assert.Contains("ClearCanonicalModel();", lifecycle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SmartDiscovery_DefersEagerFcValueReadsFromStructuralScan()
+    {
+        var capture = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SmartDiscoveryCapture.cs"));
+        var lifecycle = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SmartDiscoveryLifecycle.cs"));
+
+        Assert.Contains("SmartDiscoveryStructuralFreezeContract = \"P0-R9-STRUCTURAL\"", capture, StringComparison.Ordinal);
+        Assert.Contains("CreateP0FrozenSmartDiscoveryOptions()", capture, StringComparison.Ordinal);
+        Assert.Contains("MaxConcurrentChains = 8", capture, StringComparison.Ordinal);
+        Assert.Contains("UnknownPeerMaxConcurrentChains = 4", capture, StringComparison.Ordinal);
+        Assert.Contains("MaxNameListPages = 64", capture, StringComparison.Ordinal);
+        Assert.Contains("ProbeReportAttributes = true", capture, StringComparison.Ordinal);
+        Assert.Contains("MaxReportAttributeProbes = 64", capture, StringComparison.Ordinal);
+        Assert.Contains("ReadDataSetDirectories = true", capture, StringComparison.Ordinal);
+        Assert.Contains("MaxDataSetDirectoryReads = 64", capture, StringComparison.Ordinal);
+        Assert.Contains("GetOrCreateSmartDiscoveryAssociationFlight(", capture, StringComparison.Ordinal);
+        Assert.Contains("DiscoverSmartSingleFlightAsync(smartOptions, CancellationToken.None)", capture, StringComparison.Ordinal);
+        Assert.Contains("ProbeSmartAsync(_session, discovery.IedDirectory, smartOptions, CancellationToken.None)", capture, StringComparison.Ordinal);
+        Assert.DoesNotContain("_session.DiscoverAsync(", capture, StringComparison.Ordinal);
+        Assert.DoesNotContain("DiscoverDomainVariableNamesAsync", capture, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryBuildSupplementalGetNameListSnapshotAsync", capture, StringComparison.Ordinal);
+        Assert.DoesNotContain("DiscoverDomainVariableTypeTreeNamesAsync", capture, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddAdaptiveLogicalNodeSiblingProbeSignalsAsync", capture, StringComparison.Ordinal);
+        Assert.DoesNotContain("EnrichEngineeringUnitsAsync", capture, StringComparison.Ordinal);
+        Assert.DoesNotContain("InitialFcReadPlanner.FromSclModel", capture, StringComparison.Ordinal);
+        Assert.DoesNotContain("ExecuteInitialFcReadPlanSmartAsync", capture, StringComparison.Ordinal);
+        Assert.Contains("initialFcRoots=deferred", capture, StringComparison.Ordinal);
+        Assert.Contains("ArMms.InitialFcReadExecutionResult? initialRead = null", capture, StringComparison.Ordinal);
+        Assert.Contains("TryPublishSmartDiscoveryAuthority(", capture, StringComparison.Ordinal);
+        Assert.Contains("ArMms.InitialFcReadExecutionResult? initialRead", lifecycle, StringComparison.Ordinal);
+        Assert.Contains("PublishCanonicalModel(model, initialRead);", lifecycle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DeviceWorkspace_ReceivesCanonicalSnapshotFromSameClientSession()
+    {
+        var runtime = File.ReadAllText(FindRepoFile("Services/Iec61850MonitorRuntime.cs"));
+        var model = File.ReadAllText(FindRepoFile("Models/MonitorModels.cs"));
+
+        Assert.Contains("public LiveIedCanonicalModel? LiveCanonicalModel", model, StringComparison.Ordinal);
+        Assert.Contains("device.LiveCanonicalModel = session.Client.LastCanonicalModel;", runtime, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LiveSave_UsesCanonicalExporterAndFailsClosedOnStaleOrMissingEvidence()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.xaml.cs"));
+        var saveMethodStart = source.IndexOf(
+            "private void SaveTypedModelAsScl(",
+            StringComparison.Ordinal);
+        Assert.True(saveMethodStart >= 0);
+
+        var saveMethod = source[saveMethodStart..];
+        var canonicalIndex = saveMethod.IndexOf(
+            "CanonicalLiveIedSclExporter.WriteFiles",
+            StringComparison.Ordinal);
+        var staleGuardIndex = saveMethod.IndexOf(
+            "The canonical association snapshot does not belong to the current live discovery model.",
+            StringComparison.Ordinal);
+        var missingGuardIndex = saveMethod.IndexOf(
+            "The live discovery model is not bound to accepted MMS association evidence.",
+            StringComparison.Ordinal);
+
+        Assert.True(missingGuardIndex >= 0);
+        Assert.True(staleGuardIndex >= 0);
+        Assert.True(canonicalIndex > staleGuardIndex);
+        Assert.Contains("if (device.SclWorkspace == null)", saveMethod, StringComparison.Ordinal);
+        Assert.Contains("profile: \"full-model\"", saveMethod, StringComparison.Ordinal);
+        Assert.Contains("canonical round-trip verified", saveMethod, StringComparison.Ordinal);
+        Assert.Contains("instanceEvidence={canonicalExportEvidence.InstanceValues.Count}", saveMethod, StringComparison.Ordinal);
+        Assert.Contains("runtimeRCB={canonicalExportEvidence.Discovery.ReportControls.Count}", saveMethod, StringComparison.Ordinal);
+        Assert.Contains("logicalExportRCB={result.ReportControlCount}", saveMethod, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LiveSave_UsesPureWorkspaceReloadValidatorBeforeSuccess()
+    {
+        var source = File.ReadAllText(FindRepoFile("MainWindow.xaml.cs"));
+        var validator = File.ReadAllText(FindRepoFile("Services/CanonicalSclReloadValidator.cs"));
+        var saveMethodStart = source.IndexOf(
+            "private void SaveTypedModelAsScl(",
+            StringComparison.Ordinal);
+        var successStart = source.IndexOf(
+            "private void ShowSclSaveSuccess(",
+            saveMethodStart,
+            StringComparison.Ordinal);
+
+        Assert.True(saveMethodStart >= 0 && successStart > saveMethodStart);
+        var saveMethod = source[saveMethodStart..successStart];
+
+        var exportIndex = saveMethod.IndexOf("CanonicalLiveIedSclExporter.WriteFiles", StringComparison.Ordinal);
+        var reloadIndex = saveMethod.IndexOf("CanonicalSclReloadValidator.Validate", StringComparison.Ordinal);
+        Assert.True(exportIndex >= 0 && reloadIndex > exportIndex);
+        Assert.Contains("DeleteFailedCanonicalExportArtifacts(result)", saveMethod, StringComparison.Ordinal);
+        Assert.Contains("reloadLD=", saveMethod, StringComparison.Ordinal);
+        Assert.Contains("reloadLN=", saveMethod, StringComparison.Ordinal);
+        Assert.Contains("reloadDataSet=", saveMethod, StringComparison.Ordinal);
+        Assert.Contains("reloadRCB=", saveMethod, StringComparison.Ordinal);
+
+        var cleanupStart = source.IndexOf(
+            "private static void DeleteFailedCanonicalExportArtifacts(",
+            StringComparison.Ordinal);
+        Assert.True(cleanupStart >= 0);
+        var cleanup = source[cleanupStart..successStart];
+        Assert.Contains("result.SclPath", cleanup, StringComparison.Ordinal);
+        Assert.Contains("result.ReportPath", cleanup, StringComparison.Ordinal);
+        Assert.Contains("result.SummaryPath", cleanup, StringComparison.Ordinal);
+        Assert.Contains("result.ExcludedAttributesPath", cleanup, StringComparison.Ordinal);
+        Assert.Contains("File.Delete(path)", cleanup, StringComparison.Ordinal);
+
+        Assert.Contains("workspaceService.Open(", validator, StringComparison.Ordinal);
+        Assert.Contains("IedName = effectiveIedName", validator, StringComparison.Ordinal);
+        Assert.Contains("verifiedIedName",validator,StringComparison.Ordinal);
+        Assert.Contains("AccessPointName = canonical.AccessPointName", validator, StringComparison.Ordinal);
+        Assert.Contains("endpoint.Port != 102", validator, StringComparison.Ordinal);
+        Assert.Contains("reloadCoverage.LogicalDeviceCount != result.LogicalDeviceCount", validator, StringComparison.Ordinal);
+        Assert.Contains("reloadCoverage.LogicalNodeCount != result.LogicalNodeCount", validator, StringComparison.Ordinal);
+        Assert.Contains("workspace.DataSets.Count != result.DataSetCount", validator, StringComparison.Ordinal);
+        Assert.Contains("workspace.ReportControls.Count != result.ReportControlCount", validator, StringComparison.Ordinal);
+        Assert.Contains("SclAssistedConnectionPreparationBuilder.Build(", validator, StringComparison.Ordinal);
+        Assert.Contains("preparation.IsSuccess", validator, StringComparison.Ordinal);
+        Assert.Contains("preparation.AssociationPlan", validator, StringComparison.Ordinal);
+        Assert.Contains("Generated SCL cannot rebuild the ARSAS SCL-assisted reconnect plan", validator, StringComparison.Ordinal);
+        Assert.Contains("canonicalAssociation.ApTitle", validator, StringComparison.Ordinal);
+        Assert.Contains("canonicalAssociation.AeQualifier", validator, StringComparison.Ordinal);
+        Assert.Contains("canonicalAssociation.PresentationSelector", validator, StringComparison.Ordinal);
+        Assert.Contains("canonicalAssociation.SessionSelector", validator, StringComparison.Ordinal);
+        Assert.Contains("canonicalAssociation.TransportSelector", validator, StringComparison.Ordinal);
+        Assert.Contains("Generated SCL reconnect association drifted from accepted canonical wire evidence", validator, StringComparison.Ordinal);
+        Assert.Contains("result.Profile", validator, StringComparison.Ordinal);
+        Assert.Contains("full-model", validator, StringComparison.Ordinal);
+        Assert.Contains("MmsLocalAssociationProfile.ExistingRuntimeDefault", validator, StringComparison.Ordinal);
+        Assert.Contains("changed the proven calling-side runtime identity", validator, StringComparison.Ordinal);
+        Assert.Contains("BuildAssociationProfiles()", validator, StringComparison.Ordinal);
+        Assert.Contains("reproduce accepted association profile", validator, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SclAssistedReconnect_UsesNativeCallingIdentityAndSafeParallelValueReads()
+    {
+        var preparation = File.ReadAllText(FindRepoFile("Services/SclAssistedConnectionPreparation.cs"));
+        var client = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SclAssisted.cs"));
+
+        Assert.Contains("MmsLocalAssociationProfile.ExistingRuntimeDefault", preparation, StringComparison.Ordinal);
+        Assert.DoesNotContain("MmsLocalAssociationProfile.SclInteroperabilityDefault", preparation, StringComparison.Ordinal);
+        Assert.Contains("IsSafeTrustedSclInitialReadFc", client, StringComparison.Ordinal);
+        Assert.Contains("ExecuteInitialFcReadPlanSmartAsync", client, StringComparison.Ordinal);
+        Assert.Contains("\"ST\" or \"MX\" or \"SP\" or \"SV\" or \"CF\" or \"DC\" or \"EX\" or \"BL\" or \"OR\" or \"SR\"", client, StringComparison.Ordinal);
+        Assert.DoesNotContain("ExecuteInitialFcReadPlanAsync(", client, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P0StructuralDiscoveryFreeze_LocksR9WireAndModelBudget()
+    {
+        var contract = File.ReadAllText(FindRepoFile("evidence/interoperability-reference-target.json"));
+
+        Assert.Contains("\"contractId\": \"P0-R9-STRUCTURAL\"", contract, StringComparison.Ordinal);
+        Assert.Contains("\"status\": \"implemented-and-r9-physically-proven\"", contract, StringComparison.Ordinal);
+        Assert.Contains("\"associationScopedSingleFlightRequired\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"eagerInitialFcReadsForbidden\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"supplementalLegacyBrowseForbidden\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"maxConcurrentChains\": 8", contract, StringComparison.Ordinal);
+        Assert.Contains("\"unknownPeerMaxConcurrentChains\": 4", contract, StringComparison.Ordinal);
+        Assert.Contains("\"referenceConfirmedMmsRequests\": 323", contract, StringComparison.Ordinal);
+        Assert.Contains("\"maximumConfirmedMmsRequests\": 417", contract, StringComparison.Ordinal);
+        Assert.Contains("\"referenceGetVariableAccessAttributes\": 119", contract, StringComparison.Ordinal);
+        Assert.Contains("\"maximumGetVariableAccessAttributes\": 119", contract, StringComparison.Ordinal);
+        Assert.Contains("\"referenceReads\": 64", contract, StringComparison.Ordinal);
+        Assert.Contains("\"maximumReads\": 156", contract, StringComparison.Ordinal);
+        Assert.Contains("\"topLevelDataObjects\": 860", contract, StringComparison.Ordinal);
+        Assert.Contains("\"dataObjectsIncludingSdo\": 906", contract, StringComparison.Ordinal);
+        Assert.Contains("\"scalarLeaves\": 4925", contract, StringComparison.Ordinal);
+        Assert.Contains("\"dataSets\": 2", contract, StringComparison.Ordinal);
+        Assert.Contains("\"fcda\": 58", contract, StringComparison.Ordinal);
+        Assert.Contains("\"logicalReportControls\": 32", contract, StringComparison.Ordinal);
+        Assert.Contains("\"settingControls\": 1", contract, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P1ProjectionOrderRepair_LocksPhysicalRootCauseAndExactStrategy()
+    {
+        var contract = File.ReadAllText(FindRepoFile("evidence/interoperability-reference-target.json"));
+
+        Assert.Contains("\"contractId\": \"P1-CF-DO-SCOPED\"", contract, StringComparison.Ordinal);
+        Assert.Contains("\"status\": \"physically-proven-r10\"", contract, StringComparison.Ordinal);
+        Assert.Contains("\"projectionErrors\": 46", contract, StringComparison.Ordinal);
+        Assert.Contains("\"affectedFcRoots\": 18", contract, StringComparison.Ordinal);
+        Assert.Contains("\"affectedSclLeaves\": 191", contract, StringComparison.Ordinal);
+        Assert.Contains("\"functionalConstraint\": \"CF\"", contract, StringComparison.Ordinal);
+        Assert.Contains("\"sclArrayCountAttributes\": 0", contract, StringComparison.Ordinal);
+        Assert.Contains("\"projectionErrors\": 0", contract, StringComparison.Ordinal);
+        Assert.Contains("\"noSilentCrossDoValueSwap\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"noAdditionalDiscoveryGva\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("LN$CF$DO", contract, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P2CaseSensitiveValuePipeline_LocksLosslessExactPathIdentity()
+    {
+        var contract = File.ReadAllText(FindRepoFile("evidence/interoperability-reference-target.json"));
+        var client = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SclAssisted.cs"));
+
+        Assert.Contains("\"contractId\": \"P2-CASE-EXACT-VALUES\"", contract, StringComparison.Ordinal);
+        Assert.Contains("\"observedCacheLoss\": 11", contract, StringComparison.Ordinal);
+        Assert.Contains("\"edition2CacheLoss\": 0", contract, StringComparison.Ordinal);
+        Assert.Contains("\"edition1CacheLoss\": 0", contract, StringComparison.Ordinal);
+        Assert.Contains("\"ltrkLowercaseTAndUppercaseTRemainDistinct\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"noAdditionalDiscoveryGva\": true", contract, StringComparison.Ordinal);
+
+        var cacheDeclaration = client.IndexOf("_trustedSclInitialValues =", StringComparison.Ordinal);
+        Assert.True(cacheDeclaration >= 0);
+        var cacheSegment = client.Substring(cacheDeclaration, Math.Min(260, client.Length - cacheDeclaration));
+        Assert.Contains("StringComparer.Ordinal", cacheSegment, StringComparison.Ordinal);
+        Assert.DoesNotContain("StringComparer.OrdinalIgnoreCase", cacheSegment, StringComparison.Ordinal);
+
+        Assert.Contains("projectedInitialValueKeys", client, StringComparison.Ordinal);
+        Assert.Contains("projectedUniqueValues", client, StringComparison.Ordinal);
+        Assert.Contains("initialValueCacheLoss", client, StringComparison.Ordinal);
+        Assert.Contains("cacheLoss={initialValueCacheLoss}", client, StringComparison.Ordinal);
+        Assert.Contains("NormalizeTrustedSclReference", client, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void R9PhysicalReuse_LocksWorkingPathAndKeepsSemanticProjectionGapOpen()
+    {
+        var contract = File.ReadAllText(FindRepoFile("evidence/interoperability-reference-target.json"));
+
+        Assert.Contains("\"confirmedMmsRequests\": 323", contract, StringComparison.Ordinal);
+        Assert.Contains("\"getVariableAccessAttributes\": 119", contract, StringComparison.Ordinal);
+        Assert.Contains("\"topLevelDataObjects\": 860", contract, StringComparison.Ordinal);
+        Assert.Contains("\"dataObjectsIncludingSdo\": 906", contract, StringComparison.Ordinal);
+        Assert.Contains("\"scalarLeaves\": 4925", contract, StringComparison.Ordinal);
+
+        Assert.Contains("\"fcRoots\": 563", contract, StringComparison.Ordinal);
+        Assert.Contains("\"successfulReads\": 563", contract, StringComparison.Ordinal);
+        Assert.Contains("\"fcRoots\": 562", contract, StringComparison.Ordinal);
+        Assert.Contains("\"successfulReads\": 562", contract, StringComparison.Ordinal);
+        Assert.Contains("\"reportBackedRuntimePoints\": 58", contract, StringComparison.Ordinal);
+        Assert.Contains("\"unresolvedRuntimePoints\": 0", contract, StringComparison.Ordinal);
+        Assert.Contains("\"actualInformationReportObserved\": true", contract, StringComparison.Ordinal);
+
+        Assert.Contains("\"targetProjectionErrors\": 0", contract, StringComparison.Ordinal);
+        Assert.Contains("\"observedEdition2\": 46", contract, StringComparison.Ordinal);
+        Assert.Contains("\"observedEdition1\": 46", contract, StringComparison.Ordinal);
+        Assert.Contains("\"observedProjectedMinusCached\": 11", contract, StringComparison.Ordinal);
+        Assert.Contains("\"observedWithoutDataSet\": 30", contract, StringComparison.Ordinal);
+        Assert.Contains("\"observedR9ExportValCount\": 0", contract, StringComparison.Ordinal);
+
+        var client = File.ReadAllText(FindRepoFile("Services/NativeIec61850Client.SclAssisted.cs"));
+        Assert.Contains("projectionErrorSamples", client, StringComparison.Ordinal);
+        Assert.Contains("SCL initial projection:", client, StringComparison.Ordinal);
+        Assert.Contains("fullDiscovery=skipped", client, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void R10PhysicalReuse_ClosesP1P2AndLocksReportBackedRoundTrip()
+    {
+        var contract = File.ReadAllText(FindRepoFile("evidence/interoperability-reference-target.json"));
+
+        Assert.Contains("\"arsasR10\"", contract, StringComparison.Ordinal);
+        Assert.Contains("\"initialTargets\": 709", contract, StringComparison.Ordinal);
+        Assert.Contains("\"fcRootTargets\": 525", contract, StringComparison.Ordinal);
+        Assert.Contains("\"doScopedTargets\": 184", contract, StringComparison.Ordinal);
+        Assert.Contains("\"projectedUniqueValues\": 4441", contract, StringComparison.Ordinal);
+        Assert.Contains("\"initialValueCache\": 4441", contract, StringComparison.Ordinal);
+        Assert.Contains("\"initialTargets\": 708", contract, StringComparison.Ordinal);
+        Assert.Contains("\"fcRootTargets\": 524", contract, StringComparison.Ordinal);
+        Assert.Contains("\"projectedUniqueValues\": 4246", contract, StringComparison.Ordinal);
+        Assert.Contains("\"initialValueCache\": 4246", contract, StringComparison.Ordinal);
+        Assert.Contains("\"cacheLoss\": 0", contract, StringComparison.Ordinal);
+        Assert.Contains("\"projectionErrors\": 0", contract, StringComparison.Ordinal);
+        Assert.Contains("\"reportBackedRuntimePoints\": 58", contract, StringComparison.Ordinal);
+        Assert.Contains("\"unresolvedRuntimePoints\": 0", contract, StringComparison.Ordinal);
+        Assert.Contains("\"actualInformationReportObserved\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"cyclicMmsProcessPolling\": 0", contract, StringComparison.Ordinal);
+        Assert.Contains("\"status\": \"resolved-r10-physical\"", contract, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void R7Workflow_BindsArtifactToExactSourceHeadAndReloadContracts()
+    {
+        var workflow = File.ReadAllText(
+            FindRepoFile(".github/workflows/scl-interoperability-r7.yml"));
+
+        Assert.Contains(
+            "ARSAS_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "git -C .\\ARSAS checkout --quiet --detach $env:ARSAS_SOURCE_SHA",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "if ($arsasCommit -ne $env:ARSAS_SOURCE_SHA)",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "git clone --quiet --depth 1 --branch $ref",
+            workflow,
+            StringComparison.Ordinal);
+
+        Assert.Contains(
+            "Services/CanonicalSclReloadValidator.cs",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "tests/ARSAS.Tests/CanonicalSclReloadValidatorTests.cs",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "CanonicalSclReloadValidator\\.Validate",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "ExportedCanonicalScl_ReopensThroughArsasWorkspaceWithoutStructuralDrift",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "GoldenRcbShape_RoundTripsThirtyFourRuntimeAsThirtyTwoLogicalWithPhysicalCapacity",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "34 runtime -> 32 logical with ConfReportControl max=34",
+            workflow,
+            StringComparison.Ordinal);
+
+        var buildTargets = File.ReadAllText(FindRepoFile("Directory.Build.targets"));
+        Assert.Contains("VerifyPhysicalProvenSmartDiscoveryRoute", buildTargets, StringComparison.Ordinal);
+        Assert.Contains("-VerifyOnly", buildTargets, StringComparison.Ordinal);
+        Assert.DoesNotContain("GITHUB_WORKFLOW", buildTargets, StringComparison.Ordinal);
+        Assert.DoesNotContain("SmartDiscoveryProductionPromoted", buildTargets, StringComparison.Ordinal);
+        Assert.Contains("evidence/interoperability-reference-target.json", workflow, StringComparison.Ordinal);
+        Assert.Contains("external IEC 61850 reference convergence source contract regressed", workflow, StringComparison.Ordinal);
+        Assert.Contains("TryResolveStandardSubDataObjectCdc", workflow, StringComparison.Ordinal);
+        Assert.Contains("IsEdition2ServiceTrackingCdc", workflow, StringComparison.Ordinal);
+        Assert.Contains("TryBuildSupplementalGetNameListSnapshotAsync", workflow, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void InteroperabilityReferenceContract_PhysicalRetestPassedAndMergeReady()
+    {
+        var contract = File.ReadAllText(FindRepoFile("evidence/interoperability-reference-target.json"));
+        var documentation = File.ReadAllText(FindRepoFile("docs/INTEROPERABILITY_REFERENCE_CONTRACT.md"));
+
+        Assert.Contains("\"status\": \"physical-retest-passed-merge-ready\"", contract, StringComparison.Ordinal);
+        Assert.Contains("\"pullRequest\": 134", contract, StringComparison.Ordinal);
+        Assert.Contains("\"pullRequest\": 135", contract, StringComparison.Ordinal);
+        Assert.Contains("\"pullRequest\": 324", contract, StringComparison.Ordinal);
+        Assert.Contains("648124097621046f5f127ceb1cf853fea54db730", contract, StringComparison.Ordinal);
+        Assert.Contains("\"exactlyOneAssociation\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"supplementalLegacyAssociationForbidden\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"recursivePerLeafGvaStormForbidden\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"reopenInArsasRequired\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"physicalReconnectRequired\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"productionPromoted\": false", contract, StringComparison.Ordinal);
+        Assert.Contains("\"mergeAllowedBeforePhysicalRetest\": false", contract, StringComparison.Ordinal);
+        Assert.Contains("\"mergeAllowedAfterPhysicalRetest\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("\"physicalRetestRequired\": false", contract, StringComparison.Ordinal);
+        Assert.Contains("\"physicalRetestPassed\": true", contract, StringComparison.Ordinal);
+        Assert.Contains("Merged proven baseline", documentation, StringComparison.Ordinal);
+        Assert.Contains("The field result, not test count alone", documentation, StringComparison.Ordinal);
+
+        var guard = File.ReadAllText(FindRepoFile(".github/workflows/interoperability-reference-guard.yml"));
+        Assert.Contains("name: IEC 61850 Interoperability Reference Guard", guard, StringComparison.Ordinal);
+        Assert.Contains("name: interoperability-reference-contract", guard, StringComparison.Ordinal);
+        Assert.Contains("Merged engine authority must remain PR #134 + PR #135 with ARSAS #324 provenance", guard, StringComparison.Ordinal);
+        Assert.Contains("P0 structural discovery freeze regressed away from the accepted external IEC 61850 reference convergence path", guard, StringComparison.Ordinal);
+        Assert.Contains("Canonical IEC model / SCL semantic authority regressed", guard, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SourceClean_GuardsEveryTrackedFileWithoutWholeFileExceptions()
+    {
+        var source = File.ReadAllText(FindRepoFile("scripts/verify-source-clean.ps1"));
+        var build = File.ReadAllText(FindRepoFile(".github/workflows/build.yml"));
+
+        Assert.DoesNotContain("$ApprovedConvergenceIdentifierPaths", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("identifierScanExempt", source, StringComparison.Ordinal);
+        Assert.Contains("if (Test-ContainsForbiddenIdentifier $relative)", source, StringComparison.Ordinal);
+        Assert.Contains("if (Test-ContainsForbiddenIdentifier $content)", source, StringComparison.Ordinal);
+        Assert.Contains("test-source-clean-guard.ps1", build, StringComparison.Ordinal);
+        Assert.Contains("RepositoryRoot", source, StringComparison.Ordinal);
+        Assert.Contains("ScanOnly", source, StringComparison.Ordinal);
+    }
+
+
+    [Fact]
+    public void EngineLock_PreservesPhysicalSclRepairBaselineAcrossCodeVerifiedInteropTrial()
+    {
+        var lockFile = File.ReadAllText(FindRepoFile("engines/ARIEC61850.lock.json"));
+        using var document = System.Text.Json.JsonDocument.Parse(lockFile);
+        var root = document.RootElement;
+
+        // P7.6G is a code-only experimental child of the immutable P6.2
+        // engine trial. Historical source and physical acceptance stay unchanged.
+        var closure = root.GetProperty("datasetFirstDiscoveryTrial");
+        Assert.Equal("code-trial-not-physical", closure.GetProperty("status").GetString());
+        Assert.Equal(157, closure.GetProperty("enginePullRequest").GetInt32());
+        Assert.Equal(497, closure.GetProperty("consumerPullRequest").GetInt32());
+        Assert.Equal(495, closure.GetProperty("issue").GetInt32());
+        Assert.Equal("352c81e6a798635c6addcee0683235ca87ad416d",
+            closure.GetProperty("baseEngineCommit").GetString());
+        var p10 = root.GetProperty("p10IdentityTrial");
+        Assert.Equal(closure.GetProperty("exactCommit").GetString(),
+            p10.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal("00ad2819b99ffe6b3f885e59aa24a6afb2b4d8e1", p10.GetProperty("exactCommit").GetString());
+        var coreTrial = root.GetProperty("coreReportRoutingTrial");
+        Assert.Equal(p10.GetProperty("exactCommit").GetString(),
+            coreTrial.GetProperty("baseEngineCommit").GetString());
+        var subscriptionTrial = root.GetProperty("reportSubscriberIntegrityTrial");
+        Assert.Equal(coreTrial.GetProperty("exactCommit").GetString(),
+            subscriptionTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal("code-verified-not-physical", subscriptionTrial.GetProperty("status").GetString());
+        Assert.True(subscriptionTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(subscriptionTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
+        // P10.9G remains the immutable CodeVerified ancestor of the current
+        // P10.9I consumer pin; do not treat the previous SHA as live head.
+        var canonicalTrial = root.GetProperty("canonicalReportIngressIntegrityTrial");
+        Assert.Equal(subscriptionTrial.GetProperty("exactCommit").GetString(),
+            canonicalTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal("9bd01908ebd6fdf50a74f0a421b4e79613b878d4",
+            canonicalTrial.GetProperty("exactCommit").GetString());
+        var zivTrial = root.GetProperty("zivSclBscInteroperabilityTrial");
+        Assert.Equal(canonicalTrial.GetProperty("exactCommit").GetString(),
+            zivTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal("67c6635b7e16139c0661e559a2e6946527c1442a",
+            zivTrial.GetProperty("exactCommit").GetString());
+        var genericTrial = root.GetProperty("genericControlInteroperabilityTrial");
+        Assert.Equal(zivTrial.GetProperty("exactCommit").GetString(),
+            genericTrial.GetProperty("baseEngineCommit").GetString());
+        var recovery = root.GetProperty("p109LControlRecoveryTrial");
+        Assert.Equal(genericTrial.GetProperty("exactCommit").GetString(),
+            recovery.GetProperty("baseEngineCommit").GetString());
+        var commissioning = root.GetProperty("p109QControlModelCommissioningTrial");
+        Assert.Equal(recovery.GetProperty("exactCommit").GetString(),
+            commissioning.GetProperty("baseEngineCommit").GetString());
+        var simpleEditor = root.GetProperty("p109RSimpleCtlModelEditorTrial");
+        Assert.Equal(commissioning.GetProperty("exactCommit").GetString(),
+            simpleEditor.GetProperty("baseEngineCommit").GetString());
+        var position = root.GetProperty("p109TPositionControlInteroperabilityTrial");
+        Assert.Equal(simpleEditor.GetProperty("exactCommit").GetString(),
+            position.GetProperty("baseEngineCommit").GetString());
+        var positionStatus = root.GetProperty("p109UPositionStatusNameListRecoveryTrial");
+        Assert.Equal(position.GetProperty("exactCommit").GetString(),
+            positionStatus.GetProperty("baseEngineCommit").GetString());
+        // P10.9U remains immutable historical evidence. P10.9V is the
+        // exact tested successor, not a rewrite of that accepted lineage.
+        Assert.Equal("ad43399ed411cc72e6eb68b67e198db5e7b95381",
+            positionStatus.GetProperty("exactCommit").GetString());
+        var typedBscTrial = root.GetProperty("p109VLiveBscAuthorityTrial");
+        Assert.Equal(positionStatus.GetProperty("exactCommit").GetString(),
+            typedBscTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal("036e2c00d83a0815b6160147b14ea05975057965",
+            typedBscTrial.GetProperty("exactCommit").GetString());
+        var typedStatusTrial = root.GetProperty("m217KTypedStatusReportTrial");
+        Assert.Equal(typedBscTrial.GetProperty("exactCommit").GetString(),
+            typedStatusTrial.GetProperty("previousConsumerPin").GetString());
+        Assert.Equal("51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
+            typedStatusTrial.GetProperty("exactCommit").GetString());
+        var identityTrial = root.GetProperty("p0AIdentityTrial");
+        Assert.Equal(typedStatusTrial.GetProperty("exactCommit").GetString(),
+            identityTrial.GetProperty("baseEngineCommit").GetString());
+        var rcbTrial = root.GetProperty("p0BRcbPlannerTrial");
+        Assert.Equal(identityTrial.GetProperty("exactCommit").GetString(),
+            rcbTrial.GetProperty("baseEngineCommit").GetString());
+        var typedReadTrial = root.GetProperty("p0CTypedReadTrial");
+        Assert.Equal(rcbTrial.GetProperty("exactCommit").GetString(),
+            typedReadTrial.GetProperty("baseEngineCommit").GetString());
+        var controlTrial = root.GetProperty("controlReportIsolationTrial");
+        Assert.Equal(typedReadTrial.GetProperty("exactCommit").GetString(),
+            controlTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal("c85d4e20db722bd0c2729f2533b323b13d3ef735",
+            controlTrial.GetProperty("exactCommit").GetString());
+        // The current code-only stage observation trial must be descended
+        // EXACTLY from historical #183. Physical acceptance does not transfer.
+        var stageTrial = root.GetProperty("p0CStageObservationTrial");
+        Assert.Equal(controlTrial.GetProperty("exactCommit").GetString(),
+            stageTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal("9c7cb40364023a7b217e5ec31ab3105ba90142eb",
+            stageTrial.GetProperty("exactCommit").GetString());
+        Assert.Equal(stageTrial.GetProperty("exactCommit").GetString(),
+            root.GetProperty("commit").GetString());
+        Assert.Equal(184, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(184, stageTrial.GetProperty("enginePullRequest").GetInt32());
+        Assert.Equal(185, stageTrial.GetProperty("engineCiOnlyPullRequest").GetInt32());
+        Assert.Equal(1182, stageTrial.GetProperty("engineTestsPassed").GetInt32());
+        Assert.True(stageTrial.GetProperty("sbo400msSafetyGatePreserved").GetBoolean());
+        Assert.True(stageTrial.GetProperty("negativeAndDelayedLastApplErrorRegression").GetBoolean());
+        Assert.True(stageTrial.GetProperty("noUnqualifiedImmediateOperate").GetBoolean());
+        Assert.True(stageTrial.GetProperty("physicalLatencyQualificationRequired").GetBoolean());
+        Assert.True(stageTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
+        Assert.True(controlTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(controlTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
+        Assert.True(controlTrial.GetProperty("controlChecksUnchanged").GetBoolean());
+        Assert.True(controlTrial.GetProperty("controlTimeoutsUnchanged").GetBoolean());
+        Assert.True(typedReadTrial.GetProperty("strictInvokeId").GetBoolean());
+        Assert.True(typedReadTrial.GetProperty("strictAccessOrdinal").GetBoolean());
+        Assert.True(typedReadTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(typedReadTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
+        Assert.True(rcbTrial.GetProperty("writeFreeReconciliation").GetBoolean());
+        Assert.True(rcbTrial.GetProperty("boundedContinuationRequired").GetBoolean());
+        Assert.True(rcbTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(rcbTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
+        Assert.Equal(618, typedStatusTrial.GetProperty("consumerPullRequest").GetInt32());
+        Assert.True(typedStatusTrial.GetProperty("strictFcAndTupleEvidenceRequired").GetBoolean());
+        Assert.True(typedStatusTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(typedStatusTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
+        Assert.Equal("engine-ci-success-consumer-ci-pending-not-physical",
+            typedBscTrial.GetProperty("status").GetString());
+        Assert.Equal(38328335496L, typedBscTrial.GetProperty("engineCiRun").GetInt64());
+        Assert.True(typedBscTrial.GetProperty("staticSpcNeverOverridesExactLiveBsc").GetBoolean());
+        Assert.True(typedBscTrial.GetProperty("typedTwoBitCtlValAndExactStepStatusRequired").GetBoolean());
+        Assert.True(typedBscTrial.GetProperty("wrongOrCrossObjectStatusFailsClosed").GetBoolean());
+        Assert.True(typedBscTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(typedBscTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
+        Assert.True(typedBscTrial.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
+        Assert.True(positionStatus.GetProperty("singleScalarReadOnly").GetBoolean());
+        Assert.True(positionStatus.GetProperty("bitStringWidthTwoRequired").GetBoolean());
+        Assert.True(position.GetProperty("structuredStatusRequiresTypedMmsRead").GetBoolean());
+        Assert.True(position.GetProperty("liveTypedControlVerificationRequired").GetBoolean());
+        Assert.True(simpleEditor.GetProperty("statusOnlyZeroSupported").GetBoolean());
+        Assert.True(commissioning.GetProperty("singleWriteNoRetry").GetBoolean());
+        Assert.True(commissioning.GetProperty("commandOperateForbidden").GetBoolean());
+        Assert.True(recovery.GetProperty("noControlWriteOnProbe").GetBoolean());
+        Assert.Equal("a43b9b4864a9565c02f544d4135fe157c2fac577",
+            genericTrial.GetProperty("exactCommit").GetString());
+        Assert.Equal("code-verified-not-physical", canonicalTrial.GetProperty("status").GetString());
+        Assert.Equal(166, canonicalTrial.GetProperty("enginePullRequest").GetInt32());
+        Assert.Equal(536, canonicalTrial.GetProperty("issue").GetInt32());
+        Assert.Equal(38214165576L, canonicalTrial.GetProperty("engineCiRun").GetInt64());
+        Assert.True(canonicalTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(canonicalTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
+        Assert.True(canonicalTrial.GetProperty("fullDiscoveryFallbackForbidden").GetBoolean());
+        Assert.True(canonicalTrial.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
+        Assert.Equal("code-verified-not-physical", zivTrial.GetProperty("status").GetString());
+        Assert.Equal(538, zivTrial.GetProperty("issue").GetInt32());
+        Assert.Equal(167, zivTrial.GetProperty("enginePullRequest").GetInt32());
+        Assert.Equal(38219429896L, zivTrial.GetProperty("engineCiRun").GetInt64());
+        Assert.True(zivTrial.GetProperty("sclApTitlePackedPrefixOnly").GetBoolean());
+        Assert.True(zivTrial.GetProperty("bscLiveSemanticGateRequired").GetBoolean());
+        Assert.True(zivTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(zivTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
+        Assert.True(zivTrial.GetProperty("fullDiscoveryFallbackForbidden").GetBoolean());
+        Assert.True(zivTrial.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
+        // Historical C264 remains PR #173; current P0-A identity trial is #177.
+        Assert.Equal(173, typedStatusTrial.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(177, root.GetProperty("p0AIdentityTrial").GetProperty("enginePullRequest").GetInt32());
+        Assert.Equal(169, typedBscTrial.GetProperty("enginePullRequest").GetInt32());
+        Assert.True(genericTrial.GetProperty("typedSemanticGateRequired").GetBoolean());
+        Assert.True(genericTrial.GetProperty("associationScopedInventoryRequired").GetBoolean());
+        Assert.True(genericTrial.GetProperty("vendorDispatchForbidden").GetBoolean());
+        Assert.True(genericTrial.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
+        Assert.Equal("code-trial-not-physical",p10.GetProperty("status").GetString());
+        Assert.True(p10.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(closure.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(closure.GetProperty("fullNameListFallbackForbidden").GetBoolean());
+        Assert.True(closure.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
+
+        Assert.Equal(
+            "648124097621046f5f127ceb1cf853fea54db730",
+            root.GetProperty("mergedMainCommit").GetString());
+        Assert.Equal(
+            "9935d6902d786cc69b299260fe36b835944d5e81",
+            root.GetProperty("physicalTestedCommit").GetString());
+
+        var stable = root.GetProperty("previousStablePin");
+        Assert.Equal(
+            "648124097621046f5f127ceb1cf853fea54db730",
+            stable.GetProperty("commit").GetString());
+        Assert.Equal(135, stable.GetProperty("sourcePullRequest").GetInt32());
+
+        var association = root.GetProperty("sclAssociationInteroperability");
+        Assert.Equal(143, association.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(
+            "84e9820e5a32690475960e49d5ef74e6637847fd",
+            association.GetProperty("testedEngineCommit").GetString());
+        Assert.Equal(
+            "e5deed1d8aa11d97991695c6e390baafea7ab797",
+            association.GetProperty("mergedEngineCommit").GetString());
+        Assert.True(association.GetProperty("preservesR10DiscoveryModelBaseline").GetBoolean());
+        Assert.True(association.GetProperty("fullDiscoveryFallbackForbidden").GetBoolean());
+
+        var trial = root.GetProperty("smartInteroperabilityCodeTrial");
+        Assert.Equal("code-verified-not-physical", trial.GetProperty("status").GetString());
+        Assert.Equal(
+            "9c5292570f55dd81be1b3a6b56f937e5ba1ed276",
+            trial.GetProperty("exactCommit").GetString());
+        var serverAt = root.GetProperty("sclServerAtTrial");
+        Assert.Equal("code-verified-candidate-not-physical", serverAt.GetProperty("status").GetString());
+        Assert.Equal(153, serverAt.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(trial.GetProperty("exactCommit").GetString(),
+            serverAt.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal(closure.GetProperty("baseEngineCommit").GetString(),
+            serverAt.GetProperty("exactCommit").GetString());
+        Assert.True(serverAt.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(serverAt.GetProperty("noAutomaticMmsFailover").GetBoolean());
+        Assert.Equal(759, trial.GetProperty("ciRun").GetInt32());
+        Assert.True(trial.GetProperty("physicalPromotionRequired").GetBoolean());
+        Assert.True(trial.GetProperty("vendorBranchingForbidden").GetBoolean());
+
+        var previousTrial = root.GetProperty("previousTrialPin");
+        Assert.Equal(
+            "4467124775d8d9d76f3db194f9fbfd97144767a8",
+            previousTrial.GetProperty("commit").GetString());
+    }
+
+
+
+    private static string FindRepoFile(string relativePath)
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory != null)
+        {
+            var candidate = Path.Combine(directory.FullName, relativePath);
+            if (File.Exists(candidate))
+                return candidate;
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException(
+            $"Could not locate repository file '{relativePath}' from '{AppContext.BaseDirectory}'.");
+    }
+}

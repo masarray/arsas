@@ -1,0 +1,526 @@
+<Window x:Class="ArIED61850Tester.IoListTestingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:io="clr-namespace:ArIED61850Tester.Models.IoTesting"
+        xmlns:local="clr-namespace:ArIED61850Tester"
+        Title="ARSAS - IO List Testing"
+        Height="900" Width="1500" MinHeight="760" MinWidth="1180"
+        WindowStartupLocation="CenterOwner" WindowState="Maximized"
+        Background="{StaticResource AppBackgroundGradient}"
+        FontFamily="{StaticResource AppFontFamily}"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="ClearType"
+        TextOptions.TextHintingMode="Fixed"
+        Icon="Assets/app-icon.ico"
+        Closing="Window_Closing"
+        ContentRendered="IoListTestingWindow_ContentRendered">
+    <Window.Resources>
+        <local:IoFatAllPassedVisibilityConverter x:Key="AllPassedVisibilityConverter"/>
+
+        <Style x:Key="FatGridText" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style TargetType="DataGridCell">
+            <Setter Property="Padding" Value="7,4"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="BorderBrush" Value="#E8EDF5"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        </Style>
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="7,0"/>
+            <Setter Property="Background" Value="#F4F7FB"/>
+            <Setter Property="Foreground" Value="#617087"/>
+            <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}"/>
+            <Setter Property="FontSize" Value="10.2"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
+            <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+            <Setter Property="TextOptions.TextHintingMode" Value="Fixed"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="BorderBrush" Value="#DCE4EF"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        </Style>
+        <Style x:Key="CenteredFatGridHeader"
+               TargetType="DataGridColumnHeader"
+               BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        </Style>
+        <Style TargetType="DataGridRow">
+            <Setter Property="MinHeight" Value="40"/>
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#F5F8FD"/>
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#EEF4FF"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="10"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="8"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Style="{StaticResource Card}" Padding="14,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="IO LIST FAT" Style="{StaticResource MicroLabel}" Foreground="{StaticResource Accent}"/>
+                    <TextBlock Text="{Binding Project.ProjectName}" FontSize="17" FontWeight="SemiBold"
+                               Foreground="{StaticResource Ink}" Margin="0,2,0,0"/>
+                    <TextBlock Text="Engineering SCL scope · report-first acquisition · relay-timestamped evidence"
+                               Style="{StaticResource Caption}" Margin="0,3,0,0"/>
+                </StackPanel>
+                <WrapPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
+                    <Border Background="#F1F5FB" CornerRadius="14" Padding="11,6" Margin="0,0,8,0">
+                        <TextBlock Text="{Binding ProjectSummary}" FontSize="11.4" Foreground="{StaticResource Ink}"/>
+                    </Border>
+                    <Button Content="Save" Style="{StaticResource SoftButton}" Padding="10,6"
+                            Click="SaveProgress_Click" Margin="0,0,5,0"/>
+                    <Button Content="Excel" Style="{StaticResource SoftButton}" Padding="10,6"
+                            Click="ExportExcel_Click" Margin="0,0,5,0"/>
+                    <Button Content="PDF" Style="{StaticResource SoftButton}" Padding="10,6"
+                            Click="ExportPdf_Click" Margin="0,0,5,0"/>
+                    <Button Content="Export .arsas" Style="{StaticResource PrimaryButton}" Padding="11,6"
+                            Click="ExportHandover_Click" Margin="0,0,5,0"/>
+                    <Button Content="Engineering" Style="{StaticResource SoftButton}" Padding="10,6"
+                            Click="ReturnToEngineering_Click"/>
+                </WrapPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="282"/>
+                <ColumnDefinition Width="10"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="9">
+                <DockPanel>
+                    <Grid DockPanel.Dock="Top" Margin="5,3,5,9">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="IED EXPLORER" Style="{StaticResource MicroLabel}"/>
+                            <TextBlock Text="Engineering FAT devices" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <Border Grid.Column="1" Background="#F1F5FB" CornerRadius="12" Padding="8,4" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Project.Ieds.Count}" FontWeight="SemiBold" FontSize="11"
+                                       Foreground="{StaticResource Ink}"/>
+                        </Border>
+                    </Grid>
+
+                    <Button DockPanel.Dock="Bottom" Content="＋ Add IED · Import SCL"
+                            Style="{StaticResource PrimaryButton}" Margin="4,8,4,2" Padding="11,8"
+                            IsEnabled="{Binding CanAddFatIed}" Click="AddFatIedFromScl_Click"
+                            ToolTip="Add another IED from CID/SCD/ICD/IID without replacing the current FAT workspace"/>
+
+                    <ListBox x:Name="FatIedList" ItemsSource="{Binding Project.Ieds}"
+                             SelectedItem="{Binding SelectedIed, Mode=TwoWay}"
+                             IsEnabled="{Binding CanSelectIed}"
+                             BorderThickness="0" Background="Transparent"
+                             HorizontalContentAlignment="Stretch"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="Margin" Value="0,0,0,7"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="BorderThickness" Value="0"/>
+                                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Border x:Name="IedCard" Background="#FAFCFF" BorderBrush="#D8E1EE"
+                                                    BorderThickness="1" CornerRadius="14" Padding="9">
+                                                <ContentPresenter/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="IedCard" Property="Background" Value="#F5F8FD"/>
+                                                    <Setter TargetName="IedCard" Property="BorderBrush" Value="#AFC4E6"/>
+                                                </Trigger>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter TargetName="IedCard" Property="Background" Value="#EDF4FF"/>
+                                                    <Setter TargetName="IedCard" Property="BorderBrush" Value="#6F9FF1"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid MinHeight="64">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="54"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Width="52"
+                                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Viewbox Width="42" Height="42" HorizontalAlignment="Center">
+                                            <Control x:Name="RelayIcon" Width="50" Height="50" Foreground="#D94B55"
+                                                     Template="{StaticResource IedRelayFrontPanelTemplate}"/>
+                                        </Viewbox>
+                                        <Border x:Name="StateBadge" HorizontalAlignment="Center" Margin="0,2,0,0"
+                                                Background="#FFF1F2" BorderBrush="#F0B7BC"
+                                                BorderThickness="1" CornerRadius="3" Padding="4,1">
+                                            <Border.Visibility>
+                                                <MultiBinding Converter="{StaticResource AllPassedVisibilityConverter}" ConverterParameter="Inverse">
+                                                    <Binding Path="TestPoints.Count"/>
+                                                    <Binding Path="PassedCount"/>
+                                                </MultiBinding>
+                                            </Border.Visibility>
+                                            <TextBlock x:Name="StateText" Text="{Binding CardStateText}"
+                                                       FontSize="7" FontWeight="SemiBold" Foreground="#C53A45"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <Grid Grid.Column="1" Margin="3,0,0,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding IedName}" FontSize="12.4" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"
+                                                       Margin="0,0,9,0" VerticalAlignment="Center"/>
+                                            <Border Grid.Column="1" Background="#EAF8F1" BorderBrush="#8FD1B1"
+                                                    BorderThickness="1" CornerRadius="9" Padding="7,2"
+                                                    Margin="9,0,0,0" VerticalAlignment="Center">
+                                                <Border.Visibility>
+                                                    <MultiBinding Converter="{StaticResource AllPassedVisibilityConverter}">
+                                                        <Binding Path="TestPoints.Count"/>
+                                                        <Binding Path="PassedCount"/>
+                                                    </MultiBinding>
+                                                </Border.Visibility>
+                                                <TextBlock Text="✔ PASS" FontSize="8.5" FontWeight="Bold" Foreground="#16845A"/>
+                                            </Border>
+                                        </Grid>
+                                        <TextBlock Grid.Row="1" Text="{Binding IpAddress}" Style="{StaticResource Caption}"
+                                                   Margin="0,2,0,0"/>
+                                        <TextBlock Grid.Row="2" Margin="0,6,0,0" FontSize="10.2"
+                                                   Foreground="{StaticResource Muted}">
+                                            <Run Text="{Binding BoundCount, Mode=OneWay}"/>
+                                            <Run Text=" live  ·  "/>
+                                            <Run Text="{Binding PassedCount, Mode=OneWay}"/>
+                                            <Run Text=" pass  ·  "/>
+                                            <Run Text="{Binding PendingCount, Mode=OneWay}"/>
+                                            <Run Text=" pending"/>
+                                        </TextBlock>
+                                        <ProgressBar x:Name="CardProgress"
+                                                     Grid.Row="3"
+                                                     Height="3"
+                                                     Margin="0,7,0,0"
+                                                     Minimum="0"
+                                                     Maximum="100"
+                                                     IsIndeterminate="True"
+                                                     Visibility="Collapsed"
+                                                     BorderThickness="0"
+                                                     Background="#DCE7F8"
+                                                     Foreground="{StaticResource Accent}"/>
+                                    </Grid>
+                                </Grid>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsLiveConnected}" Value="True">
+                                        <Setter TargetName="RelayIcon" Property="Foreground" Value="#D49A26"/>
+                                        <Setter TargetName="StateBadge" Property="Background" Value="#FFF8E8"/>
+                                        <Setter TargetName="StateBadge" Property="BorderBrush" Value="#E9C46A"/>
+                                        <Setter TargetName="StateText" Property="Foreground" Value="#A56D00"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsLiveMonitoring}" Value="True">
+                                        <Setter TargetName="RelayIcon" Property="Foreground" Value="#18A66A"/>
+                                        <Setter TargetName="StateBadge" Property="Background" Value="#EAF8F1"/>
+                                        <Setter TargetName="StateBadge" Property="BorderBrush" Value="#8FD1B1"/>
+                                        <Setter TargetName="StateText" Property="Foreground" Value="#16845A"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsPreparing}" Value="True">
+                                        <Setter TargetName="RelayIcon" Property="Foreground" Value="#4F7FEA"/>
+                                        <Setter TargetName="CardProgress" Property="Visibility" Value="Visible"/>
+                                        <Setter TargetName="StateBadge" Property="Background" Value="#EDF3FF"/>
+                                        <Setter TargetName="StateBadge" Property="BorderBrush" Value="#9CB8F5"/>
+                                        <Setter TargetName="StateText" Property="Foreground" Value="#315DBF"/>
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Column="2" Style="{StaticResource Card}" Padding="10">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="10"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
+                            <TextBlock Text="{Binding SelectedIed.IedName}" FontSize="16" FontWeight="SemiBold"
+                                       Foreground="{StaticResource Ink}"/>
+                            <TextBlock Text="{Binding SelectedIedSummary}" Style="{StaticResource Caption}" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button x:Name="WorkspacePreviewToggle"
+                                    Content="Print Preview"
+                                    Style="{StaticResource SoftButton}"
+                                    Padding="10,7"
+                                    Click="TogglePrintPreview_Click"
+                                    Margin="0,0,8,0"/>
+                            <Button Content="{Binding SelectedStartWorkflowText}" Style="{StaticResource PrimaryButton}"
+                                    Padding="12,7" IsEnabled="{Binding SelectedCanStartWorkflow}"
+                                    Click="StartSelectedIedSafely_Click" Margin="0,0,5,0"/>
+                            <Button Content="Pause" Style="{StaticResource SoftButton}" Padding="10,7"
+                                    IsEnabled="{Binding SelectedCanPause}" Click="PauseSession_Click" Margin="0,0,5,0"/>
+                            <Button Content="Resume" Style="{StaticResource SoftButton}" Padding="10,7"
+                                    IsEnabled="{Binding SelectedCanResume}" Click="ResumeSession_Click" Margin="0,0,5,0"/>
+                            <Button Content="Stop" Style="{StaticResource SoftButton}" Padding="10,7"
+                                    IsEnabled="{Binding SelectedCanStop}" Click="StopSession_Click"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <Border Grid.Row="1" Visibility="{Binding PreparationVisibility}"
+                            Background="#F3F7FF" BorderBrush="#B9CCF4" BorderThickness="1"
+                            CornerRadius="12" Padding="11,8" Margin="0,9,0,0">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding PreparationIedText}" FontSize="11.5" FontWeight="SemiBold"
+                                           Foreground="{StaticResource Ink}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="{Binding PreparationStatusText}" FontSize="10.6"
+                                           Foreground="#526783" Margin="11,0,0,0" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </Grid>
+                            <ProgressBar Height="4"
+                                         Margin="0,8,0,0"
+                                         IsIndeterminate="True"
+                                         BorderThickness="0"
+                                         Background="#DCE7F8"
+                                         Foreground="{StaticResource Accent}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <DataGrid Grid.Row="3"
+                              ItemsSource="{Binding SelectedIed.TestPoints}"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
+                              CanUserReorderColumns="False"
+                              CanUserResizeColumns="True"
+                              IsReadOnly="False"
+                              HeadersVisibility="Column"
+                              GridLinesVisibility="None"
+                              BorderThickness="1"
+                              BorderBrush="#E1E7F0"
+                              Background="White"
+                              RowBackground="White"
+                              AlternatingRowBackground="White"
+                              HorizontalGridLinesBrush="#E8EDF5"
+                              SelectionMode="Single"
+                              SelectionUnit="FullRow"
+                              RowHeaderWidth="0"
+                              FrozenColumnCount="1"
+                              EnableRowVirtualization="True"
+                              EnableColumnVirtualization="True"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Recycling"
+                              ScrollViewer.CanContentScroll="True"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                              ScrollViewer.VerticalScrollBarVisibility="Auto">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="TEST" Width="46" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <CheckBox IsChecked="{Binding TestEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  IsEnabled="{Binding DataContext.CanEditPlan, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="SIGNAL" Width="1.35*" MinWidth="170" MaxWidth="260">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding SignalName}" Style="{StaticResource FatGridText}"
+                                                   FontWeight="SemiBold" ToolTip="{Binding SignalName}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="IEC REFERENCE" Width="2.25*" MinWidth="290" MaxWidth="480">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding ObjectReference}" Style="{StaticResource FatGridText}"
+                                                   FontFamily="{StaticResource AppCodeFontFamily}" FontSize="10.8"
+                                                   Foreground="#52627A" ToolTip="{Binding ObjectReference}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="LIVE" Width="76" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock x:Name="LiveText" Text="{Binding LiveBindingText}"
+                                                   Style="{StaticResource FatGridText}" FontSize="10.5"
+                                                   FontWeight="SemiBold" Foreground="#65758B"
+                                                   ToolTip="{Binding LiveBindingReason}"/>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding IsLiveBound}" Value="True">
+                                                <Setter TargetName="LiveText" Property="Foreground" Value="#16845A"/>
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="VALUE" Width="72" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Runtime.CurrentValue}" Style="{StaticResource FatGridText}"
+                                                   FontWeight="SemiBold"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="QUALITY" Width="82" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Runtime.CurrentQuality}" Style="{StaticResource FatGridText}"
+                                                   FontSize="10.8" ToolTip="{Binding Runtime.CurrentQuality}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="ACQUISITION" Width="122" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Runtime.CurrentSource}" Style="{StaticResource FatGridText}"
+                                                   FontSize="10.4" FontWeight="SemiBold" Foreground="#405B7D"
+                                                   ToolTip="{Binding Runtime.CurrentSource}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="ON · RELAY TIME" Width="154"
+                                                    HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Runtime.OnRelayTimestampText}"
+                                                   Style="{StaticResource FatGridText}"
+                                                   FontFamily="{StaticResource AppCodeFontFamily}" FontSize="10.1"
+                                                   ToolTip="{Binding Runtime.OnEvidenceToolTip}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="OFF · RELAY TIME" Width="154"
+                                                    HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Runtime.OffRelayTimestampText}"
+                                                   Style="{StaticResource FatGridText}"
+                                                   FontFamily="{StaticResource AppCodeFontFamily}" FontSize="10.1"
+                                                   ToolTip="{Binding Runtime.OffEvidenceToolTip}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="STATUS" Width="108" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Runtime.StateText}" Style="{StaticResource FatGridText}"
+                                                   FontSize="10.4" FontWeight="SemiBold" Foreground="#607089"
+                                                   ToolTip="{Binding Runtime.StatusReason}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="RESULT" Width="86" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock x:Name="FinalResultText" Text="—"
+                                                   Style="{StaticResource FatGridText}"
+                                                   FontSize="10.5" FontWeight="Bold"
+                                                   Foreground="#8A97A9"
+                                                   ToolTip="{Binding Runtime.StatusReason}"/>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding Runtime.State}"
+                                                         Value="{x:Static io:IoTestPointState.Passed}">
+                                                <Setter TargetName="FinalResultText" Property="Text" Value="✔ PASS"/>
+                                                <Setter TargetName="FinalResultText" Property="Foreground" Value="#16845A"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Runtime.State}"
+                                                         Value="{x:Static io:IoTestPointState.Review}">
+                                                <Setter TargetName="FinalResultText" Property="Text" Value="⚠ REVIEW"/>
+                                                <Setter TargetName="FinalResultText" Property="Foreground" Value="#9A6500"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Runtime.State}"
+                                                         Value="{x:Static io:IoTestPointState.Failed}">
+                                                <Setter TargetName="FinalResultText" Property="Text" Value="✖ FAILED"/>
+                                                <Setter TargetName="FinalResultText" Property="Foreground" Value="#C53A45"/>
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="4" Background="#F8FAFD" BorderBrush="#DEE6F0"
+                BorderThickness="1" CornerRadius="12" Padding="11,7">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.4*"/>
+                    <ColumnDefinition Width="1.0*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding SelectedFooterStatusText}" Style="{StaticResource Caption}"
+                           VerticalAlignment="Center" ToolTip="{Binding Session.JournalPath}"
+                           TextTrimming="CharacterEllipsis"/>
+                <TextBlock Grid.Column="1" Text="{Binding Storage.LastSavedText}"
+                           Style="{StaticResource Caption}" VerticalAlignment="Center"
+                           HorizontalAlignment="Center" ToolTip="{Binding Storage.SnapshotPath}"/>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding SelectedProgressText}" Style="{StaticResource MicroLabel}"
+                               Foreground="{StaticResource Ink}"/>
+                    <TextBlock Text="  ·  " Style="{StaticResource Caption}"/>
+                    <TextBlock Style="{StaticResource Caption}">
+                        <Run Text="Evidence "/>
+                        <Run Text="{Binding SelectedEvidenceCount, Mode=OneWay}"/>
+                    </TextBlock>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

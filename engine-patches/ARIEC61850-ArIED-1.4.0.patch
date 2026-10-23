@@ -1,0 +1,1361 @@
+diff --git a/docs/ARIED_INTEGRATION_AUDIT.md b/docs/ARIED_INTEGRATION_AUDIT.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..0359be731ce28a9e957b814e4f5d378b82bb9ad8
+--- /dev/null
++++ b/docs/ARIED_INTEGRATION_AUDIT.md
+@@ -0,0 +1,132 @@
++# ARIEC61850 integration audit for ArIED 61850 Tester 1.4.0
++
++This document records the source-level findings and corrections made after auditing the complete ARIEC61850 engine used by ArIED.
++
++## Critical findings
++
++### 1. Live IED identity was truncated at the first digit
++
++The previous live-model identity fallback treated the leading alphabetic characters of the first MMS Logical Device domain as the IED name. This produced incorrect identities for product and station names containing digits, for example:
++
++```text
++OLSF501ADD, OLSF501CB1, OLSF501Ln1_... -> OLSF
++```
++
++The engine now resolves identity from the full set of MMS Logical Device domains. Stable common domain stems and known LD role boundaries are evaluated without discarding product digits.
++
++Expected examples:
++
++```text
++OLSF501ADD + OLSF501CB1 + OLSF501Ln1_... -> IEDName OLSF501
++OCR7SR12CTRL                              -> IEDName OCR7SR, LDInst 12CTRL
++```
++
++Important limitation: MMS online discovery does not guarantee that the SCL `IED@name` is directly exposed by every server. A multi-domain common stem is therefore high-confidence evidence, while a single-domain split remains a heuristic unless an SCL/configured name is available.
++
++### 2. Multi-RCB report frames could be projected against the wrong DataSet
++
++All MMS InformationReport PDUs for one association enter one receive-router queue. Previously, each persistent monitor plan independently consumed the next queue item and immediately decoded it with that plan's `Members` list.
++
++With multiple active RCBs, this allowed the following unsafe sequence:
++
++```text
++report from RCB B
++    -> consumed while monitor A owns the receive slice
++    -> decoded with DataSet A members
++    -> wrong IEC object/value mapping
++```
++
++This can present as incorrect values, missing q/t companions, duplicate edges, or a live view that appears frozen.
++
++The corrected design is:
++
++```text
++one MMS InformationReport queue per association
++        -> decode report header first
++        -> identify RCB by exact RptID / RCB affinity / exact DataSet
++        -> map values with that monitor's actual DataSet members
++        -> enqueue the mapped frame to that monitor
++```
++
++Ambiguous reports are deliberately not projected against an arbitrary DataSet. The engine increments `UnroutedPersistentReportCount` and exposes a routing diagnostic instead.
++
++### 3. Quality decoder could mistake a two-bit Dbpos value for IEC quality
++
++The old recursive decoder accepted the first bit string it found. A two-bit double-point value could therefore be interpreted as IEC 61850 quality.
++
++Quality decoding now requires a bit-string payload capable of carrying the 13 quality bits. Short bit strings remain undecoded.
++
++### 4. q/t-only report frames were discarded
++
++When a report contained only a companion `q` or `t` member, the projector filtered it out because no process-value leaf was present in that frame.
++
++The projector now emits a partial companion update with explicit flags:
++
++```text
++HasValue     = false
++HasQuality   = true/false
++HasTimestamp = true/false
++```
++
++ArIED merges that update into the existing live point without replacing the process value or generating a false Sequence-of-Events value edge.
++
++## Report metadata now propagated
++
++ArIED receives report-frame metadata already decoded by ARIEC61850:
++
++- report-control reference;
++- RptID;
++- DataSet reference;
++- sequence number;
++- sub-sequence number;
++- segmentation continuation flag;
++- ConfRev;
++- buffer-overflow flag;
++- EntryID;
++- report time-of-entry;
++- local receive instant for internal ordering only.
++
++The runtime uses these fields for diagnostics and report-stream health. Local receive time is not shown as the IED process timestamp.
++
++## Runtime health checks added in ArIED
++
++- Refuses unsafe cross-RCB projection.
++- Reports the number of ambiguous/unrouted InformationReport frames.
++- Warns on BRCB buffer overflow.
++- Warns when ConfRev changes.
++- Detects non-contiguous report sequence numbers.
++- Retains the latest EntryID for later BRCB resume work.
++- Merges q/t-only updates without manufacturing a process-value event.
++
++## Source files changed
++
++### Engine
++
++- `Binding/Iec61850SmartValueReading.cs`
++- `Binding/Iec61850ValueBindingEngine.cs`
++- `Discovery/LiveIedModelDiscoveryBuilder.cs`
++- `Mms/MmsClientSession.cs`
++- `Mms/MmsPersistentReportMonitor.cs`
++- `Mms/MmsReportLiveSession.cs`
++- `Mms/MmsReportValueProjector.cs`
++- `Properties/AssemblyInfo.cs`
++
++### Tests
++
++- identity resolver tests;
++- quality bit-length guard test;
++- persistent multi-RCB routing tests;
++- report-header decoding test;
++- q-only report projection test.
++
++## Remaining live-validation items
++
++These require the target relay and a Windows .NET build environment:
++
++1. Confirm actual `RptID` values emitted by each vendor RCB.
++2. Exercise two or more RCBs concurrently and verify zero unsafe routing.
++3. Confirm q/t updates for separate DataSet members and structured Data Objects.
++4. Test segmented reports with real payloads.
++5. Validate sequence wrap behavior for the target vendor.
++6. Verify BRCB EntryID resume after disconnect/reconnect.
++7. Validate dynamic DataSet and URCB cleanup on stop/disconnect.
+diff --git a/src/AR.Iec61850/Binding/Iec61850SmartValueReading.cs b/src/AR.Iec61850/Binding/Iec61850SmartValueReading.cs
+index 741b3a54ecae44efa949f3ae38016a2902c87577..ec336a6c5ab1bcecfe15b11d04ec27d58c20b740 100644
+--- a/src/AR.Iec61850/Binding/Iec61850SmartValueReading.cs
++++ b/src/AR.Iec61850/Binding/Iec61850SmartValueReading.cs
+@@ -15,9 +15,13 @@ public sealed record Iec61850DiscoveredIdentity(
+ 
+ public static class Iec61850IdentityResolver
+ {
+-    private static readonly string[] KnownLdSuffixes =
++    private static readonly string[] KnownLdRolePrefixes =
+     {
+-        "PROT", "CTRL", "MEAS", "DR", "LD0", "LD", "ANN", "BCU", "MU", "PQM", "MET", "SYS", "COM", "RLY", "BAY"
++        "OPERATIONALVALUES", "PROCESSMONITOR", "APPLICATION", "FUNDAMENTAL",
++        "PROTECTION", "MEASUREMENT", "AUTOMATION", "ENERGY", "POWER",
++        "PROT", "CTRL", "MEAS", "SYSTEM", "SYS", "COM", "COMM",
++        "REC", "DR", "ANN", "BCU", "MU", "PQM", "MET", "RLY", "BAY",
++        "ADD", "CB", "DS", "LN", "MOD", "POWS", "LD"
+     };
+ 
+     public static Iec61850DiscoveredIdentity Resolve(LiveIedModelDiscoveryDocument document)
+@@ -26,6 +30,12 @@ public static Iec61850DiscoveredIdentity Resolve(LiveIedModelDiscoveryDocument d
+         return ResolveFromDomains(document.LogicalDevices.Select(x => x.MmsDomain), document.Host, document.IedName);
+     }
+ 
++    /// <summary>
++    /// Resolves the best available online identity from MMS Logical Device domains.
++    /// IEC 61850 MMS does not expose the SCL IED@name directly in every server, so this
++    /// result is an evidence-based identity. Multiple domains with a stable common stem
++    /// provide high confidence; a single domain remains heuristic unless SCL supplied a name.
++    /// </summary>
+     public static Iec61850DiscoveredIdentity ResolveFromDomains(IEnumerable<string> domains, string host, string? fallbackName = null)
+     {
+         var materialized = domains
+@@ -35,22 +45,43 @@ public static Iec61850DiscoveredIdentity ResolveFromDomains(IEnumerable<string>
+             .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+             .ToArray();
+ 
+-        var prefix = LongestCommonPrefix(materialized);
+-        if (prefix.Length < 3 || materialized.Length == 1)
+-            prefix = InferPrefixFromKnownSuffix(materialized.FirstOrDefault() ?? string.Empty);
++        var explicitName = NormalizeCandidate(fallbackName);
++        var commonPrefix = materialized.Length > 1
++            ? NormalizeCandidate(LongestCommonPrefix(materialized))
++            : string.Empty;
++        commonPrefix = TrimKnownRoleTail(commonPrefix);
+ 
+-        var name = !string.IsNullOrWhiteSpace(prefix)
+-            ? prefix
+-            : !string.IsNullOrWhiteSpace(fallbackName) && !fallbackName.Equals("IED", StringComparison.OrdinalIgnoreCase)
+-                ? fallbackName!.Trim()
+-                : host;
++        var strippedCandidates = materialized
++            .Select(InferPrefixFromDomain)
++            .Where(x => !string.IsNullOrWhiteSpace(x))
++            .Distinct(StringComparer.OrdinalIgnoreCase)
++            .ToArray();
++        var strippedConsensus = strippedCandidates.Length == 0
++            ? string.Empty
++            : strippedCandidates.Length == 1
++                ? strippedCandidates[0]
++                : NormalizeCandidate(LongestCommonPrefix(strippedCandidates));
++
++        var inferred = ChooseBestInferredName(commonPrefix, strippedConsensus, materialized);
++        var explicitIsUseful = IsUsefulExplicitName(explicitName, host);
++        var name = explicitIsUseful && !ShouldPreferInferredName(explicitName, inferred, materialized)
++            ? explicitName
++            : !string.IsNullOrWhiteSpace(inferred)
++                ? inferred
++                : explicitIsUseful
++                    ? explicitName
++                    : host;
+ 
+         var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+         foreach (var domain in materialized)
+         {
+             var alias = domain;
+-            if (!string.IsNullOrWhiteSpace(name) && domain.StartsWith(name, StringComparison.OrdinalIgnoreCase) && domain.Length > name.Length)
++            if (!string.IsNullOrWhiteSpace(name) &&
++                domain.StartsWith(name, StringComparison.OrdinalIgnoreCase) &&
++                domain.Length > name.Length)
++            {
+                 alias = domain[name.Length..];
++            }
+ 
+             if (string.IsNullOrWhiteSpace(alias))
+                 alias = domain;
+@@ -58,12 +89,14 @@ public static Iec61850DiscoveredIdentity ResolveFromDomains(IEnumerable<string>
+             aliases[domain] = alias;
+         }
+ 
+-        return new Iec61850DiscoveredIdentity(
+-            name,
+-            host,
+-            aliases,
+-            string.IsNullOrWhiteSpace(prefix) ? "Fallback" : "MmsDomainCommonPrefix",
+-            string.IsNullOrWhiteSpace(prefix) ? "Low" : materialized.Length > 1 ? "High" : "Medium");
++        var source = !string.IsNullOrWhiteSpace(inferred)
++            ? materialized.Length > 1 ? "MmsDomainSet" : "MmsDomainHeuristic"
++            : explicitIsUseful ? "ConfiguredOrSclName" : "HostFallback";
++        var confidence = !string.IsNullOrWhiteSpace(inferred)
++            ? materialized.Length > 1 ? "High" : "Medium"
++            : explicitIsUseful ? "High" : "Low";
++
++        return new Iec61850DiscoveredIdentity(name, host, aliases, source, confidence);
+     }
+ 
+     public static string DisplayLogicalDevice(Iec61850DiscoveredIdentity identity, string mmsDomain)
+@@ -71,51 +104,149 @@ public static string DisplayLogicalDevice(Iec61850DiscoveredIdentity identity, s
+             ? alias
+             : mmsDomain;
+ 
++    private static string ChooseBestInferredName(string commonPrefix, string strippedConsensus, IReadOnlyList<string> domains)
++    {
++        var candidates = new[] { commonPrefix, strippedConsensus }
++            .Where(x => IsValidPrefixForAll(x, domains))
++            .Distinct(StringComparer.OrdinalIgnoreCase)
++            .OrderByDescending(x => x.Length)
++            .ToArray();
++
++        if (candidates.Length == 0)
++            return string.Empty;
++
++        // Prefer the longer stable domain stem. This fixes models such as
++        // OLSF501ADD/OLSF501CB1/OLSF501Ln1_* => OLSF501 instead of OLSF.
++        return candidates[0];
++    }
++
++    private static bool ShouldPreferInferredName(string explicitName, string inferred, IReadOnlyList<string> domains)
++    {
++        if (string.IsNullOrWhiteSpace(inferred) || inferred.Equals(explicitName, StringComparison.OrdinalIgnoreCase))
++            return false;
++
++        if (!IsValidPrefixForAll(inferred, domains))
++            return false;
++
++        // Replace a weak truncated live-model name (OLSF) with the stronger domain-set
++        // identity (OLSF501), but never shorten a more specific configured/SCL name.
++        return inferred.StartsWith(explicitName, StringComparison.OrdinalIgnoreCase) && inferred.Length > explicitName.Length;
++    }
++
++    private static bool IsUsefulExplicitName(string name, string host)
++        => !string.IsNullOrWhiteSpace(name) &&
++           !name.Equals("IED", StringComparison.OrdinalIgnoreCase) &&
++           !name.Equals("DISCOVERED_IED", StringComparison.OrdinalIgnoreCase) &&
++           !name.Equals(host, StringComparison.OrdinalIgnoreCase) &&
++           !name.StartsWith("IED_", StringComparison.OrdinalIgnoreCase);
++
++    private static bool IsValidPrefixForAll(string candidate, IReadOnlyList<string> domains)
++        => !string.IsNullOrWhiteSpace(candidate) &&
++           candidate.Length >= 2 &&
++           candidate.Any(char.IsLetter) &&
++           domains.Count > 0 &&
++           domains.All(domain => domain.Length >= candidate.Length && domain.StartsWith(candidate, StringComparison.OrdinalIgnoreCase));
++
+     private static string LongestCommonPrefix(IReadOnlyList<string> values)
+     {
+         if (values.Count == 0)
+             return string.Empty;
+-        if (values.Count == 1)
+-            return string.Empty;
+ 
+         var prefix = values[0];
+         foreach (var value in values.Skip(1))
+         {
+             var length = 0;
+-            while (length < prefix.Length && length < value.Length && char.ToUpperInvariant(prefix[length]) == char.ToUpperInvariant(value[length]))
++            while (length < prefix.Length && length < value.Length &&
++                   char.ToUpperInvariant(prefix[length]) == char.ToUpperInvariant(value[length]))
++            {
+                 length++;
++            }
++
+             prefix = prefix[..length];
+             if (prefix.Length == 0)
+                 break;
+         }
+ 
+-        return TrimPrefixBoundary(prefix);
++        return prefix;
+     }
+ 
+-    private static string TrimPrefixBoundary(string prefix)
++    private static string InferPrefixFromDomain(string domain)
+     {
+-        if (string.IsNullOrWhiteSpace(prefix))
++        var candidate = NormalizeCandidate(domain);
++        if (string.IsNullOrWhiteSpace(candidate))
+             return string.Empty;
+ 
+-        var trimmed = prefix.TrimEnd('_', '-', '.', ' ');
+-        while (trimmed.Length > 0 && char.IsLower(trimmed[^1]))
+-            trimmed = trimmed[..^1];
+-        return trimmed;
++        var roleIndex = FindKnownRoleStart(candidate);
++        if (roleIndex <= 0)
++            return string.Empty;
++
++        candidate = NormalizeCandidate(candidate[..roleIndex]);
++        candidate = StripLogicalDeviceOrdinal(candidate);
++        return candidate;
+     }
+ 
+-    private static string InferPrefixFromKnownSuffix(string domain)
++    private static string TrimKnownRoleTail(string prefix)
+     {
+-        if (string.IsNullOrWhiteSpace(domain))
++        var candidate = NormalizeCandidate(prefix);
++        if (string.IsNullOrWhiteSpace(candidate))
+             return string.Empty;
+ 
+-        foreach (var suffix in KnownLdSuffixes.OrderByDescending(x => x.Length))
++        foreach (var role in KnownLdRolePrefixes.OrderByDescending(x => x.Length))
+         {
+-            if (domain.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) && domain.Length > suffix.Length + 2)
+-                return domain[..^suffix.Length].TrimEnd('_', '-', '.', ' ');
++            if (candidate.EndsWith(role, StringComparison.OrdinalIgnoreCase) && candidate.Length > role.Length + 1)
++                return StripLogicalDeviceOrdinal(NormalizeCandidate(candidate[..^role.Length]));
+         }
+ 
+-        return string.Empty;
++        return candidate;
++    }
++
++    private static int FindKnownRoleStart(string domain)
++    {
++        for (var index = 2; index < domain.Length; index++)
++        {
++            var tail = domain[index..];
++            foreach (var role in KnownLdRolePrefixes.OrderByDescending(x => x.Length))
++            {
++                if (!tail.StartsWith(role, StringComparison.OrdinalIgnoreCase))
++                    continue;
++
++                // A role may be followed by an ordinal or project suffix. Requiring a
++                // case/digit boundary avoids treating letters inside the IED name as LDInst.
++                var previous = domain[index - 1];
++                var boundaryBefore = char.IsDigit(previous) ||
++                                     previous is '_' or '-' or '.' ||
++                                     (char.IsLower(previous) && char.IsUpper(domain[index]));
++                if (boundaryBefore)
++                    return index;
++            }
++        }
++
++        return -1;
+     }
++
++    private static string StripLogicalDeviceOrdinal(string candidate)
++    {
++        var end = candidate.Length;
++        while (end > 0 && char.IsDigit(candidate[end - 1]))
++            end--;
++
++        if (end == candidate.Length || end < 3)
++            return candidate;
++
++        var stem = candidate[..end];
++        var trailingLetters = 0;
++        for (var index = stem.Length - 1; index >= 0 && char.IsLetter(stem[index]); index--)
++            trailingLetters++;
++
++        // OCR7SR12CTRL => role CTRL, ordinal 12, IEDName OCR7SR.
++        // Do not strip product digits from names that do not have a stable letter stem.
++        return trailingLetters >= 2 && stem[..^trailingLetters].Any(char.IsDigit)
++            ? stem
++            : candidate;
++    }
++
++    private static string NormalizeCandidate(string? value)
++        => (value ?? string.Empty).Trim().TrimEnd('_', '-', '.', ' ');
+ }
+ 
+ public sealed record Iec61850SmartReadTarget(string Reference, string FunctionalConstraint, string Purpose, int Priority);
+diff --git a/src/AR.Iec61850/Binding/Iec61850ValueBindingEngine.cs b/src/AR.Iec61850/Binding/Iec61850ValueBindingEngine.cs
+index 8eb0e1104eaf6e19f04f18a0a704ee3fd33205da..4a221ad4b50b1a29133df6cb281c20f0731e3c32 100644
+--- a/src/AR.Iec61850/Binding/Iec61850ValueBindingEngine.cs
++++ b/src/AR.Iec61850/Binding/Iec61850ValueBindingEngine.cs
+@@ -346,7 +346,7 @@ public static class Iec61850QualityDecoder
+     public static Iec61850DecodedQuality Decode(MmsDataValue? value)
+     {
+         value = FindFirst(value, MmsDataKind.BitString);
+-        if (value?.Kind != MmsDataKind.BitString)
++        if (value?.Kind != MmsDataKind.BitString || !HasQualityBitLength(value))
+             return new Iec61850DecodedQuality(false, "-", false, false, false, false, false, false, false, false, "-", false, false);
+ 
+         var bit = BitReader(value);
+@@ -376,6 +376,20 @@ public static Iec61850DecodedQuality Decode(MmsDataValue? value)
+             bit(12));
+     }
+ 
++
++    private static bool HasQualityBitLength(MmsDataValue value)
++    {
++        if (value.RawValue.Count < 3)
++            return false;
++
++        var unusedBits = value.RawValue[0];
++        if (unusedBits > 7)
++            return false;
++
++        var bitCount = (value.RawValue.Count - 1) * 8 - unusedBits;
++        return bitCount >= 13;
++    }
++
+     private static MmsDataValue? FindFirst(MmsDataValue? value, MmsDataKind kind)
+     {
+         if (value == null)
+@@ -422,6 +436,7 @@ public sealed record Iec61850DecodedTimestamp(
+ 
+ public static class Iec61850TimestampDecoder
+ {
++
+     private static MmsDataValue? FindFirst(MmsDataValue? value, MmsDataKind kind)
+     {
+         if (value == null)
+@@ -465,6 +480,7 @@ public sealed record Iec61850DecodedCheck(bool IsDecoded, bool InterlockCheck, b
+ 
+ public static class Iec61850CheckDecoder
+ {
++
+     private static MmsDataValue? FindFirst(MmsDataValue? value, MmsDataKind kind)
+     {
+         if (value == null)
+diff --git a/src/AR.Iec61850/Discovery/LiveIedModelDiscoveryBuilder.cs b/src/AR.Iec61850/Discovery/LiveIedModelDiscoveryBuilder.cs
+index 39533a81899f6f8bcfbd99494ff9ec33b4e2017a..b927f74079a4880f2a7f85aa53c14b04b1587038 100644
+--- a/src/AR.Iec61850/Discovery/LiveIedModelDiscoveryBuilder.cs
++++ b/src/AR.Iec61850/Discovery/LiveIedModelDiscoveryBuilder.cs
+@@ -1,3 +1,4 @@
++using AR.Iec61850.Binding;
+ using AR.Iec61850.Mms;
+ 
+ namespace AR.Iec61850.Discovery;
+@@ -41,7 +42,13 @@ public static LiveIedModelDiscoveryDocument Build(
+         var variableTypes = BuildVariableTypeDiscoveries(variableTypeList).ToArray();
+         var warnings = BuildWarnings(directory, dataSets, controlBlocks, variableTypeList).ToArray();
+         var coverage = BuildCoverage(logicalDevices, dataSets, reportControls, controlBlocks, variableTypes);
+-        var iedName = string.IsNullOrWhiteSpace(options.IedName) ? InferIedName(directory, options.Host) : options.IedName.Trim();
++        var identity = Iec61850IdentityResolver.ResolveFromDomains(
++            directory.LogicalDevices.Keys,
++            options.Host,
++            options.IedName);
++        var iedName = string.IsNullOrWhiteSpace(identity.IedName)
++            ? string.IsNullOrWhiteSpace(options.Host) ? "DISCOVERED_IED" : "IED_" + Iec61850ReferenceParts.SafeIdPart(options.Host)
++            : identity.IedName;
+ 
+         return new LiveIedModelDiscoveryDocument
+         {
+@@ -473,18 +480,6 @@ private static LiveIedModelDiscoveryCoverage BuildCoverage(
+     private static string FormatSummary(LiveIedModelDiscoveryCoverage coverage)
+         => $"Live IED model: LD={coverage.LogicalDeviceCount}, LN={coverage.LogicalNodeCount}, DO={coverage.DataObjectCount}, DA={coverage.DataAttributeCount}, DataSets={coverage.DataSetCount}, RCB={coverage.ReportControlCount}, GoCB={coverage.GooseControlBlockCount}, SVCB={coverage.SampledValueControlBlockCount}, SGCB={coverage.SettingGroupControlCount}, LCB={coverage.LogControlCount}.";
+ 
+-    private static string InferIedName(MmsIedModelDirectory directory, string host)
+-    {
+-        var firstLd = directory.LogicalDevices.Keys.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).FirstOrDefault();
+-        if (!string.IsNullOrWhiteSpace(firstLd))
+-        {
+-            var letters = new string(firstLd.TakeWhile(ch => char.IsLetterOrDigit(ch) && !char.IsDigit(ch)).ToArray());
+-            return string.IsNullOrWhiteSpace(letters) ? firstLd : letters;
+-        }
+-
+-        return string.IsNullOrWhiteSpace(host) ? "DISCOVERED_IED" : "IED_" + Iec61850ReferenceParts.SafeIdPart(host);
+-    }
+-
+     private static string NormalizeDataSetReference(string value)
+         => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Replace('$', '.');
+ 
+diff --git a/src/AR.Iec61850/Mms/MmsClientSession.cs b/src/AR.Iec61850/Mms/MmsClientSession.cs
+index c29ed373f9b8101cbda4b537b7586110143ea7a9..d9eabffacfd79cab8d37acbdfd367004809208bf 100644
+--- a/src/AR.Iec61850/Mms/MmsClientSession.cs
++++ b/src/AR.Iec61850/Mms/MmsClientSession.cs
+@@ -1003,6 +1003,7 @@ private async ValueTask ResetTransportAsync()
+         _cotp.Reset();
+         await _tpkt.DisposeAsync().ConfigureAwait(false);
+         _receiveRouter.Clear();
++        ClearPersistentReportMonitors();
+     }
+ 
+     private static IReadOnlyList<(string Profile, MmsObjectReference Reference)> BuildReadCandidates(MmsObjectReference reference)
+diff --git a/src/AR.Iec61850/Mms/MmsPersistentReportMonitor.cs b/src/AR.Iec61850/Mms/MmsPersistentReportMonitor.cs
+index ae47e11dd8b30132e690b5e030bc31c6a53dc164..2d933fb257da224482a73a016803894c8f11a6de 100644
+--- a/src/AR.Iec61850/Mms/MmsPersistentReportMonitor.cs
++++ b/src/AR.Iec61850/Mms/MmsPersistentReportMonitor.cs
+@@ -1,3 +1,5 @@
++using System.Collections.Concurrent;
++
+ namespace AR.Iec61850.Mms;
+ 
+ public sealed class MmsPersistentReportMonitorSession
+@@ -37,6 +39,8 @@ internal MmsPersistentReportMonitorSession(
+     public int PollReadCount { get; internal set; }
+     public bool IsStopped { get; internal set; }
+ 
++    internal ConcurrentQueue<MmsReportFrame> PendingReports { get; } = new();
++
+     public string Summary =>
+         $"persistent report monitor: rcb={ReportControl.Reference}, dataset={Plan.DataSetReference}, mode={Plan.Mode}, reports={ReportCount}, stopped={IsStopped}";
+ }
+@@ -69,6 +73,17 @@ public sealed class MmsPersistentReportMonitorStopResult
+ 
+ public sealed partial class MmsClientSession
+ {
++    private readonly object _persistentReportMonitorSync = new();
++    private readonly HashSet<MmsPersistentReportMonitorSession> _persistentReportMonitors = new();
++    private int _unroutedPersistentReportCount;
++
++    /// <summary>
++    /// Number of InformationReport PDUs that could not be assigned unambiguously
++    /// to an active persistent monitor. Such reports are deliberately not mapped
++    /// against an arbitrary DataSet because that can corrupt values.
++    /// </summary>
++    public int UnroutedPersistentReportCount => Volatile.Read(ref _unroutedPersistentReportCount);
++
+     public async Task<MmsPersistentReportMonitorStartResult> StartPersistentReportMonitorAsync(
+         MmsReportSubscriptionPlan plan,
+         bool triggerGeneralInterrogation = true,
+@@ -217,6 +232,7 @@ public async Task<MmsPersistentReportMonitorStartResult> StartPersistentReportMo
+                 dataSetCreated,
+                 reservationTouched,
+                 enabledByThisClient);
++            RegisterPersistentReportMonitor(session);
+ 
+             return new MmsPersistentReportMonitorStartResult
+             {
+@@ -260,28 +276,18 @@ public async Task<MmsPersistentReportMonitorReceiveResult> ReceivePersistentRepo
+         var reports = new List<MmsReportFrame>();
+         var pollReads = new List<MmsReportPollRead>();
+         var writes = new List<MmsReportAttributeWriteStep>();
+-        Func<CancellationToken, Task<MmsReportAttributeWriteStep>>? giWriter = null;
+-        TimeSpan? giInterval = null;
+-        if (triggerGeneralInterrogation)
+-        {
+-            giWriter = token => WriteReportAttributeAsync(session.ReportControl, "GI", MmsDataValue.Boolean(true), token);
+-            giInterval = TimeSpan.FromMilliseconds(1);
+-        }
+ 
+-        var received = await ReceiveInformationReportsAsync(
+-            session.Plan.Members,
++        await ReceiveAndDispatchPersistentReportsAsync(
++            session,
+             duration <= TimeSpan.Zero ? TimeSpan.FromMilliseconds(250) : duration,
+             pollDirectory,
+             pollReferences,
+             pollInterval,
++            triggerGeneralInterrogation,
++            reports,
+             pollReads,
+-            soakSnapshots: null,
+-            soakSnapshotInterval: null,
+-            giWriter,
+-            giInterval,
+             writes,
+             cancellationToken).ConfigureAwait(false);
+-        reports.AddRange(received);
+ 
+         if (reports.Count > 0)
+         {
+@@ -310,6 +316,7 @@ public async Task<MmsPersistentReportMonitorStopResult> StopPersistentReportMoni
+ 
+         var writes = new List<MmsReportAttributeWriteStep>();
+         var success = true;
++        UnregisterPersistentReportMonitor(session);
+ 
+         if (session.EnabledByThisClient)
+         {
+@@ -376,4 +383,276 @@ public async Task<MmsPersistentReportMonitorStopResult> StopPersistentReportMoni
+                 : $"Persistent report monitor stop completed with cleanup warnings for {session.ReportControl.Reference}."
+         };
+     }
++
++    private void RegisterPersistentReportMonitor(MmsPersistentReportMonitorSession session)
++    {
++        lock (_persistentReportMonitorSync)
++            _persistentReportMonitors.Add(session);
++    }
++
++    private void UnregisterPersistentReportMonitor(MmsPersistentReportMonitorSession session)
++    {
++        lock (_persistentReportMonitorSync)
++            _persistentReportMonitors.Remove(session);
++
++        while (session.PendingReports.TryDequeue(out _))
++        {
++        }
++    }
++
++    private MmsPersistentReportMonitorSession[] SnapshotPersistentReportMonitors()
++    {
++        lock (_persistentReportMonitorSync)
++            return _persistentReportMonitors.Where(x => !x.IsStopped).ToArray();
++    }
++
++    private void ClearPersistentReportMonitors()
++    {
++        lock (_persistentReportMonitorSync)
++        {
++            foreach (var session in _persistentReportMonitors)
++            {
++                session.IsStopped = true;
++                while (session.PendingReports.TryDequeue(out _))
++                {
++                }
++            }
++
++            _persistentReportMonitors.Clear();
++            Interlocked.Exchange(ref _unroutedPersistentReportCount, 0);
++        }
++    }
++
++    private async Task ReceiveAndDispatchPersistentReportsAsync(
++        MmsPersistentReportMonitorSession requestedSession,
++        TimeSpan duration,
++        MmsIedModelDirectory? pollDirectory,
++        IReadOnlyList<string>? pollReferences,
++        TimeSpan? pollInterval,
++        bool triggerGeneralInterrogation,
++        List<MmsReportFrame> reports,
++        List<MmsReportPollRead> pollReads,
++        List<MmsReportAttributeWriteStep> writes,
++        CancellationToken cancellationToken)
++    {
++        var references = pollReferences?
++            .Where(x => !string.IsNullOrWhiteSpace(x))
++            .Distinct(StringComparer.OrdinalIgnoreCase)
++            .ToArray() ?? Array.Empty<string>();
++        var effectiveDuration = duration <= TimeSpan.Zero ? TimeSpan.FromMilliseconds(250) : duration;
++        var deadline = DateTimeOffset.UtcNow + effectiveDuration;
++        var effectivePollInterval = pollInterval.GetValueOrDefault(TimeSpan.FromSeconds(1));
++        if (effectivePollInterval <= TimeSpan.Zero)
++            effectivePollInterval = TimeSpan.FromSeconds(1);
++
++        var nextPollAt = DateTimeOffset.UtcNow;
++        var giPending = triggerGeneralInterrogation;
++
++        while (DateTimeOffset.UtcNow < deadline)
++        {
++            cancellationToken.ThrowIfCancellationRequested();
++            DrainPendingReports(requestedSession, reports);
++
++            var routedAny = false;
++            while (TryDequeueInformationReport(out var queuedPayload))
++            {
++                RoutePersistentInformationReport(queuedPayload);
++                routedAny = true;
++            }
++
++            DrainPendingReports(requestedSession, reports);
++            if (routedAny)
++                continue;
++
++            if (giPending)
++            {
++                writes.Add(await WriteReportAttributeAsync(
++                    requestedSession.ReportControl,
++                    "GI",
++                    MmsDataValue.Boolean(true),
++                    cancellationToken).ConfigureAwait(false));
++                giPending = false;
++                continue;
++            }
++
++            if (pollDirectory != null && references.Length > 0 && DateTimeOffset.UtcNow >= nextPollAt)
++            {
++                foreach (var reference in references)
++                {
++                    if (DateTimeOffset.UtcNow >= deadline)
++                        break;
++
++                    pollReads.Add(await ReadReportPollReferenceAsync(
++                        pollDirectory,
++                        reference,
++                        cancellationToken).ConfigureAwait(false));
++                }
++
++                nextPollAt = DateTimeOffset.UtcNow + effectivePollInterval;
++                continue;
++            }
++
++            var remaining = deadline - DateTimeOffset.UtcNow;
++            if (remaining <= TimeSpan.Zero)
++                break;
++
++            if (IsReceivePumpRunning)
++            {
++                var delay = remaining < TimeSpan.FromMilliseconds(25) ? remaining : TimeSpan.FromMilliseconds(25);
++                if (delay > TimeSpan.Zero)
++                    await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
++                continue;
++            }
++
++            if (!_cotp.HasDataAvailable)
++            {
++                var delay = remaining < TimeSpan.FromMilliseconds(25) ? remaining : TimeSpan.FromMilliseconds(25);
++                if (delay > TimeSpan.Zero)
++                    await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
++                continue;
++            }
++
++            var payload = await _cotp.ReceiveDataAsync(cancellationToken).ConfigureAwait(false);
++            var route = _receiveRouter.Route(payload);
++            LastReceiveRoutingSummary = route.Message;
++        }
++
++        DrainPendingReports(requestedSession, reports);
++    }
++
++    private static void DrainPendingReports(MmsPersistentReportMonitorSession session, List<MmsReportFrame> destination)
++    {
++        while (session.PendingReports.TryDequeue(out var frame))
++            destination.Add(frame);
++    }
++
++    private void RoutePersistentInformationReport(byte[] payload)
++    {
++        if (!MmsInformationReportDecoder.IsInformationReport(payload))
++            return;
++
++        MmsInformationReport decoded;
++        try
++        {
++            decoded = MmsInformationReportDecoder.Decode(payload);
++        }
++        catch (Exception ex) when (ex is InvalidDataException or ArgumentException)
++        {
++            Interlocked.Increment(ref _unroutedPersistentReportCount);
++            LastReceiveRoutingSummary = $"InformationReport decode failed before RCB routing: {ex.GetType().Name}: {ex.Message}";
++            return;
++        }
++
++        var header = MmsReportFrameMapper.DecodeHeader(decoded);
++        var active = SnapshotPersistentReportMonitors();
++        var target = SelectPersistentReportMonitor(active, header, out var evidence);
++        if (target == null)
++        {
++            Interlocked.Increment(ref _unroutedPersistentReportCount);
++            LastReceiveRoutingSummary =
++                $"Unrouted InformationReport: RptID={RoutingTextOrDash(header.ReportId)}, DatSet={RoutingTextOrDash(header.DataSetReference)}, activeRCB={active.Length}. {evidence}";
++            return;
++        }
++
++        var frame = MmsReportFrameMapper.Map(decoded, target.Plan.Members, DateTimeOffset.UtcNow);
++        target.PendingReports.Enqueue(frame);
++        LastReceiveRoutingSummary =
++            $"Routed InformationReport to {target.ReportControl.Reference} by {evidence}. RptID={RoutingTextOrDash(header.ReportId)}, DatSet={RoutingTextOrDash(header.DataSetReference)}.";
++    }
++
++    internal static MmsPersistentReportMonitorSession? SelectPersistentReportMonitor(
++        IReadOnlyList<MmsPersistentReportMonitorSession> active,
++        MmsReportHeader header,
++        out string evidence)
++    {
++        ArgumentNullException.ThrowIfNull(active);
++        ArgumentNullException.ThrowIfNull(header);
++        var candidates = active.Where(x => !x.IsStopped).ToArray();
++        if (candidates.Length == 0)
++        {
++            evidence = "no active persistent monitor";
++            return null;
++        }
++
++        var reportId = NormalizeRoutingReference(header.ReportId);
++        if (!string.IsNullOrWhiteSpace(reportId))
++        {
++            var exactRptId = candidates
++                .Where(x => NormalizeRoutingReference(x.ReportControl.ReportId).Equals(reportId, StringComparison.OrdinalIgnoreCase))
++                .ToArray();
++            if (exactRptId.Length == 1)
++            {
++                evidence = "exact RptID";
++                return exactRptId[0];
++            }
++
++            var rcbAffinity = candidates.Where(x => HasRcbNameAffinity(reportId, x.ReportControl)).ToArray();
++            if (rcbAffinity.Length == 1)
++            {
++                evidence = "RptID-to-RCB name affinity";
++                return rcbAffinity[0];
++            }
++        }
++
++        var dataSet = NormalizeRoutingReference(header.DataSetReference);
++        if (!string.IsNullOrWhiteSpace(dataSet))
++        {
++            var exactDataSet = candidates
++                .Where(x => NormalizeRoutingReference(x.Plan.DataSetReference).Equals(dataSet, StringComparison.OrdinalIgnoreCase))
++                .ToArray();
++            if (exactDataSet.Length == 1)
++            {
++                evidence = "exact DataSet";
++                return exactDataSet[0];
++            }
++
++            var dataSetTail = RoutingTail(dataSet);
++            var tailMatches = candidates
++                .Where(x => RoutingTail(NormalizeRoutingReference(x.Plan.DataSetReference)).Equals(dataSetTail, StringComparison.OrdinalIgnoreCase))
++                .ToArray();
++            if (!string.IsNullOrWhiteSpace(dataSetTail) && tailMatches.Length == 1)
++            {
++                evidence = "DataSet tail";
++                return tailMatches[0];
++            }
++        }
++
++        if (candidates.Length == 1)
++        {
++            evidence = "single active monitor fallback";
++            return candidates[0];
++        }
++
++        evidence = "ambiguous report identity; report was not projected against an arbitrary DataSet";
++        return null;
++    }
++
++    private static bool HasRcbNameAffinity(string reportId, MmsReportControlCandidate reportControl)
++    {
++        var name = NormalizeRoutingReference(reportControl.Name);
++        if (string.IsNullOrWhiteSpace(name))
++            return false;
++
++        return reportId.Equals(name, StringComparison.OrdinalIgnoreCase) ||
++               reportId.EndsWith("." + name, StringComparison.OrdinalIgnoreCase) ||
++               reportId.EndsWith("/" + name, StringComparison.OrdinalIgnoreCase) ||
++               reportId.Contains("." + name + ".", StringComparison.OrdinalIgnoreCase);
++    }
++
++    private static string RoutingTail(string reference)
++    {
++        if (string.IsNullOrWhiteSpace(reference))
++            return string.Empty;
++
++        var slash = reference.LastIndexOf('/');
++        var dot = reference.LastIndexOf('.');
++        var index = Math.Max(slash, dot);
++        return index >= 0 && index + 1 < reference.Length ? reference[(index + 1)..] : reference;
++    }
++
++    private static string NormalizeRoutingReference(string? reference)
++        => (reference ?? string.Empty).Trim().Replace('$', '.').Replace('\\', '/').TrimEnd('.');
++
++    private static string RoutingTextOrDash(string? value)
++        => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+ }
+diff --git a/src/AR.Iec61850/Mms/MmsReportLiveSession.cs b/src/AR.Iec61850/Mms/MmsReportLiveSession.cs
+index db916f92bedbc45f055b5f8ac0c967cfe02601fe..c51924658b2d1878130fb362f1ad86bb8df4b417 100644
+--- a/src/AR.Iec61850/Mms/MmsReportLiveSession.cs
++++ b/src/AR.Iec61850/Mms/MmsReportLiveSession.cs
+@@ -333,6 +333,100 @@ public static MmsReportFrame Map(
+         };
+     }
+ 
++    /// <summary>
++    /// Decodes the IEC 61850 report identity and optional header fields without
++    /// requiring a DataSet member list. This is used to route one MMS
++    /// InformationReport to the correct active RCB before value projection.
++    /// </summary>
++    public static MmsReportHeader DecodeHeader(MmsInformationReport decoded)
++    {
++        ArgumentNullException.ThrowIfNull(decoded);
++        var items = decoded.Items;
++        if (items.Count == 0)
++            return new MmsReportHeader();
++
++        var reportId = IsTextValue(items[0].Value) ? ToText(items[0].Value) : string.Empty;
++        if (items.Count < 2 || items[1].Value?.Kind != MmsDataKind.BitString)
++            return new MmsReportHeader { ReportId = reportId };
++
++        var optionalFields = DecodeOptionalFields(items[1].Value!);
++        var cursor = 2;
++        ulong? sequenceNumber = null;
++        ulong? subSequenceNumber = null;
++        bool? moreSegmentsFollow = null;
++        var timeOfEntry = string.Empty;
++        var dataSet = string.Empty;
++        bool? bufferOverflow = null;
++        var entryIdHex = string.Empty;
++        ulong? confRev = null;
++
++        if (optionalFields.HasSequenceNumber)
++        {
++            if (cursor < items.Count && items[cursor].Value != null && TryToUnsigned(items[cursor].Value!, out var sequence))
++                sequenceNumber = sequence;
++            cursor++;
++        }
++
++        if (optionalFields.HasReportTimestamp)
++        {
++            if (cursor < items.Count && items[cursor].Value is { } timeValue && IsTimeValue(timeValue))
++                timeOfEntry = MmsDataValueRenderer.ToCompactString(timeValue);
++            cursor++;
++        }
++
++        if (optionalFields.HasDataSetName)
++        {
++            if (cursor < items.Count && IsTextValue(items[cursor].Value))
++                dataSet = ToText(items[cursor].Value);
++            cursor++;
++        }
++
++        if (optionalFields.HasBufferOverflow)
++        {
++            if (cursor < items.Count && items[cursor].Value?.Kind == MmsDataKind.Boolean && items[cursor].Value?.Value is bool flag)
++                bufferOverflow = flag;
++            cursor++;
++        }
++
++        if (optionalFields.HasEntryId)
++        {
++            if (cursor < items.Count && items[cursor].Value?.Kind == MmsDataKind.OctetString)
++                entryIdHex = Convert.ToHexString(items[cursor].Value!.RawValue.ToArray());
++            cursor++;
++        }
++
++        if (optionalFields.HasConfRevision)
++        {
++            if (cursor < items.Count && items[cursor].Value != null && TryToUnsigned(items[cursor].Value!, out var revision))
++                confRev = revision;
++            cursor++;
++        }
++
++        if (optionalFields.HasSegmentation)
++        {
++            if (cursor < items.Count && items[cursor].Value != null && TryToUnsigned(items[cursor].Value!, out var subSequence))
++                subSequenceNumber = subSequence;
++            cursor++;
++
++            if (cursor < items.Count && items[cursor].Value?.Kind == MmsDataKind.Boolean && items[cursor].Value?.Value is bool more)
++                moreSegmentsFollow = more;
++        }
++
++        return new MmsReportHeader
++        {
++            ReportId = reportId,
++            OptionalFields = optionalFields,
++            SequenceNumber = sequenceNumber,
++            SubSequenceNumber = subSequenceNumber,
++            MoreSegmentsFollow = moreSegmentsFollow,
++            TimeOfEntry = timeOfEntry,
++            DataSetReference = dataSet,
++            BufferOverflow = bufferOverflow,
++            EntryIdHex = entryIdHex,
++            ConfRev = confRev
++        };
++    }
++
+     private readonly record struct ReportValueMapping(
+         bool IsMapped,
+         MmsReportHeader Header,
+diff --git a/src/AR.Iec61850/Mms/MmsReportValueProjector.cs b/src/AR.Iec61850/Mms/MmsReportValueProjector.cs
+index e73561eea96a3fe489dac12c79882ff4e2580374..a270d94cc17948bf79972202393ece239135d7e9 100644
+--- a/src/AR.Iec61850/Mms/MmsReportValueProjector.cs
++++ b/src/AR.Iec61850/Mms/MmsReportValueProjector.cs
+@@ -13,6 +13,9 @@ public sealed class MmsReportSignalUpdate
+     public string Timestamp { get; init; } = "-";
+     public string Reason { get; init; } = "-";
+     public DateTimeOffset UpdatedAt { get; init; }
++    public bool HasValue { get; init; }
++    public bool HasQuality { get; init; }
++    public bool HasTimestamp { get; init; }
+     public bool IsProjectedChild { get; init; }
+     public string ProjectionStatus { get; init; } = string.Empty;
+ 
+@@ -71,12 +74,53 @@ public static MmsReportValueProjection Project(MmsReportFrame frame)
+             .GroupBy(x => Normalize(x.TimestampBaseReference), StringComparer.OrdinalIgnoreCase)
+             .ToDictionary(x => x.Key, x => x.Last().Value, StringComparer.OrdinalIgnoreCase);
+ 
+-        var updates = candidates
++        var valueUpdates = candidates
+             .Where(x => !x.IsQualityCarrier && !x.IsTimestampCarrier)
+             .Select(x => Enrich(x, qualityByBase, timestampByBase))
+             .Where(x => !string.IsNullOrWhiteSpace(x.Reference))
+             .GroupBy(x => Normalize(x.Reference) + "|" + x.FunctionalConstraint, StringComparer.OrdinalIgnoreCase)
+             .Select(x => x.Last())
++            .ToList();
++
++        // qchg/t-only reports are legal. Do not discard them merely because the same
++        // frame contains no process value member. Emit a partial companion update; the
++        // consumer keeps its current value while refreshing q/t.
++        var normalBases = valueUpdates
++            .Select(update => Normalize(BaseDataObjectReference(update.Reference)))
++            .ToHashSet(StringComparer.OrdinalIgnoreCase);
++        var companionGroups = candidates
++            .Where(x => x.IsQualityCarrier || x.IsTimestampCarrier)
++            .GroupBy(x => Normalize(x.IsQualityCarrier ? x.QualityBaseReference : x.TimestampBaseReference), StringComparer.OrdinalIgnoreCase);
++        foreach (var group in companionGroups)
++        {
++            if (string.IsNullOrWhiteSpace(group.Key) || normalBases.Contains(group.Key))
++                continue;
++
++            var qualityCarrier = group.LastOrDefault(x => x.IsQualityCarrier);
++            var timestampCarrier = group.LastOrDefault(x => x.IsTimestampCarrier);
++            var carrier = qualityCarrier ?? timestampCarrier;
++            if (carrier == null)
++                continue;
++
++            valueUpdates.Add(new MmsReportSignalUpdate
++            {
++                Reference = group.Key,
++                FunctionalConstraint = carrier.FunctionalConstraint,
++                DisplayName = ShortReference(group.Key),
++                Source = "report",
++                Value = "-",
++                Quality = qualityCarrier?.Value ?? "-",
++                Timestamp = timestampCarrier?.Value ?? "-",
++                Reason = string.Join(",", group.Select(x => x.Reason).Where(x => !string.IsNullOrWhiteSpace(x) && x != "-").Distinct(StringComparer.OrdinalIgnoreCase)),
++                UpdatedAt = group.Max(x => x.UpdatedAt),
++                HasValue = false,
++                HasQuality = qualityCarrier != null,
++                HasTimestamp = timestampCarrier != null,
++                ProjectionStatus = "companion-only"
++            });
++        }
++
++        var updates = valueUpdates
+             .OrderBy(x => x.Reference, StringComparer.OrdinalIgnoreCase)
+             .ToArray();
+ 
+@@ -119,6 +163,9 @@ private static MmsReportSignalUpdate Enrich(
+             Timestamp = string.IsNullOrWhiteSpace(t) ? "-" : t,
+             Reason = string.IsNullOrWhiteSpace(candidate.Reason) ? "-" : candidate.Reason,
+             UpdatedAt = candidate.UpdatedAt,
++            HasValue = true,
++            HasQuality = !string.IsNullOrWhiteSpace(q) && q != "-",
++            HasTimestamp = !string.IsNullOrWhiteSpace(t) && t != "-",
+             IsProjectedChild = candidate.IsProjectedChild,
+             ProjectionStatus = candidate.ProjectionStatus
+         };
+diff --git a/src/AR.Iec61850/Properties/AssemblyInfo.cs b/src/AR.Iec61850/Properties/AssemblyInfo.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..e39e3f54f11e48c3a91c104933e21b02e2910a19
+--- /dev/null
++++ b/src/AR.Iec61850/Properties/AssemblyInfo.cs
+@@ -0,0 +1,3 @@
++using System.Runtime.CompilerServices;
++
++[assembly: InternalsVisibleTo("AR.Iec61850.Tests")]
+diff --git a/tests/AR.Iec61850.Tests/Binding/Iec61850IdentityResolverTests.cs b/tests/AR.Iec61850.Tests/Binding/Iec61850IdentityResolverTests.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..dc042e7e88db836014fc653c249a32dba470a6a1
+--- /dev/null
++++ b/tests/AR.Iec61850.Tests/Binding/Iec61850IdentityResolverTests.cs
+@@ -0,0 +1,51 @@
++using AR.Iec61850.Binding;
++
++namespace AR.Iec61850.Tests.Binding;
++
++public sealed class Iec61850IdentityResolverTests
++{
++    [Fact]
++    public void ResolveFromDomains_PreservesProductDigitsBeforeLogicalDeviceRole()
++    {
++        var identity = Iec61850IdentityResolver.ResolveFromDomains(
++        [
++            "OLSF501ADD",
++            "OLSF501Application",
++            "OLSF501CB1",
++            "OLSF501Ln1_5051OC3phA1",
++            "OLSF501OperationalValues"
++        ],
++        "192.168.1.5",
++        fallbackName: "OLSF");
++
++        Assert.Equal("OLSF501", identity.IedName);
++        Assert.Equal("ADD", identity.LogicalDeviceAliases["OLSF501ADD"]);
++        Assert.Equal("CB1", identity.LogicalDeviceAliases["OLSF501CB1"]);
++        Assert.Equal("Ln1_5051OC3phA1", identity.LogicalDeviceAliases["OLSF501Ln1_5051OC3phA1"]);
++        Assert.Equal("High", identity.Confidence);
++    }
++
++    [Fact]
++    public void ResolveFromDomains_SplitsSingleDomainOrdinalAndRole()
++    {
++        var identity = Iec61850IdentityResolver.ResolveFromDomains(
++            ["OCR7SR12CTRL"],
++            "10.10.10.7");
++
++        Assert.Equal("OCR7SR", identity.IedName);
++        Assert.Equal("12CTRL", identity.LogicalDeviceAliases["OCR7SR12CTRL"]);
++        Assert.Equal("Medium", identity.Confidence);
++    }
++
++    [Fact]
++    public void ResolveFromDomains_DoesNotSplitRoleTextInsideConfiguredIedName()
++    {
++        var identity = Iec61850IdentityResolver.ResolveFromDomains(
++            ["MYCTRLDEVICE"],
++            "10.10.10.8",
++            fallbackName: "MYCTRLDEVICE");
++
++        Assert.Equal("MYCTRLDEVICE", identity.IedName);
++        Assert.Equal("MYCTRLDEVICE", identity.LogicalDeviceAliases["MYCTRLDEVICE"]);
++    }
++}
+diff --git a/tests/AR.Iec61850.Tests/Binding/Iec61850ValueBindingEngineTests.cs b/tests/AR.Iec61850.Tests/Binding/Iec61850ValueBindingEngineTests.cs
+index 640ae1c0bbcea813da5eb423c85a65729a523d4e..7b9883a712c477dc0dfad23a32e7721e91a6302c 100644
+--- a/tests/AR.Iec61850.Tests/Binding/Iec61850ValueBindingEngineTests.cs
++++ b/tests/AR.Iec61850.Tests/Binding/Iec61850ValueBindingEngineTests.cs
+@@ -35,6 +35,15 @@ public void Quality_BitString_Decodes_To_Named_Flags()
+         Assert.Contains(result.Root.Children, x => x.Name.Equals("Quality Details", StringComparison.OrdinalIgnoreCase));
+     }
+ 
++    [Fact]
++    public void Quality_Decoder_Rejects_TwoBit_DoublePoint_Status()
++    {
++        var decoded = Iec61850QualityDecoder.Decode(MmsDataValue.BitString(6, [0x40]));
++
++        Assert.False(decoded.IsDecoded);
++        Assert.Equal("-", decoded.Validity);
++    }
++
+     [Fact]
+     public void Timestamp_Decodes_To_Readable_Time_And_Time_Quality_Rows()
+     {
+diff --git a/tests/AR.Iec61850.Tests/Discovery/LiveIedModelDiscoveryBuilderTests.cs b/tests/AR.Iec61850.Tests/Discovery/LiveIedModelDiscoveryBuilderTests.cs
+index 1020ea43bfc67d2ec75ea7a71bbc52963a9f7e78..18f7b8bd66d163fb4bfc9af01ff77f6325246ebc 100644
+--- a/tests/AR.Iec61850.Tests/Discovery/LiveIedModelDiscoveryBuilderTests.cs
++++ b/tests/AR.Iec61850.Tests/Discovery/LiveIedModelDiscoveryBuilderTests.cs
+@@ -97,6 +97,43 @@ public void Builds_logical_model_and_infers_protection_operation_cdc()
+         Assert.Equal("1", document.LogicalDevices[0].LogicalNodes[0].LnInst);
+     }
+ 
++    [Fact]
++    public void Build_ReplacesWeakConfiguredNameWithStrongerMmsDomainIdentity()
++    {
++        var result = new MmsDiscoveryResult
++        {
++            IedDirectory = new MmsIedModelDirectory(
++            [
++                new MmsFcResolvedPoint
++                {
++                    Domain = "OLSF501ADD",
++                    LogicalNode = "LLN0",
++                    FunctionalConstraint = "ST",
++                    DataObjectPath = "Beh.stVal",
++                    MmsItemName = "LLN0$ST$Beh$stVal"
++                },
++                new MmsFcResolvedPoint
++                {
++                    Domain = "OLSF501CB1",
++                    LogicalNode = "CSWI1",
++                    FunctionalConstraint = "ST",
++                    DataObjectPath = "Pos.stVal",
++                    MmsItemName = "CSWI1$ST$Pos$stVal"
++                }
++            ])
++        };
++
++        var document = LiveIedModelDiscoveryBuilder.Build(
++            result,
++            new LiveIedModelDiscoveryBuildOptions
++            {
++                Host = "192.168.1.5",
++                IedName = "OLSF"
++            });
++
++        Assert.Equal("OLSF501", document.IedName);
++    }
++
+     [Fact]
+     public void Parses_dataset_directory_members_into_model()
+     {
+diff --git a/tests/AR.Iec61850.Tests/Mms/MmsPersistentReportRoutingTests.cs b/tests/AR.Iec61850.Tests/Mms/MmsPersistentReportRoutingTests.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..14ec1f5675ed477a61604cd2612da0f591718e68
+--- /dev/null
++++ b/tests/AR.Iec61850.Tests/Mms/MmsPersistentReportRoutingTests.cs
+@@ -0,0 +1,83 @@
++using AR.Iec61850.Mms;
++
++namespace AR.Iec61850.Tests.Mms;
++
++public sealed class MmsPersistentReportRoutingTests
++{
++    [Fact]
++    public void Selector_RoutesByExactReportIdBeforeDataSetProjection()
++    {
++        var first = CreateSession("URCBA01", "RPT_A", "IEDLD0/LLN0.DS_A");
++        var second = CreateSession("URCBA02", "RPT_B", "IEDLD0/LLN0.DS_B");
++
++        var selected = MmsClientSession.SelectPersistentReportMonitor(
++            [first, second],
++            new MmsReportHeader { ReportId = "RPT_B", DataSetReference = "IEDLD0/LLN0$DS_B" },
++            out var evidence);
++
++        Assert.Same(second, selected);
++        Assert.Equal("exact RptID", evidence);
++    }
++
++    [Fact]
++    public void Selector_RoutesByExactDataSetWhenReportIdIsUnavailable()
++    {
++        var first = CreateSession("URCBA01", "", "IEDLD0/LLN0.DS_A");
++        var second = CreateSession("URCBA02", "", "IEDLD0/LLN0.DS_B");
++
++        var selected = MmsClientSession.SelectPersistentReportMonitor(
++            [first, second],
++            new MmsReportHeader { DataSetReference = "IEDLD0/LLN0$DS_A" },
++            out var evidence);
++
++        Assert.Same(first, selected);
++        Assert.Equal("exact DataSet", evidence);
++    }
++
++    [Fact]
++    public void Selector_DoesNotProjectAmbiguousReportAgainstArbitraryMembers()
++    {
++        var first = CreateSession("URCBA01", "", "IEDLD0/LLN0.DS_A");
++        var second = CreateSession("URCBA02", "", "IEDLD0/LLN0.DS_B");
++
++        var selected = MmsClientSession.SelectPersistentReportMonitor(
++            [first, second],
++            new MmsReportHeader(),
++            out var evidence);
++
++        Assert.Null(selected);
++        Assert.Contains("ambiguous", evidence, StringComparison.OrdinalIgnoreCase);
++    }
++
++    private static MmsPersistentReportMonitorSession CreateSession(string rcbName, string reportId, string dataSet)
++    {
++        var rcb = new MmsReportControlCandidate
++        {
++            Domain = "IEDLD0",
++            LogicalNode = "LLN0",
++            FunctionalConstraint = "RP",
++            Name = rcbName,
++            Reference = $"IEDLD0/LLN0.RP.{rcbName}",
++            ReportId = reportId,
++            DataSetReference = dataSet
++        };
++        var plan = new MmsReportSubscriptionPlan
++        {
++            Mode = MmsReportSubscriptionPlanMode.StaticDataSet,
++            Status = MmsReportSubscriptionPlanStatus.ReadyRequiresWrite,
++            ReportControl = rcb,
++            DataSetReference = dataSet,
++            Members = [new MmsDataSetDirectoryMember { UserReference = $"IEDLD0/GGIO1.{rcbName}.stVal", FunctionalConstraint = "ST" }]
++        };
++
++        return new MmsPersistentReportMonitorSession(
++            plan,
++            rcb,
++            originalDataSetReference: dataSet,
++            isDynamic: false,
++            deleteDynamicDataSetOnStop: false,
++            dataSetCreated: false,
++            reservationTouched: false,
++            enabledByThisClient: true);
++    }
++}
+diff --git a/tests/AR.Iec61850.Tests/Mms/MmsReportExactDecoderTests.cs b/tests/AR.Iec61850.Tests/Mms/MmsReportExactDecoderTests.cs
+index 382376b0be260245bdd6cf5fe84a1a231a21ed70..77c2d1302ed3cb70169e7800f1a0c921de601444 100644
+--- a/tests/AR.Iec61850.Tests/Mms/MmsReportExactDecoderTests.cs
++++ b/tests/AR.Iec61850.Tests/Mms/MmsReportExactDecoderTests.cs
+@@ -48,4 +48,33 @@ public void ReportFrameMapper_UsesOptFldsDrivenDecodeForRealisticBufferedReportS
+         Assert.Equal(2, frame.Values.Count);
+         Assert.All(frame.Values, value => Assert.Equal(["application-trigger"], value.ReasonForInclusion));
+     }
++    [Fact]
++    public void DecodeHeader_ExtractsRoutingIdentityBeforeDataSetMemberMapping()
++    {
++        var decoded = new MmsInformationReport
++        {
++            IsSuccess = true,
++            Items =
++            [
++                new MmsInformationReportItem { Index = 0, Value = MmsDataValue.VisibleString("IEDLD0/LLN0$RP$URCBA02") },
++                new MmsInformationReportItem { Index = 1, Value = MmsDataValue.BitString(6, [0x7B, 0x80]) },
++                new MmsInformationReportItem { Index = 2, Value = MmsDataValue.Unsigned(19) },
++                new MmsInformationReportItem { Index = 3, Value = MmsDataValue.BinaryTime(Convert.FromHexString("04B1EE6A3C8F")) },
++                new MmsInformationReportItem { Index = 4, Value = MmsDataValue.VisibleString("IEDLD0/LLN0$DS_B") },
++                new MmsInformationReportItem { Index = 5, Value = MmsDataValue.Boolean(false) },
++                new MmsInformationReportItem { Index = 6, Value = MmsDataValue.OctetString(Convert.FromHexString("01020304")) },
++                new MmsInformationReportItem { Index = 7, Value = MmsDataValue.Unsigned(7) }
++            ]
++        };
++
++        var header = MmsReportFrameMapper.DecodeHeader(decoded);
++
++        Assert.Equal("IEDLD0/LLN0$RP$URCBA02", header.ReportId);
++        Assert.Equal("IEDLD0/LLN0$DS_B", header.DataSetReference);
++        Assert.Equal((ulong)19, header.SequenceNumber);
++        Assert.Equal((ulong)7, header.ConfRev);
++        Assert.False(header.BufferOverflow);
++        Assert.Equal("01020304", header.EntryIdHex);
++    }
++
+ }
+diff --git a/tests/AR.Iec61850.Tests/Mms/MmsReportValueProjectorTests.cs b/tests/AR.Iec61850.Tests/Mms/MmsReportValueProjectorTests.cs
+index f460374162ea22a539f0a6fb3d7d2503e0b0e674..2f4b7df7bc07b46d4833dcb650b720d49bf72175 100644
+--- a/tests/AR.Iec61850.Tests/Mms/MmsReportValueProjectorTests.cs
++++ b/tests/AR.Iec61850.Tests/Mms/MmsReportValueProjectorTests.cs
+@@ -86,4 +86,32 @@ public void Project_Merges_Leaf_StVal_With_Separate_Q_And_T_Report_Members()
+         Assert.Contains("2026-06-13", update.Timestamp, StringComparison.Ordinal);
+         Assert.Equal("report", update.Source);
+     }
++    [Fact]
++    public void Project_Preserves_QualityOnly_Report_As_Partial_Companion_Update()
++    {
++        var frame = new MmsReportFrame
++        {
++            ReceivedAt = DateTimeOffset.UnixEpoch,
++            Values =
++            [
++                new MmsReportValue
++                {
++                    Index = 0,
++                    Member = new MmsDataSetDirectoryMember { UserReference = "LD0/XCBR1.Pos.q", FunctionalConstraint = "ST" },
++                    Value = MmsDataValue.BitString(3, [0x40, 0x00]),
++                    ReasonForInclusion = ["quality-change"]
++                }
++            ]
++        };
++
++        var update = Assert.Single(MmsReportValueProjector.Project(frame).Updates);
++
++        Assert.Equal("LD0/XCBR1.Pos", update.Reference);
++        Assert.False(update.HasValue);
++        Assert.True(update.HasQuality);
++        Assert.Equal("invalid", update.Quality);
++        Assert.Equal("quality-change", update.Reason);
++        Assert.Equal("companion-only", update.ProjectionStatus);
++    }
++
+ }

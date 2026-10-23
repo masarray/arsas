@@ -1,0 +1,578 @@
+using AR.Iec61850.Discovery;
+using AR.Iec61850.Mms;
+using AR.Iec61850.Scl.Export;
+using ArIED61850Tester.Models;
+using ArIED61850Tester.Services;
+using System.Windows;
+
+namespace ArIED61850Tester;
+
+public partial class MainWindow
+{
+    private readonly Services.RcbAvailabilityProbeService _rcbAvailabilityProbe = new();
+
+    private void IedEditRcb_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetDeviceFromButton(sender, out var device) || device.IsBusy || device.IsDemo)
+            return;
+
+        SclReportControlInventoryResult? sourceInventory = null;
+        Exception? sourceInspectionError = null;
+        MmsRcbAvailabilityResult? latestAvailability = null;
+        if (!string.IsNullOrWhiteSpace(device.SclSourcePath) && File.Exists(device.SclSourcePath))
+        {
+            try
+            {
+                sourceInventory = SclReportControlFilter.InspectFile(
+                    device.SclSourcePath,
+                    EffectiveSclIedName(device),
+                    device.SclAccessPointName);
+            }
+            catch (Exception ex)
+            {
+                sourceInspectionError = ex;
+                AddLog("WARN", "RCB Export", $"{device.Name}: source SCL RCB inventory failed: {ex.Message}");
+            }
+        }
+
+        var rows = BuildRcbExportRows(device, sourceInventory, availability: null);
+        if (rows.Count == 0)
+        {
+            var detail = sourceInspectionError?.Message ??
+                         "No Report Control Blocks are available in the opened SCL or last successful live discovery model.";
+            MessageBox.Show(this, detail, "RCB Export Filter", MessageBoxButton.OK, MessageBoxImage.Information);
+            SetStatus($"{device.Name}: no RCB inventory is available for legacy SAS export.");
+            return;
+        }
+
+        SelectedDevice = device;
+        var options = new RcbExportWindowOptions
+        {
+            IedName = device.Name,
+            Endpoint = device.EndpointText,
+            IsMock = false,
+            CanCheckAvailability = device.IsConnected,
+            Rows = rows,
+            RefreshAvailabilityAsync = device.IsConnected
+                ? async cancellationToken =>
+                {
+                    latestAvailability = await _rcbAvailabilityProbe.CheckAsync(device, cancellationToken).ConfigureAwait(false);
+                    return BuildRcbExportRows(device, sourceInventory, latestAvailability);
+                }
+                : null,
+            ExportAsync = (row, schema, outputPath, cancellationToken) =>
+                ExportLegacySasRcbAsync(device, row, schema, outputPath, latestAvailability, cancellationToken)
+        };
+
+        var dialog = new RcbExportFilterWindow(options)
+        {
+            Owner = this,
+            ShowInTaskbar = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner
+        };
+        dialog.ShowDialog();
+    }
+
+    private static IReadOnlyList<RcbExportRow> BuildRcbExportRows(
+        Iec61850MonitorDevice device,
+        SclReportControlInventoryResult? sourceInventory,
+        MmsRcbAvailabilityResult? availability)
+    {
+        var liveRows = BuildLiveModelRcbRows(device.LiveDiscoveryModel, availability);
+        if (sourceInventory == null)
+            return liveRows;
+
+        // Present concrete live instances when the IED exposes them, but never append the
+        // corresponding logical SCL ReportControl as a duplicate row. For example, a source
+        // `Buffer` with RptEnabled max=2 may appear online as Buffer01 + Buffer02. The source
+        // logical identity remains export authority; the concrete instance names are UX/runtime evidence.
+        var rows = BuildSourceBackedRcbRows(device, sourceInventory, availability).ToList();
+        var seen = rows
+            .Select(row => NormalizeRcbReference(row.Reference))
+            .Where(reference => !string.IsNullOrWhiteSpace(reference))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var sourceBackedSelectionKeys = rows
+            .Where(row => row.IsSourceBacked && !string.IsNullOrWhiteSpace(row.SourceSelectionKey))
+            .Select(row => row.SourceSelectionKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var logicalSourceReferences = sourceInventory.ReportControls
+            .Where(descriptor => sourceBackedSelectionKeys.Contains(descriptor.SelectionKey))
+            .Select(descriptor => NormalizeRcbReference(descriptor.DisplayReference))
+            .Where(reference => !string.IsNullOrWhiteSpace(reference))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var liveRow in liveRows)
+        {
+            var key = NormalizeRcbReference(liveRow.Reference);
+            if (logicalSourceReferences.Contains(key))
+                continue;
+            if (!seen.Add(key))
+                continue;
+            rows.Add(liveRow);
+        }
+
+        return rows;
+    }
+
+    private static IReadOnlyList<RcbExportRow> BuildSourceBackedRcbRows(
+        Iec61850MonitorDevice device,
+        SclReportControlInventoryResult inventory,
+        MmsRcbAvailabilityResult? availability)
+    {
+        var rows = new List<RcbExportRow>();
+        var mappedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var sourceReportIds = RcbSclReportIdCatalog.Read(device.SclSourcePath, inventory.ReportControls);
+
+        if (availability != null)
+        {
+            foreach (var snapshot in availability.ReportControls)
+            {
+                var descriptor = FindSourceDescriptor(snapshot, inventory.ReportControls);
+                if (descriptor == null) continue;
+                mappedKeys.Add(descriptor.SelectionKey);
+                rows.Add(CreateSourceBackedRow(descriptor, snapshot, device.IsConnected,
+                    sourceReportIds.GetValueOrDefault(descriptor.SelectionKey, string.Empty)));
+            }
+        }
+
+        foreach (var descriptor in inventory.ReportControls)
+        {
+            if (mappedKeys.Contains(descriptor.SelectionKey)) continue;
+            rows.Add(CreateSourceBackedRow(descriptor, snapshot: null, device.IsConnected,
+                sourceReportIds.GetValueOrDefault(descriptor.SelectionKey, string.Empty)));
+        }
+        return rows;
+    }
+
+    private static RcbExportRow CreateSourceBackedRow(
+        SclReportControlDescriptor descriptor,
+        MmsRcbAvailabilitySnapshot? snapshot,
+        bool connected = true,
+        string sourceReportId = "")
+    {
+        var probeState = snapshot?.DataSetProbeState ?? MmsRcbDataSetProbeState.NotAttempted;
+        var effectiveDataSetReference = RcbExportEvidencePolicy.EffectiveDataSetReference(
+            snapshot?.DataSetReference,
+            descriptor.DataSetReference,
+            probeState);
+        var memberCount = RcbExportEvidencePolicy.EffectiveMemberCount(
+            snapshot?.DataSetMemberCount ?? 0,
+            descriptor.DataSetMemberCount);
+        var evidenceConflict = snapshot != null && RcbExportEvidencePolicy.HasSourceLiveBindingConflict(
+            descriptor.DataSetReference,
+            snapshot.DataSetReference,
+            probeState);
+        var availability = evidenceConflict
+            ? MmsRcbOperationalAvailability.Unknown
+            : RcbExportEvidencePolicy.SourceAvailability(
+                snapshot?.Availability,
+                descriptor.DataSetName,
+                descriptor.DataSetResolved,
+                descriptor.DataSetMemberCount);
+        var effectiveDataSetName = evidenceConflict
+            ? $"{(string.IsNullOrWhiteSpace(descriptor.DataSetName) ? "—" : descriptor.DataSetName)} ↔ {(string.IsNullOrWhiteSpace(snapshot?.DataSetReference) ? "—" : LastReferenceSegment(snapshot.DataSetReference))}"
+            : string.IsNullOrWhiteSpace(effectiveDataSetReference)
+                ? string.Empty
+                : LastReferenceSegment(effectiveDataSetReference);
+        var scope = !string.IsNullOrWhiteSpace(descriptor.LogicalDeviceInstance) ||
+                    !string.IsNullOrWhiteSpace(descriptor.LogicalNodePath)
+            ? $"{descriptor.LogicalDeviceInstance} / {descriptor.LogicalNodePath}".Trim(' ', '/')
+            : RcbExportEvidencePolicy.ScopeFromReference(snapshot?.Reference ?? descriptor.DisplayReference);
+        var reason = evidenceConflict
+            ? $"Configuration mismatch: source SCL binds {RcbExportEvidencePolicy.DisplayBinding(descriptor.DataSetReference)}, while the live IED reports {RcbExportEvidencePolicy.DisplayBinding(snapshot!.DataSetReference)}. Export remains available; this mismatch is preserved as operator evidence."
+            : snapshot?.Reason ?? RcbExportEvidencePolicy.SourceReason(
+                descriptor.DataSetName,
+                descriptor.DataSetResolved,
+                descriptor.DataSetMemberCount,
+                connected);
+        var dataSetDetail = evidenceConflict
+            ? $"Configuration mismatch • source {RcbExportEvidencePolicy.DisplayBinding(descriptor.DataSetReference)} • live {RcbExportEvidencePolicy.DisplayBinding(snapshot!.DataSetReference)}"
+            : snapshot?.DataSetProbeState == MmsRcbDataSetProbeState.ReadFailed
+                ? "Configured DataSet • live DatSet binding unresolved"
+                : snapshot?.DataSetProbeState == MmsRcbDataSetProbeState.ReadSucceeded && snapshot.DataSetDirectorySuccess
+                    ? "Static DataSet • live binding + directory verified"
+                    : string.IsNullOrWhiteSpace(descriptor.DataSetName)
+                        ? "No configured DataSet • source model"
+                        : descriptor.DataSetResolved
+                            ? $"Static DataSet • source model{(descriptor.Indexed ? $" • indexed ×{descriptor.InstanceCount}" : string.Empty)}"
+                            : "Broken DataSet reference • source model";
+
+        return new RcbExportRow
+        {
+            SourceSelectionKey = descriptor.SelectionKey,
+            ExportName = snapshot?.Name ?? descriptor.Name,
+            Name = snapshot?.Name ?? descriptor.Name,
+            Reference = snapshot?.Reference ?? descriptor.DisplayReference,
+            ScopeText = scope,
+            Type = descriptor.Type,
+            Buffered = descriptor.Buffered,
+            DataSetName = string.IsNullOrWhiteSpace(effectiveDataSetName) ? "—" : effectiveDataSetName,
+            DataSetReference = effectiveDataSetReference,
+            DataSetDetail = dataSetDetail,
+            MemberCount = memberCount,
+            Availability = availability,
+            Confidence = evidenceConflict ? MmsRcbAvailabilityConfidence.Unknown : snapshot?.Confidence ?? MmsRcbAvailabilityConfidence.Unknown,
+            StatusText = evidenceConflict
+                ? "Config mismatch"
+                : snapshot == null && availability == MmsRcbOperationalAvailability.Unknown
+                    ? "Not checked"
+                    : RcbExportRow.ToStatusText(availability),
+            Reason = reason,
+            Owner = snapshot?.Owner ?? string.Empty,
+            HasEvidenceConflict = evidenceConflict,
+            IsSourceBacked = true,
+            IsIndexedSource = descriptor.Indexed,
+            Inspection = RcbInspectionEvidence.FromSource(sourceReportId, snapshot)
+        };
+    }
+
+    private static SclReportControlDescriptor? FindSourceDescriptor(
+        MmsRcbAvailabilitySnapshot snapshot,
+        IReadOnlyList<SclReportControlDescriptor> descriptors)
+    {
+        var modeMatches = descriptors.Where(descriptor => descriptor.Buffered == snapshot.Buffered).ToArray();
+        var exact = modeMatches.Where(descriptor =>
+                descriptor.Name.Equals(snapshot.Name, StringComparison.OrdinalIgnoreCase) &&
+                LogicalScopeMatches(descriptor, snapshot))
+            .ToArray();
+        if (exact.Length == 1) return exact[0];
+
+        var indexed = modeMatches.Where(descriptor =>
+                descriptor.Indexed && IsIndexedRuntimeName(descriptor.Name, snapshot.Name) &&
+                LogicalScopeMatches(descriptor, snapshot))
+            .ToArray();
+        if (indexed.Length == 1) return indexed[0];
+
+        var dataSetName = LastReferenceSegment(snapshot.DataSetReference);
+        var byDataSet = modeMatches.Where(descriptor =>
+                descriptor.DataSetName.Equals(dataSetName, StringComparison.OrdinalIgnoreCase) &&
+                LogicalScopeMatches(descriptor, snapshot))
+            .ToArray();
+        return byDataSet.Length == 1 ? byDataSet[0] : null;
+    }
+
+    private static bool LogicalScopeMatches(SclReportControlDescriptor descriptor, MmsRcbAvailabilitySnapshot snapshot)
+    {
+        var logicalNodeMatches = string.IsNullOrWhiteSpace(snapshot.LogicalNode) ||
+                                 descriptor.LogicalNodePath.Equals(snapshot.LogicalNode, StringComparison.OrdinalIgnoreCase);
+        var logicalDeviceMatches = string.IsNullOrWhiteSpace(snapshot.Domain) ||
+                                   string.IsNullOrWhiteSpace(descriptor.LogicalDeviceInstance) ||
+                                   snapshot.Domain.EndsWith(descriptor.LogicalDeviceInstance, StringComparison.OrdinalIgnoreCase);
+        return logicalNodeMatches && logicalDeviceMatches;
+    }
+
+    private static bool IsIndexedRuntimeName(string sourceName, string runtimeName)
+    {
+        if (!runtimeName.StartsWith(sourceName, StringComparison.OrdinalIgnoreCase)) return false;
+        var suffix = runtimeName[sourceName.Length..];
+        return suffix.Length > 0 && suffix.All(char.IsDigit);
+    }
+
+    private static IReadOnlyList<RcbExportRow> BuildLiveModelRcbRows(
+        LiveIedModelDiscoveryDocument? model,
+        MmsRcbAvailabilityResult? availability)
+    {
+        if (model == null) return Array.Empty<RcbExportRow>();
+
+        var snapshots = availability?.ReportControls
+            .GroupBy(snapshot => NormalizeRcbReference(snapshot.Reference), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase)
+            ?? new Dictionary<string, MmsRcbAvailabilitySnapshot>(StringComparer.OrdinalIgnoreCase);
+        var dataSets = model.DataSets
+            .GroupBy(dataSet => NormalizeRcbReference(dataSet.Reference), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        var rows = new List<RcbExportRow>();
+
+        foreach (var reportControl in model.ReportControls)
+        {
+            snapshots.TryGetValue(NormalizeRcbReference(reportControl.Reference), out var snapshot);
+            var probeState = snapshot?.DataSetProbeState ?? MmsRcbDataSetProbeState.NotAttempted;
+            var effectiveDataSetReference = RcbExportEvidencePolicy.EffectiveDataSetReference(
+                snapshot?.DataSetReference,
+                reportControl.DataSetReference,
+                probeState);
+            dataSets.TryGetValue(NormalizeRcbReference(effectiveDataSetReference), out var dataSet);
+            var members = RcbExportEvidencePolicy.EffectiveMemberCount(
+                snapshot?.DataSetMemberCount ?? 0,
+                dataSet?.MemberCount ?? 0);
+            var availabilityState = RcbExportEvidencePolicy.LiveModelAvailability(
+                snapshot?.Availability,
+                effectiveDataSetReference,
+                dataSet != null,
+                members);
+            var liveOverridesDiscovery = snapshot != null && RcbExportEvidencePolicy.HasSourceLiveBindingConflict(
+                reportControl.DataSetReference,
+                snapshot.DataSetReference,
+                probeState);
+            var dataSetName = string.IsNullOrWhiteSpace(effectiveDataSetReference)
+                ? "—"
+                : string.IsNullOrWhiteSpace(dataSet?.Name)
+                    ? LastReferenceSegment(effectiveDataSetReference)
+                    : dataSet.Name;
+            var dataSetDetail = liveOverridesDiscovery
+                ? snapshot?.Availability == MmsRcbOperationalAvailability.NoDataSet
+                    ? "Live DatSet verified empty • overrides stale discovery binding"
+                    : "Live DatSet verified • overrides stale discovery binding"
+                : snapshot?.DataSetProbeState == MmsRcbDataSetProbeState.ReadFailed
+                    ? "Known DataSet • live DatSet binding unresolved"
+                    : snapshot?.DataSetProbeState == MmsRcbDataSetProbeState.ReadSucceeded && snapshot.DataSetDirectorySuccess
+                        ? "Static DataSet • live binding + directory verified"
+                        : snapshot?.Availability == MmsRcbOperationalAvailability.NoDataSet
+                            ? "No configured DataSet • live verified"
+                            : string.IsNullOrWhiteSpace(effectiveDataSetReference)
+                                ? "DataSet binding unresolved"
+                                : dataSet == null
+                                    ? "DataSet directory unresolved"
+                                    : "Static DataSet • live discovery";
+
+            rows.Add(new RcbExportRow
+            {
+                ExportName = reportControl.Name,
+                Name = reportControl.Name,
+                Reference = reportControl.Reference,
+                ScopeText = RcbExportEvidencePolicy.ScopeFromReference(reportControl.Reference),
+                Type = reportControl.Buffered ? "Buffered" : "Unbuffered",
+                Buffered = reportControl.Buffered,
+                DataSetName = dataSetName,
+                DataSetReference = effectiveDataSetReference,
+                DataSetDetail = dataSetDetail,
+                MemberCount = members,
+                Availability = availabilityState,
+                Confidence = snapshot?.Confidence ?? MmsRcbAvailabilityConfidence.Unknown,
+                StatusText = snapshot == null && availabilityState == MmsRcbOperationalAvailability.Unknown
+                    ? "Not checked"
+                    : RcbExportRow.ToStatusText(availabilityState),
+                Reason = snapshot?.Reason ?? RcbExportEvidencePolicy.LiveModelReason(
+                    effectiveDataSetReference,
+                    dataSet != null,
+                    members),
+                Owner = snapshot?.Owner ?? string.Empty,
+                IsSourceBacked = false,
+                Inspection = RcbInspectionEvidence.FromDiscovery(reportControl, snapshot)
+            });
+        }
+        return rows;
+    }
+
+    private async Task<RcbExportCompletion> ExportLegacySasRcbAsync(
+        Iec61850MonitorDevice device,
+        RcbExportRow row,
+        SclSchemaProfile schema,
+        string outputPath,
+        MmsRcbAvailabilityResult? availability,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (row.IsSourceBacked && !string.IsNullOrWhiteSpace(device.SclSourcePath) && File.Exists(device.SclSourcePath))
+        {
+            if (row.HasEvidenceConflict)
+                AddLog("WARN", "RCB Export", $"{device.Name}: exporting source-backed RCB {row.Reference} with source/live DataSet mismatch preserved as evidence.");
+
+            var result = await Task.Run(() => LegacySasSclExporter.WriteFiles(
+                device.SclSourcePath,
+                outputPath,
+                new LegacySasSclExportOptions
+                {
+                    IedName = EffectiveSclIedName(device),
+                    AccessPointName = device.SclAccessPointName,
+                    SchemaProfile = schema,
+                    SelectedReportControl = new SclReportControlSelection(row.SourceSelectionKey, row.ExportName),
+                    RemoveUnreferencedDataSets = false,
+                    PreserveSourceReportControlIdentity = true,
+                    ToolId = "ARIEC61850"
+                }), cancellationToken);
+
+            AddLog("INFO", "RCB Export",
+                $"{device.Name}: legacy SAS CID saved; schema={result.SclSchema}; RCB={result.RetainedReportControlReference}; DataSet={result.RetainedDataSetName}; members={result.RetainedDataSetMemberCount}; removed RCB={result.RemovedReportControlCount}; output={result.OutputPath}");
+            SetStatus($"{device.Name}: legacy SAS CID exported with one RCB — {row.Name}.");
+            return new RcbExportCompletion
+            {
+                OutputPath = result.OutputPath,
+                ReportPath = result.ReportPath,
+                SummaryPath = result.SummaryPath,
+                SchemaDisplayName = result.SclSchema,
+                RetainedReportControl = result.RetainedReportControlReference,
+                DataSetName = result.RetainedDataSetName,
+                DataSetMemberCount = result.RetainedDataSetMemberCount,
+                RemovedReportControlCount = result.RemovedReportControlCount,
+                Message = $"Export complete: {result.RetainedReportControlReference} is the only RCB in the generated CID."
+            };
+        }
+
+        var liveModel = device.LiveDiscoveryModel
+            ?? throw new InvalidOperationException("A source SCL file or complete live discovery model is required for legacy SAS export.");
+        var effectiveAvailability = availability;
+        var exportModel = liveModel;
+
+        // Reuse any availability evidence that the operator already acquired. Merge the live
+        // DatSet binding before resolving the DataSet so a runtime binding can override stale
+        // discovery evidence without forcing an unnecessary second MMS association.
+        if (effectiveAvailability != null)
+        {
+            exportModel = LiveRcbDataSetEvidenceMerger.MergeSelectedReportControlEvidence(
+                exportModel,
+                row.Reference,
+                effectiveAvailability);
+        }
+
+        var effectiveDataSetReference = ResolveExportDataSetReference(exportModel, row);
+        var selectedDataSet = FindExportDataSet(exportModel, effectiveDataSetReference);
+
+        // An RCB with no DataSet is still a real RCB and remains exportable. When an RCB does
+        // declare a DataSet, however, Save/Export owns the evidence acquisition: first reuse
+        // an existing availability directory, then perform one bounded read-only audit only
+        // when FCDA evidence is still missing. This keeps R4 discovery fast and makes Save SCL
+        // self-contained instead of requiring a manual Check Availability + retry cycle.
+        if (!string.IsNullOrWhiteSpace(effectiveDataSetReference) &&
+            (selectedDataSet is null || selectedDataSet.Members.Count == 0))
+        {
+            if (effectiveAvailability != null)
+            {
+                exportModel = LiveRcbDataSetEvidenceMerger.MergeSelectedDataSetDirectory(
+                    exportModel,
+                    row.Reference,
+                    effectiveAvailability);
+                effectiveDataSetReference = ResolveExportDataSetReference(exportModel, row);
+                selectedDataSet = FindExportDataSet(exportModel, effectiveDataSetReference);
+            }
+
+            if (!string.IsNullOrWhiteSpace(effectiveDataSetReference) &&
+                (selectedDataSet is null || selectedDataSet.Members.Count == 0))
+            {
+                if (!device.IsConnected)
+                {
+                    throw new InvalidOperationException(
+                        $"The selected RCB declares DataSet '{effectiveDataSetReference}', but no FCDA directory evidence is available and the IED is disconnected.");
+                }
+
+                AddLog("INFO", "RCB Export",
+                    $"{device.Name}: FCDA evidence missing for {row.Reference}; acquiring one read-only MMS availability snapshot before export.");
+
+                using var evidenceTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                evidenceTimeout.CancelAfter(TimeSpan.FromSeconds(30));
+                try
+                {
+                    effectiveAvailability = await _rcbAvailabilityProbe
+                        .CheckAsync(device, evidenceTimeout.Token)
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    throw new TimeoutException(
+                        $"Timed out while acquiring FCDA directory evidence for RCB '{row.Reference}'. The CID was not written.");
+                }
+
+                exportModel = LiveRcbDataSetEvidenceMerger.MergeSelectedReportControlEvidence(
+                    exportModel,
+                    row.Reference,
+                    effectiveAvailability);
+                effectiveDataSetReference = ResolveExportDataSetReference(exportModel, row);
+
+                if (!string.IsNullOrWhiteSpace(effectiveDataSetReference))
+                {
+                    exportModel = LiveRcbDataSetEvidenceMerger.MergeSelectedDataSetDirectory(
+                        exportModel,
+                        row.Reference,
+                        effectiveAvailability);
+                    effectiveDataSetReference = ResolveExportDataSetReference(exportModel, row);
+                    selectedDataSet = FindExportDataSet(exportModel, effectiveDataSetReference);
+                }
+                else
+                {
+                    selectedDataSet = null;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(effectiveDataSetReference) &&
+                (selectedDataSet is null || selectedDataSet.Members.Count == 0))
+            {
+                throw new InvalidOperationException(
+                    $"RCB '{row.Reference}' resolves to DataSet '{effectiveDataSetReference}', but the authoritative read-only MMS audit did not return any FCDA members. The CID was not written.");
+            }
+        }
+
+        // If the probe proved a dynamic RCB is currently unbound, keep that authoritative
+        // result and do not resurrect the stale discovery binding during serialization.
+        if (effectiveAvailability != null)
+        {
+            exportModel = LiveRcbDataSetEvidenceMerger.MergeSelectedReportControlEvidence(
+                exportModel,
+                row.Reference,
+                effectiveAvailability);
+            effectiveDataSetReference = ResolveExportDataSetReference(exportModel, row);
+            selectedDataSet = FindExportDataSet(exportModel, effectiveDataSetReference);
+        }
+
+        var filteredModel = SclReportControlFilter.FilterLiveModel(exportModel, row.Reference);
+        var verifiedIdentity = await TrustedSclIdentityAuthority.TryMatchAsync(
+            device,filteredModel,cancellationToken);
+        var liveResult = await Task.Run(() => AuthoritativeLiveIedSclExporter.WriteFiles(
+            filteredModel,
+            outputPath,
+            new LiveIedSclExportOptions
+            {
+                Profile = "full-model",
+                SchemaProfile = schema,
+                IpAddress = device.IpAddress,
+                IedNameOverride = verifiedIdentity?.IedName ?? device.Name,
+                VerifiedIdentity = verifiedIdentity,
+                IncludeLowConfidenceTypes = true,
+                IncludeRuntimeStateComment = false
+            }), cancellationToken);
+
+        var removedCount = Math.Max(0, liveModel.ReportControls.Count - 1);
+        AddLog("INFO", "RCB Export",
+            $"{device.Name}: live-model legacy SAS CID saved; schema={liveResult.SclSchema}; RCB={row.Reference}; DataSet={effectiveDataSetReference}; members={selectedDataSet?.Members.Count ?? 0}; removed RCB={removedCount}; output={liveResult.SclPath}");
+        SetStatus($"{device.Name}: legacy SAS CID exported with one RCB — {row.Name}.");
+        return new RcbExportCompletion
+        {
+            OutputPath = liveResult.SclPath,
+            ReportPath = liveResult.ReportPath,
+            SummaryPath = liveResult.SummaryPath,
+            SchemaDisplayName = liveResult.SclSchema,
+            RetainedReportControl = row.Reference,
+            DataSetName = string.IsNullOrWhiteSpace(effectiveDataSetReference) ? row.DataSetName : LastReferenceSegment(effectiveDataSetReference),
+            DataSetMemberCount = selectedDataSet?.Members.Count ?? 0,
+            RemovedReportControlCount = removedCount,
+            Message = $"Export complete: {row.Reference} is the only RCB in the generated CID."
+        };
+    }
+
+    private static string ResolveExportDataSetReference(LiveIedModelDiscoveryDocument model, RcbExportRow row)
+    {
+        var selectedReportControl = model.ReportControls.FirstOrDefault(reportControl =>
+            NormalizeRcbReference(reportControl.Reference)
+                .Equals(NormalizeRcbReference(row.Reference), StringComparison.OrdinalIgnoreCase));
+
+        return selectedReportControl is not null
+            ? (selectedReportControl.DataSetReference ?? string.Empty).Trim()
+            : (row.DataSetReference ?? string.Empty).Trim();
+    }
+
+    private static LiveIedDataSetModel? FindExportDataSet(
+        LiveIedModelDiscoveryDocument model,
+        string? dataSetReference)
+    {
+        if (string.IsNullOrWhiteSpace(dataSetReference))
+            return null;
+
+        var normalizedReference = NormalizeRcbReference(dataSetReference);
+        return model.DataSets.FirstOrDefault(dataSet =>
+            NormalizeRcbReference(dataSet.Reference)
+                .Equals(normalizedReference, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string EffectiveSclIedName(Iec61850MonitorDevice device)
+        => string.IsNullOrWhiteSpace(device.SclIedName) ? device.Name : device.SclIedName;
+
+    private static string LastReferenceSegment(string? reference)
+    {
+        var text = (reference ?? string.Empty).Trim().Replace('$', '.');
+        var index = text.LastIndexOf('.');
+        return index < 0 ? text : text[(index + 1)..];
+    }
+
+    private static string NormalizeRcbReference(string? reference)
+        => (reference ?? string.Empty).Trim().Replace('$', '.').ToLowerInvariant();
+}

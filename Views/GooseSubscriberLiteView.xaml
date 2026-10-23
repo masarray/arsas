@@ -1,0 +1,721 @@
+<UserControl x:Class="ArIED61850Tester.Views.GooseSubscriberLiteView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             MinWidth="900" MinHeight="560">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="9"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Style="{StaticResource Card}" Padding="10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="5"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="14"/>
+                        <ColumnDefinition Width="340"/>
+                        <ColumnDefinition Width="4"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="6"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="6"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse Width="8" Height="8" Fill="#16A34A" Margin="0,0,8,0"/>
+                        <TextBlock Text="GOOSE Subscriber" FontSize="14.5" FontWeight="SemiBold"
+                                   Foreground="{StaticResource Ink}" VerticalAlignment="Center"/>
+                        <Border Margin="8,0,0,0" Background="#EEF4FF" BorderBrush="#C9D9F1"
+                                BorderThickness="1" CornerRadius="8" Padding="6,2">
+                            <TextBlock Text="READ ONLY" FontSize="8.7" FontWeight="Bold" Foreground="#45648E"/>
+                        </Border>
+                    </StackPanel>
+
+                    <ComboBox Grid.Column="2" ItemsSource="{Binding GooseAdapters}"
+                              SelectedItem="{Binding SelectedGooseAdapter, Mode=TwoWay}"
+                               DropDownClosed="AdapterComboBox_DropDownClosed"
+                               KeyUp="AdapterComboBox_KeyUp"
+                              DisplayMemberPath="DisplayText" TextSearch.TextPath="DisplayText"
+                              Style="{StaticResource ModernComboBox}" Height="34" Padding="10,4"
+                              IsHitTestVisible="{Binding CanRefreshGooseConfiguration}"
+                              Focusable="{Binding CanRefreshGooseConfiguration}"
+                              ToolTip="{Binding SelectedGooseAdapterDetail}"/>
+
+                    <Button Grid.Column="4" Style="{StaticResource IedIconButton}"
+                            Click="RefreshAdapters_Click" IsEnabled="{Binding CanRefreshGooseConfiguration}"
+                            ToolTip="Refresh network adapters">
+                        <Viewbox Width="15" Height="15">
+                            <Path Data="{StaticResource LucideRefreshCw}" Style="{StaticResource LucideIcon}"/>
+                        </Viewbox>
+                    </Button>
+
+                    <Button Grid.Column="6" Style="{StaticResource IedIconButton}"
+                            Click="RefreshModels_Click" IsEnabled="{Binding CanRefreshGooseConfiguration}"
+                            ToolTip="Refresh signal names from SCL and live discovery">
+                        <Viewbox Width="15" Height="15">
+                            <Path Data="{StaticResource LucideSlidersHorizontal}" Style="{StaticResource LucideIcon}"/>
+                        </Viewbox>
+                    </Button>
+
+                    <Button Grid.Column="8" Style="{StaticResource CommandOpenButton}"
+                            Click="StartCapture_Click" IsEnabled="{Binding CanStartGooseSubscriber}"
+                            Padding="13,6" MinHeight="34">
+                        <StackPanel Orientation="Horizontal">
+                            <Viewbox Width="13" Height="13" Margin="0,0,6,0">
+                                <Path Data="{StaticResource LucidePlay}" Style="{StaticResource LucideIcon}" Stroke="White"/>
+                            </Viewbox>
+                            <TextBlock Text="Start" Foreground="White"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button Grid.Column="10" Style="{StaticResource SoftButton}"
+                            Click="StopCapture_Click" IsEnabled="{Binding CanStopGooseSubscriber}"
+                            Padding="11,6" MinHeight="34">
+                        <StackPanel Orientation="Horizontal">
+                            <Viewbox Width="13" Height="13" Margin="0,0,6,0">
+                                <Path Data="{StaticResource LucideSquare}" Style="{StaticResource LucideIcon}"
+                                      Stroke="{StaticResource Warning}"/>
+                            </Viewbox>
+                            <TextBlock Text="Stop"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button Grid.Column="12" Style="{StaticResource SoftButton}"
+                            Click="ClearCapture_Click" Padding="11,6" MinHeight="34"
+                            ToolTip="Clear publishers and events">
+                        <StackPanel Orientation="Horizontal">
+                            <Viewbox Width="13" Height="13" Margin="0,0,6,0">
+                                <Path Data="{StaticResource LucideX}" Style="{StaticResource LucideIcon}"
+                                      Stroke="{StaticResource Danger}"/>
+                            </Viewbox>
+                            <TextBlock Text="Clear"/>
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <Grid Grid.Row="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="10"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Border CornerRadius="9" Padding="8,3" BorderThickness="1">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="#F2F4F7"/>
+                                <Setter Property="BorderBrush" Value="#D0D5DD"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsGooseCapturing}" Value="True">
+                                        <Setter Property="Background" Value="#E8F8EF"/>
+                                        <Setter Property="BorderBrush" Value="#86D3A7"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <TextBlock Text="{Binding GooseCaptureStateText}" FontSize="9.6" FontWeight="Bold">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="#667085"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsGooseCapturing}" Value="True">
+                                            <Setter Property="Foreground" Value="#067647"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Border>
+                    <TextBlock Grid.Column="2" Text="{Binding GooseStatusText}" FontSize="10.5"
+                               Foreground="{StaticResource Muted}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" ToolTip="{Binding GooseStatusText}"/>
+                    <TextBlock Grid.Column="3" Text="{Binding GooseCounterText}" FontSize="10.5"
+                               FontWeight="SemiBold" Foreground="#45648E" VerticalAlignment="Center"/>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="420"/>
+                <ColumnDefinition Width="9"/>
+                <ColumnDefinition Width="420" MinWidth="370"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="10" Visibility="Collapsed">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="7"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="7" Height="7" Fill="{StaticResource Accent}" Margin="0,0,7,0"/>
+                            <TextBlock Text="Publishers" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource Ink}"/>
+                        </StackPanel>
+                        <Border Grid.Column="1" Background="#EEF4FF" BorderBrush="#C9D9F1"
+                                BorderThickness="1" CornerRadius="9" Padding="7,2">
+                            <TextBlock Text="{Binding GoosePublisherCountText}" FontSize="9.4"
+                                       FontWeight="SemiBold" Foreground="#45648E"/>
+                        </Border>
+                    </Grid>
+
+                    <Grid Grid.Row="2">
+                        <ListBox ItemsSource="{Binding GooseVisibleStreams}"
+                                 SelectedItem="{Binding SelectedGooseStream, Mode=TwoWay}"
+                                 BorderThickness="0" Background="Transparent"
+                                 HorizontalContentAlignment="Stretch"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="Margin" Value="0,0,0,6"/>
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Setter Property="BorderThickness" Value="0"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ListBoxItem">
+                                                <Border x:Name="Card" Background="#FBFDFF" BorderBrush="#D8E2F0"
+                                                        BorderThickness="1" CornerRadius="11" Padding="8,7">
+                                                    <ContentPresenter/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="Card" Property="Background" Value="#F2F7FF"/>
+                                                        <Setter TargetName="Card" Property="BorderBrush" Value="#AFC7E8"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsSelected" Value="True">
+                                                        <Setter TargetName="Card" Property="Background" Value="#E7F0FF"/>
+                                                        <Setter TargetName="Card" Property="BorderBrush" Value="#6F9FF1"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid MinHeight="49">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Ellipse x:Name="HealthDot" Width="7" Height="7" Fill="#16A34A"
+                                                     Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding DisplayName}" FontSize="11.4"
+                                                       FontWeight="SemiBold" Foreground="{StaticResource Ink}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <Border Grid.Column="2" Background="#F2F4F7" BorderBrush="#D0D5DD"
+                                                    BorderThickness="1" CornerRadius="7" Padding="5,1" Margin="5,0,0,0">
+                                                <TextBlock Text="{Binding AppIdText}" FontSize="8.5" Foreground="#475467"/>
+                                            </Border>
+                                        </Grid>
+                                        <TextBlock Grid.Row="1" Text="{Binding DisplaySecondary}" FontSize="9.4"
+                                                   Foreground="{StaticResource Muted}" Margin="14,2,0,0"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <Grid Grid.Row="2" Margin="14,3,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding StateSequenceCompactText}" FontSize="9.1" Foreground="#45648E"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding SequenceStatus}" FontSize="9.1"
+                                                       Foreground="{StaticResource Muted}" TextTrimming="CharacterEllipsis"/>
+                                        </Grid>
+                                    </Grid>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding HasDiagnostics}" Value="True">
+                                            <Setter TargetName="HealthDot" Property="Fill" Value="#F59E0B"/>
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <Border Visibility="{Binding GooseNoStreamsVisibility}" Background="#FAFCFF"
+                                BorderBrush="#DCE6F3" BorderThickness="1" CornerRadius="11"
+                                Padding="13" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <StackPanel>
+                                <TextBlock Text="No publishers" FontSize="12.4" FontWeight="SemiBold"
+                                           Foreground="{StaticResource Ink}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Choose an adapter and press Start." FontSize="10"
+                                           Foreground="{StaticResource Muted}" HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="9">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="7"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <!-- Compact, single-baseline event toolbar. Fixed-height count
+                         prevents the old badge from stretching into a vertical pill. -->
+                    <Grid x:Name="GooseEventHeader" MinHeight="30" SnapsToDevicePixels="True">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*" MinWidth="10"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Orientation="Horizontal"
+                                    VerticalAlignment="Center">
+                            <TextBlock Text="GOOSE Events" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{StaticResource Ink}"
+                                       VerticalAlignment="Center" TextWrapping="NoWrap"/>
+                            <Border x:Name="GooseEventCountBadge" Height="21" MinWidth="26"
+                                    Margin="7,0,0,0" Padding="6,0" VerticalAlignment="Center"
+                                    Background="#EEF4FF" BorderBrush="#C9D9F1"
+                                    BorderThickness="1" CornerRadius="10">
+                                <TextBlock Text="{Binding GooseEventCountText}"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           Foreground="#45648E" TextAlignment="Center"
+                                           VerticalAlignment="Center" TextWrapping="NoWrap"/>
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                    VerticalAlignment="Center">
+                            <ComboBox x:Name="GooseEventScope" Width="165" Height="28"
+                                      Margin="0,0,11,0" Padding="8,3"
+                                      SelectedIndex="{Binding GooseIedScopeIndex, Mode=TwoWay}"
+                                      Style="{StaticResource ModernComboBox}"
+                                      ToolTip="{Binding GooseSelectedScopeHint}"
+                                      VerticalAlignment="Center" FontSize="10.5">
+                                <ComboBoxItem Content="Selected IED only"/>
+                                <ComboBoxItem Content="All IED GOOSE signals"/>
+                            </ComboBox>
+                            <CheckBox Content="Follow latest" Height="28" Margin="0,0,11,0"
+                                      VerticalAlignment="Center" VerticalContentAlignment="Center"
+                                      IsChecked="{Binding FollowLatestGooseEvents, Mode=TwoWay}"
+                                      FontSize="10.5" Foreground="{StaticResource Muted}"
+                                      ToolTip="Follow the newest change; uncheck to inspect an immutable historical frame."/>
+                            <CheckBox Content="Retransmissions" Height="28"
+                                      VerticalAlignment="Center" VerticalContentAlignment="Center"
+                                      IsChecked="{Binding ShowGooseRetransmissions, Mode=TwoWay}"
+                                      FontSize="10.5" Foreground="{StaticResource Muted}"
+                                      ToolTip="Show every received GOOSE frame including retransmissions. Unchecked: show changes only; raw capture is preserved."/>
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Row="2">
+                        <DataGrid ItemsSource="{Binding GooseVisibleEvents}"
+                                  SelectedItem="{Binding SelectedGooseEvent, Mode=TwoWay}"
+                                  IsReadOnly="True" Style="{StaticResource ModernDataGrid}"
+                                  AutoGenerateColumns="False" RowHeight="32"
+                                  EnableRowVirtualization="True"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  VirtualizingPanel.VirtualizationMode="Recycling"
+                                  ScrollViewer.CanContentScroll="True"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <DataGrid.RowStyle>
+                                <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                                    <Style.Triggers>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding EventTone}" Value="Warning"/>
+                                                <Condition Binding="{Binding IsRecent}" Value="True"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Background" Value="#FFFAEB"/>
+                                            <Setter Property="BorderBrush" Value="#FEC84B"/>
+                                            <Setter Property="BorderThickness" Value="3,0,0,1"/>
+                                        </MultiDataTrigger>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding EventTone}" Value="Change"/>
+                                                <Condition Binding="{Binding IsRecent}" Value="True"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Background" Value="#EEF5FF"/>
+                                            <Setter Property="BorderBrush" Value="#84ADFF"/>
+                                            <Setter Property="BorderThickness" Value="3,0,0,1"/>
+                                        </MultiDataTrigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter Property="Background" Value="#DDEAFF"/>
+                                            <Setter Property="BorderBrush" Value="#4F86E5"/>
+                                            <Setter Property="BorderThickness" Value="3,0,0,1"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGrid.RowStyle>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Time" Binding="{Binding TimeText}" Width="116" MinWidth="106"/>
+                                <DataGridTextColumn Header="IED" Binding="{Binding IedName}" Width="92" MinWidth="75"/>
+                                <DataGridTextColumn Header="GOOSE ID" Binding="{Binding GooseId}" Width="113" MinWidth="98"/>
+                                <DataGridTemplateColumn Header="Event" Width="92">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Border x:Name="Badge" Background="#EEF4FF" BorderBrush="#C9D9F1"
+                                                    BorderThickness="1" CornerRadius="8" Padding="7,2"
+                                                    HorizontalAlignment="Left">
+                                                <TextBlock x:Name="Text" Text="{Binding EventText}" FontSize="9.3"
+                                                           FontWeight="SemiBold" Foreground="#45648E"/>
+                                            </Border>
+                                            <DataTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding EventTone}" Value="Change">
+                                                    <Setter TargetName="Badge" Property="Background" Value="#E8F1FF"/>
+                                                    <Setter TargetName="Badge" Property="BorderBrush" Value="#84ADFF"/>
+                                                    <Setter TargetName="Text" Property="Foreground" Value="#175CD3"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding EventTone}" Value="Warning">
+                                                    <Setter TargetName="Badge" Property="Background" Value="#FFFAEB"/>
+                                                    <Setter TargetName="Badge" Property="BorderBrush" Value="#FEC84B"/>
+                                                    <Setter TargetName="Text" Property="Foreground" Value="#B54708"/>
+                                                </DataTrigger>
+                                            </DataTemplate.Triggers>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="GOOSE DataSet" Binding="{Binding DataSetName}" Width="135" MinWidth="118"/>
+                                <!-- Historical engineering columns retained but hidden from compact operator timeline. -->
+                                <DataGridTextColumn Header="Relative time" Binding="{Binding RelativeTime}" Width="0" Visibility="Collapsed"/>
+                                <DataGridTextColumn Header="Source MAC" Binding="{Binding SourceMac}" Width="0" Visibility="Collapsed"/>
+                                <DataGridTextColumn Header="Destination MAC" Binding="{Binding DestinationMac}" Width="0" Visibility="Collapsed"/>
+                                <DataGridTextColumn Header="Details" Binding="{Binding Summary}" Width="*" MinWidth="215"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <Border Visibility="{Binding GooseNoEventsVisibility}" Background="#FAFCFF"
+                                BorderBrush="#DCE6F3" BorderThickness="1" CornerRadius="11"
+                                Padding="15" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="320">
+                            <StackPanel>
+                                <TextBlock Text="Waiting for a meaningful event" FontSize="12.4"
+                                           FontWeight="SemiBold" Foreground="{StaticResource Ink}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="New publishers, changed values and new warnings appear here."
+                                           FontSize="10" Foreground="{StaticResource Muted}" TextAlignment="Center"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="2" Style="{StaticResource Card}" Padding="9">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="7"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="7" Height="7" Fill="{StaticResource Accent}" Margin="0,0,7,0"/>
+                            <TextBlock Text="DataSet Inspector" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource Ink}"/>
+                        </StackPanel>
+                        <Border Grid.Column="1" CornerRadius="9" Padding="7,2" BorderThickness="1">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#ECFDF3"/>
+                                    <Setter Property="BorderBrush" Value="#86EFAC"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedGooseStream.HasDiagnostics}" Value="True">
+                                            <Setter Property="Background" Value="#FFFAEB"/>
+                                            <Setter Property="BorderBrush" Value="#FEC84B"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="{Binding SelectedGooseStream.HealthText}" FontSize="9.2" FontWeight="SemiBold"/>
+                        </Border>
+                    </Grid>
+
+                    <Grid Grid.Row="2">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ScrollViewer.Style>
+                                <Style TargetType="ScrollViewer">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedGooseStream}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ScrollViewer.Style>
+                            <StackPanel>
+                                <TextBlock Text="{Binding SelectedGooseStream.DisplayName}" FontSize="14.5"
+                                           FontWeight="SemiBold" Foreground="{StaticResource Ink}"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding SelectedGooseStream.DisplaySecondary}" FontSize="10.2"
+                                           Foreground="{StaticResource Muted}" Margin="0,2,0,8"
+                                           TextTrimming="CharacterEllipsis"/>
+
+                                <Border Background="#F8FBFF" BorderBrush="#DCE6F3" BorderThickness="1"
+                                        CornerRadius="11" Padding="9" Margin="0,0,0,7">
+                                    <StackPanel>
+                                        <TextBlock Text="Identity" FontSize="11.4" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource Ink}" Margin="0,0,0,6"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Text="IED" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,0,0,0"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedGooseStream.ModelIedDisplay}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,0,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.ModelIedDisplay}"/>
+                                            <TextBlock Grid.Row="1" Text="GOOSE ID" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedGooseStream.GooseIdDisplay}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.GooseIdDisplay}"/>
+                                            <TextBlock Grid.Row="2" Text="Application ID" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedGooseStream.ApplicationIdDecimal}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.ApplicationIdDecimal}"/>
+                                            <TextBlock Grid.Row="3" Text="DataSet" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedGooseStream.DataSetShortName}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.DataSetShortName}"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Background="#F8FBFF" BorderBrush="#DCE6F3" BorderThickness="1"
+                                        CornerRadius="11" Padding="9" Margin="0,0,0,7">
+                                    <StackPanel>
+                                        <TextBlock Text="Communication" FontSize="11.4" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource Ink}" Margin="0,0,0,6"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Text="Source MAC" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,0,0,0"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedGooseStream.SourceMac}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,0,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.SourceMac}"/>
+                                            <TextBlock Grid.Row="1" Text="Destination MAC" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedGooseStream.DestinationMac}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.DestinationMac}"/>
+                                            <TextBlock Grid.Row="2" Text="VLAN ID" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedGooseStream.VlanId}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.VlanId}"/>
+                                            <TextBlock Grid.Row="3" Text="VLAN priority" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedGooseStream.VlanPriority}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.VlanPriority}"/>
+                                            <TextBlock Grid.Row="4" Text="Time allowed to live" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedGooseStream.TimeAllowedToLiveText}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.TimeAllowedToLiveText}"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Background="#F8FBFF" BorderBrush="#DCE6F3" BorderThickness="1"
+                                        CornerRadius="11" Padding="9" Margin="0,0,0,7">
+                                    <StackPanel>
+                                        <TextBlock Text="Current state" FontSize="11.4" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource Ink}" Margin="0,0,0,6"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="160"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Grid.Row="0" Text="Status number" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,0,0,0"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedGooseStream.StateNumberText}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,0,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.StateNumberText}"/>
+                                            <TextBlock Grid.Row="1" Text="Sequence number" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedGooseStream.SequenceNumberText}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.SequenceNumberText}"/>
+                                            <TextBlock Grid.Row="2" Text="Configuration revision" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedGooseStream.ConfigurationRevisionText}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.ConfigurationRevisionText}"/>
+                                            <TextBlock Grid.Row="3" Text="Simulation test" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedGooseStream.SimulationTestText}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.SimulationTestText}"/>
+                                            <TextBlock Grid.Row="4" Text="Number of DataSet entries" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedGooseStream.DataSetEntryCountText}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.DataSetEntryCountText}"/>
+                                            <TextBlock Grid.Row="5" Text="Event type" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding SelectedGooseStream.SequenceStatus}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.SequenceStatus}"/>
+                                            <TextBlock Grid.Row="6" Text="Model binding" FontSize="9.7" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                                            <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding SelectedGooseStream.ModelStateText}"
+                                                       FontSize="10.1" Foreground="{StaticResource Ink}" Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedGooseStream.ModelStateText}"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Background="#FFFAEB" BorderBrush="#FEC84B" BorderThickness="1"
+                                        CornerRadius="11" Padding="9" Margin="0,0,0,7">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedGooseStream.HasDiagnostics}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <StackPanel>
+                                        <TextBlock Text="Needs attention" FontSize="11" FontWeight="SemiBold" Foreground="#B54708"/>
+                                        <TextBlock Text="{Binding SelectedGooseStream.DiagnosticsSummary}" FontSize="9.6"
+                                                   Foreground="#7A2E0E" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <StackPanel Margin="0,0,0,7">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedGooseStream.BindingSource}" Value="Unbound">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="Signal names need the publisher's SCL/CID model." FontSize="10"
+                                               Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                                    <Button Content="Open Publisher SCL / CID" Click="ImportPublisherModel_Click"
+                                            HorizontalAlignment="Left" Padding="9,4" Margin="0,5,0,0"
+                                            FontSize="10" ToolTip="Load a trusted SCL/CID for this publisher; existing GOOSE capture continues."/>
+                                </StackPanel>
+                                <Grid Margin="0,0,0,5">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="DataSet entries" FontSize="11.6" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                    <Border Grid.Column="1" Background="#EEF4FF" BorderBrush="#C9D9F1"
+                                            BorderThickness="1" CornerRadius="8" Padding="6,2">
+                                        <TextBlock Text="{Binding GooseSelectedLeafCountText}" FontSize="9" Foreground="#45648E"/>
+                                    </Border>
+                                </Grid>
+
+                                <!-- Operator view = exact ordered GOOSE allData entries.
+                                     The q member remains a typed Value row; deliberately
+                                     do not infer or fabricate a separate Quality column. -->
+                                <DataGrid ItemsSource="{Binding SelectedGooseStream.Leaves}"
+                                          IsReadOnly="True" AutoGenerateColumns="False"
+                                          Style="{StaticResource ModernDataGrid}"
+                                          HeadersVisibility="Column" RowHeight="30" ColumnHeaderHeight="30"
+                                          MinHeight="55" MaxHeight="440"
+                                          EnableRowVirtualization="True"
+                                          VirtualizingPanel.IsVirtualizing="True"
+                                          VirtualizingPanel.VirtualizationMode="Recycling"
+                                          ScrollViewer.CanContentScroll="True"
+                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                    <DataGrid.RowStyle>
+                                        <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                                                    <Setter Property="Background" Value="#FFF1C7"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGrid.RowStyle>
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="*" MinWidth="105">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                                    <Setter Property="ToolTip" Value="{Binding SignalReference}"/>
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                        </DataGridTextColumn>
+                                        <DataGridTemplateColumn Header="Value" Width="153" MinWidth="143"
+                                                                CellTemplate="{StaticResource ProcessValueBadgeTemplate}"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <Border Background="#FAFCFF" BorderBrush="#DCE6F3" BorderThickness="1"
+                                CornerRadius="11" Padding="15" HorizontalAlignment="Center"
+                                VerticalAlignment="Center" MaxWidth="260">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedGooseStream}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel>
+                                <TextBlock Text="Select a publisher" FontSize="12.4" FontWeight="SemiBold"
+                                           Foreground="{StaticResource Ink}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Identity, network state and DataSet values appear here."
+                                           FontSize="10" Foreground="{StaticResource Muted}" TextAlignment="Center"
+                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

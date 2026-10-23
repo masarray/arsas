@@ -1,0 +1,37 @@
+name: Installation, update or package problem
+description: Report installer, portable ZIP, SmartScreen, checksum, startup or update failures.
+title: "[Installation] "
+labels: ["installation", "needs-evidence"]
+body:
+  - type: input
+    id: arsas-version
+    attributes: {label: ARSAS version, placeholder: 1.6.18}
+    validations: {required: true}
+  - type: input
+    id: windows
+    attributes: {label: Windows version and architecture, placeholder: Windows 11 23H2 x64}
+    validations: {required: true}
+  - type: dropdown
+    id: package
+    attributes: {label: Package, options: [Windows installer, Portable ZIP, Automatic update, Checksum file, Other]}
+    validations: {required: true}
+  - type: dropdown
+    id: symptom
+    attributes: {label: Symptom, options: [Download failed, SHA-256 mismatch, SmartScreen or antivirus warning, Install failed, Uninstall failed, Application does not start, Update failed, Missing dependency, Other]}
+    validations: {required: true}
+  - type: textarea
+    id: steps
+    attributes: {label: Reproduction steps and exact error}
+    validations: {required: true}
+  - type: input
+    id: checksum
+    attributes: {label: Observed SHA-256, description: Required for download or package-integrity problems.}
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: I downloaded from the official ARSAS release or Download Center.
+          required: true
+        - label: I removed usernames, private paths, credentials and confidential data.
+          required: true

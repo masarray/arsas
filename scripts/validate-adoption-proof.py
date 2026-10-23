@@ -1,0 +1,617 @@
+#!/usr/bin/env python3
+"""Validate ARSAS onboarding, learning, capability tutorials, evidence and supply-chain contracts."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from datetime import date
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+LANDING = ROOT / "landing"
+TEMPLATES = LANDING / "templates"
+PAIR_MAP = {
+    "quick-start.html": "panduan-mulai-arsas.html",
+    "learning-center.html": "pusat-belajar-iec61850.html",
+    "what-is-iec61850.html": "apa-itu-iec61850.html",
+    "connect-ied-ip-arsas.html": "cara-hubungkan-ied-ip-arsas.html",
+    "mms-client.html": "mms-client-iec61850.html",
+    "smart-reporting.html": "smart-reporting-iec61850.html",
+    "goose-analyzer.html": "analyzer-goose-iec61850.html",
+    "scl-workspace.html": "workspace-scl-iec61850.html",
+    "io-list-fat-evidence.html": "bukti-fat-iolist-iec61850.html",
+    "faq.html": "faq-arsas.html",
+    "compatibility.html": "bukti-kompatibilitas.html",
+    "demo.html": "demo-arsas.html",
+}
+ISSUE_FORMS = {
+    "device-compatibility.yml", "connection.yml", "reporting.yml", "file-transfer.yml",
+    "goose.yml", "installation.yml", "feature-request.yml", "config.yml",
+}
+STATUSES = {"verified", "conditional", "observed", "not-tested", "known-issue"}
+
+
+def read(path: Path, errors: list[str]) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as exc:
+        errors.append(f"{path.relative_to(ROOT)}: {exc}")
+        return ""
+
+
+def require_values(text: str, label: str, values: tuple[str, ...], errors: list[str], contract: str) -> None:
+    lower = text.lower()
+    for value in values:
+        if value.lower() not in lower:
+            errors.append(f"{label}: missing {contract} {value}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--site", default="")
+    args = parser.parse_args()
+    errors: list[str] = []
+
+    config = json.loads(read(LANDING / "site.json", errors) or "{}")
+    pages = config.get("pages", []) if isinstance(config, dict) else []
+    entries = {str(item.get("path", "")): item for item in pages if isinstance(item, dict)}
+    if len(pages) != 62:
+        errors.append(f"landing/site.json must contain 62 pages, found {len(pages)}")
+    localized = [item for item in pages if isinstance(item, dict) and item.get("contentType") == "localized"]
+    if len(localized) != 21:
+        errors.append(f"landing/site.json must contain 21 Indonesian pages, found {len(localized)}")
+    for english, indonesian in PAIR_MAP.items():
+        expected = {"en": english, "id": indonesian, "x-default": english}
+        for path, language in ((english, "en"), (indonesian, "id")):
+            entry = entries.get(path)
+            if not isinstance(entry, dict) or entry.get("language") != language or entry.get("alternates") != expected:
+                errors.append(f"invalid adoption localization contract for {path}")
+
+    quick_pairs = (
+        ("quick-start.html", "io-list-fat-evidence.html"),
+        ("panduan-mulai-arsas.html", "bukti-fat-iolist-iec61850.html"),
+    )
+    for name, continuation in quick_pairs:
+        text = read(TEMPLATES / name, errors)
+        require_values(
+            text,
+            name,
+            ("quick-step-number", "TCP port 102", "Npcap", "MMS", "live", "quality", "timestamp", "reporting", "polling", "diagnostic", "control"),
+            errors,
+            "onboarding contract",
+        )
+        if text.count('class="quick-step"') != 7:
+            errors.append(f"{name}: expected seven quick-start steps")
+        if continuation not in text:
+            errors.append(f"{name}: missing IO List FAT continuation path")
+
+    learning_contracts = {
+        "learning-center.html": ("Learn IEC 61850", "What is IEC 61850", "Connect your first IED", "troubleshooting", "CollectionPage"),
+        "pusat-belajar-iec61850.html": ("Belajar IEC 61850", "Apa itu IEC 61850", "Hubungkan IED pertama", "troubleshooting", "CollectionPage"),
+        "what-is-iec61850.html": ("30-second takeaway", "Logical Node", "MMS", "Reporting", "GOOSE", "SCL", "FAQPage"),
+        "apa-itu-iec61850.html": ("Takeaway 30 detik", "Logical Node", "MMS", "Reporting", "GOOSE", "SCL", "FAQPage"),
+        "connect-ied-ip-arsas.html": ("TCP port 102", "Add IED", "MMS association", "quality", "timestamp", "HowTo"),
+        "cara-hubungkan-ied-ip-arsas.html": ("TCP port 102", "Add IED", "association MMS", "quality", "timestamp", "HowTo"),
+    }
+    learning_hubs = {"learning-center.html", "pusat-belajar-iec61850.html"}
+    for name, required_values in learning_contracts.items():
+        text = read(TEMPLATES / name, errors)
+        require_values(text, name, required_values, errors, "learning contract")
+        if name not in learning_hubs and "learning-center.html" not in text and "pusat-belajar-iec61850.html" not in text:
+            errors.append(f"{name}: missing Learning Center continuation path")
+
+    capability_tutorials = {
+        "mms-client.html": (
+            "30-second takeaway", "When to use the MMS Client", "Add IED", "Functional Constraint",
+            "Success criteria", "If it fails", "HowTo", "FAQPage", "learning-center.html",
+        ),
+        "mms-client-iec61850.html": (
+            "Takeaway 30 detik", "Kapan memakai MMS Client", "Add IED", "Functional Constraint",
+            "Success criteria", "Bila gagal", "HowTo", "FAQPage", "pusat-belajar-iec61850.html",
+        ),
+        "smart-reporting.html": (
+            "30-second takeaway", "DataSet", "BRCB", "URCB", "General Interrogation",
+            "Success criteria", "If Reporting is silent", "HowTo", "FAQPage", "learning-center.html",
+        ),
+        "smart-reporting-iec61850.html": (
+            "Takeaway 30 detik", "DataSet", "BRCB", "URCB", "General Interrogation",
+            "Success criteria", "Bila Reporting silent", "HowTo", "FAQPage", "pusat-belajar-iec61850.html",
+        ),
+        "goose-analyzer.html": (
+            "30-second takeaway", "stNum", "sqNum", "Time Allowed to Live",
+            "Success criteria", "If the result is wrong", "HowTo", "FAQPage", "learning-center.html",
+        ),
+        "analyzer-goose-iec61850.html": (
+            "Takeaway 30 detik", "stNum", "sqNum", "Time Allowed to Live",
+            "Success criteria", "Bila hasil salah", "HowTo", "FAQPage", "pusat-belajar-iec61850.html",
+        ),
+        "scl-workspace.html": (
+            "30-second takeaway", "ICD", "CID", "SCD", "IID",
+            "Success criteria", "If the file is rejected", "HowTo", "FAQPage", "learning-center.html",
+        ),
+        "workspace-scl-iec61850.html": (
+            "Takeaway 30 detik", "ICD", "CID", "SCD", "IID",
+            "Success criteria", "Bila file ditolak", "HowTo", "FAQPage", "pusat-belajar-iec61850.html",
+        ),
+    }
+    for name, required_values in capability_tutorials.items():
+        text = read(TEMPLATES / name, errors)
+        require_values(text, name, required_values, errors, "capability tutorial contract")
+        if text.count('<details class="faq-item">') != 3:
+            errors.append(f"{name}: expected three visible capability FAQ items")
+        step_class = 'class="reporting-step"' if name.startswith("smart-reporting") else 'class="step"'
+        if text.count(step_class) != 6:
+            errors.append(f"{name}: expected six capability tutorial steps")
+
+    investigation_template_contracts = {
+        "features.html": "{{> investigation-path}}",
+        "goose-analyzer.html": "{{> investigation-path}}",
+        "file-transfer.html": "{{> investigation-path}}",
+        "multi-ied-monitoring.html": "{{> investigation-path}}",
+        "demo.html": "{{> investigation-path}}",
+        "analyzer-goose-iec61850.html": "{{> investigation-path-id}}",
+        "transfer-file-comtrade-iec61850.html": "{{> investigation-path-id}}",
+        "demo-arsas.html": "{{> investigation-path-id}}",
+    }
+    for name, include_marker in investigation_template_contracts.items():
+        text = read(TEMPLATES / name, errors)
+        if include_marker not in text:
+            errors.append(f"{name}: missing reusable investigation partial {include_marker}")
+
+    investigation_partials = {
+        "investigation-path.html": ("data-investigation-path=\"true\"", "Investigation workflow", "Network evidence", "Event / SOE", "Fault record", "COMTRADE", "Engineering timeline", "Correlation is not automatic causation proof."),
+        "investigation-path-id.html": ("data-investigation-path=\"true\"", "Workflow investigasi", "Evidence network", "Event / SOE", "Fault record", "COMTRADE", "Timeline engineering", "Korelasi bukan otomatis bukti sebab-akibat."),
+    }
+    partial_dir = LANDING / "partials"
+    for name, required_values in investigation_partials.items():
+        text = read(partial_dir / name, errors)
+        require_values(text, name, required_values, errors, "investigation workflow partial contract")
+
+    for name in ("io-list-fat-evidence.html", "bukti-fat-iolist-iec61850.html"):
+        text = read(TEMPLATES / name, errors)
+        require_values(
+            text,
+            name,
+            ("TestPointId", "OFF → ON", "ON → OFF", ".arsas", "Excel", "PDF", "quality", "timestamp", "acquisition source"),
+            errors,
+            "IO FAT contract",
+        )
+        lower = text.lower()
+        if "mainline" not in lower or "stable" not in lower:
+            errors.append(f"{name}: missing mainline versus stable release boundary")
+        if "browser" not in lower or "third-party" not in lower:
+            errors.append(f"{name}: missing native PDF dependency boundary")
+
+    for name in ("faq.html", "faq-arsas.html"):
+        text = read(TEMPLATES / name, errors)
+        if '"@type":"FAQPage"' not in text.replace(" ", ""):
+            errors.append(f"{name}: missing visible FAQPage structured data")
+        if text.count('<details class="faq-item">') != 12:
+            errors.append(f"{name}: expected twelve visible FAQ items")
+        require_values(text, name, ("SmartScreen", "Npcap", "SBO", "analytics", "Portable"), errors, "FAQ topic")
+
+    evidence_path = LANDING / "device-evidence.json"
+    try:
+        evidence = json.loads(read(evidence_path, errors) or "{}")
+    except json.JSONDecodeError as exc:
+        errors.append(f"device-evidence.json: {exc}")
+        evidence = {}
+    if evidence.get("schemaVersion") != 2 or evidence.get("product") != "ARSAS" or evidence.get("namedDeviceCount") != 0:
+        errors.append("device-evidence.json identity or named-device boundary is invalid")
+    policy = evidence.get("freshnessPolicy")
+    if not isinstance(policy, dict) or policy.get("stableVersionSource") != "latest.json" or not all(
+        policy.get(key) for key in ("missingTestVersion", "missingRetest", "recordScope", "registryUpdate")
+    ):
+        errors.append("device-evidence.json: incomplete historical/retest policy")
+    if not re.fullmatch(r"20\d{2}-\d{2}-\d{2}", str(evidence.get("updatedAt", ""))):
+        errors.append("device-evidence.json: invalid registry update date")
+    vocabulary = evidence.get("statusVocabulary")
+    if not isinstance(vocabulary, dict) or set(vocabulary) != STATUSES:
+        errors.append("device-evidence.json status vocabulary is invalid")
+    profiles = evidence.get("profiles")
+    profile_ids: set[str] = set()
+    if not isinstance(profiles, list) or len(profiles) != 2:
+        errors.append("device-evidence.json must contain exactly two bounded anonymized profiles")
+        profiles = []
+    for profile in profiles:
+        if not isinstance(profile, dict):
+            errors.append("device-evidence.json contains an invalid profile")
+            continue
+        profile_id = str(profile.get("id", ""))
+        profile_ids.add(profile_id)
+        services = profile.get("services")
+        if not isinstance(services, dict) or not services or not set(services.values()).issubset(STATUSES):
+            errors.append(f"{profile_id}: invalid service status")
+        links = profile.get("evidenceLinks")
+        if not isinstance(links, list) or len(links) < 2 or not all(str(link).startswith("https://github.com/masarray/") for link in links):
+            errors.append(f"{profile_id}: public evidence links are incomplete")
+        if not isinstance(profile.get("conditions"), list) or len(profile["conditions"]) < 3:
+            errors.append(f"{profile_id}: evidence conditions are incomplete")
+        if not re.fullmatch(r"20\d{2}-(0[1-9]|1[0-2])", str(profile.get("evidenceDate", ""))):
+            errors.append(f"{profile_id}: invalid historical evidence month")
+        tested = profile.get("testedArsasVersion", "__missing__")
+        if tested != "__missing__" and tested is not None and not re.fullmatch(r"\d+\.\d+\.\d+", str(tested)):
+            errors.append(f"{profile_id}: invalid tested ARSAS version")
+        if tested == "__missing__":
+            errors.append(f"{profile_id}: missing explicit tested ARSAS version")
+        retest = profile.get("lastRetest", "__missing__")
+        if retest == "__missing__":
+            errors.append(f"{profile_id}: missing explicit lastRetest")
+        elif retest is not None:
+            if not isinstance(retest, dict) or not re.fullmatch(r"\d+\.\d+\.\d+", str(retest.get("arsasVersion", ""))) or not re.fullmatch(r"20\d{2}-\d{2}-\d{2}", str(retest.get("date", ""))) or not isinstance(retest.get("evidenceLinks"), list) or not retest["evidenceLinks"]:
+                errors.append(f"{profile_id}: retest needs version, date and public evidence")
+        if profile.get("publicRecordType") != "engineering-implementation-trail" or profile.get("rawFieldCaptureLinked") is not False:
+            errors.append(f"{profile_id}: public engineering trail must not imply raw capture")
+        records = profile.get("serviceRecords")
+        declared = {key for key, status in services.items() if status != "not-tested"} if isinstance(services, dict) else set()
+        if not isinstance(records, dict) or set(records) != declared:
+            errors.append(f"{profile_id}: service-level record coverage does not match published statuses")
+        elif isinstance(links, list):
+            for service, urls in records.items():
+                if not isinstance(urls, list) or not urls or any(url not in links for url in urls):
+                    errors.append(f"{profile_id}/{service}: unsupported service-level engineering record")
+
+    # R6.3 coverage is computed from declared profile statuses; an omitted service is
+    # Not declared, never silently converted into Not tested.
+    plan = evidence.get("coveragePlan")
+    if not isinstance(plan, dict) or plan.get("scope") != "published-anonymized-profiles-only":
+        errors.append("device-evidence.json: missing bounded coverage plan")
+        plan = {}
+    service_order = plan.get("serviceOrder")
+    declared_services = set().union(*(set(p.get("services", {})) for p in profiles if isinstance(p, dict) and isinstance(p.get("services"), dict)))
+    if not isinstance(service_order, list) or len(service_order) != len(set(service_order)) or set(service_order) != declared_services:
+        errors.append("device-evidence.json: coverage service inventory differs from profile declarations")
+        service_order = []
+    uncovered = {
+        service for service in service_order
+        if profiles and all(
+            isinstance(profile, dict)
+            and isinstance(profile.get("services"), dict)
+            and profile["services"].get(service) == "not-tested"
+            for profile in profiles
+        )
+    }
+    gaps = plan.get("noPublishedTestAcrossProfiles")
+    if not isinstance(gaps, list) or len(gaps) != len(set(gaps)) or set(gaps) != uncovered:
+        errors.append("device-evidence.json: cross-profile gaps must be derived from explicit Not tested statuses")
+        gaps = []
+    next_evidence = plan.get("nextEvidence")
+    if not isinstance(next_evidence, dict) or set(next_evidence) != uncovered or any(
+        not isinstance(value, str) or len(value.strip()) < 60 for value in next_evidence.values()
+    ):
+        errors.append("device-evidence.json: each uncovered service needs a concrete capture request")
+        next_evidence = {}
+    stable_retest = plan.get("stableRetest")
+    if not isinstance(stable_retest, dict) or stable_retest.get("state") not in {"not-publicly-documented", "documented-with-reviewed-records"} or not isinstance(stable_retest.get("requirements"), list) or len(stable_retest["requirements"]) != 3 or any(not isinstance(item, str) or len(item.strip()) < 20 for item in stable_retest["requirements"]):
+        errors.append("device-evidence.json: incomplete current-stable retest intake requirements")
+
+    # R6.5: a reviewed field-test ledger is distinct from package identity and
+    # historical engineering trails. There are deliberately no accepted records yet.
+    trace = evidence.get("releaseTraceability")
+    required_fields = {
+        "id", "profileId", "service", "testDate", "arsasVersion", "releaseTag",
+        "sourceCommit", "releaseUrl", "result", "evidenceKind",
+        "expectedObserved", "conditions", "deviceDisclosure",
+        "publicEvidenceUrl", "reviewIssueUrl", "reviewPrUrl",
+    }
+    if not isinstance(trace, dict) or trace.get("schemaVersion") != 1 or trace.get("currentStableSource") != "latest.json" or trace.get("reviewPolicyPath") != "docs/evidence-intake-review.md":
+        errors.append("releaseTraceability: missing exact-release review contract")
+        trace = {}
+    if not isinstance(trace.get("requiredRecordFields"), list) or len(trace["requiredRecordFields"]) != len(required_fields) or set(trace["requiredRecordFields"]) != required_fields:
+        errors.append("releaseTraceability: reviewed record requirements drifted")
+    if not isinstance(trace.get("claimBoundary"), str) or len(trace["claimBoundary"]) < 100:
+        errors.append("releaseTraceability: missing package versus field-test boundary")
+    reviewed = trace.get("reviewedTests")
+    if not isinstance(reviewed, list):
+        errors.append("releaseTraceability: reviewedTests must be an explicit list")
+        reviewed = []
+    exact_release = json.loads(read(LANDING / "latest.json", errors) or "{}")
+    current_version = exact_release.get("version")
+    current_tag = exact_release.get("tag")
+    current_commit = exact_release.get("sourceCommit")
+    record_ids: set[str] = set()
+    current_records: list[dict] = []
+    for record in reviewed:
+        if not isinstance(record, dict) or set(record) != required_fields:
+            errors.append("releaseTraceability: record missing required provenance fields")
+            continue
+        rid = str(record["id"])
+        if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)+", rid) or rid in record_ids:
+            errors.append(f"releaseTraceability: invalid or duplicate test ID {rid}")
+        record_ids.add(rid)
+        profile = next((p for p in profiles if isinstance(p, dict) and p.get("id") == record["profileId"]), None)
+        if profile is None or record["service"] not in profile.get("services", {}):
+            errors.append(f"{rid}: unknown profile or undeclared service")
+        elif profile["services"][record["service"]] != record["result"]:
+            errors.append(f"{rid}: reviewed result differs from the profile service status")
+        if record["result"] not in STATUSES - {"not-tested"}:
+            errors.append(f"{rid}: not-tested cannot be a completed field result")
+        if record["evidenceKind"] != "sanitized-field-test":
+            errors.append(f"{rid}: implementation history or diagnostic alone is not a field test")
+        version = str(record["arsasVersion"])
+        tag = str(record["releaseTag"])
+        if not re.fullmatch(r"\d+\.\d+\.\d+", version) or tag != "v" + version:
+            errors.append(f"{rid}: invalid exact version/tag association")
+        if not re.fullmatch(r"[0-9a-f]{40}", str(record["sourceCommit"])):
+            errors.append(f"{rid}: invalid immutable source commit")
+        if record["releaseUrl"] != f"https://github.com/masarray/arsas/releases/tag/{tag}":
+            errors.append(f"{rid}: release URL does not match tested tag")
+        try:
+            tested_at = date.fromisoformat(str(record["testDate"]))
+            if tested_at > date.today():
+                errors.append(f"{rid}: test date cannot be in the future")
+        except ValueError:
+            errors.append(f"{rid}: invalid actual test date")
+        if len(str(record["expectedObserved"]).strip()) < 30 or not isinstance(record["conditions"], list) or len(record["conditions"]) < 2 or any(len(str(v).strip()) < 10 for v in record["conditions"]) or len(str(record["deviceDisclosure"]).strip()) < 12:
+            errors.append(f"{rid}: incomplete sanitized test context")
+        for key, suffix in (("publicEvidenceUrl", "issues"), ("reviewIssueUrl", "issues"), ("reviewPrUrl", "pull")):
+            if not re.fullmatch(rf"https://github\.com/masarray/arsas/{suffix}/[1-9]\d*", str(record[key])):
+                errors.append(f"{rid}: {key} must be a public ARSAS {suffix} record")
+        if version == current_version:
+            current_records.append(record)
+            if tag != current_tag or record["sourceCommit"] != current_commit or record["releaseUrl"] != exact_release.get("releaseUrl"):
+                errors.append(f"{rid}: claimed current stable test does not match latest.json")
+            if isinstance(record["testDate"], str) and record["testDate"] < str(exact_release.get("publishedAtUtc", ""))[:10]:
+                errors.append(f"{rid}: current release test predates publication of its exact tag")
+        if profile is not None and profile.get("lastRetest") is not None:
+            last = profile["lastRetest"]
+            if isinstance(last, dict) and last.get("date") == record["testDate"] and last.get("arsasVersion") == version and record["publicEvidenceUrl"] not in last.get("evidenceLinks", []):
+                errors.append(f"{rid}: profile retest is not linked to its public field record")
+    expected_state = "documented-with-reviewed-records" if current_records else "not-publicly-documented"
+    if trace.get("currentStableFieldTestState") != expected_state:
+        errors.append("releaseTraceability: current stable field-test state disagrees with accepted records")
+    if isinstance(stable_retest, dict) and stable_retest.get("state") != expected_state:
+        errors.append("coveragePlan: current stable retest state disagrees with accepted records")
+    for profile in profiles:
+        if isinstance(profile, dict) and isinstance(profile.get("lastRetest"), dict):
+            last = profile["lastRetest"]
+            if not any(record.get("profileId") == profile["id"] and record.get("testDate") == last.get("date") and record.get("arsasVersion") == last.get("arsasVersion") and record.get("publicEvidenceUrl") in last.get("evidenceLinks", []) for record in reviewed if isinstance(record, dict)):
+                errors.append(f"{profile['id']}: profile retest lacks a matching reviewed release record")
+
+    issue_form = read(ROOT / ".github" / "ISSUE_TEMPLATE" / "device-compatibility.yml", errors)
+    require_values(issue_form, "device-compatibility.yml", ("id: evidence-date", "id: evidence-kind", "id: prior-profile", "actual test date", "engineering or implementation history only"), errors, "R6.3 evidence intake")
+    review_url = "https://github.com/masarray/arsas/blob/main/docs/evidence-intake-review.md"
+    require_values(issue_form, "device-compatibility.yml", (
+        review_url, "one issue = one bounded service result", "id: expected-observed",
+        "id: public-evidence-link", "id: tested-release-tag", "id: tested-source-commit", "a submission, not verified evidence",
+        "separate registry PR", "raw private captures",
+    ), errors, "R6.4 evidence intake/review gate")
+    review_policy = read(ROOT / "docs" / "evidence-intake-review.md", errors)
+    require_values(review_policy, "docs/evidence-intake-review.md", (
+        "submitted, not verified", "Privacy first", "Maintainer review gate",
+        "Promote only with a reviewed PR", "actual test date", "exact tested ARSAS version",
+        "not a retest", "registry", "not the physical truth", "releaseTraceability.reviewedTests", "latest.json",
+    ), errors, "R6.4 review policy")
+
+    for name in ("compatibility.html", "bukti-kompatibilitas.html"):
+        text = read(TEMPLATES / name, errors)
+        if 'data-evidence-matrix="true"' not in text:
+            errors.append(f"{name}: missing interoperability evidence matrix")
+        proof_route = (
+            ("Review the service matrix", "Review claim boundaries", "Understand the file-service workflow →", "Understand the RCB &amp; SCL workflow →")
+            if name == "compatibility.html" else
+            ("Review matrix service", "Review batas klaim", "Pahami workflow file service →", "Pahami workflow RCB &amp; SCL →")
+        )
+        require_values(text, name, proof_route, errors, "R6 evaluator proof route")
+        if 'data-evidence-intake="submitted-not-verified"' not in text or review_url not in text:
+            errors.append(f"{name}: missing R6.4 submission-to-review policy route")
+        if 'data-release-traceability="reviewed-tests-only"' not in text or 'data-release-source="latest.json"' not in text:
+            errors.append(f"{name}: missing release-to-test traceability contract")
+        if f'data-reviewed-release-test-count="{len(reviewed)}"' not in text or f'data-current-stable-field-test="{expected_state}"' not in text:
+            errors.append(f"{name}: accepted test count/current release state disagrees with registry")
+        for token in ("{{STABLE_VERSION}}", "{{STABLE_TAG}}", "{{STABLE_SOURCE_COMMIT}}", "{{RELEASE_URL}}"):
+            if token not in text:
+                errors.append(f"{name}: missing exact release template token {token}")
+        for profile_id in profile_ids:
+            if f'data-release-trace-profile="{profile_id}"' not in text:
+                errors.append(f"{name}: missing historical release boundary {profile_id}")
+        displayed = re.findall(r'data-release-test-record="([^"]+)"', text)
+        if len(displayed) != len(set(displayed)) or set(displayed) != record_ids:
+            errors.append(f"{name}: release-test rows differ from reviewed ledger")
+        if not reviewed and 'data-release-records="none"' not in text:
+            errors.append(f"{name}: unverified empty ledger is not explicit")
+        if reviewed and 'data-release-records="none"' in text:
+            errors.append(f"{name}: stale empty-ledger claim remains after test promotion")
+        for record in reviewed:
+            if not isinstance(record, dict) or "id" not in record:
+                continue
+            start = text.find(f'data-release-test-record="{record["id"]}"')
+            end = text.find("</tr>", start) if start >= 0 else -1
+            row = text[start:end] if end >= 0 else ""
+            for value in (record["profileId"], record["service"], record["testDate"], record["arsasVersion"], record["releaseTag"], record["sourceCommit"], record["publicEvidenceUrl"], record["reviewPrUrl"]):
+                if str(value) not in row:
+                    errors.append(f"{name}: incomplete reviewed test row {record['id']}")
+        if name == "compatibility.html":
+            require_values(text, name, (
+                "Submit → maintainer review → registry PR", "a GitHub issue is a report",
+                "Planned tests and engineering history alone",
+            ), errors, "R6.4 EN publication gate")
+        else:
+            require_values(text, name, (
+                "Kirim → review maintainer → PR registry", "GitHub Issue adalah laporan",
+                "Planned test dan riwayat engineering saja",
+            ), errors, "R6.4 ID publication gate")
+        for profile in profiles:
+            if not isinstance(profile, dict):
+                continue
+            profile_id = str(profile.get("id", ""))
+            if f'data-evidence-profile="{profile_id}"' not in text:
+                errors.append(f"{name}: missing evidence profile {profile_id}")
+            if f'data-evidence-trace="{profile_id}"' not in text or f'data-service-records="{profile_id}"' not in text:
+                errors.append(f"{name}: missing profile freshness or service-record trace for {profile_id}")
+            if f'data-evidence-trace="{profile_id}" data-tested-version="not-recorded" data-current-stable-retest="not-documented"' not in text:
+                errors.append(f"{name}: historical unknown version/retest is not explicit for {profile_id}")
+            records = profile.get("serviceRecords")
+            if isinstance(records, dict):
+                record_start = text.find(f'data-service-records="{profile_id}"')
+                record_end = text.find("</p>", record_start) if record_start >= 0 else -1
+                record_block = text[record_start:record_end] if record_end >= 0 else ""
+                for service, urls in records.items():
+                    for url in urls:
+                        if f'href="{url}"' not in record_block:
+                            errors.append(f"{name}: missing linked engineering record for {profile_id}/{service}")
+            services = profile.get("services")
+            if isinstance(services, dict):
+                for service, status in services.items():
+                    marker = f'data-evidence-cell="{profile_id}:{service}:{status}"'
+                    if marker not in text:
+                        errors.append(f"{name}: evidence matrix drift for {profile_id}/{service}/{status}")
+        if 'data-evidence-freshness="true"' not in text or "{{STABLE_VERSION}}" not in text:
+            errors.append(f"{name}: current stable source or historical freshness note missing")
+        if 'data-evidence-coverage="published-anonymized-profiles-only"' not in text or 'data-stable-retest="not-publicly-documented"' not in text:
+            errors.append(f"{name}: missing bounded cross-profile coverage and stable-retest gap")
+        for service in gaps:
+            if f'data-uncovered-service="{service}"' not in text:
+                errors.append(f"{name}: missing explicit public evidence gap for {service}")
+        for service in declared_services - set(gaps):
+            if f'data-uncovered-service="{service}"' in text:
+                errors.append(f"{name}: declared service incorrectly shown as uncovered: {service}")
+        if name == "compatibility.html":
+            for prompt in next_evidence.values():
+                if prompt not in text:
+                    errors.append(f"{name}: coverage capture guidance drift from registry")
+        else:
+            require_values(text, name, ("GOOSE", "Control", "Not tested", "Not declared", "tanggal uji", "retest"), errors, "Indonesian coverage guidance")
+        if name == "compatibility.html":
+            require_values(text, name, ("Historical evidence", "not publicly recorded", "not documented", "not raw field captures"), errors, "R6.2 historical/retest boundary")
+        else:
+            require_values(text, name, ("Evidence historis", "belum tercatat secara publik", "belum terdokumentasi", "bukan raw field capture"), errors, "R6.2 historical/retest boundary")
+        for status in ("verified", "conditional", "observed"):
+            if f'data-status="{status}"' not in text:
+                errors.append(f"{name}: missing status {status}")
+        lower = text.lower()
+        if "device-evidence.json" not in text or not any(term in lower for term in ("conformance", "conformity")):
+            errors.append(f"{name}: missing machine-readable or conformance boundary")
+
+    for name in ("guides.html", "panduan.html"):
+        text = read(TEMPLATES / name, errors)
+        require_values(
+            text,
+            name,
+            ("data-guide-filter", "data-guide-search", "data-guide-category", "data-guide-card", "guide-filter.js"),
+            errors,
+            "guide-filter contract",
+        )
+        if text.count("data-guide-card") != 11:
+            errors.append(f"{name}: expected eleven filterable guide cards")
+        if "io-list-fat-evidence.html" not in text and "bukti-fat-iolist-iec61850.html" not in text:
+            errors.append(f"{name}: missing IO FAT guidance path")
+
+    for name in ("demo.html", "demo-arsas.html"):
+        text = read(TEMPLATES / name, errors)
+        if text.count("data-demo-step") != 7 or text.count("data-demo-panel") != 7:
+            errors.append(f"{name}: expected seven guided demo steps and panels")
+        if "demo.js" not in text or text.count("assets/screenshots/") < 9:
+            errors.append(f"{name}: guided demo must use the real screenshot set and controller")
+        if "time-to-value claim" not in text and "klaim waktu" not in text:
+            errors.append(f"{name}: guided demo must reject unsupported timing claims")
+
+    issue_dir = ROOT / ".github" / "ISSUE_TEMPLATE"
+    actual_forms = {path.name for path in issue_dir.glob("*.yml")}
+    missing_forms = ISSUE_FORMS - actual_forms
+    if missing_forms:
+        errors.append("missing structured issue forms: " + ", ".join(sorted(missing_forms)))
+    for name in ISSUE_FORMS - {"config.yml"}:
+        text = read(issue_dir / name, errors)
+        require_values(text, name, ("name:", "description:", "body:", "validations:"), errors, "issue-form contract")
+    combined_forms = "\n".join(read(issue_dir / name, errors) for name in ISSUE_FORMS)
+    require_values(combined_forms, "issue forms", ("ARSAS version", "Windows", "sanitized", "credentials", "confidential"), errors, "intake boundary")
+
+    supply_workflow = read(ROOT / ".github" / "workflows" / "release-supply-chain.yml", errors)
+    require_values(
+        supply_workflow,
+        "release-supply-chain.yml",
+        ("actions/attest@v4", "attestations: write", "id-token: write", "sha256sum --check", "generate-release-sbom.py", "ARSAS-Windows-x64-SBOM.spdx.json"),
+        errors,
+        "supply-chain workflow contract",
+    )
+    sbom_generator = read(ROOT / "scripts" / "generate-release-sbom.py", errors)
+    require_values(sbom_generator, "generate-release-sbom.py", ("SPDX-2.3", "packageVerificationCode", "SHA256", "GPL-3.0-or-later"), errors, "SBOM contract")
+
+    trust_en = read(LANDING / "partials" / "trust-architecture.html", errors)
+    trust_id = read(LANDING / "partials" / "trust-architecture-id.html", errors)
+    require_values(trust_en, "trust-architecture.html", ("Open-source reliability", "STABLE_SOURCE_COMMIT", "SPDX SBOM", "CI", "Open source is not automatic correctness", "reproducible-build claim"), errors, "R5.6 trust contract")
+    require_values(trust_id, "trust-architecture-id.html", ("Reliability open-source", "STABLE_SOURCE_COMMIT", "SPDX SBOM", "CI", "Open source bukan jaminan correctness otomatis", "reproducible build"), errors, "R5.6 Indonesian trust contract")
+    for name, partial in (("index.html", "{{> trust-architecture}}"), ("id.html", "{{> trust-architecture-id}}"), ("technical-review.html", "{{> trust-architecture}}")):
+        text = read(TEMPLATES / name, errors)
+        if partial not in text:
+            errors.append(f"{name}: missing reusable R5.6 trust partial {partial}")
+        if name == "technical-review.html":
+            require_values(text, name, ("Review field interoperability evidence", "Verify the stable release"), errors, "R6 technical-review proof route")
+
+    evidence_en = read(LANDING / "partials" / "evidence-contract.html", errors)
+    evidence_id = read(LANDING / "partials" / "evidence-contract-id.html", errors)
+    require_values(evidence_en, "evidence-contract.html", ("Review field interoperability evidence →", "Review engineering boundaries →"), errors, "R6 evidence proof routing")
+    require_values(evidence_id, "evidence-contract-id.html", ("Review evidence interoperabilitas field →", "Review batas engineering →"), errors, "R6 Indonesian evidence proof routing")
+
+    # R5 final audit: preserve the beginner-to-evidence path while preventing duplicate overview layers.
+    for name, trust_partial in (("index.html", "{{> trust-architecture}}"), ("id.html", "{{> trust-architecture-id}}")):
+        text = read(TEMPLATES / name, errors)
+        require_values(
+            text,
+            name,
+            ("home-quick-start-section", "home-paths-section", "home-capabilities", "discovery-scl-showcase", "home-evidence", "release-trust-section", trust_partial),
+            errors,
+            "R5 final overview contract",
+        )
+        if "home-workflows" in text:
+            errors.append(f"{name}: duplicated post-evidence SCL/depth overview section must stay removed")
+
+    features_text = read(TEMPLATES / "features.html", errors)
+    require_values(
+        features_text,
+        "features.html",
+        ("Six capability domains", "{{> investigation-path}}", 'id="product-areas"', "Project workflows"),
+        errors,
+        "R5 final capability-navigation contract",
+    )
+    for forbidden in ("approved IED IP address", "approved IP address", "Current source and published release", 'class="container metric-grid"'):
+        if forbidden.lower() in features_text.lower():
+            errors.append(f"features.html: final-audit duplication/authority wording returned: {forbidden}")
+
+    home_css = read(LANDING / "home.css", errors)
+    for obsolete_selector in ("home-workflows", "home-next-grid"):
+        if obsolete_selector in home_css:
+            errors.append(f"landing/home.css: obsolete overview selector returned: {obsolete_selector}")
+
+    latest = json.loads(read(LANDING / "latest.json", errors) or "{}")
+    if len(str(latest.get("sourceCommit", ""))) != 40 or not str(latest.get("tag", "")).startswith("v"):
+        errors.append("latest.json: missing exact R5.6 source identity")
+
+    for name in ("download.html", "unduh.html", "release-notes.html", "catatan-rilis.html"):
+        text = read(TEMPLATES / name, errors)
+        lower = text.lower()
+        if "SBOM" not in text or "provenance" not in lower:
+            errors.append(f"{name}: missing supply-chain evidence guidance")
+        require_values(text, name, ("STABLE_SOURCE_COMMIT", "STABLE_TAG", "ARSAS-Windows-x64-SBOM.spdx.json", "ARSAS-Windows-x64-PROVENANCE.json", "reproducible build"), errors, "R5.6 exact-release trust")
+        if not any(term in lower for term in ("does not claim", "does not infer", "tidak mengklaim", "tidak menganggap")):
+            errors.append(f"{name}: missing honest current-release provenance boundary")
+
+    if args.site:
+        site = Path(args.site).resolve()
+        for path in (*PAIR_MAP.keys(), *PAIR_MAP.values(), "device-evidence.json"):
+            if not (site / path).is_file():
+                errors.append(f"built site missing adoption output {path}")
+        build_info = json.loads(read(site / "build-info.json", errors) or "{}")
+        if len(build_info.get("pages", [])) != 62:
+            errors.append("built site build-info.json must contain 62 pages")
+
+    errors = list(dict.fromkeys(errors))
+    if errors:
+        print("ARSAS adoption and field-proof validation failed:", file=sys.stderr)
+        for error in errors:
+            print(f"- {error}")
+        return 1
+    print(
+        "ARSAS adoption and field-proof validation passed: 62 pages, 21 localized pages, "
+        "beginner learning, bilingual MMS, Reporting, GOOSE and SCL tutorials, IO FAT evidence, "
+        "onboarding, FAQ, field evidence, demo, issue intake and supply-chain contracts."
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

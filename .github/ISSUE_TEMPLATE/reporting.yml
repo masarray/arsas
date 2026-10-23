@@ -1,0 +1,34 @@
+name: Reporting, RCB or DataSet problem
+description: Report silent BRCB or URCB, ownership, DataSet coverage or fallback behavior.
+title: "[Reporting] "
+labels: ["reporting", "needs-evidence"]
+body:
+  - type: input
+    id: arsas-version
+    attributes: {label: ARSAS version, placeholder: 1.6.18}
+    validations: {required: true}
+  - type: input
+    id: device
+    attributes: {label: Device, firmware and RCB reference, description: Anonymize restricted identity.}
+    validations: {required: true}
+  - type: dropdown
+    id: symptom
+    attributes: {label: Symptom, options: [Reporting silent, RCB reserved or occupied, Empty or incomplete DataSet, RptEna or write rejected, Buffered recovery problem, Unexpected polling fallback, Other]}
+    validations: {required: true}
+  - type: textarea
+    id: selected-signals
+    attributes: {label: Selected object references and expected DataSet coverage}
+    validations: {required: true}
+  - type: textarea
+    id: evidence
+    attributes: {label: Sanitized RCB, DataSet and diagnostics evidence, description: Include report source, reason, owner and fallback state where visible.}
+    validations: {required: true}
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: I did not force reservation, write or takeover outside an approved procedure.
+          required: true
+        - label: I removed credentials and confidential project data.
+          required: true

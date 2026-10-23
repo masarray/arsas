@@ -1,0 +1,27 @@
+{
+  "SchemaVersion": 1,
+  "Phase": "P0-5e",
+  "Status": "awaiting-fresh-physical-budget-lock",
+  "DeviceIdentity": "AA1E1F06R4",
+  "EngineCommit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
+  "SemanticTarget": {
+    "LogicalDevices": 32,
+    "LogicalNodes": 119,
+    "SemanticLeaves": 4925,
+    "DataSets": 2,
+    "OrderedFcdaMembers": 58,
+    "LogicalReportControls": 32,
+    "RuntimeReportControlInstances": 34,
+    "IndexedBufferedFamilyMax": 2,
+    "IndexedUnbufferedFamilyMax": 2,
+    "SyntheticReportControlInstancesAllowed": 0
+  },
+  "BudgetAuthority": {
+    "RequiredProofPhase": "P0-5d",
+    "RequiredProofVerdict": "PASS",
+    "RequireRawCaptureSha256": true,
+    "RequireExactArsasCommit": true,
+    "RequireExactEngineCommit": true,
+    "BudgetValues": null
+  }
+}

@@ -1,0 +1,38 @@
+name: MMS connection or port 102 problem
+description: Report routing, TCP 102, association or live-model discovery failures.
+title: "[Connection] "
+labels: ["connection", "needs-evidence"]
+body:
+  - type: input
+    id: arsas-version
+    attributes: {label: ARSAS version, placeholder: 1.6.18}
+    validations: {required: true}
+  - type: input
+    id: windows
+    attributes: {label: Windows and network adapter, placeholder: Windows 11 x64, Ethernet adapter}
+    validations: {required: true}
+  - type: input
+    id: device
+    attributes: {label: Device and firmware, description: Anonymize when disclosure is restricted.}
+    validations: {required: true}
+  - type: dropdown
+    id: stage
+    attributes: {label: Failing stage, options: [IP routing or ping, TCP port 102, ISO session, MMS association, Identity read, Live model discovery]}
+    validations: {required: true}
+  - type: textarea
+    id: steps
+    attributes: {label: Reproduction steps and expected result}
+    validations: {required: true}
+  - type: textarea
+    id: diagnostics
+    attributes: {label: Exact sanitized diagnostics, description: Include error text and timestamps; remove addresses when private.}
+    validations: {required: true}
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: I tested only an endpoint I was authorized to access.
+          required: true
+        - label: I removed credentials and confidential project data.
+          required: true

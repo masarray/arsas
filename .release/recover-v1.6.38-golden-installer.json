@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "tag": "v1.6.38",
+  "installerVersion": "1.6.38",
+  "testedInstallerArtifactId": 10586413305,
+  "testedInstallerArtifactName": "ARSAS-v1.6.38-golden-installer-candidate",
+  "testedInstallerArtifactZipSha256": "ec3dc83b74d421aa779d9c94fc5a1f4c219e135ad3d9893f9e87f5ad2bc15660",
+  "installerName": "ARSAS-Windows-x64-Setup.exe",
+  "installerSha256": "198dfea5b6d7b58c4c1006fd15c6fbfef1f0885d84924b17c04e0f6cb4cfff30",
+  "installerSizeBytes": 73461055,
+  "installerEvidenceName": "ARSAS-v1.6.38-golden-installer-evidence.json",
+  "installerEvidenceSha256": "e1ad23a6ee128efe5b07eaf20266978dda89c43ee45b2ec3e41e679b2cda2e80",
+  "goldenRuntimeSha256": "555c3d91dbda85cb1b3de453266b33dd26a95cd06fe6805ccb973ed62d19487a",
+  "goldenRuntimeSizeBytes": 78383243,
+  "runtimeApplicationCommit": "eb8eb13d491f9aa265205852b8a4bab07af440ff",
+  "runtimeEngineCommit": "9935d6902d786cc69b299260fe36b835944d5e81",
+  "sourceGoldenArtifactId": 10549589733,
+  "sourceGoldenArtifactZipSha256": "d68b9e89487cfd71bf92ac181e5abed35106ea65776a6005eaa863eb6cdc0068",
+  "runtimeRebuilt": false,
+  "reason": "Promote the exact tested installer candidate that packages the field-verified golden runtime without rebuilding it."
+}

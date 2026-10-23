@@ -1,0 +1,88 @@
+name: Legacy SAS RCB export guard
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "MainWindow.xaml"
+      - "MainWindow.RcbExport.cs"
+      - "RcbExportFilterWindow.xaml"
+      - "RcbExportFilterWindow.xaml.cs"
+      - "Models/RcbExportModels.cs"
+      - "Services/RcbAvailabilityProbeService.cs"
+      - "SaveSclWindow.xaml.cs"
+      - "scripts/verify-rcb-export.ps1"
+      - "engines/ARIEC61850.lock.json"
+      - ".github/workflows/rcb-export-guard.yml"
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "MainWindow.xaml"
+      - "MainWindow.RcbExport.cs"
+      - "RcbExportFilterWindow.xaml"
+      - "RcbExportFilterWindow.xaml.cs"
+      - "Models/RcbExportModels.cs"
+      - "Services/RcbAvailabilityProbeService.cs"
+      - "SaveSclWindow.xaml.cs"
+      - "scripts/verify-rcb-export.ps1"
+      - "engines/ARIEC61850.lock.json"
+      - ".github/workflows/rcb-export-guard.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify selected-RCB CID workflow
+    runs-on: windows-latest
+    steps:
+      - name: Checkout ARSAS
+        uses: actions/checkout@v7
+
+      - name: Checkout pinned ARIEC61850 engine
+        shell: powershell
+        run: |
+          $lock = Get-Content .\engines\ARIEC61850.lock.json -Raw | ConvertFrom-Json
+          if ($lock.repository -ne 'masarray/ARIEC61850' -or
+              ([string]$lock.commit) -notmatch '^[0-9a-f]{40}$') {
+            throw 'Invalid ARIEC61850 integration lock.'
+          }
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$($lock.repository).git" ARIEC61850
+          if ($LASTEXITCODE -ne 0) { throw 'Engine clone failed.' }
+          git -C .\ARIEC61850 fetch --quiet --depth 1 origin $lock.commit
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned engine fetch failed.' }
+          git -C .\ARIEC61850 checkout --quiet --detach $lock.commit
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned engine checkout failed.' }
+          $actual = (git -C .\ARIEC61850 rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($LASTEXITCODE -ne 0 -or $actual -ne ([string]$lock.commit).ToLowerInvariant()) {
+            throw "Pinned engine mismatch. Expected $($lock.commit), checked out $actual."
+          }
+          Write-Host "RCB export guard uses pinned ARIEC61850 $actual"
+
+      - name: Verify RCB availability and export invariants
+        id: guard
+        shell: powershell
+        run: |
+          try {
+            .\scripts\verify-rcb-export.ps1 -EngineRoot .\ARIEC61850
+            "PASS: Legacy SAS selected-RCB CID workflow guard passed." | Set-Content rcb-guard-result.txt
+          }
+          catch {
+            $message = "FAIL: " + $_.Exception.Message
+            $message | Set-Content rcb-guard-result.txt
+            Write-Error $message
+            exit 1
+          }
+
+      - name: Upload concise guard result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rcb-guard-result
+          path: rcb-guard-result.txt
+          retention-days: 1

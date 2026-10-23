@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Catatan Rilis ARSAS {{STABLE_VERSION}} dan Batasan</title>
+  <meta name="description" content="Baca catatan rilis stabil ARSAS terbaru, exact source identity, checksum SHA-256, evidence SBOM/provenance, known limitations, pelaporan issue dan screenshot aplikasi Windows." />
+  <meta name="author" content="{{AUTHOR_NAME}}" />
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
+  <meta name="theme-color" content="#07111f" />
+  <meta name="color-scheme" content="dark" />
+  <link rel="canonical" href="{{CANONICAL_ROOT}}catatan-rilis.html" />
+  <link rel="manifest" href="site.webmanifest" />
+  <link rel="icon" href="assets/app-icon.png" type="image/png" sizes="256x256" />
+  <link rel="apple-touch-icon" href="assets/app-icon.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="screenshots.css" />
+  <link rel="stylesheet" href="audit.css" />
+  <link rel="stylesheet" href="download.css" />
+  <link rel="stylesheet" href="adoption.css" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="ARSAS" />
+  <meta property="og:title" content="Catatan Rilis ARSAS {{STABLE_VERSION}}" />
+  <meta property="og:description" content="{{RELEASE_SUMMARY_ID}}" />
+  <meta property="og:url" content="{{CANONICAL_ROOT}}catatan-rilis.html" />
+  <meta property="og:image" content="{{CANONICAL_ROOT}}{{RELEASE_SCREENSHOT_SRC}}" />
+  <meta property="og:image:width" content="{{RELEASE_SCREENSHOT_WIDTH}}" />
+  <meta property="og:image:height" content="{{RELEASE_SCREENSHOT_HEIGHT}}" />
+  <meta property="og:image:alt" content="{{RELEASE_SCREENSHOT_ALT_ID}}" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"TechArticle","headline":"Catatan Rilis ARSAS {{STABLE_VERSION}}","datePublished":"{{STABLE_PUBLISHED_ISO}}","inLanguage":"id","author":{"@id":"{{CANONICAL_ROOT}}about.html#ari-sulistiono"},"about":{"@id":"{{CANONICAL_ROOT}}#software"},"url":"{{CANONICAL_ROOT}}catatan-rilis.html"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Beranda","item":"{{CANONICAL_ROOT}}id.html"},{"@type":"ListItem","position":2,"name":"Unduh","item":"{{CANONICAL_ROOT}}unduh.html"},{"@type":"ListItem","position":3,"name":"Catatan Rilis","item":"{{CANONICAL_ROOT}}catatan-rilis.html"}]}]}</script>
+</head>
+<body data-page="download">
+  {{> header}}
+  <main id="main">
+    <section class="page-hero download-hero"><div class="container"><div class="breadcrumbs"><a href="id.html">Beranda</a> / <a href="unduh.html">Unduh</a> / Catatan Rilis</div><span class="eyebrow">Stable terbaru · Windows x64 · dipublikasikan {{STABLE_PUBLISHED_DATE_ID}}</span><h1>ARSAS {{STABLE_VERSION}}: <span class="gradient-text">{{RELEASE_TITLE_ID}}</span></h1><p>{{RELEASE_SUMMARY_ID}}</p><div class="hero-actions"><a class="btn btn-primary" href="{{INSTALLER_URL}}" download>Unduh Windows installer</a><a class="btn" href="unduh.html">Verifikasi sebelum unduh</a><a class="btn" href="panduan-mulai-arsas.html">Panduan Mulai</a><a class="btn btn-quiet" href="release-notes.html" hreflang="en" lang="en">English</a></div><div class="release-status"><span class="dot"></span><span>Publikasi stabil terverifikasi · exact artifact CI · SHA-256 tersedia</span></div></div></section>
+
+    <section class="section section-tight"><div class="container release-facts"><div class="release-fact"><span>Versi</span><strong>{{STABLE_VERSION}}</strong></div><div class="release-fact"><span>Dipublikasikan</span><strong>{{STABLE_PUBLISHED_DATE_ID}}</strong></div><div class="release-fact"><span>Installer</span><strong>{{INSTALLER_SIZE}}</strong></div><div class="release-fact"><span>Portable EXE</span><strong>{{PORTABLE_SIZE}}</strong></div></div></section>
+
+    <section class="section"><div class="container split-panel"><article class="panel"><span class="kicker">Yang baru</span><h2>Perubahan pada rilis stabil terbaru</h2><ul class="check-list release-list">{{RELEASE_HIGHLIGHTS_ID}}</ul></article><article class="panel"><span class="kicker">Peningkatan reliability</span><h2>Penguatan delivery dan workflow</h2><ul class="check-list release-list">{{RELEASE_IMPROVEMENTS_ID}}</ul></article></div></section>
+
+    <section class="section"><div class="container"><div class="section-head center"><span class="kicker">Screenshot versi stabil</span><h2>Lihat aplikasi sebelum mengunduh.</h2><p>Screenshot merepresentasikan workspace stabil yang dipublikasikan.</p></div><figure class="screenshot-card wide"><a class="screenshot-link" href="{{RELEASE_SCREENSHOT_SRC}}" target="_blank" rel="noopener"><img src="{{RELEASE_SCREENSHOT_SRC}}" width="{{RELEASE_SCREENSHOT_WIDTH}}" height="{{RELEASE_SCREENSHOT_HEIGHT}}" alt="{{RELEASE_SCREENSHOT_ALT_ID}}" loading="lazy" decoding="async" /></a><figcaption class="screenshot-caption"><h3><span class="screenshot-number">{{STABLE_VERSION}}</span>Workspace Windows stabil</h3><p>{{RELEASE_SCREENSHOT_CAPTION_ID}}</p></figcaption></figure></div></section>
+
+    <section class="section section-tight"><div class="container comparison-grid"><article class="comparison-panel"><span class="kicker">Known limitations</span><h2>Baca sebelum dipakai di lapangan.</h2><ul class="release-list">{{RELEASE_LIMITATIONS_ID}}</ul></article><article class="comparison-panel"><span class="kicker">Identity publisher Windows</span><h2>{{SIGNING_LABEL_ID}}</h2><p>{{SIGNING_DETAIL_ID}}</p><div class="trust-badge trust-badge-warning">Status yang dideklarasikan: {{SIGNING_STATUS}}</div><p class="small-note">Status ini tetap terlihat untuk transparansi UX Windows. Trust package direview melalui exact tag, source commit, SHA-256 dan supply-chain evidence; status publisher-signing bukan score kualitas produk.</p></article></div></section>
+
+    <section class="section section-tight"><div class="container"><div class="section-head"><span class="kicker">Evidence release exact</span><h2>Trace binary kembali ke source bertag yang exact.</h2><p>ARSAS {{STABLE_VERSION}} dipublikasikan sebagai <code>{{STABLE_TAG}}</code> dari source commit <code>{{STABLE_SOURCE_COMMIT}}</code>. Tagged release memuat file SHA-256, SPDX SBOM, dan asset provenance untuk versi ini.</p></div><div class="supply-chain-note"><article><strong>Identity</strong><p>Cocokkan nama package, ukuran, dan SHA-256 terhadap exact tagged release.</p></article><article><strong>Source</strong><p>Review source commit <code>{{STABLE_SOURCE_COMMIT}}</code> dan history repository secara independen.</p></article><article><strong>Asset supply-chain</strong><p>Periksa <code>ARSAS-Windows-x64-SBOM.spdx.json</code> dan <code>ARSAS-Windows-x64-PROVENANCE.json</code> pada exact tag ini.</p></article><article><strong>Boundary</strong><p>Evidence SBOM/provenance memperkuat traceability, tetapi ARSAS tidak mengklaim reproducible build dan evidence tersebut tidak menggantikan acceptance lapangan.</p></article></div><div class="section-actions"><a class="btn" href="{{RELEASE_URL}}" target="_blank" rel="noopener">Periksa release ini</a><a class="btn" href="{{REPOSITORY_URL}}" target="_blank" rel="noopener">Periksa source</a><a class="btn" href="https://github.com/masarray/arsas/attestations" target="_blank" rel="noopener">Repository attestations</a></div></div></section>
+
+    <section class="section section-tight"><div class="container callout"><div class="callout-grid"><div><span class="kicker">Menemukan masalah release?</span><h2>Laporkan dengan evidence yang dapat direproduksi.</h2><p>Sertakan versi ARSAS, jenis paket, Windows, exact error, log atau screenshot yang sudah disanitasi, konteks device bila relevan dan apakah checksum sesuai.</p></div><div class="section-actions"><a class="btn btn-primary" href="{{ISSUES_URL}}" target="_blank" rel="noopener">Laporkan issue</a><a class="btn" href="faq-arsas.html">Baca FAQ</a></div></div></div></section>
+
+    {{> download-cta-id}}
+  </main>
+  {{> footer}}
+</body>
+</html>

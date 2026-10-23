@@ -1,0 +1,282 @@
+name: Publish verified ARSAS Windows release
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - ".release/publish-verified.json"
+  push:
+    branches: [ main ]
+    paths:
+      - ".release/publish-verified.json"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  verified-release:
+    name: Verify tested artifacts and publish stable downloads
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Read verified publication request and release notes
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import re
+          from pathlib import Path
+
+          request = json.loads(Path('.release/publish-verified.json').read_text())
+          notes = json.loads(Path('landing/release-notes.json').read_text())
+          required = (
+              'version', 'installerArtifactId', 'installerSha256',
+              'portableArtifactId', 'portableSha256'
+          )
+          missing = [key for key in required if not request.get(key)]
+          if missing:
+              raise SystemExit('Missing publication request fields: ' + ', '.join(missing))
+          if not re.fullmatch(r'\d+\.\d+\.\d+', str(request['version'])):
+              raise SystemExit('Publication request version is invalid')
+          if notes.get('version') != request['version']:
+              raise SystemExit('Release notes version does not match publication request')
+          signing = notes.get('codeSigning', {})
+          if signing.get('status') not in ('signed', 'unsigned'):
+              raise SystemExit('Release notes must declare code-signing status')
+
+          print(f"version={request['version']}")
+          print(f"tag=v{request['version']}")
+          print(f"installer_artifact_id={request['installerArtifactId']}")
+          print(f"installer_sha256={request['installerSha256'].lower()}")
+          print(f"portable_artifact_id={request['portableArtifactId']}")
+          print(f"portable_sha256={request['portableSha256'].lower()}")
+          print(f"signing_status={signing['status']}")
+          PY
+
+      - name: Download tested workflow artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INSTALLER_ARTIFACT_ID: ${{ steps.request.outputs.installer_artifact_id }}
+          PORTABLE_ARTIFACT_ID: ${{ steps.request.outputs.portable_artifact_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p verified/installer verified/portable
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$INSTALLER_ARTIFACT_ID/zip" > verified/installer-artifact.zip
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$PORTABLE_ARTIFACT_ID/zip" > verified/portable-artifact.zip
+          unzip -q verified/installer-artifact.zip -d verified/installer
+          unzip -q verified/portable-artifact.zip -d verified/portable
+
+      - name: Verify exact tested binaries
+        env:
+          VERSION: ${{ steps.request.outputs.version }}
+          INSTALLER_SHA256: ${{ steps.request.outputs.installer_sha256 }}
+          PORTABLE_SHA256: ${{ steps.request.outputs.portable_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          installer="verified/installer/ARSAS-$VERSION-win-x64-setup.exe"
+          portable="verified/portable/ARSAS-$VERSION-win-x64-portable.zip"
+
+          test -s "$installer"
+          test -s "$portable"
+
+          actual_installer="$(sha256sum "$installer" | awk '{print $1}')"
+          actual_portable="$(sha256sum "$portable" | awk '{print $1}')"
+          test "$actual_installer" = "$INSTALLER_SHA256"
+          test "$actual_portable" = "$PORTABLE_SHA256"
+
+          cp "$installer" verified/ARSAS-Windows-x64-Setup.exe
+          cp "$portable" verified/ARSAS-Windows-x64-Portable.zip
+          {
+            sha256sum verified/ARSAS-Windows-x64-Setup.exe | sed 's#verified/##'
+            sha256sum verified/ARSAS-Windows-x64-Portable.zip | sed 's#verified/##'
+          } > verified/ARSAS-Windows-x64-SHA256SUMS.txt
+
+      - name: Build public release notes from reviewed metadata
+        env:
+          VERSION: ${{ steps.request.outputs.version }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          notes = json.loads(Path('landing/release-notes.json').read_text())
+          version = os.environ['VERSION']
+          lines = [
+              f"# ARSAS {version}",
+              "",
+              notes['summary'],
+              "",
+              "## What's new",
+              "",
+              *[f"- {item}" for item in notes['highlights']],
+              "",
+              "## Reliability improvements",
+              "",
+              *[f"- {item}" for item in notes['improvements']],
+              "",
+              "## Known limitations",
+              "",
+              *[f"- {item}" for item in notes['knownLimitations']],
+              "",
+              "## Code-signing status",
+              "",
+              f"**{notes['codeSigning']['label']}.** {notes['codeSigning']['detail']}",
+              "",
+              "## Included assets",
+              "",
+              "- Windows x64 installer",
+              "- Portable Windows x64 ZIP",
+              "- SHA-256 checksums",
+              "",
+              "Verify the SHA-256 value before use and report reproducible problems through the project issue tracker.",
+              "",
+          ]
+          Path('verified/release-notes.md').write_text('\n'.join(lines), encoding='utf-8')
+          PY
+
+      - name: Publish immutable stable GitHub release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.request.outputs.version }}
+          TAG: ${{ steps.request.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=(
+            verified/ARSAS-Windows-x64-Setup.exe
+            verified/ARSAS-Windows-x64-Portable.zip
+            verified/ARSAS-Windows-x64-SHA256SUMS.txt
+          )
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Refusing to overwrite existing stable release $TAG. Use a new version/tag." >&2
+            exit 1
+          fi
+          gh release create "$TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --title "ARSAS $VERSION" \
+            --notes-file verified/release-notes.md --latest
+
+      - name: Verify published release assets
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.request.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --json tagName,isDraft,isPrerelease,assets > verified/release.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          release = json.loads(Path('verified/release.json').read_text())
+          expected = {
+              'ARSAS-Windows-x64-Setup.exe',
+              'ARSAS-Windows-x64-Portable.zip',
+              'ARSAS-Windows-x64-SHA256SUMS.txt',
+          }
+          names = {asset['name'] for asset in release.get('assets', []) if asset.get('size', 0) > 0}
+          missing = sorted(expected - names)
+          if release.get('isDraft') or release.get('isPrerelease'):
+              raise SystemExit('Stable release is unexpectedly draft or prerelease')
+          if missing:
+              raise SystemExit('Published release is missing assets: ' + ', '.join(missing))
+          PY
+
+      - name: Write independently auditable publication evidence
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.request.outputs.version }}
+          TAG: ${{ steps.request.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          installer_sha="$(sha256sum verified/ARSAS-Windows-x64-Setup.exe | awk '{print $1}')"
+          portable_sha="$(sha256sum verified/ARSAS-Windows-x64-Portable.zip | awk '{print $1}')"
+          installer_size="$(stat -c %s verified/ARSAS-Windows-x64-Setup.exe)"
+          portable_size="$(stat -c %s verified/ARSAS-Windows-x64-Portable.zip)"
+          if ! gh api "repos/$GITHUB_REPOSITORY/contents/published.json?ref=release-evidence" --jq .content | base64 -d > verified/existing-published.json; then
+            printf '{}\n' > verified/existing-published.json
+          fi
+
+          python - <<PY > verified/published.json
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          notes = json.loads(Path('landing/release-notes.json').read_text())
+          try:
+              existing = json.loads(Path('verified/existing-published.json').read_text())
+          except (json.JSONDecodeError, OSError):
+              existing = {}
+          same_version = existing.get('version') == '$VERSION'
+          published_at = existing.get('publishedAtUtc') if same_version else datetime.now(timezone.utc).isoformat()
+          source_commit = existing.get('sourceCommit') if same_version else '$GITHUB_SHA'
+          print(json.dumps({
+              'schemaVersion': 1,
+              'product': 'ARSAS',
+              'version': '$VERSION',
+              'tag': '$TAG',
+              'channel': 'stable',
+              'publishedAtUtc': published_at,
+              'sourceCommit': source_commit,
+              'releaseUrl': 'https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG',
+              'installer': {
+                  'name': 'ARSAS-Windows-x64-Setup.exe',
+                  'url': 'https://github.com/$GITHUB_REPOSITORY/releases/latest/download/ARSAS-Windows-x64-Setup.exe',
+                  'sha256': '$installer_sha',
+                  'sizeBytes': int('$installer_size'),
+              },
+              'portable': {
+                  'name': 'ARSAS-Windows-x64-Portable.zip',
+                  'url': 'https://github.com/$GITHUB_REPOSITORY/releases/latest/download/ARSAS-Windows-x64-Portable.zip',
+                  'sha256': '$portable_sha',
+                  'sizeBytes': int('$portable_size'),
+              },
+              'checksums': {
+                  'name': 'ARSAS-Windows-x64-SHA256SUMS.txt',
+                  'url': 'https://github.com/$GITHUB_REPOSITORY/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt',
+              },
+              'codeSigning': {
+                  'status': notes['codeSigning']['status'],
+                  'platform': 'Authenticode',
+                  'detail': notes['codeSigning']['detail'],
+              },
+          }, indent=2))
+          PY
+
+          main_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          if ! gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/release-evidence" >/dev/null 2>&1; then
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref='refs/heads/release-evidence' -f sha="$main_sha" >/dev/null
+          fi
+
+          content="$(base64 -w0 verified/published.json)"
+          api_path="repos/$GITHUB_REPOSITORY/contents/published.json"
+          existing_sha="$(gh api "$api_path?ref=release-evidence" --jq .sha 2>/dev/null || true)"
+          args=(-f message="Record verified ARSAS $VERSION publication" -f content="$content" -f branch=release-evidence)
+          if [ -n "$existing_sha" ]; then args+=(-f sha="$existing_sha"); fi
+          gh api --method PUT "$api_path" "${args[@]}" >/dev/null
+
+      - name: Refresh product website release metadata
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main

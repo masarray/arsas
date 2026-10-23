@@ -1,0 +1,34 @@
+name: GOOSE capture or sequence problem
+description: Report adapter, Npcap, APPID, VLAN, stNum, sqNum, TAL or payload evidence.
+title: "[GOOSE] "
+labels: ["goose", "needs-evidence"]
+body:
+  - type: input
+    id: arsas-version
+    attributes: {label: ARSAS version, placeholder: 1.6.18}
+    validations: {required: true}
+  - type: input
+    id: environment
+    attributes: {label: Windows, Npcap version and adapter}
+    validations: {required: true}
+  - type: input
+    id: stream
+    attributes: {label: Sanitized stream identity, placeholder: APPID, VLAN and gocbRef without private addresses}
+    validations: {required: true}
+  - type: dropdown
+    id: symptom
+    attributes: {label: Symptom, options: [No frames captured, Stream not bound to model, stNum anomaly, sqNum anomaly, TAL or timeout problem, Payload order or value problem, Other]}
+    validations: {required: true}
+  - type: textarea
+    id: evidence
+    attributes: {label: Sanitized sequence and packet evidence, description: Include timestamps and expected behavior. Remove private MAC addresses when required.}
+    validations: {required: true}
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: Capture was authorized on the selected adapter and network.
+          required: true
+        - label: I removed credentials and confidential project data.
+          required: true

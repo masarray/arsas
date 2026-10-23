@@ -1,0 +1,692 @@
+name: Build ARSAS
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    # A trial-manifest-only PR already runs FAST CI-P1; don't duplicate a
+    # full Windows application build, native bridge build or package upload.
+    paths-ignore:
+      - "engines/ARIEC61850.trial.json"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    name: Build, test, validate and package Windows application
+    runs-on: windows-latest
+    steps:
+      - name: Checkout exact triggering ARSAS revision
+        uses: actions/checkout@v7
+        with:
+          path: ArIED61850Tester
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify tested application revision
+        shell: powershell
+        run: |
+          $actual = (git -C .\ArIED61850Tester rev-parse HEAD).Trim().ToLowerInvariant()
+          $expected = $env:GITHUB_SHA.Trim().ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "CI source revision mismatch. Expected $expected, checked out $actual."
+          }
+          "ARSAS_SOURCE_COMMIT=$actual" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Testing and packaging exact ARSAS source $actual"
+
+      - name: Resolve immutable engine and native bridge locks
+        shell: powershell
+        run: |
+          $lockPath = ".\ArIED61850Tester\engines\ARIEC61850.lock.json"
+          if (!(Test-Path $lockPath)) {
+            throw "ARIEC61850 lock file was not found."
+          }
+          $lock = Get-Content $lockPath -Raw | ConvertFrom-Json
+          if ($lock.repository -notmatch '^[^/]+/[^/]+$' -or
+              $lock.ref -ne 'main' -or
+              $lock.commit -notmatch '^[0-9a-f]{40}$') {
+            throw "ARIEC61850 lock metadata is invalid."
+          }
+
+          $ardirecPath = ".\ArIED61850Tester\engines\ARDIREC.lock.json"
+          if (!(Test-Path $ardirecPath)) {
+            throw "ArdIrec lock file was not found."
+          }
+          $ardirec = Get-Content $ardirecPath -Raw | ConvertFrom-Json
+          if ($ardirec.schema -ne 3 -or
+              $ardirec.repository -notmatch '^[^/]+/[^/]+$' -or
+              $ardirec.ref -notmatch '^[A-Za-z0-9._/-]+$' -or
+              $ardirec.commit -notmatch '^[0-9a-f]{40}$' -or
+              $ardirec.bridge.abi -ne 1 -or
+              $ardirec.bridge.mode -ne 'native-only' -or
+              $ardirec.bridge.relativeLibrary -ne 'Tools/ArdIrec/ardirec_bridge.dll') {
+            throw "ArdIrec native bridge lock metadata is invalid."
+          }
+
+          "ARIEC61850_REPOSITORY=$($lock.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_REF=$($lock.ref)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARIEC61850_COMMIT=$($lock.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARDIREC_REPOSITORY=$($ardirec.repository)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARDIREC_REF=$($ardirec.ref)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARDIREC_COMMIT=$($ardirec.commit)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Verify source, website and license boundaries
+        shell: powershell
+        run: .\ArIED61850Tester\scripts\verify-source-clean.ps1
+
+      - name: Verify source-clean rejection fixtures
+        shell: powershell
+        run: .\ArIED61850Tester\scripts\test-source-clean-guard.ps1
+
+      - name: Validate Windows packaging PowerShell syntax
+        shell: powershell
+        run: |
+          $scripts = @(
+            '.\ArIED61850Tester\scripts\build-ardirec-bridge.ps1',
+            '.\ArIED61850Tester\scripts\publish-windows-portable.ps1',
+            '.\ArIED61850Tester\scripts\build-windows-installer.ps1'
+          )
+          foreach ($script in $scripts) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $script, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -ne 0) {
+              $messages = ($errors | ForEach-Object Message) -join '; '
+              throw "PowerShell syntax validation failed for ${script}: $messages"
+            }
+          }
+
+      - name: Set up Python for read-only maintenance inventory
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Test and capture workflow-script consumer inventory
+        shell: powershell
+        run: |
+          python .\ArIED61850Tester\scripts\test-maintenance-dependencies.py
+          if ($LASTEXITCODE -ne 0) { throw "Maintenance inventory tests failed." }
+          python .\ArIED61850Tester\scripts\test-verify-p10-ge-field-scl.py
+          if ($LASTEXITCODE -ne 0) { throw "P10 GE trusted-IID SCL field gate fixture regressions failed." }
+          python .\ArIED61850Tester\scripts\test-compare-p10-brcb-sessions.py
+          if ($LASTEXITCODE -ne 0) { throw "P10.8D exact-slot BRCB comparator regressions failed." }
+          python .\ArIED61850Tester\scripts\audit-maintenance-dependencies.py --root .\ArIED61850Tester --output "$env:RUNNER_TEMP\arsas-maintenance-dependencies.json"
+          if ($LASTEXITCODE -ne 0) { throw "Maintenance inventory generation failed." }
+
+      - name: Upload maintenance dependency inventory
+        uses: actions/upload-artifact@v7
+        with:
+          name: ARSAS-maintenance-dependency-inventory
+          path: ${{ runner.temp }}/arsas-maintenance-dependencies.json
+          if-no-files-found: error
+
+      - name: Verify premium UX, GOOSE, SMV, SAS and release invariants
+        shell: powershell
+        run: |
+          $app = Get-Content .\ArIED61850Tester\App.xaml -Raw
+          $main = Get-Content .\ArIED61850Tester\MainWindow.xaml -Raw
+          $code = Get-Content .\ArIED61850Tester\MainWindow.xaml.cs -Raw
+          $save = Get-Content .\ArIED61850Tester\SaveSclWindow.xaml -Raw
+          $saveCode = Get-Content .\ArIED61850Tester\SaveSclWindow.xaml.cs -Raw
+          $project = Get-Content .\ArIED61850Tester\ArIED61850Tester.csproj -Raw
+          $versionProps = Get-Content .\ArIED61850Tester\Directory.Build.props -Raw
+          $versionFile = (Get-Content .\ArIED61850Tester\VERSION -Raw).Trim()
+          $publish = Get-Content .\ArIED61850Tester\scripts\publish-windows-portable.ps1 -Raw
+          $manifest = Get-Content .\ArIED61850Tester\app.manifest -Raw
+          $sasPolicy = Get-Content .\ArIED61850Tester\Services\SasOperationalSignalPolicy.cs -Raw
+          $sasUi = Get-Content .\ArIED61850Tester\SasOperationalUiPolicy.cs -Raw
+          $sclMapper = Get-Content .\ArIED61850Tester\Services\SclWorkspaceSignalMapper.cs -Raw
+          $gooseUi = Get-Content .\ArIED61850Tester\MainWindow.GooseSubscriber.cs -Raw
+          $gooseRuntime = Get-Content .\ArIED61850Tester\Services\GooseSubscriberRuntime.cs -Raw
+          $gooseModels = Get-Content .\ArIED61850Tester\Models\GooseSubscriberModels.cs -Raw
+          $smvUi = Get-Content .\ArIED61850Tester\SmvViewerWindow.xaml -Raw
+          $smvCode = Get-Content .\ArIED61850Tester\SmvViewerWindow.xaml.cs -Raw
+          $smvHardening = Get-Content .\ArIED61850Tester\SmvViewerWindow.P0Hardening.cs -Raw
+          $smvRuntime = Get-Content .\ArIED61850Tester\Services\SmvSnapshotCaptureService.cs -Raw
+          $smvSafety = Get-Content .\ArIED61850Tester\Services\SmvSnapshotSafetyAssessment.cs -Raw
+          $smvSelection = Get-Content .\ArIED61850Tester\Services\SmvSnapshotSelectionIdentity.cs -Raw
+          $tests = Get-Content .\ArIED61850Tester\tests\ARSAS.Tests\SmvSnapshotSafetyTests.cs -Raw
+
+          if ($save -notmatch 'x:Name="EditionIndicator"' -or
+              $save -notmatch 'Content="Edition 2"' -or
+              $save -notmatch 'Content="Edition 1"' -or
+              $save -match '<ComboBox' -or
+              $save -match 'Schema V3\.1' -or
+              $save -match 'Schema V1\.6') {
+            throw "Save SCL segmented Edition 2 / Edition 1 selector regressed."
+          }
+
+          $itemStyleMatch = [regex]::Match(
+            $main,
+            '<ListBox\.ItemContainerStyle>(?<body>.*?)</ListBox\.ItemContainerStyle>',
+            [System.Text.RegularExpressions.RegexOptions]::Singleline)
+          if (-not $itemStyleMatch.Success) {
+            throw "IED card item-container style was not found."
+          }
+          $itemStyle = $itemStyleMatch.Groups['body'].Value
+          if ($itemStyle -match 'ScaleTransform' -or $itemStyle -match 'RenderTransform') {
+            throw "IED card interaction must not resize or transform the card."
+          }
+
+          if ($main -notmatch 'Content="\{Binding ControlPendingConfirmationLabel\}"' -or
+              $main -match 'Content="Confirm Open"' -or
+              $main -match 'Content="Confirm Close"' -or
+              $main -notmatch 'ScrollViewer.HorizontalScrollBarVisibility="Disabled"' -or
+              $main -notmatch 'CanUserResizeColumns="False"') {
+            throw "Atomic Confirm or Command Panel overflow protection regressed."
+          }
+
+          if ($main -notmatch 'WorkflowNavShell" Width="760" Height="56"' -or
+              $main -notmatch 'x:Name="NavGooseButton"' -or
+              $main -notmatch '<TabItem Header="GOOSE Subscriber">' -or
+              $main -notmatch 'ItemsSource="\{Binding SelectedGooseStream.Leaves\}"' -or
+              $main -notmatch 'Header="confRev"' -or
+              $main -notmatch 'Header="Flags"' -or
+              $main -notmatch 'Header="Diagnostics" Binding="\{Binding DiagnosticsSummary\}"' -or
+              $main -notmatch '<ColumnDefinition Width="56"/>' -or
+              $main -notmatch '<Viewbox Width="50" Height="50" Stretch="Uniform"' -or
+              $main -notmatch 'x:Name="MonitorStateBadge"' -or
+              $main -match '<Control\.Effect><DropShadowEffect BlurRadius="5" ShadowDepth="1" Opacity="0\.22" Color="#26313B"/></Control\.Effect>' -or
+              # Material migration changes glyph identity, never action tone.
+              # Keep both the stop and remove semantic color invariants.
+              $main -notmatch 'Click="IedStopAction_Click"' -or
+              $main -notmatch 'MaterialStopIcon.*Fill="\{StaticResource Warning\}"' -or
+              $main -notmatch 'Click="IedRemove_Click"' -or
+              $main -notmatch 'MaterialCloseIcon.*Fill="\{StaticResource Danger\}"' -or
+              $app -notmatch 'x:Key="CommandOpenGradient"' -or
+              $app -notmatch 'x:Key="CommandCloseGradient"' -or
+              $app -notmatch 'x:Key="CommandActionButtonBase"' -or
+              $app -notmatch '<Setter Property="Foreground" Value="White"/>' -or
+              $app -notmatch 'x:Key="IedIconButton"[\s\S]*?<Setter Property="Background" Value="Transparent"/>' -or
+              $app -notmatch 'x:Key="IedIconButton"[\s\S]*?<Setter Property="BorderBrush" Value="Transparent"/>') {
+            throw "Direct navbar, IED-card action, relay-icon, command-action, or GOOSE-tab visual invariants regressed."
+          }
+
+          if ($gooseRuntime -notmatch 'NpcapProcessBusFrameSource' -or
+              $gooseRuntime -notmatch 'ProcessBusStreamMonitor' -or
+              $gooseRuntime -notmatch 'GooseFrameParser.TryParseEthernetFrame' -or
+              $gooseRuntime -notmatch 'ether proto 0x88b8' -or
+              $gooseUi -notmatch 'BuildGooseBindingCatalog' -or
+              $gooseUi -notmatch 'SclWorkspace' -or
+              $gooseUi -notmatch 'LiveDiscoveryModel' -or
+              $gooseUi -notmatch 'Select\(\(entry, position\)' -or
+              $gooseUi -notmatch 'Select\(\(member, position\)' -or
+              $gooseUi -notmatch 'FirstNonEmpty' -or
+              $gooseUi -notmatch 'GOOSE APPID differs from model' -or
+              $gooseUi -notmatch 'GOOSE confRev differs from model' -or
+              $gooseUi -match 'signal\?\.Category' -or
+              $gooseModels -notmatch 'class GooseLeafValueRow' -or
+              $gooseModels -notmatch 'public int Order' -or
+              $gooseModels -notmatch 'FlagsText' -or
+              $project -notmatch 'ArIec61850NpcapProject' -or
+              $project -notmatch 'AR.Iec61850.Transports.Npcap') {
+            throw "SCL/discovery-aware GOOSE Subscriber runtime, canonical leaf order, or semantic metadata binding regressed."
+          }
+
+          if ($smvUi -notmatch 'Content="Capture 2 cycles"' -or
+              $smvUi -notmatch 'x:Name="StreamGrid"' -or
+              $smvUi -notmatch 'ElementName=CaptureButton' -or
+              $smvUi -notmatch 'P0StreamGrid_SelectionChanged' -or
+              $smvUi -notmatch 'SnapshotContinuityEvidenceText' -or
+              $smvUi -notmatch 'x:Name="WaveformCanvas"' -or
+              $smvCode -notmatch 'SmvSnapshotCaptureService' -or
+              $smvCode -notmatch 'smpCnt' -or
+              $smvCode -notmatch 'Raw lanes remain semantically unresolved' -or
+              $smvHardening -notmatch 'SmvSnapshotSafetyAssessment.IsCleanProof' -or
+              $smvHardening -notmatch 'SmvSnapshotSelectionIdentity' -or
+              $smvHardening -notmatch 'publisher restart' -or
+              $smvSafety -notmatch 'RestartTransitions > 0' -or
+              $smvSelection -notmatch 'public sealed record SmvSnapshotSelectionIdentity' -or
+              $tests -notmatch 'AnyCounterDiscontinuity_BlocksCleanProof' -or
+              $tests -notmatch 'SelectionIdentity_RejectsDifferentStream' -or
+              $smvRuntime -notmatch 'SampledValuesFrameParser.TryParseEthernetFrame' -or
+              $smvRuntime -notmatch 'SvGenericAsduInspector' -or
+              $smvRuntime -notmatch 'SvSampleCounterTracker' -or
+              $smvRuntime -notmatch 'SvTimebaseResolver' -or
+              $smvRuntime -notmatch 'ether proto 0x88ba') {
+            throw "Bounded two-cycle SMV P0 safety, selection lock, raw waveform, timebase, or continuity evidence regressed."
+          }
+
+          if ($sasPolicy -notmatch 'public static bool IsVisible' -or
+              $sasPolicy -notmatch 'IsOperationalProtectionLeaf' -or
+              $sasPolicy -notmatch 'IsFundamentalMeasurement' -or
+              $sasPolicy -notmatch 'IsUnprovenSyntheticCandidate' -or
+              $sasPolicy -notmatch 'dataObject is "mod" or "beh"') {
+            throw "Typed SAS operational signal policy is incomplete."
+          }
+          if ($sasUi -notmatch 'ModuleInitializer' -or
+              $sasUi -notmatch 'ApplyBallisticNavigation' -or
+              $sasUi -notmatch 'legacyPill.Visibility = Visibility.Collapsed' -or
+              $sasUi -notmatch 'shell.Width = 760' -or
+              $sasUi -notmatch 'shell.Height = 56' -or
+              $sasUi -notmatch 'NavGooseButton' -or
+              $sasUi -notmatch '#D8E2F0' -or
+              $sasUi -notmatch 'SasOperationalSignalPolicy.IsVisible' -or
+              $sclMapper -notmatch 'SasOperationalSignalPolicy.IsVisible') {
+            throw "Operator signal pruning or ballistic navigation policy is not installed."
+          }
+
+          [xml]$projectXml = $project
+          [xml]$versionXml = $versionProps
+          $releaseVersion = [string]$versionXml.Project.PropertyGroup.Version
+          $assemblyVersion = [string]$versionXml.Project.PropertyGroup.AssemblyVersion
+          $fileVersion = [string]$versionXml.Project.PropertyGroup.FileVersion
+          $projectVersion = [string]$projectXml.Project.PropertyGroup.Version
+          if ($releaseVersion -notmatch '^\d+\.\d+\.\d+$' -or
+              $assemblyVersion -ne "$releaseVersion.0" -or
+              $fileVersion -ne "$releaseVersion.0" -or
+              $projectVersion -ne $releaseVersion -or
+              $versionFile -ne $releaseVersion -or
+              $publish -notmatch 'Directory.Build.props' -or
+              $publish -notmatch 'PublishSingleFile' -or
+              $publish -notmatch 'IncludeNativeLibrariesForSelfExtract=true' -or
+              $publish -notmatch 'IncludeAllContentForSelfExtract=true' -or
+              $publish -notmatch 'PublishTrimmed=false' -or
+              $publish -notmatch 'portable.exe' -or
+              $manifest -notmatch 'requestedExecutionLevel level="asInvoker"') {
+            throw "Release metadata is not aligned to canonical version $releaseVersion."
+          }
+          "ARSAS_VERSION=$releaseVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Upload source snapshot
+        uses: actions/upload-artifact@v7
+        with:
+          name: ARSAS-source-snapshot
+          path: |
+            ArIED61850Tester/App.xaml
+            ArIED61850Tester/MainWindow.xaml
+            ArIED61850Tester/MainWindow.xaml.cs
+            ArIED61850Tester/MainWindow.CommandPanelUx.cs
+            ArIED61850Tester/MainWindow.ControlDiagnostics.cs
+            ArIED61850Tester/MainWindow.GooseSubscriber.cs
+            ArIED61850Tester/SmvViewerWindow.xaml
+            ArIED61850Tester/SmvViewerWindow.xaml.cs
+            ArIED61850Tester/SmvViewerWindow.P0Hardening.cs
+            ArIED61850Tester/SaveSclWindow.xaml
+            ArIED61850Tester/SaveSclWindow.xaml.cs
+            ArIED61850Tester/GridUxBehavior.cs
+            ArIED61850Tester/Directory.Build.props
+            ArIED61850Tester/VERSION
+            ArIED61850Tester/engines
+            ArIED61850Tester/Models
+            ArIED61850Tester/Services
+            ArIED61850Tester/tests
+            ArIED61850Tester/docs
+            ArIED61850Tester/landing
+
+      - name: Checkout immutable ARIEC61850 engine revision
+        shell: powershell
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARIEC61850_REPOSITORY.git" ARIEC61850
+          git -C .\ARIEC61850 fetch --quiet --depth 1 origin $env:ARIEC61850_COMMIT
+          git -C .\ARIEC61850 checkout --quiet --detach $env:ARIEC61850_COMMIT
+          $actual = (git -C .\ARIEC61850 rev-parse HEAD).Trim()
+          if ($actual -ne $env:ARIEC61850_COMMIT) {
+            throw "ARIEC61850 pin mismatch. Expected $env:ARIEC61850_COMMIT, got $actual."
+          }
+
+      - name: Checkout immutable ArdIrec native bridge revision
+        shell: powershell
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARDIREC_REPOSITORY.git" ArdIrec
+          if ($LASTEXITCODE -ne 0) { throw "Could not clone pinned ArdIrec repository." }
+          git -C .\ArdIrec fetch --quiet --depth 1 origin $env:ARDIREC_COMMIT
+          if ($LASTEXITCODE -ne 0) { throw "Could not fetch pinned ArdIrec revision." }
+          git -C .\ArdIrec checkout --quiet --detach $env:ARDIREC_COMMIT
+          if ($LASTEXITCODE -ne 0) { throw "Could not checkout pinned ArdIrec revision." }
+          $actual = (git -C .\ArdIrec rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($actual -ne $env:ARDIREC_COMMIT) {
+            throw "ArdIrec pin mismatch. Expected $env:ARDIREC_COMMIT, got $actual."
+          }
+
+      - name: Verify required ARIEC61850 APIs
+        shell: powershell
+        run: |
+          $control = ".\ARIEC61850\src\AR.Iec61850\Control\Iec61850ControlService.cs"
+          $models = ".\ARIEC61850\src\AR.Iec61850\Control\Iec61850ControlModels.cs"
+          $workspace = ".\ARIEC61850\src\AR.Iec61850\Scl\Workspace\SclWorkspaceService.cs"
+          $workspaceModels = ".\ARIEC61850\src\AR.Iec61850\Scl\Workspace\SclWorkspaceModels.cs"
+          $sclModels = ".\ARIEC61850\src\AR.Iec61850\Scl\SclModels.cs"
+          $sclExporter = ".\ARIEC61850\src\AR.Iec61850\Scl\Export\LiveIedSclExporter.cs"
+          $schemaProfiles = ".\ARIEC61850\src\AR.Iec61850\Scl\Export\SclSchemaProfiles.cs"
+          $interoperableConverter = ".\ARIEC61850\src\AR.Iec61850\Scl\Export\InteroperableSclConverter.cs"
+          $gooseParser = ".\ARIEC61850\src\AR.Iec61850\Goose\GooseFrameParser.cs"
+          $gooseDecoded = ".\ARIEC61850\src\AR.Iec61850\Goose\GooseDecodedValue.cs"
+          $processBusMonitor = ".\ARIEC61850\src\AR.Iec61850\Monitoring\ProcessBusStreamMonitor.cs"
+          $svParser = ".\ARIEC61850\src\AR.Iec61850\SampledValues\SampledValuesFrameParser.cs"
+          $svInspector = ".\ARIEC61850\src\AR.Iec61850\SampledValues\Analysis\SvGenericAsduInspector.cs"
+          $svCounter = ".\ARIEC61850\src\AR.Iec61850\SampledValues\Measurements\SvSampleCounterTracker.cs"
+          $svTimebase = ".\ARIEC61850\src\AR.Iec61850\SampledValues\Measurements\SvTimebaseResolver.cs"
+          $npcapSource = ".\ARIEC61850\src\AR.Iec61850.Transports.Npcap\NpcapProcessBusFrameSource.cs"
+          $npcapProject = ".\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj"
+
+          if (!(Test-Path $control) -or !(Test-Path $models) -or
+              !(Select-String -Path $models -Pattern "interface IIec61850ControlService" -Quiet) -or
+              !(Select-String -Path $models -Pattern "CommandTerminationReceived" -Quiet)) {
+            throw "Required ARIEC61850 Smart Control contract was not found."
+          }
+          if (!(Test-Path $workspace) -or !(Test-Path $workspaceModels) -or
+              !(Select-String -Path $workspace -Pattern "CompareLive" -Quiet)) {
+            throw "Required ARIEC61850 SCL Workspace API was not found."
+          }
+          if (!(Test-Path $sclModels) -or
+              !(Select-String -Path $sclModels -Pattern "SclDataSetBindingStatus" -Quiet) -or
+              !(Select-String -Path $sclModels -Pattern "class SclDataSetEntry" -Quiet) -or
+              !(Select-String -Path $sclModels -Pattern "public int Index" -Quiet)) {
+            throw "Typed SCL DataSet binding and ordered-entry contracts were not found."
+          }
+          if (!(Test-Path $sclExporter) -or
+              !(Select-String -Path $sclExporter -Pattern "WriteFiles" -Quiet) -or
+              !(Test-Path $interoperableConverter) -or
+              !(Select-String -Path $interoperableConverter -Pattern "WriteFiles" -Quiet) -or
+              !(Test-Path $schemaProfiles) -or
+              !(Select-String -Path $schemaProfiles -Pattern "Edition2V31" -Quiet) -or
+              !(Select-String -Path $schemaProfiles -Pattern "Edition1V16" -Quiet)) {
+            throw "Required ARIEC61850 interoperable SCL export APIs were not found."
+          }
+          if (!(Test-Path $gooseParser) -or
+              !(Test-Path $gooseDecoded) -or
+              !(Test-Path $processBusMonitor) -or
+              !(Test-Path $svParser) -or
+              !(Test-Path $svInspector) -or
+              !(Test-Path $svCounter) -or
+              !(Test-Path $svTimebase) -or
+              !(Test-Path $npcapSource) -or
+              !(Test-Path $npcapProject) -or
+              !(Select-String -Path $gooseParser -Pattern "TryParseEthernetFrame" -Quiet) -or
+              !(Select-String -Path $gooseDecoded -Pattern "SignalReference" -Quiet) -or
+              !(Select-String -Path $processBusMonitor -Pattern "GooseValues" -Quiet) -or
+              !(Select-String -Path $processBusMonitor -Pattern "TimeAllowedToLiveMilliseconds" -Quiet) -or
+              !(Select-String -Path $svParser -Pattern "TryParseEthernetFrame" -Quiet) -or
+              !(Select-String -Path $svInspector -Pattern "SvGenericPayloadInspector" -Quiet) -or
+              !(Select-String -Path $svCounter -Pattern "SvSampleCounterTransitionKind" -Quiet) -or
+              !(Select-String -Path $svTimebase -Pattern "TrustedNominalFrequencyHz" -Quiet) -or
+              !(Select-String -Path $npcapSource -Pattern "CaptureAsync" -Quiet)) {
+            throw "Required ARIEC61850 live process-bus, SV parser/inspection/timebase/counter, or Npcap APIs were not found."
+          }
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore solution
+        run: dotnet restore .\ArIED61850Tester\ArIED61850Tester.sln
+
+      - name: Build solution
+        run: dotnet build .\ArIED61850Tester\ArIED61850Tester.sln -c Release --no-restore
+
+      - name: Run pinned engine P10 identity and canonical SCL regression
+        run: dotnet test .\ARIEC61850\tests\AR.Iec61850.Tests\AR.Iec61850.Tests.csproj -c Release --filter "FullyQualifiedName~TrustedSclIedIdentityMatcherTests|FullyQualifiedName~CanonicalLiveIedSclExporterTests" --logger "trx;LogFileName=engine-p10-identity.trx" --results-directory .\ArIED61850Tester\EngineTestResults
+
+      - name: Run ARSAS application regression tests
+        run: dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj -c Release --no-build --no-restore --logger "trx;LogFileName=arsas-tests.trx" --results-directory .\ArIED61850Tester\TestResults
+
+      - name: Write exact-SHA canonical test attestation
+        shell: powershell
+        run: |
+          python .\ArIED61850Tester\scripts\write-ci-canonical-proof.py `
+            --app-dir .\ArIED61850Tester `
+            --engine-dir .\ARIEC61850 `
+            --test-results-dir .\ArIED61850Tester\TestResults `
+            --source-sha $env:GITHUB_SHA `
+            --engine-sha $env:ARIEC61850_COMMIT `
+            --run-id $env:GITHUB_RUN_ID `
+            --attempt $env:GITHUB_RUN_ATTEMPT `
+            --event-name $env:GITHUB_EVENT_NAME
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Canonical exact-SHA full-regression attestation failed.'
+          }
+
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ARSAS-test-evidence
+          path: |
+            ArIED61850Tester\TestResults\*.trx
+            ArIED61850Tester\TestResults\ci-canonical-authority.json
+          if-no-files-found: error
+
+      - name: Build and test exact pinned ArdIrec native bridge once
+        shell: powershell
+        run: |
+          $bridgeDir = Join-Path $env:RUNNER_TEMP 'arsas-canonical-ardirec-bridge'
+          $bridgeBuild = Join-Path $env:RUNNER_TEMP 'arsas-canonical-ardirec-build'
+          $ctestJunit = Join-Path $env:RUNNER_TEMP 'arsas-canonical-native-ctest.xml'
+          $bridge = [string](
+            .\ArIED61850Tester\scripts\build-ardirec-bridge.ps1 `
+              -ArdIrecSource "$env:GITHUB_WORKSPACE\ArdIrec" `
+              -OutputDirectory $bridgeDir `
+              -BuildDirectory $bridgeBuild `
+              -CTestJunitPath $ctestJunit |
+              Select-Object -Last 1
+          )
+          $bridge = $bridge.Trim()
+          if (-not (Test-Path $bridge -PathType Leaf)) {
+            throw "Canonical ArdIrec bridge build did not produce a DLL: $bridge"
+          }
+          $ctestProof = Join-Path $env:RUNNER_TEMP 'ci-native-ctest-authority.json'
+          python .\ArIED61850Tester\scripts\write-ci-native-ctest-proof.py `
+            --junit $ctestJunit `
+            --bridge $bridge `
+            --source-sha $env:GITHUB_SHA `
+            --engine-sha $env:ARIEC61850_COMMIT `
+            --ardirec-sha $env:ARDIREC_COMMIT `
+            --run-id $env:GITHUB_RUN_ID `
+            --attempt $env:GITHUB_RUN_ATTEMPT `
+            --event $env:GITHUB_EVENT_NAME `
+            --output $ctestProof
+          if ($LASTEXITCODE -ne 0) { throw "Canonical native CTest proof sealing failed." }
+          if ($env:GITHUB_EVENT_NAME -eq 'pull_request') {
+            $shadowDir = '.\ArIED61850Tester\TestResults\native-shadow'
+            New-Item -ItemType Directory -Path $shadowDir -Force | Out-Null
+            Copy-Item $ctestJunit (Join-Path $shadowDir 'ctest.xml') -Force
+            Copy-Item $ctestProof (Join-Path $shadowDir 'ci-native-ctest-authority.json') -Force
+          }
+          "NATIVE_CTEST_JUNIT=$ctestJunit" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "NATIVE_CTEST_PROOF=$ctestProof" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARDIREC_BRIDGE_PATH=$bridge" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARDIREC_BRIDGE_SHA256=$((Get-FileHash $bridge -Algorithm SHA256).Hash.ToLowerInvariant())" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Upload canonical native CTest shadow evidence
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ARSAS-native-ctest-shadow
+          path: ArIED61850Tester/TestResults/native-shadow/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish canonical installer-input folder
+        shell: powershell
+        run: |
+          .\ArIED61850Tester\scripts\publish-windows-portable.ps1 `
+            -Version $env:ARSAS_VERSION `
+            -Runtime win-x64 `
+            -SingleFile $false `
+            -SelfContained $true `
+            -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
+            -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj" `
+            -ArdIrecBridgePath $env:ARDIREC_BRIDGE_PATH
+          if ($LASTEXITCODE -ne 0) { throw "Canonical installer-input publish failed." }
+
+          $publish = ".\ArIED61850Tester\dist\ARSAS-$env:ARSAS_VERSION-win-x64"
+          $ardirecDir = Join-Path $publish 'Tools\ArdIrec'
+          New-Item -ItemType Directory -Force $ardirecDir | Out-Null
+          $license = ".\ArdIrec\LICENSE"
+          if (Test-Path $license -PathType Leaf) {
+            Copy-Item $license (Join-Path $ardirecDir 'LICENSE.txt') -Force
+          }
+
+          $packagedBridge = Join-Path $ardirecDir 'ardirec_bridge.dll'
+          if (-not (Test-Path $packagedBridge -PathType Leaf)) {
+            throw "Canonical installer-input folder is missing the native bridge."
+          }
+          $packagedHash = (Get-FileHash $packagedBridge -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($packagedHash -ne $env:ARDIREC_BRIDGE_SHA256) {
+            throw "Installer-input bridge bytes differ from the tested canonical bridge."
+          }
+
+      - name: Exercise exact packaged native bridge through managed tests
+        shell: powershell
+        run: |
+          $env:ARSAS_ARDIREC_BRIDGE_PATH = "$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:ARSAS_VERSION-win-x64\Tools\ArdIrec\ardirec_bridge.dll"
+          $env:ARSAS_NATIVE_COMTRADE_TEST_CFG = "$env:GITHUB_WORKSPACE\ArdIrec\tests\data\minimal_1999.cfg"
+          $env:ARSAS_NATIVE_LOCUS_TEST_CFG = "$env:GITHUB_WORKSPACE\ArdIrec\tests\data\distance_p1.cfg"
+          foreach ($required in @(
+            $env:ARSAS_ARDIREC_BRIDGE_PATH,
+            $env:ARSAS_NATIVE_COMTRADE_TEST_CFG,
+            $env:ARSAS_NATIVE_LOCUS_TEST_CFG
+          )) {
+            if (-not (Test-Path $required -PathType Leaf)) {
+              throw "Canonical native bridge verification prerequisite is missing: $required"
+            }
+          }
+          dotnet test .\ArIED61850Tester\tests\ARSAS.Tests\ARSAS.Tests.csproj `
+            -c Release --no-build --no-restore `
+            --filter "FullyQualifiedName~ArdIrecNativeBridgeIntegrationTests|FullyQualifiedName~ArdIrecLocusNativeSessionIntegrationTests"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Canonical packaged ArdIrec bridge failed managed integration tests."
+          }
+
+      - name: Publish real portable single EXE from the same native bridge
+        shell: powershell
+        run: |
+          .\ArIED61850Tester\scripts\publish-windows-portable.ps1 `
+            -Version $env:ARSAS_VERSION `
+            -Runtime win-x64 `
+            -SingleFile $true `
+            -SelfContained $true `
+            -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
+            -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj" `
+            -ArdIrecBridgePath $env:ARDIREC_BRIDGE_PATH
+          if ($LASTEXITCODE -ne 0) { throw "Canonical portable publish failed." }
+
+      - name: Smoke-test real portable single EXE
+        shell: powershell
+        run: |
+          $exe = ".\ArIED61850Tester\dist\ARSAS-$env:ARSAS_VERSION-win-x64-portable.exe"
+          if (-not (Test-Path $exe -PathType Leaf)) { throw "Portable single EXE was not produced: $exe" }
+          $env:DOTNET_BUNDLE_EXTRACT_BASE_DIR = Join-Path $env:RUNNER_TEMP "ARSAS-bundle-cache"
+          $diagnostic = Join-Path ([System.IO.Path]::GetTempPath()) "ARSAS-portable-smoke-error.txt"
+          Remove-Item $diagnostic -Force -ErrorAction SilentlyContinue
+          $process = Start-Process -FilePath $exe -ArgumentList @("--portable-smoke-test") -PassThru
+          if (-not $process.WaitForExit(30000)) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw "Portable single EXE smoke test timed out."
+          }
+          if ($process.ExitCode -ne 0) {
+            if (Test-Path $diagnostic) { Get-Content $diagnostic | Write-Host }
+            throw "Portable single EXE smoke test failed with exit code $($process.ExitCode)."
+          }
+
+      - name: Stage package verification runtime and fixtures
+        shell: powershell
+        run: |
+          $verification = ".\ArIED61850Tester\TestResults\windows-package-verification"
+          if (Test-Path $verification) { Remove-Item $verification -Recurse -Force }
+          $tests = Join-Path $verification 'ARSAS.Tests'
+          $fixtures = Join-Path $verification 'fixtures'
+          $native = Join-Path $verification 'native'
+          New-Item -ItemType Directory -Force -Path $tests, $fixtures, $native | Out-Null
+          $stagedCtest = Join-Path $native 'ctest.xml'
+          $stagedNativeProof = Join-Path $native 'ci-native-ctest-authority.json'
+          Copy-Item $env:NATIVE_CTEST_JUNIT $stagedCtest -Force
+          Copy-Item $env:NATIVE_CTEST_PROOF $stagedNativeProof -Force
+          python .\ArIED61850Tester\scripts\write-ci-native-ctest-proof.py `
+            --junit $stagedCtest `
+            --bridge $env:ARDIREC_BRIDGE_PATH `
+            --source-sha $env:GITHUB_SHA `
+            --engine-sha $env:ARIEC61850_COMMIT `
+            --ardirec-sha $env:ARDIREC_COMMIT `
+            --run-id $env:GITHUB_RUN_ID `
+            --attempt $env:GITHUB_RUN_ATTEMPT `
+            --event $env:GITHUB_EVENT_NAME `
+            --output $stagedNativeProof `
+            --verify-only
+          if ($LASTEXITCODE -ne 0) { throw 'Staged native CTest proof verification failed.' }
+
+          $testOutput = ".\ArIED61850Tester\tests\ARSAS.Tests\bin\Release\net8.0-windows"
+          if (-not (Test-Path (Join-Path $testOutput 'ARSAS.Tests.dll') -PathType Leaf)) {
+            throw "Canonical prebuilt ARSAS.Tests runtime is missing."
+          }
+          Copy-Item (Join-Path $testOutput '*') $tests -Recurse -Force
+
+          foreach ($stem in @('minimal_1999', 'distance_p1')) {
+            $matches = @(Get-ChildItem ".\ArdIrec\tests\data\$stem.*" -File -ErrorAction SilentlyContinue)
+            if (-not ($matches | Where-Object Extension -eq '.cfg')) {
+              throw "Pinned ArdIrec fixture is missing: $stem.cfg"
+            }
+            foreach ($file in $matches) {
+              Copy-Item $file.FullName (Join-Path $fixtures $file.Name) -Force
+            }
+          }
+
+          foreach ($extension in @('cfg', 'dat')) {
+            $releaseFixture = ".\ArIED61850Tester\tests\fixtures\comtrade\p1-release-smoke.$extension"
+            if (-not (Test-Path $releaseFixture -PathType Leaf)) {
+              throw "Canonical release native fixture is missing: $releaseFixture"
+            }
+            Copy-Item $releaseFixture (Join-Path $fixtures "p1-release-smoke.$extension") -Force
+          }
+
+      - name: Seal exact tested Windows package payload
+        shell: powershell
+        run: |
+          $artifactRoot = ".\ArIED61850Tester\TestResults\windows-package-artifact"
+          python .\ArIED61850Tester\scripts\write-ci-package-manifest.py `
+            --artifact-root $artifactRoot `
+            --portable ".\ArIED61850Tester\dist\ARSAS-$env:ARSAS_VERSION-win-x64-portable.exe" `
+            --portable-identity ".\ArIED61850Tester\dist\ARSAS-$env:ARSAS_VERSION-win-x64-portable-build-identity.json" `
+            --installer-input ".\ArIED61850Tester\dist\ARSAS-$env:ARSAS_VERSION-win-x64" `
+            --verification-dir ".\ArIED61850Tester\TestResults\windows-package-verification" `
+            --evidence-dir ".\ArIED61850Tester\TestResults" `
+            --source-sha $env:GITHUB_SHA `
+            --engine-sha $env:ARIEC61850_COMMIT `
+            --ardirec-sha $env:ARDIREC_COMMIT `
+            --version $env:ARSAS_VERSION `
+            --runtime win-x64 `
+            --run-id $env:GITHUB_RUN_ID `
+            --attempt $env:GITHUB_RUN_ATTEMPT `
+            --event-name $env:GITHUB_EVENT_NAME
+          if ($LASTEXITCODE -ne 0) { throw "Canonical Windows package sealing failed." }
+
+          $manifest = Get-Content (Join-Path $artifactRoot 'ci-windows-package-authority.json') -Raw | ConvertFrom-Json
+          if ($manifest.sourceSha -ne $env:GITHUB_SHA -or
+              $manifest.engineSha -ne $env:ARIEC61850_COMMIT -or
+              $manifest.ardirecSha -ne $env:ARDIREC_COMMIT -or
+              -not [bool]$manifest.fullRegressionPassed -or
+              -not [bool]$manifest.nativeBridgeIntegrationPassed -or
+              -not [bool]$manifest.portableSmokePassed -or
+              [bool]$manifest.installerBuilt -or
+              [bool]$manifest.releasePromotionAuthority -or
+              $manifest.nativeBridge.sha256 -ne $env:ARDIREC_BRIDGE_SHA256 -or
+              -not $manifest.portableIdentity -or
+              $manifest.portableIdentity.path -notmatch 'portable-build-identity\.json$') {
+            throw "Canonical Windows package manifest does not match the tested build authority."
+          }
+
+      - name: Upload sealed Windows package input
+        uses: actions/upload-artifact@v7
+        with:
+          name: ARSAS-windows-package-input
+          path: ArIED61850Tester\TestResults\windows-package-artifact
+          if-no-files-found: error
+          retention-days: 30
+
+      # GitHub Actions upload-artifact v7: a SINGLE file plus archive:false
+      # makes the artifact itself download as a real .exe in the browser.
+      # Keep the canonical sealed Windows package (previous upload) unchanged:
+      # it carries portable-build-identity.json, manifests and release evidence.
+      - name: Upload directly downloadable portable EXE (no ZIP)
+        uses: actions/upload-artifact@v7
+        with:
+          path: ArIED61850Tester\dist\ARSAS-*-win-x64-portable.exe
+          archive: false
+          if-no-files-found: error

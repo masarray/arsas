@@ -1,0 +1,158 @@
+namespace ARSAS.Tests;
+
+public sealed class WebsiteHeroLocalizationRegressionTests
+{
+    [Fact]
+    public void HeroGradientHeadline_AllowsLocalizedCopyToWrapInsteadOfClipping()
+    {
+        var css = Read("landing/home.css").Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        Assert.Contains("body[data-page=\"overview\"] .hero h1 .gradient-text", css, StringComparison.Ordinal);
+        Assert.Contains("white-space: normal;", css, StringComparison.Ordinal);
+        Assert.DoesNotContain(".gradient-text {\n    white-space: nowrap;", css, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void IndonesianHero_HasDedicatedDesktopSafetyRules()
+    {
+        var css = Read("landing/home.css");
+
+        Assert.Contains("body[data-page=\"overview\"] .hero:lang(id) .hero-grid", css, StringComparison.Ordinal);
+        Assert.Contains("body[data-page=\"overview\"] .hero:lang(id) h1", css, StringComparison.Ordinal);
+        Assert.Contains("body[data-page=\"overview\"] .hero:lang(id) .eyebrow", css, StringComparison.Ordinal);
+        Assert.Contains("body[data-page=\"overview\"] .hero:lang(id) .hero-actions", css, StringComparison.Ordinal);
+        Assert.Contains("flex-wrap: wrap;", css, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void HeroBalance_HasWiderCanvasQuieterProductAndTertiaryActions()
+    {
+        var css = Read("landing/home.css");
+
+        Assert.Contains("--home-hero-max: 1280px", css, StringComparison.Ordinal);
+        Assert.Contains("filter: brightness(.92) saturate(.96) contrast(.985)", css, StringComparison.Ordinal);
+        Assert.Contains(".hero-actions .btn-quiet", css, StringComparison.Ordinal);
+        Assert.Contains(".floating-chip.two", css, StringComparison.Ordinal);
+        Assert.Contains("opacity: .78", css, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ProductScreenshots_PreserveTheirSourceAspectRatio()
+    {
+        var audit = Read("landing/audit.css");
+
+        Assert.Contains(".screenshot-link img { width: 100%; height: auto; object-fit: contain; }", audit, StringComparison.Ordinal);
+        Assert.DoesNotContain(".screenshot-link,\n.reporting-visual", audit.Replace("\r\n", "\n", StringComparison.Ordinal), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("landing/templates/index.html", "Start here")]
+    [InlineData("landing/templates/id.html", "Mulai di sini")]
+    [InlineData("landing/templates/quick-start.html", "Three visible steps")]
+    [InlineData("landing/templates/panduan-mulai-arsas.html", "Tiga langkah yang terlihat")]
+    public void BeginnerJourney_UsesTheCurrentThreeStepProductFlow(string path, string heading)
+    {
+        var page = Read(path);
+
+        Assert.Contains(heading, page, StringComparison.Ordinal);
+        Assert.Contains("arsas-quick-start-choose-source-v1.6.40.webp", page, StringComparison.Ordinal);
+        Assert.Contains("arsas-quick-start-discover-ip-v1.6.40.webp", page, StringComparison.Ordinal);
+        Assert.Contains("arsas-quick-start-monitor-control-v1.6.40.webp", page, StringComparison.Ordinal);
+        Assert.Contains("SCL", page, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void HomepageGuidedOnboarding_SurfacesBothEntryPathsAndSclFormats()
+    {
+        var english = Read("landing/templates/index.html");
+        var indonesian = Read("landing/templates/id.html");
+
+        foreach (var value in new[]
+                 {
+                     "I have a live relay or IED",
+                     "I have an engineering file",
+                     "Substation Configuration Language",
+                     "ICD", "CID", "IID", "SCD",
+                     "Open the complete Quick Start"
+                 })
+            Assert.Contains(value, english, StringComparison.Ordinal);
+
+        foreach (var value in new[]
+                 {
+                     "Saya punya relay atau IED live",
+                     "Saya punya file engineering",
+                     "Substation Configuration Language",
+                     "ICD", "CID", "IID", "SCD",
+                     "Buka Quick Start lengkap"
+                 })
+            Assert.Contains(value, indonesian, StringComparison.Ordinal);
+
+        foreach (var stale in new[]
+                 {
+                     "approved relay IP",
+                     "approved IED IP",
+                     "Connect by approved IP address",
+                     "alamat IP relay yang disetujui",
+                     "IP IED yang disetujui",
+                     "alamat IP yang disetujui"
+                 })
+        {
+            Assert.DoesNotContain(stale, english, StringComparison.Ordinal);
+            Assert.DoesNotContain(stale, indonesian, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void HomepageEvidence_UsesWideReadableScreenshotPresentation()
+    {
+        var home = Read("landing/home.css");
+        var english = Read("landing/templates/index.html");
+
+        Assert.Contains("body[data-page=\"overview\"] .home-evidence .product-tour-grid", home, StringComparison.Ordinal);
+        Assert.Contains("grid-template-columns: 1fr;", home, StringComparison.Ordinal);
+        Assert.Contains("minmax(0, 1.7fr)", home, StringComparison.Ordinal);
+        Assert.Contains("sizes=\"(max-width: 980px) 94vw, 68vw\"", english, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CssArchitecture_ReplacesPhaseOverridesWithSemanticScopedLayers()
+    {
+        var header = Read("landing/partials/header.html");
+        var index = Read("landing/templates/index.html");
+        var builder = Read("scripts/build-product-site.py");
+        var home = Read("landing/home.css");
+        var designSystem = Read("landing/design-system.css");
+
+        Assert.DoesNotContain("design-system.css", header, StringComparison.Ordinal);
+        Assert.DoesNotContain("polish.css", header, StringComparison.Ordinal);
+        Assert.DoesNotContain("home.css", header, StringComparison.Ordinal);
+        Assert.Contains("home.css", index, StringComparison.Ordinal);
+        Assert.Contains("design-system.css", builder, StringComparison.Ordinal);
+        Assert.Contains("polish.css", builder, StringComparison.Ordinal);
+        Assert.DoesNotContain("hero-p0.css", header, StringComparison.Ordinal);
+        Assert.DoesNotContain("section-p1.css", header, StringComparison.Ordinal);
+
+        Assert.Contains("body[data-page=\"overview\"]", home, StringComparison.Ordinal);
+        Assert.DoesNotContain("\n.hero {", home, StringComparison.Ordinal);
+        Assert.DoesNotContain("\n.card {", home, StringComparison.Ordinal);
+
+        Assert.Contains(".section {", designSystem, StringComparison.Ordinal);
+        Assert.Contains(".card,", designSystem, StringComparison.Ordinal);
+        Assert.DoesNotContain(".hero-grid", designSystem, StringComparison.Ordinal);
+        Assert.DoesNotContain(".substation-scene", designSystem, StringComparison.Ordinal);
+    }
+
+    private static string Read(string relativePath)
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory != null)
+        {
+            var candidate = Path.Combine(directory.FullName, relativePath);
+            if (File.Exists(candidate))
+                return File.ReadAllText(candidate);
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException(relativePath);
+    }
+}

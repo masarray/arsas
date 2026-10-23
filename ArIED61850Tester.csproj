@@ -1,0 +1,120 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>ARSAS</AssemblyName>
+    <RootNamespace>ArIED61850Tester</RootNamespace>
+    <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Authors>Ari Sulistiono / masarray</Authors>
+    <Copyright>Copyright (C) 2026 Ari Sulistiono</Copyright>
+    <Product>ARSAS</Product>
+    <AssemblyTitle>ARSAS - IEC 61850 Engineering Workstation</AssemblyTitle>
+    <Description>Open-source Windows IEC 61850 engineering workstation for MMS model discovery, reporting, independent multi-IED monitoring, GOOSE subscription, fault-record file transfer, Sampled Values engineering and evidence export, SCL workflows, diagnostics, sequence of events, and guarded control validation.</Description>
+    <Version>1.6.40</Version>
+    <AssemblyVersion>1.6.40.0</AssemblyVersion>
+    <FileVersion>1.6.40.0</FileVersion>
+    <PackageProjectUrl>https://github.com/masarray/arsas</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/masarray/arsas</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>iec61850;iec-61850;mms;goose;sampled-values;smv;sv-evidence;iec-61850-file-transfer;comtrade;scl;scl-generator;ied-explorer;multi-ied-monitoring;relay-testing;substation-automation;digital-substation;report-control-block;sequence-of-events;smart-control;wpf;dotnet</PackageTags>
+    <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
+    <ArIec61850Project Condition="'$(ArIec61850Project)' == '' and '$(ARIEC61850_PROJECT)' != ''">$(ARIEC61850_PROJECT)</ArIec61850Project>
+    <ArIec61850Project Condition="'$(ArIec61850Project)' == ''">..\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj</ArIec61850Project>
+    <ArIec61850NpcapProject Condition="'$(ArIec61850NpcapProject)' == '' and '$(ARIEC61850_NPCAP_PROJECT)' != ''">$(ARIEC61850_NPCAP_PROJECT)</ArIec61850NpcapProject>
+    <ArIec61850NpcapProject Condition="'$(ArIec61850NpcapProject)' == ''">..\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj</ArIec61850NpcapProject>
+    <ArIec61850LockPath>$(MSBuildProjectDirectory)\engines\ARIEC61850.lock.json</ArIec61850LockPath>
+    <ArIec61850LockValidator>$(MSBuildProjectDirectory)\scripts\validate-ariec61850-lock.ps1</ArIec61850LockValidator>
+    <ArIec61850PowerShell Condition="'$(OS)' == 'Windows_NT'">powershell</ArIec61850PowerShell>
+    <ArIec61850PowerShell Condition="'$(OS)' != 'Windows_NT'">pwsh</ArIec61850PowerShell>
+    <ArdIrecBridgePath Condition="'$(ArdIrecBridgePath)' == '' and '$(ARSAS_ARDIREC_BRIDGE_PATH)' != ''">$(ARSAS_ARDIREC_BRIDGE_PATH)</ArdIrecBridgePath>
+    <ArdIrecBridgeRequired Condition="'$(ArdIrecBridgeRequired)' == ''">false</ArdIrecBridgeRequired>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="tests\**\*.cs" />
+    <EmbeddedResource Remove="tests\**\*" />
+    <None Remove="tests\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- WPF requires packaged fonts as Resource items (not EmbeddedResource).
+         Static Inter faces keep weight selection deterministic on WPF. -->
+    <None Remove="Assets\Fonts\Inter-*.ttf" />
+    <Resource Include="Assets\Fonts\Inter-Regular.ttf" />
+    <Resource Include="Assets\Fonts\Inter-Medium.ttf" />
+    <Resource Include="Assets\Fonts\Inter-SemiBold.ttf" />
+    <Resource Include="Assets\Fonts\Inter-Bold.ttf" />
+    <Resource Include="Assets\app-icon.png" />
+    <Resource Include="Assets\app-icon.ico" />
+    <Resource Include="Assets\app-icon-256.png" />
+    <Resource Include="Assets\gateway-hero.png" />
+    <Resource Include="Assets\ied-protection-relay-fascia.png" />
+    <None Update="README.md" Pack="true" PackagePath="\"
+          CopyToPublishDirectory="PreserveNewest" TargetPath="README.txt" />
+    <None Update="LICENSE" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="COMMERCIAL-LICENSE.md" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="TRADEMARK.md" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="COPYRIGHT.md" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="THIRD_PARTY_NOTICES.md" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="Assets\Icons\MaterialIcons-LICENSE.txt"
+          CopyToPublishDirectory="PreserveNewest"
+          TargetPath="THIRD_PARTY\Material-Icons-LICENSE.txt" />
+    <None Update="Assets\Fonts\Inter-LICENSE.txt"
+          CopyToPublishDirectory="PreserveNewest"
+          TargetPath="THIRD_PARTY\Inter-LICENSE.txt" />
+    <None Update="NOTICE" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="docs\LICENSING.md" CopyToPublishDirectory="PreserveNewest" TargetPath="LICENSING.md" />
+    <None Update="engines\ARIEC61850.lock.json"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+    <None Update="engines\ARDIREC.lock.json"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(ArdIrecBridgePath)' != '' and Exists('$(ArdIrecBridgePath)')">
+    <EmbeddedResource Include="$(ArdIrecBridgePath)"
+                      LogicalName="ArIED61850Tester.Native.ardirec_bridge.dll" />
+    <None Include="$(ArdIrecBridgePath)"
+          Link="Tools\ArdIrec\ardirec_bridge.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest"
+          Condition="'$(PublishSingleFile)' != 'true'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(ArIec61850Project)" Properties="Configuration=$(Configuration)" />
+    <ProjectReference Include="$(ArIec61850NpcapProject)" Properties="Configuration=$(Configuration)" />
+  </ItemGroup>
+
+  <Target Name="ValidateArIec61850Project" BeforeTargets="PrepareForBuild">
+    <Message Importance="High" Text="ARSAS is compiling against ARIEC61850 project: $(ArIec61850Project)" />
+    <Message Importance="High" Text="ARSAS process-bus workflows are compiling against Npcap transport: $(ArIec61850NpcapProject)" />
+    <Error Condition="!Exists('$(ArIec61850Project)')"
+           Text="ARIEC61850 engine project was not found at '$(ArIec61850Project)'. Place this folder beside the ARIEC61850 repository, or build with -p:ArIec61850Project=FULL_PATH_TO_AR.Iec61850.csproj." />
+    <Error Condition="!Exists('$(ArIec61850NpcapProject)')"
+           Text="ARIEC61850 Npcap transport project was not found at '$(ArIec61850NpcapProject)'. Place this folder beside the ARIEC61850 repository, or build with -p:ArIec61850NpcapProject=FULL_PATH_TO_AR.Iec61850.Transports.Npcap.csproj." />
+    <Error Condition="!Exists('$(ArIec61850LockValidator)')"
+           Text="ARIEC61850 lock validator was not found at '$(ArIec61850LockValidator)'." />
+    <Error Condition="!Exists('$(ArIec61850LockPath)')"
+           Text="ARIEC61850 integration lock was not found at '$(ArIec61850LockPath)'." />
+  </Target>
+
+  <Target Name="ValidateArdIrecBridgePackaging" BeforeTargets="PrepareForBuild"
+          Condition="'$(ArdIrecBridgeRequired)' == 'true'">
+    <Error Condition="'$(ArdIrecBridgePath)' == '' or !Exists('$(ArdIrecBridgePath)')"
+           Text="Pinned ArdIrec native bridge was not found at '$(ArdIrecBridgePath)'. Official Windows packaging requires ardirec_bridge.dll." />
+  </Target>
+
+  <Target Name="ValidateArIec61850Revision"
+          BeforeTargets="ResolveProjectReferences"
+          DependsOnTargets="ValidateArIec61850Project">
+    <Exec Command="$(ArIec61850PowerShell) -NoProfile -ExecutionPolicy Bypass -File &quot;$(ArIec61850LockValidator)&quot; -LockPath &quot;$(ArIec61850LockPath)&quot; -EngineProject &quot;$(ArIec61850Project)&quot; -ProjectRoot &quot;$(MSBuildProjectDirectory)&quot;" />
+  </Target>
+</Project>
