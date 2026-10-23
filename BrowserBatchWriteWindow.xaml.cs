@@ -103,11 +103,42 @@ public partial class BrowserBatchWriteWindow : Window
         WriteButton.IsEnabled = !busy && _prepared;
     }
 
-    private void Window_Loaded(object sender, RoutedEventArgs e)
+    private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
         var work = SystemParameters.WorkArea;
-        Height = Math.Max(MinHeight, Math.Min(580, work.Height - 26));
-        Width = Math.Max(MinWidth, Math.Min(760, work.Width - 26));
+        Height = Math.Max(MinHeight, Math.Min(515, work.Height - 26));
+        Width = Math.Max(MinWidth, Math.Min(940, work.Width - 26));
+        await PrimeTypedRowsAsync();
+    }
+
+    // The first bounded visible batch is read-only hydrated on open, like
+    // IEDScout. No blank "new value" textbox and NO hidden Write/Operate.
+    // Larger DOs can use Read on an explicitly selected, unhydrated row.
+    private async Task PrimeTypedRowsAsync()
+    {
+        if (_busy || !CurrentAssociation) return;
+        var candidates = Rows.Where(r => r.Eligible).Take(24).ToArray();
+        SetBusy(true);
+        try
+        {
+            var done = 0;
+            foreach (var row in candidates)
+            {
+                if (!CurrentAssociation || _lifetime.IsCancellationRequested) break;
+                try
+                {
+                    var preview = await _runtime.PreviewBrowserDataAttributeWriteAsync(
+                        _device, row.Reference!.Value, _lifetime.Token);
+                    if (!CurrentAssociation) break;
+                    row.ApplyLivePreview(preview, preserveExplicitEdit: false);
+                    done++;
+                }
+                catch (OperationCanceledException) { break; }
+                catch (Exception ex) { row.Status = "Read failed: " + ex.Message; }
+            }
+            StatusLabel.Text = $"Read {done}/{candidates.Length} typed DA(s). Choose a value; select its checkbox and press Read, then Write.";
+        }
+        finally { SetBusy(false); }
     }
 
     private BrowserBatchWriteRow[] CheckedRows()
@@ -124,10 +155,18 @@ public partial class BrowserBatchWriteWindow : Window
         WriteButton.IsEnabled = false;
         var selected = CheckedRows();
         if (selected.Length is 0 or > IedBrowserTypedWriteBatch.MaxSelectedAttributes ||
-            selected.Any(r => !r.Eligible || !r.HasEdited) || !CurrentAssociation)
+            selected.Any(r => !r.Eligible) || !CurrentAssociation)
         {
-            StatusLabel.Text =
-                "Select 1–64 eligible DAs, explicitly edit each new value and keep the same online association. No Write sent.";
+            StatusLabel.Text = "Select 1–64 eligible attributes on the current IED; nothing was written.";
+            return;
+        }
+
+        // The first Read for an uninspected row populates its type-aware
+        // editor without forcing the operator to invent a value in advance.
+        var firstRead = selected.Any(r => r.Preview is null);
+        if (!firstRead && selected.Any(r => !r.HasEdited))
+        {
+            StatusLabel.Text = "Choose a different value for every selected DA before Write.";
             return;
         }
 
@@ -141,15 +180,11 @@ public partial class BrowserBatchWriteWindow : Window
                 if (!CurrentAssociation)
                     throw new InvalidOperationException("IED association changed during inspection.");
                 StatusLabel.Text = $"Read-only inspect {i + 1}/{selected.Length}: {row.ReferenceText}";
-                row.Preview = null;
                 var preview = await _runtime.PreviewBrowserDataAttributeWriteAsync(
                     _device, row.Reference!.Value, _lifetime.Token);
                 if (!CurrentAssociation)
                     throw new InvalidOperationException("IED association changed during inspection.");
-                row.Preview = preview.IsAvailable ? preview : null;
-                row.Type = preview.Type?.MmsType ?? "unverified";
-                row.Old = preview.CurrentText;
-                row.Status = preview.Message;
+                row.ApplyLivePreview(preview, preserveExplicitEdit: !firstRead);
                 if (row.Preview is null)
                 {
                     StatusLabel.Text = "One DA has no valid live typed Read/GVA proof. No Write sent.";
@@ -157,6 +192,11 @@ public partial class BrowserBatchWriteWindow : Window
                 }
             }
 
+            if (firstRead)
+            {
+                StatusLabel.Text = "Live values loaded. Choose a new value and click Read to verify changes.";
+                return;
+            }
             if (!TryFreezePlan(selected, out _, out var rejection))
             {
                 StatusLabel.Text = rejection + " No Write sent.";
@@ -306,6 +346,18 @@ public sealed class BrowserBatchWriteRow : INotifyPropertyChanged
     private string _status;
     private string _type = "Inspect first";
     private string _old = "—";
+    private bool _canEdit;
+    private bool _isBoolean;
+    public IReadOnlyList<string> BooleanOptions { get; } = new[] { "false", "true" };
+    public string ShortName =>
+        Reference?.Item.Split((char)36).LastOrDefault() ?? ReferenceText;
+    public bool CanEdit => _canEdit;
+    public Visibility BooleanEditorVisibility =>
+        _canEdit && _isBoolean ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility TextEditorVisibility =>
+        _canEdit && !_isBoolean ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility PlaceholderVisibility =>
+        _canEdit ? Visibility.Collapsed : Visibility.Visible;
 
     public MmsObjectReference? Reference { get; }
     public string ReferenceText { get; }
@@ -324,6 +376,42 @@ public sealed class BrowserBatchWriteRow : INotifyPropertyChanged
         Fc = fc;
         Eligible = eligible;
         _status = reason;
+    }
+
+    public void ApplyLivePreview(
+        IedBrowserNativeWritePreview preview, bool preserveExplicitEdit)
+    {
+        Preview = preview.IsAvailable && preview.Type is not null &&
+            preview.OldValue is not null ? preview : null;
+        Type = preview.Type?.MmsType ?? "unverified";
+        Old = preview.CurrentText;
+        _isBoolean = preview.Type?.MmsType == "boolean";
+        _canEdit = Eligible && Preview is not null &&
+            (preview.Type!.MmsType is "boolean" or "integer" or "unsigned" or
+             "visible-string" or "mms-string" ||
+             preview.Type.MmsType == "floating-point" && preview.Type.Size == 32);
+        Status = Preview is null ? preview.Message :
+            _canEdit ? "Ready to edit" : "Unsupported live MMS editor";
+        if (!preserveExplicitEdit)
+        {
+            // Use the exact current wire value; never guess a textual enum
+            // description or coerce a Boolean 0/1 behind the operator.
+            _newValue = preview.OldValue?.Value switch
+            {
+                bool b => b ? "true" : "false",
+                string str => str,
+                long or ulong or int or uint or float or double =>
+                    Convert.ToString(preview.OldValue.Value,
+                        System.Globalization.CultureInfo.InvariantCulture) ?? "",
+                _ => ""
+            };
+            HasEdited = false;
+            Changed(nameof(NewValue));
+        }
+        Changed(nameof(CanEdit));
+        Changed(nameof(BooleanEditorVisibility));
+        Changed(nameof(TextEditorVisibility));
+        Changed(nameof(PlaceholderVisibility));
     }
 
     public bool Selected
