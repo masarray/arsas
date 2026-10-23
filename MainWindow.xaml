@@ -2052,10 +2052,18 @@
                                         Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         IsEnabled="False" Click="IedBrowserControl_Click"
                                         ToolTip="Only enabled when this online DO has an existing live-verified native IEC Control descriptor."/>
-                                <Button x:Name="IedBrowserWriteButton" Content="Write DA…"
-                                        Style="{StaticResource SoftButton}" Margin="0,0,6,0"
+                                <Button x:Name="IedBrowserWriteButton" Style="{StaticResource SoftButton}"
+                                        Margin="0,0,6,0" MinWidth="81"
                                         IsEnabled="False" Click="IedBrowserWrite_Click"
-                                        ToolTip="Select an online CF/SP/DC Data Attribute to inspect and explicitly confirm one typed MMS Write."/>
+                                        ToolTip="Write the selected Data Attribute or focused Data Object using the exact live MMS type.">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                            <Path Width="960" Height="960" Fill="#345A83"
+                                                  Data="M167,840 Q146,845 130.5,829.5 T120,793 L160,602 358,800 167,840 Z M358,800 L160,602 618,144 Q641,121 675,121 T732,144 L816,228 Q839,251 839,285 T816,342 L358,800 Z M675,200 L261,614 346,699 760,285 675,200 Z"/>
+                                        </Viewbox>
+                                        <TextBlock Text="Write" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
                                 <Button x:Name="IedBrowserReadPageButton" Content="Read" Tag="Page"
                                         Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         Click="IedBrowserReadValues_Click"
