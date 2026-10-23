@@ -22,6 +22,10 @@ public partial class IedBrowserWriteWindow : Window
     private readonly long _association;
     private readonly CancellationTokenSource _lifetime = new();
     private bool _busy;
+    // A ctlModel Write may reach the wire even if cancellation hides its reply.
+    // Invalidate stale Command Dock permission on modal close in that case.
+    public HashSet<string> PotentiallyChangedControlModels { get; } =
+        new(StringComparer.OrdinalIgnoreCase);
     public ObservableCollection<IedBrowserWriteRow> Rows { get; }
 
     public IedBrowserWriteWindow(
@@ -161,6 +165,8 @@ public partial class IedBrowserWriteWindow : Window
                 StatusText.Text = "Writing " + (passed + 1) + "/" + staged.Count +
                     " · " + row.Reference;
                 row.Result = "Write / readback pending…";
+                if (row.IsControlModel)
+                    PotentiallyChangedControlModels.Add(row.Reference[..^".ctlModel".Length]);
                 var result = await _runtime.WriteBrowserConfigurationAsync(
                     _device.DeviceId, _model, _association, row, requested, _lifetime.Token);
                 row.Current = result.ReadbackVerified ? result.After : result.Before;
