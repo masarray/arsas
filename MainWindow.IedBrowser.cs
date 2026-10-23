@@ -2434,8 +2434,8 @@ public partial class MainWindow
             ? r.Inspection.Summary(connected)
             : connected ? "Connected · Report values shown; use Read for CF/DC configuration values"
                         : "Offline · cached SCL/discovery model";
-        var owner = SelectedDevice;
-        var association = owner?.LiveValues.Association ?? -1;
+        var detailDevice = SelectedDevice;
+        var association = detailDevice?.LiveValues.Association ?? -1;
         var detailStatus = IedBrowserDetailStatus.Text;
         // Show the selected location immediately; populate only its details
         // after a bounded worker has constructed the immutable row projection.
@@ -2443,7 +2443,7 @@ public partial class MainWindow
         ReplaceIedBrowserDetails([]);
         IedBrowserDetailStatus.Text = "Preparing selected engineering details…";
         _ = BuildIedBrowserDetailsAsync(row, model,
-            owner?.SclWorkspace?.DesignModel, owner, connected,
+            detailDevice?.SclWorkspace?.DesignModel, detailDevice, connected,
             detailStatus, detailGeneration, association);
     }
 
