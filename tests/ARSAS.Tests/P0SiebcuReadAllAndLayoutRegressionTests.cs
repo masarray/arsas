@@ -77,9 +77,16 @@ public sealed class P0SiebcuReadAllAndLayoutRegressionTests
         {
             var button = Assert.Single(controls.Where(n =>
                 (string?)n.Attribute("CommandParameter") == action));
-            Assert.Equal("72", (string?)button.Attribute("Width"));
+            var grid = Assert.IsType<XElement>(button.Parent);
+            Assert.Equal("Grid", grid.Name.LocalName);
+            var columns = Assert.Single(grid.Elements().Where(n =>
+                n.Name.LocalName == "Grid.ColumnDefinitions")).Elements()
+                .Select(n => (string?)n.Attribute("Width")).ToArray();
+            Assert.Equal(new[] { "72", "7", "72" }, columns);
+            Assert.Equal(action == "Open [01]" ? "0" : "2",
+                (string?)button.Attribute("Grid.Column"));
             Assert.Equal("72", (string?)button.Attribute("MinWidth"));
-            Assert.Equal("Left", (string?)button.Attribute("HorizontalAlignment"));
+            Assert.Equal("Stretch", (string?)button.Attribute("HorizontalAlignment"));
             Assert.Equal("{Binding ControlCanInspectPosition}",
                 (string?)button.Attribute("IsEnabled"));
         }
