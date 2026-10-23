@@ -696,14 +696,16 @@
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
 
-                                        <Grid Grid.Row="0">
+                                        <Grid Grid.Row="0" MinHeight="0" ClipToBounds="True">
                                             <DataGrid x:Name="EquipmentCommandGrid" ItemsSource="{Binding SelectedDevice.OperableCommandSignals}" Loaded="CommandGrid_Loaded" IsReadOnly="False" CanUserAddRows="False" CanUserDeleteRows="False"
                                                       Style="{StaticResource CommandDataGrid}" RowStyle="{StaticResource CommandDataGridRow}"
                                                       CellStyle="{StaticResource CommandDataGridCell}" ColumnHeaderStyle="{StaticResource CommandDataGridHeader}"
                                                       AutoGenerateColumns="False" MinHeight="56" RowHeight="43" MinRowHeight="42" ColumnHeaderHeight="35" FrozenColumnCount="1"
                                                       EnableRowVirtualization="True" EnableColumnVirtualization="True"
                                                       VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
-                                                      ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                      ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Visible" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                      ScrollViewer.IsDeferredScrollingEnabled="False" ScrollViewer.PanningMode="VerticalOnly"
+                                                      VirtualizingPanel.ScrollUnit="Pixel"
                                                       CanUserResizeColumns="False" ClipToBounds="True">
                                                 <DataGrid.Columns>
                                                     <DataGridTextColumn Header="IEC Telegram" Binding="{Binding DisplayReference}" Width="1.5*" MinWidth="165" IsReadOnly="True"/>
