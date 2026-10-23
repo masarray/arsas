@@ -112,7 +112,7 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
 
     public string UnitStatus => RequestedUnits switch
     {
-        SmvDisplayUnits.RawCounts => "RAW = original INT32 counts; 9-2LE maps Ch1–4 ×0.001 A and Ch5–8 ×0.01 V (operator-selected, unverified)",
+        SmvDisplayUnits.RawCounts => "RAW counts · Voltage/Current grouping is unverified; 9-2LE profile: Ch1–4 ×0.001 A, Ch5–8 ×0.01 V (operator-selected)",
         _ when ActiveUnits == SmvDisplayUnits.NineTwoLe
             => "9-2LE user profile · 1 mA / 10 mV per count · verify publisher DataSet",
         _ => "9-2LE selected · need eight clean channels; displaying RAW counts"
