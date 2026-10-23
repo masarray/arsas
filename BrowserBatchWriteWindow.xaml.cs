@@ -142,6 +142,7 @@ public partial class BrowserBatchWriteWindow : Window
                     throw new InvalidOperationException("IED association changed during inspection.");
                 StatusLabel.Text = $"Read-only inspect {i + 1}/{selected.Length}: {row.ReferenceText}";
                 row.Preview = null;
+                row.NotifyEditorChanged();
                 var preview = await _runtime.PreviewBrowserDataAttributeWriteAsync(
                     _device, row.Reference!.Value, _lifetime.Token);
                 if (!CurrentAssociation)
@@ -271,6 +272,7 @@ public partial class BrowserBatchWriteWindow : Window
                 selected[i].Status = result.Rows[i].State?.ToString() ?? "Unattempted";
                 selected[i].Status += ": " + result.Rows[i].Message;
                 selected[i].Preview = null;
+                selected[i].NotifyEditorChanged();
             }
             StatusLabel.Text =
                 $"Readback verified: {result.Verified}; rejected: {result.Rejected}; " +
@@ -303,7 +305,7 @@ public partial class BrowserBatchWriteWindow : Window
 public sealed class BrowserBatchWriteRow : INotifyPropertyChanged
 {
     private bool _selected;
-    private string _newValue = "";
+    private string _newValue = "Inspect first";
     private string _status;
     private string _type = "Inspect first";
     private string _old = "—";
@@ -313,6 +315,7 @@ public sealed class BrowserBatchWriteRow : INotifyPropertyChanged
     public string DisplayName { get; }
     public string Fc { get; }
     public bool Eligible { get; }
+    public bool CanEdit => Eligible && Preview is { IsAvailable: true, Type: not null };
     public bool HasEdited { get; private set; }
     public IedBrowserNativeWritePreview? Preview { get; set; }
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -327,6 +330,8 @@ public sealed class BrowserBatchWriteRow : INotifyPropertyChanged
         Eligible = eligible;
         _status = reason;
     }
+
+    public void NotifyEditorChanged() => Changed(nameof(CanEdit));
 
     public IReadOnlyList<string> BooleanChoices { get; } = new[] { "true", "false" };
     public Visibility BooleanEditorVisibility => _booleanEditor ? Visibility.Visible : Visibility.Collapsed;
@@ -348,6 +353,7 @@ public sealed class BrowserBatchWriteRow : INotifyPropertyChanged
             _newValue = actualValue;
             Changed(nameof(NewValue));
         }
+        Changed(nameof(CanEdit));
     }
 
     public bool Selected
