@@ -115,9 +115,11 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
         {
             if (!Set(ref _isBusy, value)) return;
             Raise(nameof(CanSend));
+            Raise(nameof(CanClose));
             Raise(nameof(SendButtonText));
         }
     }
+    public bool CanClose => !IsBusy;
     public bool IsReady
     {
         get => _isReady;
@@ -184,9 +186,9 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
                 Iec61850ControlModelKind.StatusOnly => "Status only",
                 _ => "Unverified"
             };
-            SequenceHint = capabilities.UsesSelectBeforeOperate
-                ? "Native sequence: Select → Operate"
-                : "Native sequence: Operate";
+            SequenceHint = !capabilities.SupportsOperate ? "Not operable" :
+                capabilities.UsesSelectBeforeOperate
+                ? "Native: Select → Operate" : "Native: Operate";
             Raise(nameof(SendButtonText));
             ControlCdcText = string.IsNullOrWhiteSpace(capabilities.ControlCdc) ? "CONTROL" : capabilities.ControlCdc;
             Raise(nameof(AllowCustomValue));
@@ -465,6 +467,14 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
 
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
+        // Never abandon a dispatched native control flight by simply closing
+        // its UI. Late responses need the owning session to resolve/quarantine.
+        if (IsBusy)
+        {
+            e.Cancel = true;
+            CommandStatus = "IED operation still resolving. Close after the result is known.";
+            return;
+        }
         _cancellation.Cancel();
         _cancellation.Dispose();
     }
