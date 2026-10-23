@@ -138,7 +138,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             Iec61850ControlModelKind.SboEnhanced ? "Select → Operate" : "Operate";
     public bool CanSend => IsReady && !IsBusy && !string.IsNullOrWhiteSpace(SelectedValue) &&
         IsValidOriginator(OriginatorId) && OriginCategories.Contains(SelectedOriginCategory) &&
-        (TestMode || ConfirmLiveCommand);
+        ConfirmLiveCommand;
 
     public ControlCommandWindow(
         Iec61850MonitorRuntime runtime,
@@ -440,7 +440,9 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
     {
         if (LiveCommandWarning == null)
             return;
-        LiveCommandWarning.Visibility = IsReady && !TestMode ? Visibility.Visible : Visibility.Collapsed;
+        // Test=true is an MMS control flag, not an offline simulator.
+        // Some servers may still change equipment: authorization is mandatory.
+        LiveCommandWarning.Visibility = IsReady ? Visibility.Visible : Visibility.Collapsed;
         if (TestMode)
             ConfirmLiveCommand = false;
     }
