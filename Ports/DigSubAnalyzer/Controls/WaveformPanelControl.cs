@@ -740,12 +740,12 @@ public sealed class WaveformPanelControl : FrameworkElement
         if (stacked && traces > 0)
         {
             var band = rect.Height / traces;
+            var zeroLabel = CreateText("0", 9.6, AxisTextBrush, LabelTypeface);
             for (var i = 0; i < traces; i++)
             {
                 var y = rect.Top + (i + 0.5) * band;
                 dc.DrawLine(ZeroPen, new Point(rect.Left, y), new Point(rect.Right, y));
-                dc.DrawText(CreateText("0", 9.6, AxisTextBrush, LabelTypeface),
-                    new Point(rect.Left + 3, y - 13));
+                dc.DrawText(zeroLabel, new Point(rect.Left + 3, y - 13));
             }
             for (var i = 1; i < traces; i++)
             {
