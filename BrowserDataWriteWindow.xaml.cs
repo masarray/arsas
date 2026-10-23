@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using AR.Iec61850.Mms;
+using AR.Iec61850.Discovery;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Services;
 
