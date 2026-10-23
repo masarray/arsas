@@ -71,6 +71,9 @@ public partial class IpConnectWizardWindow : Window
         }
         MmsPortText = selectedPort.ToString(CultureInfo.InvariantCulture);
         ApplyAddress(selectedIp);
+        // Never conceal a nonstandard port in the collapsed expert section.
+        if (selectedPort != 102)
+            MoreOptionsExpander.IsExpanded = true;
 
         foreach (var box in Octets)
             DataObject.AddPastingHandler(box, Octet_Pasting);
@@ -159,9 +162,11 @@ public partial class IpConnectWizardWindow : Window
         OctetEditor.Visibility = manual ? Visibility.Collapsed : Visibility.Visible;
         HistoryButton.Visibility = manual ? Visibility.Collapsed : Visibility.Visible;
         RawIpBox.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
+        if (manual)
+            MoreOptionsExpander.IsExpanded = true;
         AddressHintText.Text = manual
-            ? "Enter a numeric IPv6 or IPv4 address. Connection starts only when you confirm."
-            : "Enter four IPv4 numbers (0–255). Use dot, arrows, Tab or paste a complete address.";
+            ? "Enter the address exactly as provided."
+            : "Example: 192.168.1.10";
     }
 
     private void ManualAddressCheck_Click(object sender, RoutedEventArgs e)
@@ -186,7 +191,7 @@ public partial class IpConnectWizardWindow : Window
         {
             // Never silently truncate a valid IPv6 literal into four octets.
             ManualAddressCheck.IsChecked = true;
-            WizardStatusText.Text = "IPv6 requires Advanced / manual address mode.";
+            WizardStatusText.Text = "Keep manual entry enabled for this address format.";
             return;
         }
 
@@ -222,7 +227,7 @@ public partial class IpConnectWizardWindow : Window
         if (!IsValidPartialOctet(replacement))
         {
             e.Handled = true;
-            WizardStatusText.Text = "Each IPv4 octet must be a number from 0 to 255.";
+            WizardStatusText.Text = "Each number must be between 0 and 255.";
         }
     }
 
@@ -284,7 +289,7 @@ public partial class IpConnectWizardWindow : Window
                 FocusOctet(3, atEnd: true);
             }
             else
-                WizardStatusText.Text = "Paste a complete IPv4 address with four octets (0–255).";
+                WizardStatusText.Text = "Paste a full IP address, for example 192.168.1.10.";
             return;
         }
 
@@ -293,7 +298,7 @@ public partial class IpConnectWizardWindow : Window
         if (!IsValidPartialOctet(next))
         {
             e.CancelCommand();
-            WizardStatusText.Text = "Each IPv4 octet must be a number from 0 to 255.";
+            WizardStatusText.Text = "Each number must be between 0 and 255.";
         }
     }
 
@@ -362,6 +367,8 @@ public partial class IpConnectWizardWindow : Window
         // Selecting history restores the exact saved IP:port, even when unverified.
         // This is recall only; the connection still requires explicit submission.
         MmsPortText = selection.MmsPort.ToString(CultureInfo.InvariantCulture);
+        if (selection.MmsPort != 102)
+            MoreOptionsExpander.IsExpanded = true;
         HistoryPopup.IsOpen = false;
         if (ManualAddressCheck.IsChecked == true) RawIpBox.Focus();
         else Octet1Box.Focus();
@@ -376,7 +383,7 @@ public partial class IpConnectWizardWindow : Window
             submittedAddress = RawIpBox.Text.Trim();
             if (!IPAddress.TryParse(submittedAddress, out _))
             {
-                WizardStatusText.Text = "Enter a valid IPv4 or IPv6 address.";
+                WizardStatusText.Text = "Enter a valid IP address.";
                 RawIpBox.Focus();
                 return;
             }
@@ -385,7 +392,7 @@ public partial class IpConnectWizardWindow : Window
         {
             if (!TryNormalizeIpv4Octets(Octets.Select(b => b.Text).ToArray(), out submittedAddress))
             {
-                WizardStatusText.Text = "Complete all four IPv4 octets, each between 0 and 255.";
+                WizardStatusText.Text = "Enter all four parts of the IP address (0–255).";
                 return;
             }
         }
@@ -394,7 +401,7 @@ public partial class IpConnectWizardWindow : Window
                 out var port) || port is <= 0 or > 65535)
         {
             WizardStatusText.Text =
-                "MMS port must be between 1 and 65535. Standard IEC 61850 MMS uses TCP 102.";
+                "Port must be between 1 and 65535.";
             return;
         }
 

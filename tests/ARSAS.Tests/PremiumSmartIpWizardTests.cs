@@ -79,6 +79,44 @@ public sealed class PremiumSmartIpWizardTests
     }
 
     [Fact]
+    public void DefaultDialog_IsCompactUsesAppTypography_AndKeepsExpertControlsCollapsed()
+    {
+        var doc = XDocument.Load(Find("IpConnectWizardWindow.xaml"));
+        XNamespace w = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var root = Assert.IsType<XElement>(doc.Root);
+
+        Assert.InRange(int.Parse(root.Attribute("Width")!.Value), 460, 530);
+        Assert.True(int.Parse(root.Attribute("MaxHeight")!.Value) <= 480);
+        Assert.Contains("AppFontFamily", root.Attribute("FontFamily")!.Value);
+        Assert.Equal("Height", root.Attribute("SizeToContent")?.Value);
+
+        var octetStyle = doc.Descendants(w + "Style")
+            .Single(style => style.Attribute(x + "Key")?.Value == "SmartIpOctet");
+        var setters = octetStyle.Elements(w + "Setter")
+            .ToDictionary(e => e.Attribute("Property")!.Value, e => e.Attribute("Value")!.Value);
+        Assert.True(double.Parse(setters["Width"], System.Globalization.CultureInfo.InvariantCulture) <= 46);
+        Assert.True(double.Parse(setters["FontSize"], System.Globalization.CultureInfo.InvariantCulture) <= 13);
+        Assert.True(double.Parse(setters["Height"], System.Globalization.CultureInfo.InvariantCulture) <= 34);
+
+        var options = doc.Descendants(w + "Expander")
+            .Single(e => e.Attribute(x + "Name")?.Value == "MoreOptionsExpander");
+        Assert.NotEqual("True", options.Attribute("IsExpanded")?.Value);
+        Assert.Contains(options.Descendants(w + "TextBox"),
+            box => box.Attribute(x + "Name")?.Value == "MmsPortBox");
+        Assert.Contains(options.Descendants(w + "CheckBox"),
+            box => box.Attribute(x + "Name")?.Value == "ManualAddressCheck");
+
+        var xaml = File.ReadAllText(Find("IpConnectWizardWindow.xaml"));
+        Assert.DoesNotContain("Smart discovery", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("DataSets", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("RCBs", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("IPv6", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"HistoryPopup\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Connect\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WpfEditor_ConstructsOnSta_AndHasReachableKeyboardFocusAndIPv6Mode()
     {
         if (!OperatingSystem.IsWindows()) return;
@@ -112,6 +150,8 @@ public sealed class PremiumSmartIpWizardTests
                     FocusManager.SetFocusedElement(wizard, boxes[0]);
                     Assert.Same(boxes[0], FocusManager.GetFocusedElement(wizard));
 
+                    var options = Assert.IsType<Expander>(wizard.FindName("MoreOptionsExpander"));
+                    Assert.False(options.IsExpanded);
                     var advanced = Assert.IsType<CheckBox>(wizard.FindName("ManualAddressCheck"));
                     var raw = Assert.IsType<TextBox>(wizard.FindName("RawIpBox"));
                     var host = Assert.IsType<Border>(wizard.FindName("IpEditorHost"));
@@ -120,6 +160,7 @@ public sealed class PremiumSmartIpWizardTests
                     Assert.NotNull(mode);
                     advanced.IsChecked = true;
                     mode.Invoke(wizard, [advanced, new RoutedEventArgs()]);
+                    Assert.True(options.IsExpanded);
                     Assert.Equal(Visibility.Visible, raw.Visibility);
                     Assert.Equal(Visibility.Collapsed, host.Visibility);
                     raw.Text = "2001:db8::2";
