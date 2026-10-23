@@ -277,7 +277,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             CommandStatus = result.IsSuccess
                 ? result.FeedbackConfirmed
                     ? "IED response and independent process feedback verified."
-                    : "IED accepted; waiting for independent IED process feedback."
+                    : "IED accepted. Waiting for independent IED process feedback."
                 : Iec61850ControlFailureReason.Explain(result).Summary;
             // Accepted MMS response is not process-image authority. Full stage,
             // LastApplError, termination and wire details stay in diagnostics.
