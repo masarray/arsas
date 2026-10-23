@@ -34,6 +34,8 @@ public sealed class StaticDataSetRcbImageTriageTests
                 new Iec61850ReportContinuityStreamSnapshot
                 {
                     Rcb = rcbA, DataSet = datasetA, Frames = 4,
+                    LastFrameReceivedAtUtc = new DateTimeOffset(
+                        2026, 10, 23, 13, 0, 0, TimeSpan.Zero),
                     RptEnaWriteAccepted = true, GiWriteAccepted = true,
                     Overflow = 1
                 }
@@ -81,11 +83,15 @@ public sealed class StaticDataSetRcbImageTriageTests
             {
                 new Iec61850ReportContinuityStreamSnapshot
                 {
-                    Rcb = rcb, DataSet = dataSet, Frames = 1
+                    Rcb = rcb, DataSet = dataSet, Frames = 1,
+                    LastFrameReceivedAtUtc = new DateTimeOffset(
+                        2026, 10, 23, 13, 1, 0, TimeSpan.Zero)
                 },
                 new Iec61850ReportContinuityStreamSnapshot
                 {
-                    Rcb = rcb, DataSet = dataSet, Frames = 2
+                    Rcb = rcb, DataSet = dataSet, Frames = 2,
+                    LastFrameReceivedAtUtc = new DateTimeOffset(
+                        2026, 10, 23, 13, 2, 0, TimeSpan.Zero)
                 }
             }
         };
