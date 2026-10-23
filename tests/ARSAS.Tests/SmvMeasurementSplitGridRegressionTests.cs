@@ -56,7 +56,7 @@ public sealed class SmvMeasurementSplitGridRegressionTests
         Assert.Contains("SmvEngineeringDisplay.Describe(row.ChannelIndex, ActiveUnits).IsVoltage", code);
         Assert.Contains("!SmvEngineeringDisplay.Describe(row.ChannelIndex, ActiveUnits).IsVoltage", code);
         Assert.Contains("var next = SmvEngineeringDisplay.Present(raw, profile);", code);
-        Assert.Contains("Measurements[rowIndex] = next;", code);
+        Assert.Contains("Measurements[rowIndex].Apply(next);", code);
         Assert.Contains("Notify(nameof(VoltageGroupHeading))", code);
         Assert.Contains("Notify(nameof(CurrentGroupHeading))", code);
         Assert.Contains("grouping is unverified", code);
