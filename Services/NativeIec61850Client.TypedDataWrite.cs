@@ -34,11 +34,16 @@ public sealed partial class NativeIec61850Client
         MmsDataValue expectedOldValue,
         MmsDataValue proposedValue,
         Func<bool> leaseIsCurrent,
+        bool operatorConfirmed,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(expectedOldValue);
         ArgumentNullException.ThrowIfNull(proposedValue);
         ArgumentNullException.ThrowIfNull(leaseIsCurrent);
+        if (!operatorConfirmed)
+            return Task.FromResult(new IedBrowserNativeWriteResult(
+                IedBrowserNativeWriteState.NotSent,
+                "Operator did not explicitly approve this exact Write."));
 
         // Keep GVA, compare-before-write, Confirmed-Write and exact readback
         // within the SAME client's MMS arbitration gate.
@@ -54,10 +59,12 @@ public sealed partial class NativeIec61850Client
                 gva = await _session.GetVariableAccessAttributesAsync(
                     reference, cancellationToken).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            catch (Exception ex) when (ex is OperationCanceledException or IOException or
+                                       InvalidOperationException or ObjectDisposedException)
             {
                 return new IedBrowserNativeWriteResult(
-                    IedBrowserNativeWriteState.NotSent, "Schema inspection cancelled; no Write sent.");
+                    IedBrowserNativeWriteState.NotSent,
+                    $"Schema inspection failed before dispatch ({ex.GetType().Name}); no Write sent.");
             }
 
             var rejection = IedBrowserTypedWriteAdmission.RejectReason(
@@ -78,10 +85,12 @@ public sealed partial class NativeIec61850Client
                 before = await _session.ReadSingleVariableAsync(
                     reference, cancellationToken).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            catch (Exception ex) when (ex is OperationCanceledException or IOException or
+                                       InvalidOperationException or ObjectDisposedException)
             {
                 return new IedBrowserNativeWriteResult(
-                    IedBrowserNativeWriteState.NotSent, "Pre-write read cancelled; no Write sent.");
+                    IedBrowserNativeWriteState.NotSent,
+                    $"Pre-write read failed before dispatch ({ex.GetType().Name}); no Write sent.");
             }
 
             if (!before.IsSuccess || before.Value is null ||
@@ -114,6 +123,14 @@ public sealed partial class NativeIec61850Client
                     IedBrowserNativeWriteState.Unknown,
                     $"Write outcome unknown after dispatch ({ex.GetType().Name}); read manually before retry.");
             }
+
+            // The existing engine returns a failed response with NO per-item
+            // access result for certain transport faults. A possibly delivered
+            // request with no confirmed result is UNKNOWN, never IED Rejected.
+            if (write.AccessResults.Count == 0)
+                return new IedBrowserNativeWriteResult(
+                    IedBrowserNativeWriteState.Unknown,
+                    $"No definitive MMS Write access result; manual readback required. {write.Message}", write);
 
             if (!write.IsSuccess || write.AccessResults.Count != 1 ||
                 !write.AccessResults[0].IsSuccess)
