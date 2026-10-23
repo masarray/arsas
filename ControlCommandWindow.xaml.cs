@@ -104,6 +104,11 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        // Honor the actual DPI-aware working area. All details scroll while
+        // the command confirmation footer stays on-screen at 1366x768/150%.
+        var work = SystemParameters.WorkArea;
+        Height = Math.Max(MinHeight, Math.Min(590, work.Height - 28));
+        Width = Math.Max(MinWidth, Math.Min(630, work.Width - 28));
         await InspectAsync();
     }
 

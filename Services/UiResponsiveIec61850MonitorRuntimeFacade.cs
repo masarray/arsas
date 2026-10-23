@@ -80,6 +80,30 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     public int ConnectedDeviceCount => _inner.ConnectedDeviceCount;
     public int MonitoringDeviceCount => _inner.MonitoringDeviceCount;
 
+    public Task<IedBrowserNativeWritePreview> PreviewBrowserDataAttributeWriteAsync(
+        Iec61850MonitorDevice device,
+        AR.Iec61850.Mms.MmsObjectReference reference,
+        CancellationToken cancellationToken)
+        => RunDeviceOperationAsync(
+            device.DeviceId, cancellationToken,
+            token => _inner.PreviewBrowserDataAttributeWriteAsync(device, reference, token),
+            rejectIfBusy: true);
+
+    /// <summary>
+    /// Strict non-queued operator Write lane, sharing the existing IED
+    /// lifecycle gate with Read and IEC Control. No independent MMS socket.
+    /// </summary>
+    public Task<IedBrowserTypedWriteBatchResult> WriteBrowserDataAttributesAsync(
+        Iec61850MonitorDevice device,
+        IReadOnlyList<IedBrowserTypedWriteStep> confirmedPlan,
+        bool explicitOperatorConfirmation,
+        CancellationToken cancellationToken)
+        => RunDeviceOperationAsync(
+            device.DeviceId, cancellationToken,
+            token => _inner.WriteBrowserDataAttributesAsync(
+                device, confirmedPlan, explicitOperatorConfirmation, token),
+            rejectIfBusy: true);
+
     public Task<int> ReadBrowserValuesAsync(
         Iec61850MonitorDevice device,
         IReadOnlyList<IedBrowserReadTarget> targets,
