@@ -226,7 +226,7 @@ def choose_artifact(payload: dict, run_id: int, *, allow_missing: bool = False) 
     if len(matches) == 1:
         return matches[0]
     if not matches:
-        raise ProofError("Expected a non-expired canonical test artifact")
+        raise ProofError("Expected exactly one non-expired canonical test artifact")
 
     # GitHub retains each attempt's same-named artifact after a workflow rerun.
     # Never delete old evidence, and NEVER pick an older passing attempt when
