@@ -106,8 +106,8 @@ public partial class BrowserBatchWriteWindow : Window
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
         var work = SystemParameters.WorkArea;
-        Height = Math.Max(MinHeight, Math.Min(580, work.Height - 26));
-        Width = Math.Max(MinWidth, Math.Min(760, work.Width - 26));
+        Height = Math.Max(MinHeight, Math.Min(490, work.Height - 26));
+        Width = Math.Max(MinWidth, Math.Min(660, work.Width - 26));
     }
 
     private BrowserBatchWriteRow[] CheckedRows()
@@ -142,6 +142,7 @@ public partial class BrowserBatchWriteWindow : Window
                     throw new InvalidOperationException("IED association changed during inspection.");
                 StatusLabel.Text = $"Read-only inspect {i + 1}/{selected.Length}: {row.ReferenceText}";
                 row.Preview = null;
+                row.NotifyEditorChanged();
                 var preview = await _runtime.PreviewBrowserDataAttributeWriteAsync(
                     _device, row.Reference!.Value, _lifetime.Token);
                 if (!CurrentAssociation)
@@ -149,6 +150,7 @@ public partial class BrowserBatchWriteWindow : Window
                 row.Preview = preview.IsAvailable ? preview : null;
                 row.Type = preview.Type?.MmsType ?? "unverified";
                 row.Old = preview.CurrentText;
+                row.ApplyLiveEditor(preview.Type?.MmsType == "boolean", preview.CurrentText);
                 row.Status = preview.Message;
                 if (row.Preview is null)
                 {
@@ -270,6 +272,7 @@ public partial class BrowserBatchWriteWindow : Window
                 selected[i].Status = result.Rows[i].State?.ToString() ?? "Unattempted";
                 selected[i].Status += ": " + result.Rows[i].Message;
                 selected[i].Preview = null;
+                selected[i].NotifyEditorChanged();
             }
             StatusLabel.Text =
                 $"Readback verified: {result.Verified}; rejected: {result.Rejected}; " +
@@ -302,15 +305,17 @@ public partial class BrowserBatchWriteWindow : Window
 public sealed class BrowserBatchWriteRow : INotifyPropertyChanged
 {
     private bool _selected;
-    private string _newValue = "";
+    private string _newValue = "Inspect first";
     private string _status;
     private string _type = "Inspect first";
     private string _old = "—";
 
     public MmsObjectReference? Reference { get; }
     public string ReferenceText { get; }
+    public string DisplayName { get; }
     public string Fc { get; }
     public bool Eligible { get; }
+    public bool CanEdit => Eligible && Preview is { IsAvailable: true, Type: not null };
     public bool HasEdited { get; private set; }
     public IedBrowserNativeWritePreview? Preview { get; set; }
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -321,9 +326,32 @@ public sealed class BrowserBatchWriteRow : INotifyPropertyChanged
     {
         Reference = reference;
         ReferenceText = referenceText;
+        DisplayName = referenceText.Split((char)36).LastOrDefault() ?? referenceText;
         Fc = fc;
         Eligible = eligible;
         _status = reason;
+    }
+
+    public void NotifyEditorChanged() => Changed(nameof(CanEdit));
+    public IReadOnlyList<string> BooleanChoices { get; } = new[] { "true", "false" };
+    public Visibility BooleanEditorVisibility => _booleanEditor ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility TextEditorVisibility => _booleanEditor ? Visibility.Collapsed : Visibility.Visible;
+    private bool _booleanEditor;
+
+    public void ApplyLiveEditor(bool boolean, string actualValue)
+    {
+        if (_booleanEditor != boolean)
+        {
+            _booleanEditor = boolean;
+            Changed(nameof(BooleanEditorVisibility));
+            Changed(nameof(TextEditorVisibility));
+        }
+        if (!HasEdited && !string.IsNullOrWhiteSpace(actualValue))
+        {
+            _newValue = actualValue;
+            Changed(nameof(NewValue));
+        }
+        Changed(nameof(CanEdit));
     }
 
     public bool Selected
