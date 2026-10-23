@@ -35,6 +35,15 @@ public static class SharedIedSchemaIndex
     public static IedBrowserSchemaIndex GetForBinding(LiveIedModelDiscoveryDocument model)
         => PrepareAsync(model).GetAwaiter().GetResult();
 
+    /// <summary>Explicit operator retry only; no background fault-retry storm.</summary>
+    public static void ForgetFaulted(LiveIedModelDiscoveryDocument model)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        if (Models.TryGetValue(model, out var lazy) &&
+            lazy.IsValueCreated && (lazy.Value.IsFaulted || lazy.Value.IsCanceled))
+            Models.Remove(model);
+    }
+
     public static bool TryGetPrepared(LiveIedModelDiscoveryDocument model,
         out IedBrowserSchemaIndex index)
     {
