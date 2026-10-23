@@ -2060,7 +2060,7 @@
                                         Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         Click="IedBrowserReadValues_Click"
                                         ToolTip="Read values for the current Browser object over MMS. Live monitoring uses the report stream."/>
-                                <Button x:Name="IedBrowserWriteButton" Content="Write DA…" IsEnabled="False"
+                                <Button x:Name="IedBrowserConfigWriteButton" Content="Config Write…" IsEnabled="False"
                                         Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         Click="IedBrowserWriteValues_Click"
                                         ToolTip="Open explicit native MMS configuration Write for the selected live DO/DA; never sends Operate"/>
