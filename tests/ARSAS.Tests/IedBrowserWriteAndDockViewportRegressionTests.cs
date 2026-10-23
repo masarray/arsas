@@ -69,7 +69,7 @@ public sealed class IedBrowserWriteAndDockViewportRegressionTests
         Assert.Contains(editor.Descendants(wpf + "ComboBoxItem"),
             item => (string?)item.Attribute("Tag") == "4");
         var source = Read("IedBrowserWriteWindow.xaml.cs");
-        Assert.Contains("MessageBoxButton.YesNo", source);
+        Assert.DoesNotContain("MessageBox.Show(", source);
         Assert.Contains("selected.Length > 16", source);
         Assert.Contains("if (!result.Succeeded)", source);
     }
