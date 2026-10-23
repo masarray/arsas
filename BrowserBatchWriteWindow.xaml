@@ -68,8 +68,11 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
-            <TextBlock x:Name="StatusLabel" Text="Reading live values from IED…"
-                       TextWrapping="Wrap" Foreground="#506780" FontSize="10.5" Margin="0,0,0,8"/>
+            <Border x:Name="ResultBanner" Background="Transparent" CornerRadius="6"
+                    Padding="8,5" Margin="0,0,0,5">
+                <TextBlock x:Name="StatusLabel" Text="Reading live values from IED…"
+                           TextWrapping="Wrap" Foreground="#314B63" FontSize="10.5"/>
+            </Border>
             <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
