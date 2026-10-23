@@ -27,6 +27,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
     private string _selectedOriginCategory = "StationControl";
     private string _controlNumberText = "Auto";
     private string _terminationText = "—";
+    private string _wireTimelineText = string.Empty;
     private Iec61850ControlModelKind _liveControlModel = Iec61850ControlModelKind.Unknown;
     private bool _interlockCheck = true;
     private bool _synchroCheck;
@@ -61,6 +62,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
     public string SequenceHint { get => _sequenceHint; private set => Set(ref _sequenceHint, value); }
     public string ControlNumberText { get => _controlNumberText; private set => Set(ref _controlNumberText, value); }
     public string TerminationText { get => _terminationText; private set => Set(ref _terminationText, value); }
+    public string WireTimelineText { get => _wireTimelineText; private set => Set(ref _wireTimelineText, value); }
     public string SelectedOriginCategory
     {
         get => _selectedOriginCategory;
@@ -180,6 +182,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
         SelectedValue = string.Empty;
         ControlNumberText = "Auto";
         TerminationText = "—";
+        WireTimelineText = string.Empty;
         IsBusy = true;
         CommandStage = "Inspecting control";
         CommandStatus = "Reading ctlModel and current status from the IED…";
@@ -293,6 +296,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
                 _cancellation.Token);
 
             ControlNumberText = result.ControlNumber;
+            WireTimelineText = Iec61850ControlOutcomePresentation.WireTimeline(result);
             TerminationText = result.CommandTerminationReceived
                 ? result.PositiveTermination ? "Positive" : "Negative" : "Not reported";
             var outcome = Iec61850ControlOutcomePresentation.From(result, TestMode);
