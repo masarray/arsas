@@ -72,13 +72,11 @@ public static class UserPreferenceStore
         string IpAddress, int MmsPort, string IedName, bool ConfirmedSuccessful,
         bool WasLastSubmitted = false)
     {
-        public string Subtitle => WasLastSubmitted
-            ? (ConfirmedSuccessful
-                ? $"Last submitted · previously connected · MMS {MmsPort}"
-                : $"Last submitted · connection unverified · MMS {MmsPort}")
+        public string Subtitle => (WasLastSubmitted
+            ? (ConfirmedSuccessful ? "Last entered · Connected before" : "Last entered · Not yet connected")
             : ConfirmedSuccessful
-                ? $"Connected successfully · {(string.IsNullOrWhiteSpace(IedName) ? "IED" : IedName)} · MMS {MmsPort}"
-                : "Saved address · connection unverified";
+                ? (string.IsNullOrWhiteSpace(IedName) ? "Connected before" : $"Connected before · {IedName}")
+                : "Previously saved") + (MmsPort == 102 ? string.Empty : $" · Port {MmsPort}");
     }
 
     // A read-only projection of the EXISTING user preference document.
