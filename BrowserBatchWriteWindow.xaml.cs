@@ -106,8 +106,8 @@ public partial class BrowserBatchWriteWindow : Window
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
         var work = SystemParameters.WorkArea;
-        Height = Math.Max(MinHeight, Math.Min(580, work.Height - 26));
-        Width = Math.Max(MinWidth, Math.Min(760, work.Width - 26));
+        Height = Math.Max(MinHeight, Math.Min(490, work.Height - 26));
+        Width = Math.Max(MinWidth, Math.Min(660, work.Width - 26));
     }
 
     private BrowserBatchWriteRow[] CheckedRows()
@@ -149,6 +149,7 @@ public partial class BrowserBatchWriteWindow : Window
                 row.Preview = preview.IsAvailable ? preview : null;
                 row.Type = preview.Type?.MmsType ?? "unverified";
                 row.Old = preview.CurrentText;
+                row.ApplyLiveEditor(preview.Type?.MmsType == "boolean", preview.CurrentText);
                 row.Status = preview.Message;
                 if (row.Preview is null)
                 {
@@ -309,6 +310,7 @@ public sealed class BrowserBatchWriteRow : INotifyPropertyChanged
 
     public MmsObjectReference? Reference { get; }
     public string ReferenceText { get; }
+    public string DisplayName { get; }
     public string Fc { get; }
     public bool Eligible { get; }
     public bool HasEdited { get; private set; }
@@ -321,6 +323,68 @@ public sealed class BrowserBatchWriteRow : INotifyPropertyChanged
     {
         Reference = reference;
         ReferenceText = referenceText;
+        DisplayName = referenceText.Split('
+        Eligible = eligible;
+        _status = reason;
+    }
+
+    public IReadOnlyList<string> BooleanChoices { get; } = new[] { "true", "false" };
+    public Visibility BooleanEditorVisibility => _booleanEditor ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility TextEditorVisibility => _booleanEditor ? Visibility.Collapsed : Visibility.Visible;
+    private bool _booleanEditor;
+
+    // A verified live read decides the editor. Never assume BOOLEAN from the
+    // SCL label or a cached string; never overwrite a user's explicit edit.
+    public void ApplyLiveEditor(bool boolean, string actualValue)
+    {
+        if (_booleanEditor != boolean)
+        {
+            _booleanEditor = boolean;
+            Changed(nameof(BooleanEditorVisibility));
+            Changed(nameof(TextEditorVisibility));
+        }
+        if (!HasEdited && !string.IsNullOrWhiteSpace(actualValue))
+        {
+            _newValue = actualValue;
+            Changed(nameof(NewValue));
+        }
+    }
+
+    public bool Selected
+    {
+        get => _selected;
+        set { if (_selected != value) { _selected = value; Changed(); } }
+    }
+    public string NewValue
+    {
+        get => _newValue;
+        set
+        {
+            if (_newValue == value) return;
+            _newValue = value;
+            HasEdited = true;
+            Changed();
+        }
+    }
+    public string Status
+    {
+        get => _status;
+        set { _status = value; Changed(); }
+    }
+    public string Type
+    {
+        get => _type;
+        set { _type = value; Changed(); }
+    }
+    public string Old
+    {
+        get => _old;
+        set { _old = value; Changed(); }
+    }
+    private void Changed([CallerMemberName] string? propertyName = null)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+}
+).LastOrDefault() ?? referenceText;
         Fc = fc;
         Eligible = eligible;
         _status = reason;
