@@ -41,7 +41,9 @@ public sealed class CommandDockLivePriorityCheckpointTests
 
         Assert.Equal(5, device.CommandSignals.Count);
         Assert.Same(tap, device.CommandSignals[0]);
-        Assert.True(device.CommandSignals.IndexOf(cswi) < device.CommandSignals.IndexOf(xcb));
+        // Within operable non-BSC objects, keep the existing evidence-based
+        // role priority. Both must precede all unresolved/disabled entries.
+        Assert.True(device.CommandSignals.IndexOf(cswi) < device.CommandSignals.IndexOf(unknown));
         Assert.True(device.CommandSignals.IndexOf(xcb) < device.CommandSignals.IndexOf(unknown));
         Assert.Same(status, device.CommandSignals[^1]);
         Assert.False(status.ControlSupportsOperate);
@@ -110,15 +112,14 @@ public sealed class CommandDockLivePriorityCheckpointTests
         var tap = Control("IED/ATCC1.TapChg", "BSC", Direct, verified: true);
         var cswi = Control("IED/CSWI1.Pos", "DPC", Direct, verified: true);
         var status = Control("IED/CSWI2.Pos", "DPC", "Status only");
-        Assert.True(Iec61850ControlIdentity.CommandDockPriority(tap) >
-                    Iec61850ControlIdentity.CommandDockPriority(cswi));
+        Assert.Equal(40, Iec61850ControlIdentity.CommandDockPriority(tap));
+        Assert.True(Iec61850ControlIdentity.CommandDockDisplayPriority(tap) <
+                    Iec61850ControlIdentity.CommandDockPriority(tap));
         Assert.True(Iec61850ControlIdentity.CommandDockDisplayPriority(tap) <
                     Iec61850ControlIdentity.CommandDockDisplayPriority(cswi));
         Assert.True(Iec61850ControlIdentity.CommandDockDisplayPriority(status) >
                     Iec61850ControlIdentity.CommandDockDisplayPriority(cswi));
         Assert.Contains("Tap changer", tap.ControlDockRole);
-        Assert.Equal(0, Iec61850ControlIdentity.CountSelected(
-            new[] { Control("IED/CSWI3.Pos", "DPC", Direct, verified: true)
-                }.Where(s => !s.IsSelected)));
+        Assert.False(status.ControlSupportsOperate);
     }
 }

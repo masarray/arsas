@@ -107,10 +107,14 @@ public sealed class P109UStableCommandProjectionTests
         device.RefreshCommandSignalProjection();
 
         Assert.Equal(2, device.CommandSignals.Count);
-        Assert.Same(first, device.CommandSignals[0]);
-        Assert.Same(second, device.CommandSignals[1]);
+        // Lost live authority = disabled, so its row moves BELOW the
+        // still-operable CSWI. Moving it must never rebuild the full grid.
+        Assert.Same(second, device.CommandSignals[0]);
+        Assert.Same(first, device.CommandSignals[1]);
         Assert.False(first.ControlSupportsOperate);
-        Assert.Empty(events);
+        Assert.Contains(NotifyCollectionChangedAction.Move, events);
+        Assert.DoesNotContain(NotifyCollectionChangedAction.Reset, events);
+        events.Clear();
 
         // Fresh live-typed authority is mandatory before the control can return.
         first.AcceptVerifiedLiveControlCdc("DPC");
@@ -118,7 +122,10 @@ public sealed class P109UStableCommandProjectionTests
         device.RefreshCommandSignalProjection();
         Assert.Equal(2, device.CommandSignals.Count);
         Assert.True(first.ControlSupportsOperate);
-        Assert.Empty(events);
+        Assert.Same(first, device.CommandSignals[0]);
+        Assert.Same(second, device.CommandSignals[1]);
+        Assert.Contains(NotifyCollectionChangedAction.Move, events);
+        Assert.DoesNotContain(NotifyCollectionChangedAction.Reset, events);
     }
 
     [Fact]

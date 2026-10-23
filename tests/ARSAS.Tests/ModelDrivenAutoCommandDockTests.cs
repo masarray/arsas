@@ -157,7 +157,7 @@ public sealed class ModelDrivenAutoCommandDockTests
 
         var dock = device.OperableCommandSignals.ToArray();
         Assert.Equal(7, dock.Length);
-        Assert.Equal(new[] { cswi, breaker1, breaker2, disconnector, tap,
+        Assert.Equal(new[] { tap, cswi, breaker1, breaker2, disconnector,
             unknown, io }, dock);
         Assert.Equal("Circuit breaker · XCBR",
             Iec61850ControlIdentity.CommandDockRole(breaker1));

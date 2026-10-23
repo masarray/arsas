@@ -23,7 +23,7 @@ public sealed class Sg7IntegratedControlSsotRcbTests
     };
 
     [Fact]
-    public void FourUnverifiedCswi_AppearFirstInDock_ButNeverInOperable()
+    public void FourUnverifiedCswi_RemainVisibleBehindVerifiedCommands_ButNeverOperable()
     {
         var cswi = Enumerable.Range(1, 4).Select(Candidate).ToArray();
         var ggio = new SignalDefinition
@@ -45,8 +45,10 @@ public sealed class Sg7IntegratedControlSsotRcbTests
         device.Signals.ReplaceAll([ggio, .. cswi]);
         device.RecountSelectedSignals();
 
-        Assert.Equal(cswi, device.CommandSignals.Take(4));
-        Assert.Same(ggio, device.CommandSignals[4]);
+        // Verification/authorization ranks ahead of inspection-only CSWI.
+        // CSWI discovery still cannot manufacture an operating command.
+        Assert.Same(ggio, device.CommandSignals[0]);
+        Assert.Equal(cswi, device.CommandSignals.Skip(1).Take(4));
         Assert.All(cswi, s =>
         {
             Assert.False(s.ControlSupportsOperate);
