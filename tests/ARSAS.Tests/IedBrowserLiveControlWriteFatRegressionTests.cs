@@ -24,7 +24,7 @@ public sealed class IedBrowserLiveControlWriteFatRegressionTests
     {
         var src = Source("MainWindow.IedBrowser.ContextControl.cs");
         Assert.Contains("FunctionalConstraint: \"CO\"", src);
-        Assert.Contains("LastOrDefault() == \"ctlVal\"", src);
+        Assert.Contains("EndsWith(\"$ctlVal\"", src);
         Assert.Contains("source.Attributes.Any", src);
         Assert.Contains("BrowserSelectedLiveControl()", src);
         Assert.Contains("new ControlCommandWindow(_runtime, device, control.Value.Signal)", src);
