@@ -60,6 +60,21 @@ public sealed class TypedWriteEditorUxRegressionTests
     }
 
     [Fact]
+    public void SingleDaBooleanRequiresRecognizedLiveState_AndNeverDefaultsAnUnknownValueToFalse()
+    {
+        var code = Source("BrowserDataWriteWindow.xaml.cs");
+        Assert.Contains("current.Equals(\"true\", StringComparison.OrdinalIgnoreCase)", code);
+        Assert.Contains("current.Equals(\"false\", StringComparison.OrdinalIgnoreCase)", code);
+        Assert.Contains("BoolPicker.SelectedIndex = verifiedBoolean;", code);
+        Assert.Contains("BoolPicker.IsEnabled = supported && verifiedBoolean >= 0;", code);
+        Assert.Contains("if (verifiedBoolean < 0)", code);
+        Assert.Contains("No verified true/false current value; no Write permitted.", code);
+        Assert.DoesNotContain(
+            "p.CurrentText.Equals(\"true\", StringComparison.OrdinalIgnoreCase) ? 0 : 1",
+            code);
+    }
+
+    [Fact]
     public void BatchEditor_BooleanPickerIsLiveGvaDriven_AndWriteHasNoAutomaticRetry()
     {
         var xaml = Source("BrowserBatchWriteWindow.xaml");

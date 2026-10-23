@@ -65,8 +65,20 @@ public partial class BrowserDataWriteWindow : Window
             NewValueBox.Visibility = boolean ? Visibility.Collapsed : Visibility.Visible;
             if (boolean)
             {
-                BoolPicker.SelectedIndex = p.CurrentText.Equals("true", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
-                BoolPicker.IsEnabled = supported;
+                // Never invent a Boolean current state: an unexpected live
+                // display must not silently turn into an editable false value.
+                var current = p.CurrentText.Trim();
+                var verifiedBoolean = current.Equals("true", StringComparison.OrdinalIgnoreCase)
+                    ? 0
+                    : current.Equals("false", StringComparison.OrdinalIgnoreCase) ? 1 : -1;
+                BoolPicker.SelectedIndex = verifiedBoolean;
+                BoolPicker.IsEnabled = supported && verifiedBoolean >= 0;
+                if (verifiedBoolean < 0)
+                {
+                    StatusLabel.Text = "Live Boolean value is unrecognized. Write disabled; reconnect/read again.";
+                    DiffLabel.Text = "No verified true/false current value; no Write permitted.";
+                    return;
+                }
             }
             else
             {
