@@ -1028,6 +1028,10 @@ public partial class MainWindow
                 UpdateIedBrowserRcbReportDetails();
             return;
         }
+        // SSOT v2: consume exactly this page's independent canonical cursor.
+        // Null means an unsafe/unknown dependency or missed journal revision:
+        // preserve the original complete projection without skipping evidence.
+        var reactiveRows = SelectIedBrowserReactiveRows(device, version);
         _iedBrowserLastLiveVersion = version;
         _iedBrowserLastCfCanonicalModel = device.LiveCanonicalModel;
         // No MMS call occurs during navigation or refresh. Exact CF/DC
@@ -1052,6 +1056,8 @@ public partial class MainWindow
         }
         foreach (var row in _iedBrowserDetails.Rows)
         {
+            if (reactiveRows is not null && !reactiveRows.Contains(row))
+                continue; // unrelated current-page rows produce zero WPF bindings
             if (string.IsNullOrWhiteSpace(row.ValueReference)) continue;
             // An IEC NamPlt DO has DC children, not a fictional scalar under
             // NamPlt [DC]. Show the exact vendor/d/swRev leaf already observed
@@ -2255,6 +2261,7 @@ public partial class MainWindow
         IedBrowserDetailList.SelectedItem = null;
         IedBrowserDetailList.ItemsSource = null;
         _iedBrowserDetails.Reset(rows);
+        RebuildIedBrowserViewportIndex();
         IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
     }
 
@@ -2269,6 +2276,7 @@ public partial class MainWindow
             IedBrowserDetailList.SelectedItem = null;
             IedBrowserDetailList.ItemsSource = null;
             _iedBrowserDetails.Toggle(row);
+            RebuildIedBrowserViewportIndex();
             IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
             _iedBrowserLastLiveVersion = -1;
             RefreshIedBrowserVisibleValues();
