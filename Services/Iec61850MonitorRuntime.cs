@@ -1066,6 +1066,31 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         device.IsMonitoring = true;
         device.IsConnected = true;
         session.BrowserObservationAssociation = device.LiveValues.Association;
+        // Static report-only may reuse genuine initial scalar MMS Read evidence
+        // already held by this association. Never issue implicit MMS requests
+        // or mistake a previous Report for current RCB traffic.
+        if (staticDataSetReportOnly)
+        {
+            var seeded = 0;
+            foreach (var point in session.Points.Values)
+            {
+                if (!TryGetStaticInitialRead(device.LiveValues,
+                        session.BrowserObservationAssociation, point.IecReference,
+                        point.FunctionalConstraint, out var read))
+                    continue;
+                ApplyValueUpdate(session, point, read.Value, read.Quality,
+                    read.DeviceTimestamp, "MMS Snapshot Read",
+                    $"Existing MMS Read at {read.ObservedUtc:O}; " +
+                    "awaiting first routed InformationReport for this monitor",
+                    read.ObservedUtc, "Snapshot / awaiting InformationReport",
+                    trustReportEdge: false);
+                seeded++;
+            }
+            if (seeded > 0)
+                Log("INFO", device.Name,
+                    $"Static report-only initial image: {seeded} actual association-scoped " +
+                    "MMS Read scalar(s) reused; zero additional MMS requests or Report claims.");
+        }
         device.Status = "Monitoring";
         if (staticDataSetReportOnly)
         {
@@ -2681,6 +2706,30 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
             verifiedStringWireKind: rich?.VerifiedStringWireKind,
             declaredDataType: declaredDataType,
             readWireShapeEvidence: rich?.WireShapeEvidence);
+    }
+
+    /// <summary>
+    /// Reuse a previously decoded exact-reference ST/MX MMS Read as an initial
+    /// static DataSet snapshot. Does not infer Report ingress, alias a sibling
+    /// attribute, change RCB state or issue any network traffic.
+    /// </summary>
+    internal static bool TryGetStaticInitialRead(
+        IedBrowserLiveValues ledger, long association, string reference,
+        string functionalConstraint, out IedBrowserObservedValue evidence)
+    {
+        ArgumentNullException.ThrowIfNull(ledger);
+        evidence = null!;
+        if (association <= 0 || ledger.IsOffline ||
+            ledger.Association != association ||
+            string.IsNullOrWhiteSpace(reference) ||
+            functionalConstraint is not ("ST" or "MX"))
+            return false;
+        if (!ledger.TryGet(reference, functionalConstraint, out var observed) ||
+            observed.Association != association || observed.IsStale ||
+            !string.Equals(observed.Source, "MMS Read", StringComparison.Ordinal))
+            return false;
+        evidence = observed;
+        return true;
     }
 
     private void ApplyValueUpdate(

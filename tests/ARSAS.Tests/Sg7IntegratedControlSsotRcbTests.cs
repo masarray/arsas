@@ -140,6 +140,32 @@ public sealed class Sg7IntegratedControlSsotRcbTests
     }
 
     [Fact]
+    public void StaticInitialImage_UsesActualSameAssociationRead_NotReportOrMissing()
+    {
+        var store = new IedBrowserLiveValues();
+        var epoch = store.BeginAssociation();
+        const string valueRef = "SG7_BCUMeter/ACsrcMMXU1.A.phsA.cVal.mag.f";
+        const string absent = "SG7_BCUMeter/ACsrcMMXU1.A.phsB.cVal.mag.f";
+        Assert.False(Iec61850MonitorRuntime.TryGetStaticInitialRead(
+            store, epoch, absent, "MX", out _));
+        Assert.True(store.PublishForAssociation(epoch, valueRef, "MX",
+            "123.5", "Good", "12:00", "MMS Read"));
+        Assert.True(Iec61850MonitorRuntime.TryGetStaticInitialRead(
+            store, epoch, valueRef, "MX", out var evidence));
+        Assert.Equal("MMS Read", evidence.Source);
+        Assert.Equal("123.5", evidence.Value);
+        Assert.False(Iec61850MonitorRuntime.TryGetStaticInitialRead(
+            store, epoch, valueRef, "CO", out _));
+        Assert.True(store.PublishForAssociation(epoch, valueRef, "MX",
+            "124", "Good", "12:01", "Report"));
+        Assert.False(Iec61850MonitorRuntime.TryGetStaticInitialRead(
+            store, epoch, valueRef, "MX", out _));
+        store.BeginAssociation();
+        Assert.False(Iec61850MonitorRuntime.TryGetStaticInitialRead(
+            store, epoch, valueRef, "MX", out _));
+    }
+
+    [Fact]
     public void IntegrationContract_OneIngressWriter_NoWpfPublishOrBypassedOperate()
     {
         var runtime = Read("Services/Iec61850MonitorRuntime.cs");
