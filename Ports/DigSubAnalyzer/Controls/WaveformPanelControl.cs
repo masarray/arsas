@@ -1096,13 +1096,15 @@ public sealed class WaveformPanelControl : FrameworkElement
 
     private static string FormatEngineeringValue(double value, string unit)
     {
+        // Cursor precision is diagnostic, but concise: small engineering
+        // signals must not disappear when rounded to one decimal place.
         if (string.Equals(unit, "V", StringComparison.OrdinalIgnoreCase) && Math.Abs(value) >= 1000.0)
-            return $"{value / 1000.0:0.##} kV";
+            return $"{value / 1000.0:0.###} kV";
 
         if (string.Equals(unit, "A", StringComparison.OrdinalIgnoreCase) && Math.Abs(value) >= 1000.0)
-            return $"{value / 1000.0:0.##} kA";
+            return $"{value / 1000.0:0.###} kA";
 
-        return $"{value:0.#} {unit}";
+        return $"{value:0.###} {unit}";
     }
 
     private static void DrawTimebaseLabel(DrawingContext dc, Rect rect, WaveformSnapshot snapshot)
