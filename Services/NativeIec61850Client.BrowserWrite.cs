@@ -84,5 +84,15 @@ public sealed partial class NativeIec61850Client
         var target = MmsObjectReference.FromIec61850Reference(reference, fc);
         if (string.IsNullOrWhiteSpace(target.Domain) || string.IsNullOrWhiteSpace(target.Item))
             throw new InvalidOperationException("Invalid domain/item identity for MMS Write.");
+        // The dedicated native Control/ctlModel services are the sole owners
+        // of these wire operations. A forged CF segment must not bypass them.
+        if (target.Item.Split('
+    }
+}
+).Skip(2).Any(segment =>
+                segment.Equals("ctlModel", StringComparison.OrdinalIgnoreCase) ||
+                segment is "Oper" or "SBO" or "SBOw" or "Cancel"))
+            throw new InvalidOperationException(
+                "Control service and ctlModel configuration require dedicated native APIs; generic MMS Write forbidden.");
     }
 }
