@@ -127,8 +127,8 @@ public partial class MainWindow
         var selectedDo = ctlModel is null && selected is null ? BrowserWritableSelectedDo() : null;
         IedBrowserWriteButton.IsEnabled =
             ctlModel is not null || selected is not null || selectedDo is not null;
-        IedBrowserWriteButton.Content = ctlModel is not null ? "Write ctlModel…" :
-            selectedDo is not null ? "Write DAs…" : "Write DA…";
+        // The button always reads "Write". Selection changes the action/tooltip,
+        // never the caption, width or Material pencil visual.
         IedBrowserWriteButton.ToolTip = ctlModel is not null
             ? "Read live ctlModel, choose IEC enum 0–4, confirm a guarded CF Write and verify readback."
             : selected is not null
