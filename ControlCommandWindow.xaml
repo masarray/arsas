@@ -171,6 +171,10 @@
                 <TextBlock Text="{Binding CommandStatus}" Foreground="#50647A"
                            TextWrapping="Wrap" MaxHeight="38" FontSize="10.5"
                            Margin="0,3,0,0"/>
+                <TextBlock Text="{Binding WireTimelineText}" Foreground="#546981"
+                           TextWrapping="Wrap" FontSize="10" MaxHeight="32"
+                           Margin="0,4,0,0"
+                           ToolTip="Only received native MMS control wire steps; not physical feedback"/>
             </StackPanel>
         </Border>
 
