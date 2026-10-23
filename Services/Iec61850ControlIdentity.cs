@@ -86,7 +86,7 @@ public static class Iec61850ControlIdentity
     public static SignalDefinition[] DiscoveredIndependentCswiControls(
         IEnumerable<SignalDefinition> signals)
         => signals.Where(s => !s.IsSelected && IsIndependentCswiCandidate(s) &&
-                              (s.HasControlServiceEvidence || s.ControlModelResolved))
+                              s.HasControlServiceEvidence)
             .GroupBy(s => Normalize(s.ObjectReference), StringComparer.OrdinalIgnoreCase)
             .Select(g => g.OrderByDescending(s => s.ControlSupportsOperate)
                 .ThenByDescending(s => s.ControlModelResolved).First())
@@ -172,6 +172,19 @@ public static class Iec61850ControlIdentity
         var lastDot = reference.LastIndexOf('.');
         var dataObject = lastDot < 0 ? string.Empty : reference[(lastDot + 1)..];
         var ln = signal.LogicalNodeClass.ToUpperInvariant();
+
+        // Discovery visibility must not depend on a native live CDC result.
+        // A CSWI.Pos with verified CO service declarations can legitimately
+        // have an unresolved/contradictory typed CDC (e.g. SG7 DPC DO with
+        // Boolean Oper.ctlVal). Rank it as an *inspection candidate* first,
+        // while SignalDefinition.ControlSupportsOperate and native admission
+        // remain independent and fail closed. Do NOT infer operability here.
+        if (ln == "CSWI" &&
+            dataObject.Equals("Pos", StringComparison.OrdinalIgnoreCase) &&
+            signal.HasControlServiceEvidence)
+            return (0, signal.ControlSupportsOperate
+                ? "Switch controller · CSWI"
+                : "Switch controller · CSWI · verification required");
 
         if (cdc == "DPC" && dataObject.Equals("Pos", StringComparison.OrdinalIgnoreCase))
             return ln switch
