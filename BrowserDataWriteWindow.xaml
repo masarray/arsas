@@ -9,8 +9,6 @@
         Loaded="Window_Loaded" Closed="Window_Closed">
     <Window.Resources>
         <!-- Google Material Icons: edit, close, info (vector paths, no icon font). -->
-        <Geometry x:Key="MaterialWriteIcon">M167-120q-21 5-36.5-10.5T120-167l40-191 198 198-191 40Zm191-40L160-358l458-458q23-23 57-23t57 23l84 84q23 23 23 57t-23 57L358-160Zm317-600L261-346l85 85 414-414-85-85Z</Geometry>
-        <Geometry x:Key="MaterialCloseIcon">M256-200l-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z</Geometry>
         <Style x:Key="FatActionButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
             <Setter Property="Width" Value="94"/>
             <Setter Property="Height" Value="32"/>
@@ -66,7 +64,7 @@
                             Width="80" Height="29" Click="Read_Click"
                             Style="{StaticResource SoftButton}">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <TextBlock Text="↻" FontSize="15" Margin="0,0,5,0"/>
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0"><Path Data="M480-120q-150 0-255-105T120-480q0-150 105-255t255-105q94 0 175 45t125 122v-167h80v320H540v-80h191q-29-66-95.5-113T480-760q-116 0-198 82t-82 198q0 116 82 198t198 82q93 0 165-57t91-143h82q-20 119-114.5 199.5T480-120Z" Fill="#45617C"/></Viewbox>
                             <TextBlock Text="Read" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -108,7 +106,7 @@
                     Style="{StaticResource SoftButton}" Click="Close_Click">
                 <StackPanel Orientation="Horizontal">
                     <Viewbox Width="12" Height="12" Margin="0,0,5,0">
-                        <Path Data="{StaticResource MaterialCloseIcon}" Fill="#415771"/>
+                        <Path Data="M256-200l-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z" Fill="#415771"/>
                     </Viewbox>
                     <TextBlock Text="Cancel" VerticalAlignment="Center"/>
                 </StackPanel>
@@ -117,7 +115,7 @@
                     Style="{StaticResource FatActionButton}" Click="Write_Click">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                     <Viewbox Width="16" Height="16" Margin="0,0,6,0">
-                        <Path Data="{StaticResource MaterialWriteIcon}" Fill="White"/>
+                        <Path Data="M167-120q-21 5-36.5-10.5T120-167l40-191 198 198-191 40Zm191-40L160-358l458-458q23-23 57-23t57 23l84 84q23 23 23 57t-23 57L358-160Zm317-600L261-346l85 85 414-414-85-85Z" Fill="White"/>
                     </Viewbox>
                     <TextBlock Text="Write" VerticalAlignment="Center"/>
                 </StackPanel>
