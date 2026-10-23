@@ -1124,7 +1124,7 @@ public sealed class WaveformPanelControl : FrameworkElement
         if (duration <= 0 || !double.IsFinite(duration))
             return;
         var startMs = -reference * 1000.0 / snapshot.SampleRateHz;
-        var major = duration / plot.Width * 5.0 < 0.04 ? 5.0 : 10.0;
+        var major = plot.Width * 5.0 / duration >= 48.0 ? 5.0 : 10.0;
         var firstTick = (int)Math.Ceiling(startMs / major);
         var lastTick = (int)Math.Floor((startMs + duration) / major);
         for (var index = firstTick; index <= lastTick && index - firstTick < 80; index++)
