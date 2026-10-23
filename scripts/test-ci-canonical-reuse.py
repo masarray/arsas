@@ -353,6 +353,45 @@ class CanonicalReuseTests(unittest.TestCase):
         with self.assertRaisesRegex(consumer.ProofError, "Timed out"):
             run_once(api)
 
+    def test_latest_rerun_artifact_is_selected_without_deleting_failed_attempt_evidence(self):
+        first = {
+            "id": 101, "name": "ARSAS-test-evidence", "expired": False,
+            "workflow_run": {"id": RUN},
+            "created_at": "2026-10-23T00:50:45Z",
+            "archive_download_url": "https://example.invalid/old.zip",
+        }
+        second = {
+            "id": 102, "name": "ARSAS-test-evidence", "expired": False,
+            "workflow_run": {"id": RUN},
+            "created_at": "2026-10-23T00:57:03Z",
+            "archive_download_url": "https://example.invalid/current.zip",
+        }
+        self.assertEqual(
+            consumer.choose_artifact({"artifacts": [first, second]}, RUN)["id"], 102)
+        self.assertEqual(
+            consumer.choose_artifact({"artifacts": [second, first]}, RUN)["id"], 102)
+
+    def test_ambiguous_rerun_artifacts_fail_closed(self):
+        artifacts = [
+            {"id": 101, "name": "ARSAS-test-evidence", "expired": False,
+             "workflow_run": {"id": RUN}, "created_at": "2026-10-23T00:57:03Z"},
+            {"id": 102, "name": "ARSAS-test-evidence", "expired": False,
+             "workflow_run": {"id": RUN}, "created_at": "2026-10-23T00:57:03Z"},
+        ]
+        with self.assertRaisesRegex(consumer.ProofError, "ambiguous"):
+            consumer.choose_artifact({"artifacts": artifacts}, RUN)
+        artifacts[0].pop("created_at")
+        with self.assertRaisesRegex(consumer.ProofError, "timestamps"):
+            consumer.choose_artifact({"artifacts": artifacts}, RUN)
+
+    def test_stale_attempt_cannot_be_misrepresented_as_success(self):
+        older = zip_archive(fixture())  # Proven run_attempt=1.
+        with self.assertRaisesRegex(consumer.ProofError, "run attempt"):
+            consumer.validate_artifact_archive(
+                older, merge_sha=SOURCE, engine_sha=ENGINE,
+                workflow_run_id=RUN, run_attempt=2,
+            )
+
     def test_wrong_artifact_type_is_not_accepted(self):
         api = FakeApi()
         api.get = lambda url, binary=False: (

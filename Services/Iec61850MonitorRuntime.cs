@@ -11,7 +11,7 @@ namespace ArIED61850Tester.Services;
 /// existing static RCB/DataSet reporting first, then an association-scoped dynamic
 /// DataSet/URCB, and uses cyclic MMS reads only for points that reporting cannot cover.
 /// </summary>
-public sealed class Iec61850MonitorRuntime : IAsyncDisposable
+public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
 {
     private sealed class RuntimePointState
     {

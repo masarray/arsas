@@ -1,4 +1,6 @@
 using AR.Iec61850.Discovery;
+using System.Collections.ObjectModel;
+using System.Runtime.CompilerServices;
 
 namespace ArIED61850Tester.Models;
 
@@ -9,14 +11,23 @@ namespace ArIED61850Tester.Models;
 /// </summary>
 public static class IedBrowserRcbEnabledPresentation
 {
-    // Build once per coalesced UI projection, O(number of model RCBs).
-    // Ambiguous duplicate identities are never accepted as Boolean authority.
+    // Declarations never change within one live model identity. Build once,
+    // not on every 200 ms value flush. Weak keys release obsolete IED models.
+    private static readonly ConditionalWeakTable<LiveIedModelDiscoveryDocument,
+        IReadOnlyDictionary<string, IedBrowserReadTarget>> VerifiedIndexCache = new();
+    private static readonly IReadOnlyDictionary<string, IedBrowserReadTarget> EmptyIndex =
+        new ReadOnlyDictionary<string, IedBrowserReadTarget>(
+            new Dictionary<string, IedBrowserReadTarget>(StringComparer.Ordinal));
+
     public static IReadOnlyDictionary<string, IedBrowserReadTarget> VerifiedTargets(
         LiveIedModelDiscoveryDocument? verified)
+        => verified is null ? EmptyIndex : VerifiedIndexCache.GetValue(verified, BuildTargets);
+
+    // Ambiguous duplicate RCB identities still fail closed.
+    private static IReadOnlyDictionary<string, IedBrowserReadTarget> BuildTargets(
+        LiveIedModelDiscoveryDocument verified)
     {
         var targets = new Dictionary<string, IedBrowserReadTarget>(StringComparer.Ordinal);
-        if (verified is null) return targets;
-
         foreach (var group in verified.ReportControls.GroupBy(
                      item => IedBrowserLiveValues.CanonicalReference(item.Reference),
                      StringComparer.Ordinal))
@@ -30,7 +41,7 @@ public static class IedBrowserRcbEnabledPresentation
             targets.Add(reference, new IedBrowserReadTarget(
                 reference + ".RptEna", fc, "Boolean"));
         }
-        return targets;
+        return new ReadOnlyDictionary<string, IedBrowserReadTarget>(targets);
     }
 
     public static bool TryVerifiedTrue(IedBrowserLiveValues ledger,

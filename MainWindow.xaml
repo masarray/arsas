@@ -696,14 +696,16 @@
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
 
-                                        <Grid Grid.Row="0">
+                                        <Grid Grid.Row="0" MinHeight="0" ClipToBounds="True">
                                             <DataGrid x:Name="EquipmentCommandGrid" ItemsSource="{Binding SelectedDevice.CommandSignals}" Loaded="CommandGrid_Loaded" IsReadOnly="False" CanUserAddRows="False" CanUserDeleteRows="False"
                                                       Style="{StaticResource CommandDataGrid}" RowStyle="{StaticResource CommandDataGridRow}"
                                                       CellStyle="{StaticResource CommandDataGridCell}" ColumnHeaderStyle="{StaticResource CommandDataGridHeader}"
                                                       AutoGenerateColumns="False" MinHeight="56" RowHeight="43" MinRowHeight="42" ColumnHeaderHeight="35" FrozenColumnCount="1"
                                                       EnableRowVirtualization="True" EnableColumnVirtualization="True"
                                                       VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
-                                                      ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                      ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Visible" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                      ScrollViewer.IsDeferredScrollingEnabled="False" ScrollViewer.PanningMode="VerticalOnly"
+                                                      VirtualizingPanel.ScrollUnit="Pixel"
                                                       CanUserResizeColumns="False" ClipToBounds="True">
                                                 <DataGrid.Columns>
                                                     <DataGridTextColumn Header="IEC Telegram" Binding="{Binding DisplayReference}" Width="1.5*" MinWidth="165" IsReadOnly="True"/>
@@ -2058,6 +2060,10 @@
                                         Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         Click="IedBrowserReadValues_Click"
                                         ToolTip="Read values for the current Browser object over MMS. Live monitoring uses the report stream."/>
+                                <Button x:Name="IedBrowserWriteButton" Content="Write DA…" IsEnabled="False"
+                                        Style="{StaticResource SoftButton}" Margin="0,0,6,0"
+                                        Click="IedBrowserWriteValues_Click"
+                                        ToolTip="Open explicit native MMS configuration Write for the selected live DO/DA; never sends Operate"/>
                                 <Button x:Name="IedBrowserReadLnButton" Content="Read LN" Tag="LN"
                                         Visibility="Collapsed" Style="{StaticResource SoftButton}" Margin="0,0,6,0"
                                         Click="IedBrowserReadValues_Click"
