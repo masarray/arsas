@@ -16,20 +16,28 @@ namespace ArIED61850Tester;
 /// </summary>
 internal static class P2BlueSteelGreigeUx
 {
-    private static readonly FontFamily PreferredFont =
-        new("Plus Jakarta Sans, Aptos, Segoe UI Variable Text, Segoe UI");
+    // Each WPF window receives its visual adapter exactly once. A later
+    // dialog activation must never restyle the already-visible MainWindow.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Window, object>
+        AppliedWindows = new();
 
     public static void ApplyToOpenWindows(Application application)
     {
         ArgumentNullException.ThrowIfNull(application);
 
         foreach (Window window in application.Windows)
+        {
+            if (!window.IsLoaded || AppliedWindows.TryGetValue(window, out _))
+                continue;
             Apply(window);
+            AppliedWindows.Add(window, new object());
+        }
     }
 
     private static void Apply(Window window)
     {
-        window.FontFamily = PreferredFont;
+        // The bundled AppFontFamily (Inter) is the only window typography
+        // authority. A runtime local FontFamily value masked XAML inheritance.
 
         switch (window)
         {
@@ -62,10 +70,8 @@ internal static class P2BlueSteelGreigeUx
         }
 
         if (window.FindName("WorkflowPill") is Border workflowPill)
-        {
             workflowPill.CornerRadius = new CornerRadius(9);
-            workflowPill.Height = 36;
-        }
+        // NavigationLayoutFix owns all nav/pill height after construction.
 
         var deviceList = Descendants<ListBox>(window)
             .FirstOrDefault(list => ReferenceEquals(list.ItemsSource, window.Devices));
@@ -78,7 +84,8 @@ internal static class P2BlueSteelGreigeUx
 
     private static void ApplyIoFatWindow(IoListTestingWindow window)
     {
-        window.WindowState = WindowState.Maximized;
+        if (window.WindowState != WindowState.Maximized)
+            window.WindowState = WindowState.Maximized;
 
         var fatIedList = Descendants<ListBox>(window)
             .FirstOrDefault(list => ReferenceEquals(list.ItemsSource, window.Project.Ieds));
