@@ -328,34 +328,55 @@ public partial class BrowserBatchWriteWindow : Window
             }
 
             // Refresh every selected DA regardless of success/rejection.
-            // Actual live readback, not presumed process feedback.
-            foreach (var row in selected)
+            // Verify the newly displayed value against the staged exact MMS
+            // bytes; an independent mismatch can never earn a green toast.
+            var readbackMismatch = false;
+            for (var i = 0; i < selected.Length; i++)
             {
+                var row = selected[i];
                 if (!CurrentAssociation)
                 {
                     row.Status += " · connection changed";
+                    readbackMismatch = true;
                     break;
                 }
                 try
                 {
                     var actual = await _runtime.PreviewBrowserDataAttributeWriteAsync(
                         _device, row.Reference!.Value, _lifetime.Token);
-                    if (!CurrentAssociation) break;
+                    if (!CurrentAssociation)
+                    {
+                        readbackMismatch = true;
+                        break;
+                    }
                     if (actual is { IsAvailable: true, OldValue: not null })
                     {
+                        var matches = MmsDataCodec.Encode(actual.OldValue).AsSpan()
+                            .SequenceEqual(MmsDataCodec.Encode(steps[i].ProposedValue));
                         row.Old = actual.CurrentText;
                         row.Preview = actual;
                         row.ResetToReadback(actual.CurrentText);
+                        if (!matches)
+                        {
+                            row.Status += " · Readback differs: " + actual.CurrentText;
+                            readbackMismatch = true;
+                        }
                         row.NotifyEditorChanged();
                     }
-                    else row.Status += " · Readback unavailable";
+                    else
+                    {
+                        row.Status += " · Readback unavailable";
+                        readbackMismatch = true;
+                    }
                 }
                 catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
                     row.Status += " · Readback unavailable: " + ex.Message;
+                    readbackMismatch = true;
                 }
             }
-            var anyFailure = result.Rejected > 0 || result.Unknown > 0 ||
+            var anyFailure = readbackMismatch ||
+                result.Rejected > 0 || result.Unknown > 0 ||
                 result.Unverified > 0 || result.Unattempted > 0;
             var shortReason = result.Rows.LastOrDefault()?.Message ?? "IED refused the requested value.";
             if (shortReason.Length > 110) shortReason = shortReason[..107] + "…";
