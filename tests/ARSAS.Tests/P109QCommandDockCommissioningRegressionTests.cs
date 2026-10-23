@@ -146,7 +146,8 @@ public sealed class P109QCommandDockCommissioningRegressionTests
         var ui = Read("ControlModelWriteWindow.xaml");
         var handler = Read("ControlModelWriteWindow.xaml.cs");
         Assert.Contains("new ControlModelWriteWindow(", code);
-        Assert.Contains("Content=\"Write\"", ui);
+        Assert.Contains("<TextBlock Text=\"Write\" VerticalAlignment=\"Center\"/>", ui);
+        Assert.Contains("Data=\"{StaticResource MaterialEditIcon}\"", ui);
         Assert.Contains("ItemsSource=\"{Binding Choices}\"", ui);
         Assert.DoesNotContain("Type the exact object reference", ui);
         Assert.DoesNotContain("I am authorized to change", ui);
@@ -163,7 +164,8 @@ public sealed class P109QCommandDockCommissioningRegressionTests
         Assert.Contains("public Task<AR.Iec61850.Control.Iec61850ControlModelConfigurationResult> ConfigureControlModelAsync(", facade);
         Assert.Contains("_inner.ConfigureControlModelAsync(deviceId, signal, expected, requested, token)", facade);
         Assert.Contains("RunDeviceOperationAsync(", facade);
-        Assert.Contains("Background=\"#F4F7FB\"", ui);
+        Assert.Contains("Background=\"#F5F7FB\"", ui);
+        Assert.Contains("FontFamily=\"{StaticResource AppFontFamily}\"", ui);
         Assert.DoesNotContain("new ControlCommandWindow(", code);
     }
 

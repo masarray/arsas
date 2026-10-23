@@ -22,6 +22,16 @@ public partial class ControlModelWriteWindow : Window
     private bool _busy;
     private bool _liveModelReady;
     private Iec61850ControlModelKind _liveModel = Iec61850ControlModelKind.Unknown;
+    // Read/GVA evidence belongs to one live MMS association and one immutable
+    // model instance. A reconnect cannot keep a previously enabled Write valid.
+    private long _inspectedAssociation;
+    private object? _inspectedLiveModel;
+
+    private bool InspectionIsCurrent =>
+        _inspectedLiveModel is not null &&
+        ReferenceEquals(_device.LiveDiscoveryModel, _inspectedLiveModel) &&
+        _device.LiveValues.Association == _inspectedAssociation &&
+        _device.IsConnected && !_cancellation.IsCancellationRequested;
 
     public ObservableCollection<ModelChoice> Choices { get; } = new()
     {
@@ -52,7 +62,7 @@ public partial class ControlModelWriteWindow : Window
     private void UpdateWriteButton()
     {
         ReadButton.IsEnabled = !_busy;
-        WriteButton.IsEnabled = !_busy && _device.IsConnected && _liveModelReady &&
+        WriteButton.IsEnabled = !_busy && _liveModelReady && InspectionIsCurrent &&
             ModelPicker.SelectedItem is ModelChoice choice && choice.Model != _liveModel;
     }
 
@@ -60,15 +70,30 @@ public partial class ControlModelWriteWindow : Window
     {
         _busy = true;
         _liveModelReady = false;
+        _inspectedLiveModel = null;
         ModelPicker.IsEnabled = false;
         UpdateWriteButton();
         StatusLabel.Text = "Reading current ctlModel…";
+        var association = _device.LiveValues.Association;
+        var model = _device.LiveDiscoveryModel;
         FailureDetails.Visibility = Visibility.Collapsed;
         FailureDetails.Text = string.Empty;
         try
         {
+            if (!_device.IsConnected || model is null)
+                throw new InvalidOperationException("A connected IED with verified live model is required.");
             var capabilities = await _runtime.InspectControlAsync(
                 _device.DeviceId, _signal, _cancellation.Token);
+            if (_cancellation.IsCancellationRequested || !IsLoaded)
+                return;
+            if (!_device.IsConnected || _device.LiveValues.Association != association ||
+                !ReferenceEquals(_device.LiveDiscoveryModel, model))
+            {
+                StatusLabel.Text = "IED connection or live model changed. Read again before Write.";
+                return;
+            }
+            _inspectedAssociation = association;
+            _inspectedLiveModel = model;
             _liveModel = capabilities.ControlModel;
             _liveModelReady = _liveModel != Iec61850ControlModelKind.Unknown &&
                 capabilities.EngineControlServiceAvailable;
@@ -105,12 +130,36 @@ public partial class ControlModelWriteWindow : Window
 
     private async void Write_Click(object sender, RoutedEventArgs e)
     {
-        if (_busy || !_liveModelReady || !_device.IsConnected ||
+        if (_busy || !_liveModelReady || !InspectionIsCurrent ||
             ModelPicker.SelectedItem is not ModelChoice selected || selected.Model == _liveModel)
             return;
-        // Exact expected value is confirmed again by ARIEC immediately before
-        // the one permitted CF Write. No automatic mode trials.
+        // Explicit operator confirmation: changing ctlModel affects later
+        // command admission and must never be a single accidental click.
         var expected = _liveModel;
+        var decision = MessageBox.Show(
+            this,
+            $"IED: {_device.Name}\n" +
+            $"DA: {_signal.ObjectReference}.ctlModel [CF]\n" +
+            $"Current: {(int)expected}\n" +
+            $"Requested: {selected.Label}\n\n" +
+            "Send one configuration Write and verify its exact readback?\n" +
+            "No Operate or automatic retry will be sent.",
+            "Confirm IEC 61850 ctlModel Write",
+            MessageBoxButton.OKCancel, MessageBoxImage.Warning, MessageBoxResult.Cancel);
+        if (decision != MessageBoxResult.OK)
+            return;
+        // An operator may spend minutes in the confirmation dialog. Recheck
+        // live identity AFTER confirmation and BEFORE entering the native call.
+        if (!InspectionIsCurrent || ModelPicker.SelectedItem is not ModelChoice current ||
+            current.Model != selected.Model || _liveModel != expected)
+        {
+            _liveModelReady = false;
+            UpdateWriteButton();
+            ShowWriteFailure("IED association or selected ctlModel changed. Read again; no Write was sent.");
+            return;
+        }
+        // Native ARIEC will additionally compare expected ctlModel, dispatch
+        // at most one CF Write, and independently verify MMS readback.
         _busy = true;
         _liveModelReady = false;
         ModelPicker.IsEnabled = false;
