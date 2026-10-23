@@ -283,6 +283,20 @@ public sealed class IedBrowserLiveValues
                 point.DeviceTimestamp, "", point.DeviceTimestamp, "Report timestamp");
     }
 
+    /// <summary>
+    /// Last-resort canonical bridge for a real routed InformationReport where
+    /// the typed primary route did not publish. Runtime lane only; no WPF and
+    /// no fabricated q/t. Exact association check rejects reconnect races.
+    /// Typed primary evidence always wins via onlyIfNoReport.
+    /// </summary>
+    public bool MirrorRoutedReportIfMissingForAssociation(long association,
+        string reference, string fc, string? value, string? quality,
+        string? timestamp)
+        => association > 0 && TryPublish(reference, fc, value, quality,
+            timestamp, "Report compatibility", expectedAssociation: association,
+            utcTimeEvidence: null, qualityEvidence: null,
+            onlyIfNoReport: true);
+
     private void MirrorReportIfMissing(string reference, string fc,
         string? value, string? quality, string? timestamp, string source)
         => TryPublish(reference, fc, value, quality, timestamp, source,

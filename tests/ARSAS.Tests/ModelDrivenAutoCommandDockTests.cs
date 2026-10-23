@@ -56,7 +56,7 @@ public sealed class ModelDrivenAutoCommandDockTests
         // Deliberately put hundreds of generic channels first.
         var candidates = bank.Concat([switchController, tap, disconnector, breaker]).ToArray();
         var scheduled = Iec61850ControlIdentity.DiscoveredControlInspectionCandidates(candidates);
-        Assert.Equal(new[] { breaker, disconnector, switchController, tap },
+        Assert.Equal(new[] { switchController, breaker, disconnector, tap },
             scheduled.Take(4));
         Assert.Equal(904, scheduled.Length);
         Assert.All(scheduled, signal => Assert.False(signal.ControlSupportsOperate));
@@ -157,7 +157,7 @@ public sealed class ModelDrivenAutoCommandDockTests
 
         var dock = device.OperableCommandSignals.ToArray();
         Assert.Equal(7, dock.Length);
-        Assert.Equal(new[] { breaker1, breaker2, disconnector, cswi, tap,
+        Assert.Equal(new[] { cswi, breaker1, breaker2, disconnector, tap,
             unknown, io }, dock);
         Assert.Equal("Circuit breaker · XCBR",
             Iec61850ControlIdentity.CommandDockRole(breaker1));

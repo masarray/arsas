@@ -1633,11 +1633,17 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                         pointState.AcquisitionLabel = acquisitionLabel;
                         pointState.SourceMode = acquisitionLabel;
                         pointState.Reason = session.StaticDataSetReportOnly
-                            ? "awaiting configured static report / General Interrogation"
+                            ? $"RCB setup accepted: {activeReference}; awaiting first routed InformationReport (GI requested does not prove delivery)"
                             : "awaiting report / MMS initial read";
                         pointState.Status = session.StaticDataSetReportOnly
-                            ? "Static report armed / awaiting value"
+                            ? "RCB armed / awaiting first routed value"
                             : "Report armed / verification active";
+                        // Readback and traffic are separate proofs. Emit only
+                        // first-image status rows, never a fake process value.
+                        // The existing bounded UI coalescer handles these keys.
+                        if (session.StaticDataSetReportOnly && !pointState.HasValue)
+                            EmitStatusSnapshot(session, point, pointState,
+                                pointState.Status, "Pending / q not supplied");
                     }
                 }
 
@@ -2672,6 +2678,17 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         state.Status = status;
         if (changed)
             state.Sequence++;
+
+        // Canonical ingress precedes ALL presentation callbacks. A typed raw
+        // Report already present in LiveValues wins; compatibility evidence
+        // may fill only a truly missing primary value on this association.
+        // Never run canonical publication on the WPF Dispatcher.
+        if (trustReportEdge && hasProcessValue &&
+            session.BrowserObservationAssociation != 0)
+            session.Device.LiveValues.MirrorRoutedReportIfMissingForAssociation(
+                session.BrowserObservationAssociation,
+                point.IecReference, point.FunctionalConstraint,
+                state.Value, quality, deviceTimestamp);
 
         if (!hadValue || displayChanged || qualityChangedForUi || metadataChanged)
         {

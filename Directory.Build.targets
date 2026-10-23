@@ -1,9 +1,0 @@
-<Project>
-  <Target Name="VerifyPhysicalProvenSmartDiscoveryRoute"
-          BeforeTargets="CoreCompile"
-          Condition="'$(MSBuildProjectName)' == 'ArIED61850Tester'">
-    <Message Importance="High"
-             Text="Verifying tracked physical-proven Smart Discovery production route." />
-    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\scripts\enable-smart-discovery-capture.ps1&quot; -VerifyOnly" />
-  </Target>
-</Project>

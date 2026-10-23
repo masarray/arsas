@@ -75,6 +75,24 @@ public static class Iec61850ControlIdentity
             .Where(s => s.ControlModelResolved && s.ControlSupportsOperate)
             .ToArray();
 
+    /// <summary>
+    /// Operator inventory != authority to Operate. An independently declared
+    /// CSWI.Pos may be shown in Command Dock before native CDC verification,
+    /// but must never enter VerifiedCommandTargets unless type-safe and live.
+    /// CO-service evidence (or a completed live ctlModel inspection) prevents
+    /// name-only and status-only aliases from masquerading as control objects.
+    /// No first-24 display truncation; budget applies to read-only PROBES only.
+    /// </summary>
+    public static SignalDefinition[] DiscoveredIndependentCswiControls(
+        IEnumerable<SignalDefinition> signals)
+        => signals.Where(s => !s.IsSelected && IsIndependentCswiCandidate(s) &&
+                              (s.HasControlServiceEvidence || s.ControlModelResolved))
+            .GroupBy(s => Normalize(s.ObjectReference), StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.OrderByDescending(s => s.ControlSupportsOperate)
+                .ThenByDescending(s => s.ControlModelResolved).First())
+            .OrderBy(s => Normalize(s.ObjectReference), StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
 
     /// <summary>
     /// Read-only probe priority. These are IEC function hints, NOT commands
@@ -91,7 +109,7 @@ public static class Iec61850ControlIdentity
         var doName = dot < 0 ? string.Empty : reference[(dot + 1)..];
         var ln = signal.LogicalNodeClass.ToUpperInvariant();
         if (doName.Equals("Pos", StringComparison.OrdinalIgnoreCase))
-            return ln switch { "XCBR" => 0, "XSWI" => 1, "CSWI" => 2, _ => 8 };
+            return ln switch { "CSWI" => 0, "XCBR" => 1, "XSWI" => 2, _ => 8 };
         if (doName.Equals("TapChg", StringComparison.OrdinalIgnoreCase))
             return 3;
         if (ln == "ATCC") return 12;
@@ -158,9 +176,9 @@ public static class Iec61850ControlIdentity
         if (cdc == "DPC" && dataObject.Equals("Pos", StringComparison.OrdinalIgnoreCase))
             return ln switch
             {
+                "CSWI" => (0, "Switch controller · CSWI"),
                 "XCBR" => (10, "Circuit breaker · XCBR"),
                 "XSWI" => (20, "Disconnector · XSWI"),
-                "CSWI" => (30, "Switch controller · CSWI"),
                 _ => (85, "Position control · equipment unlinked")
             };
 

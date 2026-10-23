@@ -752,7 +752,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         // never promote status-only XCBR/XSWI or mutate DataSet membership.
         var selected = Iec61850ControlIdentity.DistinctSelected(Signals)
             .Concat(IsConnected && LiveDiscoveryModel is not null
-                ? Iec61850ControlIdentity.VerifiedIndependentCswiControls(Signals)
+                ? Iec61850ControlIdentity.DiscoveredIndependentCswiControls(Signals)
                 : [])
             .GroupBy(signal => Iec61850ControlIdentity.Normalize(signal.ObjectReference),
                 StringComparer.OrdinalIgnoreCase)

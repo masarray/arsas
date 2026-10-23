@@ -1447,7 +1447,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (SelectedDevice is not { } device || EquipmentCommandGrid is null)
             return;
-        var first = device.OperableCommandSignals.FirstOrDefault(signal =>
+        var first = device.CommandSignals.FirstOrDefault(signal =>
             Iec61850ControlIdentity.CommandDockPriority(signal) < 100);
         if (first is null)
             return;
@@ -1455,7 +1455,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             new Action(() =>
             {
                 if (ReferenceEquals(SelectedDevice, device) &&
-                    device.OperableCommandSignals.Contains(first))
+                    device.CommandSignals.Contains(first))
                     EquipmentCommandGrid.ScrollIntoView(first);
             }));
     }
@@ -2656,7 +2656,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             // Live Monitor and SOE. Browser never has its own report decoder.
             // Canonical ingress remains first authority. The point snapshot
             // is a compatibility mirror only when Report evidence is absent.
-            observedOwner.LiveValues.PublishReport(point, snapshot.IsReportTraffic);
+            // Canonical Report compatibility mirror is admitted on the runtime
+            // ingress lane BEFORE this WPF tick, never on the Dispatcher.
             // Never mirror the payload into signals directly. Only the actual
             // canonical Report observation with matching association can feed
             // selected SignalDefinition presentation rows.

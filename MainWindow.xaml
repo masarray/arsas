@@ -697,7 +697,7 @@
                                         </Grid.RowDefinitions>
 
                                         <Grid Grid.Row="0">
-                                            <DataGrid x:Name="EquipmentCommandGrid" ItemsSource="{Binding SelectedDevice.OperableCommandSignals}" Loaded="CommandGrid_Loaded" IsReadOnly="False" CanUserAddRows="False" CanUserDeleteRows="False"
+                                            <DataGrid x:Name="EquipmentCommandGrid" ItemsSource="{Binding SelectedDevice.CommandSignals}" Loaded="CommandGrid_Loaded" IsReadOnly="False" CanUserAddRows="False" CanUserDeleteRows="False"
                                                       Style="{StaticResource CommandDataGrid}" RowStyle="{StaticResource CommandDataGridRow}"
                                                       CellStyle="{StaticResource CommandDataGridCell}" ColumnHeaderStyle="{StaticResource CommandDataGridHeader}"
                                                       AutoGenerateColumns="False" MinHeight="56" RowHeight="43" MinRowHeight="42" ColumnHeaderHeight="35" FrozenColumnCount="1"
@@ -780,10 +780,10 @@
                                                                             </StackPanel.Style>
                                                                             <Button Content="Open" Tag="{Binding}" CommandParameter="Open [01]" Click="ControlStageAction_Click"
                                                                                     Style="{StaticResource CommandOpenButton}" Margin="0,0,7,0"
-                                                                                    Width="72" MinWidth="72" HorizontalAlignment="Left" IsEnabled="{Binding ControlCanInspectPosition}" Height="29" MinHeight="29" Padding="10,3"/>
+                                                                                    Width="72" MinWidth="72" HorizontalAlignment="Left" IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
                                                                             <Button Content="Close" Tag="{Binding}" CommandParameter="Closed [10]" Click="ControlStageAction_Click"
                                                                                     Style="{StaticResource CommandCloseButton}" Margin="0,0,7,0"
-                                                                                    Width="72" MinWidth="72" HorizontalAlignment="Left" IsEnabled="{Binding ControlCanInspectPosition}" Height="29" MinHeight="29" Padding="10,3"/>
+                                                                                    Width="72" MinWidth="72" HorizontalAlignment="Left" IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
                                                                         </StackPanel>
 
                                                                         <StackPanel Orientation="Horizontal">
