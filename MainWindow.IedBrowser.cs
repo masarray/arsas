@@ -1999,20 +1999,10 @@ public partial class MainWindow
                 ? _iedBrowserTree.ExpandedKeys()
                 : new HashSet<string>(StringComparer.Ordinal);
 
-            SclReportControlInventoryResult? inventory = null;
-            if (stamp != DateTime.MinValue)
-            {
-                try
-                {
-                    inventory = SclReportControlFilter.InspectFile(
-                        sourcePath, EffectiveSclIedName(device), device.SclAccessPointName);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
-                                             or InvalidDataException or ArgumentException)
-                {
-                    IedBrowserDetailStatus.Text = "Source inventory unavailable: " + ex.Message;
-                }
-            }
+            // Source inspection parses SCL XML; never perform it inside a click handler.
+            if (!TryResolveIedBrowserSclInventory(
+                    device, model, sourcePath, stamp, out var inventory))
+                return;
 
             var rcbs = BuildRcbExportRows(device, inventory, _iedBrowserSnapshot);
             if (rcbs.Count == 0 && model != null)
