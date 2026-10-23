@@ -165,7 +165,7 @@ public sealed class StaticDataSetReportProjectionAccumulatorTests
     [Fact]
     public void PreparedStaticReportIndex_UsesExactMembershipAndResetsLeafEvidence()
     {
-        const string parent = "SG7_BCUMeter/ACsrcMHAI1.ThdA";
+        const string parent = "IEDLD0/I_MHAI1.ThdA";
         var model = Model(DataObject(parent, "ThdA",
             Attribute(parent + ".phsA.cVal.mag.f", "phsA.cVal.mag.f"),
             Attribute(parent + ".phsB.cVal.mag.f", "phsB.cVal.mag.f"),
