@@ -105,6 +105,10 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         public int ControlFlightQuarantined;
         public HybridReportPhysicalValidationTracker HybridValidation { get; } = new();
         public StaticDataSetReportProjectionAccumulator StaticReportProjection { get; } = new();
+        // Frozen membership and stable point object references: reports cannot
+        // allocate/walk a fresh dictionary snapshot for every process leaf.
+        // Rebuilt when a new monitor selection starts, released on stop.
+        public Iec61850MonitorPoint[] StaticProjectionPoints { get; set; } = [];
         public bool StaticDataSetReportOnly { get; set; }
         // Independent canonical journal cursor: no second value store or
         // cyclic MMS read is introduced for operator-triggered snapshots.
@@ -1051,6 +1055,9 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
             };
         }
 
+        session.StaticProjectionPoints = staticDataSetReportOnly
+            ? session.Points.Values.ToArray()
+            : [];
         session.HealthProbePointKey = staticDataSetReportOnly
             ? string.Empty
             : session.Points.Values
@@ -2031,7 +2038,7 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                 var effectiveUpdates = session.StaticDataSetReportOnly
                     ? session.StaticReportProjection.Project(
                         session.Device.SclWorkspace?.DesignModel ?? session.Device.LiveDiscoveryModel,
-                        session.Points.Values.ToArray(),
+                        session.StaticProjectionPoints,
                         sourceUpdate)
                     : new[] { sourceUpdate };
 
@@ -3517,6 +3524,7 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         session.ReportSetupDeadlineUtc = DateTime.MinValue;
         if (!preservePointDefinitions)
         {
+            session.StaticProjectionPoints = [];
             session.Points.Clear();
             session.States.Clear();
             session.ReportReferenceIndex.Clear();

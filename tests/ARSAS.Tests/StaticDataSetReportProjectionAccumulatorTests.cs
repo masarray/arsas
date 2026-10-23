@@ -149,6 +149,16 @@ public sealed class StaticDataSetReportProjectionAccumulatorTests
     }
 
     [Fact]
+    public void StaticReportHotPath_ReusesMembershipSnapshotInsteadOfAllocatingPerFrame()
+    {
+        var source = File.ReadAllText(FindRepoFile("Services/Iec61850MonitorRuntime.cs"));
+        Assert.Contains("session.StaticProjectionPoints = staticDataSetReportOnly", source);
+        Assert.Contains("session.StaticProjectionPoints,\n                        sourceUpdate)", source);
+        Assert.Contains("session.StaticProjectionPoints = [];", source);
+        Assert.DoesNotContain("session.Points.Values.ToArray(),\n                        sourceUpdate)", source);
+    }
+
+    [Fact]
     public void RuntimeSource_StaticMode_UsesSchemaSafeReportAuthority_AndNoMmsFallback()
     {
         var source = File.ReadAllText(FindRepoFile("Services/Iec61850MonitorRuntime.cs"));
