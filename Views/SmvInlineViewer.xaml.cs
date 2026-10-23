@@ -58,6 +58,12 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
     public string PowerStatus => _powerTotal is null
         ? "Power unavailable · requires clean 9-2LE U/I sample pairing"
         : "P true · Q₁ fundamental · S true RMS · PF true (operator-selected U/I)";
+    public string PowerStatusShort => _powerTotal is null
+        ? "9-2LE required" : "True P · Q₁ fundamental";
+    public string PowerDetails => _powerTotal is null
+        ? "No power calculation for unverified RAW channels or incomplete snapshots."
+        : PowerStatus + "\n" + string.Join("\n", PowerPhases.Select(phase =>
+            $"{phase.Name}: P {phase.PText}  Q₁ {phase.QText}  S {phase.SText}  PF {phase.PfText}"));
     public string SyncLabel => SmvSyncPresentation.Label(_visibleSnapshot);
     public string SyncDetail => SmvSyncPresentation.Detail(_visibleSnapshot);
     public Brush SyncBackground => SmvSyncPresentation.Background(_visibleSnapshot);
@@ -69,9 +75,9 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
     public ICollectionView CurrentMeasurements { get; }
 
     public string VoltageGroupHeading => ActiveUnits == SmvDisplayUnits.NineTwoLe
-        ? "Voltage · Ch5–8 (V)" : "Voltage · Ch1–4 (raw)*";
+        ? "Voltage · Ch5–8 (V)" : "RAW Group A · Ch1–4 (counts)";
     public string CurrentGroupHeading => ActiveUnits == SmvDisplayUnits.NineTwoLe
-        ? "Current · Ch1–4 (A)" : "Current · Ch5–8 (raw)*";
+        ? "Current · Ch1–4 (A)" : "RAW Group B · Ch5–8 (counts)";
 
     // The original DigSub WPF controls repaint immutable models, not packet work.
     public WaveformSnapshot? CurrentWaveform { get; private set; }
@@ -106,7 +112,7 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
 
     public string UnitStatus => RequestedUnits switch
     {
-        SmvDisplayUnits.RawCounts => "RAW counts · *Voltage/Current grouping is unverified (no SCL channel mapping)",
+        SmvDisplayUnits.RawCounts => "RAW = original INT32 counts; 9-2LE maps Ch1–4 ×0.001 A and Ch5–8 ×0.01 V (operator-selected, unverified)",
         _ when ActiveUnits == SmvDisplayUnits.NineTwoLe
             => "9-2LE user profile · 1 mA / 10 mV per count · verify publisher DataSet",
         _ => "9-2LE selected · need eight clean channels; displaying RAW counts"
@@ -516,6 +522,8 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
         Notify(nameof(PowerS));
         Notify(nameof(PowerPf));
         Notify(nameof(PowerStatus));
+        Notify(nameof(PowerStatusShort));
+        Notify(nameof(PowerDetails));
     }
 
     private void WaveformOptionsChanged(object sender, SelectionChangedEventArgs e)
