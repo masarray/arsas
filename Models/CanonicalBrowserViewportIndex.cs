@@ -7,18 +7,18 @@ namespace ArIED61850Tester.Models;
 /// </summary>
 public sealed class CanonicalBrowserViewportIndex
 {
-    private readonly IReadOnlyList<RowDependencies> _rows;
+    private readonly IReadOnlyDictionary<string, IedBrowserDetailRow[]> _rowsByScope;
     private readonly bool _hasOpaqueRows;
-
-    private sealed record RowDependencies(IedBrowserDetailRow Row, string[] Domains);
 
     public CanonicalBrowserViewportIndex(IEnumerable<IedBrowserDetailRow> rows)
     {
         ArgumentNullException.ThrowIfNull(rows);
-        var descriptors = new List<RowDependencies>();
+        var scopeRows = new Dictionary<string, List<IedBrowserDetailRow>>(StringComparer.Ordinal);
+        var rowCount = 0;
         var opaque = false;
         foreach (var row in rows)
         {
+            rowCount++;
             var dependencies = new HashSet<string>(StringComparer.Ordinal);
             Add(row.ValueReference);
             Add(row.FallbackValueReference);
@@ -49,7 +49,12 @@ public sealed class CanonicalBrowserViewportIndex
             // declared key cannot safely be optimized by an exact-key filter.
             if ((row.Kind is "Data" or "Object") && dependencies.Count == 0)
                 opaque = true;
-            descriptors.Add(new RowDependencies(row, dependencies.ToArray()));
+            foreach (var scope in dependencies)
+            {
+                if (!scopeRows.TryGetValue(scope, out var matches))
+                    scopeRows[scope] = matches = new List<IedBrowserDetailRow>();
+                matches.Add(row);
+            }
 
             void Add(string? reference)
             {
@@ -62,8 +67,9 @@ public sealed class CanonicalBrowserViewportIndex
                     dependencies.Add(scope);
             }
         }
-        _rows = descriptors;
-        _hasOpaqueRows = opaque || descriptors.Count == 0;
+        _rowsByScope = scopeRows.ToDictionary(
+            pair => pair.Key, pair => pair.Value.ToArray(), StringComparer.Ordinal);
+        _hasOpaqueRows = opaque || rowCount == 0;
     }
 
     /// <summary>
@@ -91,10 +97,10 @@ public sealed class CanonicalBrowserViewportIndex
             if (scope.Length == 0) return false;
             dirtyScopes.Add(scope);
         }
-        foreach (var row in _rows)
+        foreach (var scope in dirtyScopes)
         {
-            if (row.Domains.Any(dirtyScopes.Contains))
-                dirty.Add(row.Row);
+            if (_rowsByScope.TryGetValue(scope, out var affected))
+                foreach (var row in affected) dirty.Add(row);
         }
         return true;
     }
