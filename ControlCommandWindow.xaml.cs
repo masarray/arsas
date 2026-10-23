@@ -118,10 +118,12 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             if (!Set(ref _isBusy, value)) return;
             Raise(nameof(CanSend));
             Raise(nameof(CanClose));
+            Raise(nameof(CanEdit));
             Raise(nameof(SendButtonText));
         }
     }
     public bool CanClose => !_commandFlightActive;
+    public bool CanEdit => IsReady && !IsBusy;
     public bool IsReady
     {
         get => _isReady;
@@ -130,6 +132,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             if (!Set(ref _isReady, value)) return;
             UpdateLiveWarning();
             Raise(nameof(CanSend));
+            Raise(nameof(CanEdit));
         }
     }
     public string CommandStage { get => _commandStage; private set => Set(ref _commandStage, value); }
