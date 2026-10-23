@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
@@ -89,13 +88,20 @@ public sealed class PremiumSmartIpWizardTests
         Assert.InRange(int.Parse(root.Attribute("Width")!.Value), 460, 530);
         Assert.True(int.Parse(root.Attribute("MaxHeight")!.Value) <= 480);
         Assert.Contains("AppFontFamily", root.Attribute("FontFamily")!.Value);
-        Assert.Equal("Height", root.Attribute("SizeToContent")?.Value);
+        Assert.Equal("Manual", root.Attribute("SizeToContent")?.Value);
+        Assert.Equal("Manual", root.Attribute("WindowStartupLocation")?.Value);
+        Assert.Equal("Wizard_SourceInitialized", root.Attribute("SourceInitialized")?.Value);
+        Assert.InRange(int.Parse(root.Attribute("Height")!.Value), 300, 340);
 
         var octetStyle = doc.Descendants(w + "Style")
             .Single(style => style.Attribute(x + "Key")?.Value == "SmartIpOctet");
         var setters = octetStyle.Elements(w + "Setter")
             .ToDictionary(e => e.Attribute("Property")!.Value, e => e.Attribute("Value")!.Value);
         Assert.True(double.Parse(setters["Width"], System.Globalization.CultureInfo.InvariantCulture) <= 46);
+        var host = doc.Descendants(w + "Border")
+            .Single(element => element.Attribute(x + "Name")?.Value == "IpEditorHost");
+        Assert.InRange(int.Parse(host.Attribute("Width")!.Value), 240, 270);
+        Assert.Equal("Left", host.Attribute("HorizontalAlignment")?.Value);
         Assert.True(double.Parse(setters["FontSize"], System.Globalization.CultureInfo.InvariantCulture) <= 13);
         Assert.True(double.Parse(setters["Height"], System.Globalization.CultureInfo.InvariantCulture) <= 34);
 
@@ -104,14 +110,22 @@ public sealed class PremiumSmartIpWizardTests
         Assert.NotEqual("True", options.Attribute("IsExpanded")?.Value);
         Assert.Contains(options.Descendants(w + "TextBox"),
             box => box.Attribute(x + "Name")?.Value == "MmsPortBox");
-        Assert.Contains(options.Descendants(w + "CheckBox"),
-            box => box.Attribute(x + "Name")?.Value == "ManualAddressCheck");
+        Assert.Empty(options.Descendants(w + "CheckBox"));
+        var roundedPort = options.Descendants(w + "Border")
+            .Single(node => node.Elements(w + "TextBox")
+                .Any(box => box.Attribute(x + "Name")?.Value == "MmsPortBox"));
+        Assert.Equal("9", roundedPort.Attribute("CornerRadius")?.Value);
 
         var xaml = File.ReadAllText(Find("IpConnectWizardWindow.xaml"));
         Assert.DoesNotContain("Smart discovery", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("DataSets", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("RCBs", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("IPv6", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ManualAddressCheck", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Use full address", xaml, StringComparison.Ordinal);
+        Assert.Contains("OperatorCommandDockChevronDownIcon", xaml, StringComparison.Ordinal);
+        Assert.Contains("OperatorCommandDockChevronUpIcon", xaml, StringComparison.Ordinal);
+        Assert.Contains("Expanded=\"MoreOptionsExpander_ExpandedCollapsed\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"HistoryPopup\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Content=\"Connect\"", xaml, StringComparison.Ordinal);
     }
@@ -152,19 +166,27 @@ public sealed class PremiumSmartIpWizardTests
 
                     var options = Assert.IsType<Expander>(wizard.FindName("MoreOptionsExpander"));
                     Assert.False(options.IsExpanded);
-                    var advanced = Assert.IsType<CheckBox>(wizard.FindName("ManualAddressCheck"));
                     var raw = Assert.IsType<TextBox>(wizard.FindName("RawIpBox"));
                     var host = Assert.IsType<Border>(wizard.FindName("IpEditorHost"));
-                    var mode = typeof(IpConnectWizardWindow).GetMethod(
-                        "ManualAddressCheck_Click", BindingFlags.Instance | BindingFlags.NonPublic);
-                    Assert.NotNull(mode);
-                    advanced.IsChecked = true;
-                    mode.Invoke(wizard, [advanced, new RoutedEventArgs()]);
-                    Assert.True(options.IsExpanded);
-                    Assert.Equal(Visibility.Visible, raw.Visibility);
-                    Assert.Equal(Visibility.Collapsed, host.Visibility);
-                    raw.Text = "2001:db8::2";
-                    Assert.True(System.Net.IPAddress.TryParse(raw.Text, out _));
+                    Assert.Equal(Visibility.Visible, host.Visibility);
+                    Assert.Equal(Visibility.Collapsed, raw.Visibility);
+                    Assert.NotNull(wizard.FindName("HistoryButton"));
+
+                    var ipv6Wizard = new IpConnectWizardWindow("2001:db8::2");
+                    try
+                    {
+                        var ipv6Raw = Assert.IsType<TextBox>(ipv6Wizard.FindName("RawIpBox"));
+                        var ipv6Host = Assert.IsType<Border>(ipv6Wizard.FindName("IpEditorHost"));
+                        Assert.Equal("2001:db8::2", ipv6Raw.Text);
+                        Assert.Equal(Visibility.Visible, ipv6Raw.Visibility);
+                        Assert.Equal(Visibility.Visible, ipv6Host.Visibility);
+                        Assert.Equal(Visibility.Collapsed,
+                            Assert.IsType<StackPanel>(ipv6Wizard.FindName("OctetEditor")).Visibility);
+                        Assert.NotNull(ipv6Wizard.FindName("HistoryButton"));
+                        Assert.False(Assert.IsType<Expander>(
+                            ipv6Wizard.FindName("MoreOptionsExpander")).IsExpanded);
+                    }
+                    finally { ipv6Wizard.Close(); }
 
                     Assert.NotNull(wizard.FindName("HistorySearchBox"));
                     Assert.NotNull(wizard.FindName("HistoryListBox"));
@@ -177,6 +199,23 @@ public sealed class PremiumSmartIpWizardTests
         thread.Start();
         Assert.True(thread.Join(TimeSpan.FromSeconds(20)), "Smart IP WPF STA test timed out.");
         Assert.Null(failure);
+    }
+
+    [Fact]
+    public void FullIpv6Paste_SwitchesToRawBeforeAnySingleOctetValidation()
+    {
+        var source = File.ReadAllText(Find("IpConnectWizardWindow.xaml.cs"));
+        var method = source.IndexOf("private void Octet_Pasting(", StringComparison.Ordinal);
+        var next = source.IndexOf("private void HistoryButton_Click(", method, StringComparison.Ordinal);
+        Assert.True(method >= 0 && next > method);
+        var paste = source[method..next];
+        var fullIpv6 = paste.IndexOf(
+            "fullAddress.AddressFamily == AddressFamily.InterNetworkV6", StringComparison.Ordinal);
+        var decimalPath = paste.IndexOf("if (pasted.Contains('.'))", StringComparison.Ordinal);
+        Assert.True(fullIpv6 >= 0 && decimalPath > fullIpv6,
+            "Full IPv6 paste must bypass IPv4 octet validation.");
+        Assert.Contains("ApplyAddress(pasted)", paste, StringComparison.Ordinal);
+        Assert.Contains("RawIpBox.Focus()", paste, StringComparison.Ordinal);
     }
 
     [Fact]

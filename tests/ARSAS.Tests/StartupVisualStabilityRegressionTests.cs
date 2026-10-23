@@ -71,10 +71,15 @@ public sealed class StartupVisualStabilityRegressionTests
         var host = doc.Descendants(presentation + "Border")
             .Single(node => node.Attribute(xaml + "Name")?.Value == "IpEditorHost");
         Assert.Equal("43", (string?)host.Attribute("Height"));
+        Assert.Equal("256", (string?)host.Attribute("Width"));
+        Assert.Equal("Left", (string?)host.Attribute("HorizontalAlignment"));
+        Assert.Equal("Manual", (string?)doc.Root.Attribute("WindowStartupLocation"));
+        Assert.Equal("Manual", (string?)doc.Root.Attribute("SizeToContent"));
+        Assert.Equal("Wizard_SourceInitialized", (string?)doc.Root.Attribute("SourceInitialized"));
 
         var editor = doc.Descendants(presentation + "StackPanel")
             .Single(node => node.Attribute(xaml + "Name")?.Value == "OctetEditor");
-        Assert.Equal("Center", (string?)editor.Attribute("HorizontalAlignment"));
+        Assert.Equal("Left", (string?)editor.Attribute("HorizontalAlignment"));
 
         var popup = doc.Descendants(presentation + "Popup")
             .Single(node => node.Attribute(xaml + "Name")?.Value == "HistoryPopup");
@@ -88,6 +93,9 @@ public sealed class StartupVisualStabilityRegressionTests
         Assert.DoesNotContain("Smart discovery", source, StringComparison.Ordinal);
         Assert.DoesNotContain("TaskDialogCardStyle", source, StringComparison.Ordinal);
         Assert.DoesNotContain("IPv6", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ManualAddressCheck", source, StringComparison.Ordinal);
+        Assert.Contains("OperatorCommandDockChevronDownIcon", source, StringComparison.Ordinal);
+        Assert.Contains("OperatorCommandDockChevronUpIcon", source, StringComparison.Ordinal);
         Assert.Contains("Content=\"Connect\"", source, StringComparison.Ordinal);
 
         var behavior = Read("IpConnectWizardWindow.xaml.cs");
