@@ -9,7 +9,7 @@ namespace ArIED61850Tester;
 public partial class MainWindow
 {
     private void ExplorerLiveSearch_TextChanged(object sender, TextChangedEventArgs e)
-        => ApplyExplorerLiveSearchFilter();
+        => ScheduleUnifiedLiveSignalSearch();
 
     private void ExplorerLiveSearchClear_Click(object sender, RoutedEventArgs e)
     {
