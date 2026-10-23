@@ -1,0 +1,85 @@
+<Window x:Class="ArIED61850Tester.BrowserDataWriteWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Write Data to IED • MMS" Width="540" Height="445"
+        MinWidth="470" MinHeight="390" MaxHeight="680"
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResize"
+        Background="#F5F7FA" FontFamily="Segoe UI" FontSize="12"
+        Loaded="Window_Loaded" Closed="Window_Closed">
+    <Grid Margin="18,12,18,13">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock Text="Write Data to IED" FontSize="17" FontWeight="SemiBold" Foreground="#263C55"/>
+            <TextBlock Text="Exact live MMS type • single Data Attribute • no control Operate"
+                       Foreground="#66798E" Margin="0,3,0,0" FontSize="11"/>
+        </StackPanel>
+        <Border Grid.Row="1" Background="White" BorderBrush="#DCE3EC"
+                BorderThickness="1" CornerRadius="9">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="15,12,15,13">
+                    <TextBlock Text="IED / FC / Attribute" FontWeight="SemiBold"
+                               Foreground="#607187" FontSize="11"/>
+                    <TextBlock x:Name="ReferenceLabel" Margin="0,3,0,10"
+                               Foreground="#293F5B" TextWrapping="Wrap"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1*"/>
+                            <ColumnDefinition Width="1*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Live MMS type" Foreground="#607187" FontSize="11"/>
+                            <TextBlock x:Name="TypeLabel" Text="Not inspected"
+                                       Foreground="#2C4665" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="Live current value" Foreground="#607187" FontSize="11"/>
+                            <TextBlock x:Name="CurrentLabel" Text="—" FontWeight="SemiBold"
+                                       Foreground="#253C56" Margin="0,3,0,0"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </Grid>
+                    <Border Height="1" Background="#E7EBF0" Margin="0,14,0,13"/>
+                    <TextBlock Text="New value" Foreground="#42566D" FontWeight="SemiBold"/>
+                    <TextBox x:Name="NewValueBox" Height="30" Margin="0,7,0,3"
+                             Padding="8,5" IsEnabled="False" FontSize="12"
+                             VerticalContentAlignment="Center"
+                             BorderBrush="#C5D2E1"
+                             TextChanged="NewValueBox_TextChanged"/>
+                    <TextBlock Text="Numbers use a dot as decimal separator. Values are validated against exact live MMS type."
+                               Foreground="#72859A" TextWrapping="Wrap" FontSize="10.5"/>
+                    <Border Background="#F2F6FB" BorderBrush="#DCE6F3"
+                            BorderThickness="1" CornerRadius="6" Padding="9,8"
+                            Margin="0,13,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Wire preview" Foreground="#56708E" FontWeight="SemiBold" FontSize="11"/>
+                            <TextBlock x:Name="DiffLabel" Text="Read-only GVA inspection required."
+                                       Foreground="#344C68" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+        <Grid Grid.Row="2" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="StatusLabel" Foreground="#536981"
+                       VerticalAlignment="Center" TextWrapping="Wrap"
+                       FontSize="11" Margin="0,0,10,0"
+                       Text="Read-only inspection starting…"/>
+            <Button Grid.Column="1" Content="Close" Width="76" Height="30"
+                    Background="White" BorderBrush="#CAD5E2" Foreground="#344960"
+                    Margin="0,0,7,0" Click="Close_Click"/>
+            <Button x:Name="WriteButton" Grid.Column="2"
+                    Content="Write…" Width="88" Height="30" IsEnabled="False"
+                    Background="#255F99" Foreground="White" BorderBrush="#255F99"
+                    FontWeight="SemiBold" Click="Write_Click"/>
+        </Grid>
+    </Grid>
+</Window>
