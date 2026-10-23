@@ -911,6 +911,14 @@ public partial class MainWindow
             IedBrowserReadPageButton.Content = "Read LN";
         IedBrowserReadPageButton.IsEnabled = ready;
         IedBrowserReadAllButton.IsEnabled = ready;
+        if (IedBrowserWriteButton is not null)
+        {
+            var current = _iedBrowserNavigation.Current;
+            IedBrowserWriteButton.IsEnabled = device is { IsConnected: true, IsDemo: false } &&
+                device.LiveDiscoveryModel is not null && _iedBrowserReadOperation is null &&
+                (current?.Kind is "DO" or "DA" ||
+                 current?.Kind == "LN" && !string.IsNullOrWhiteSpace(_iedBrowserSelectedDoReference));
+        }
         if (IedBrowserExportReadEvidenceButton is not null)
             IedBrowserExportReadEvidenceButton.IsEnabled =
                 device?.LiveDiscoveryModel is not null &&
