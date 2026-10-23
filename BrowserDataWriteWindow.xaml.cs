@@ -169,6 +169,7 @@ public partial class BrowserDataWriteWindow : Window
         StatusLabel.Text = "Writing…";
         string feedback = "Write not verified.";
         bool accepted = false;
+        bool readbackVerified = false;
         try
         {
             var step = new IedBrowserTypedWriteStep(
@@ -223,7 +224,8 @@ public partial class BrowserDataWriteWindow : Window
                         }
                         var matches = MmsDataCodec.Encode(live.OldValue).AsSpan()
                             .SequenceEqual(MmsDataCodec.Encode(proposed));
-                        feedback = accepted && matches
+                        readbackVerified = accepted && matches;
+                        feedback = readbackVerified
                             ? "Write verified · Readback: " + live.CurrentText
                             : accepted ? "Write not verified: readback differs (" + live.CurrentText + ")"
                             : feedback + " · Current: " + live.CurrentText;
@@ -240,6 +242,10 @@ public partial class BrowserDataWriteWindow : Window
             }
             _busy = false;
             RefreshInput();
+            ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
+                readbackVerified
+                    ? System.Windows.Media.Color.FromRgb(232, 248, 237)
+                    : System.Windows.Media.Color.FromRgb(255, 242, 228));
             StatusLabel.Text = feedback.Length > 165 ? feedback[..162] + "…" : feedback;
         }
     }
