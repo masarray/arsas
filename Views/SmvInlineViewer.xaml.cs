@@ -50,6 +50,14 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
     private bool _selectingProgrammatically;
     private bool _awaitingPublisherSwitch;
     private SmvDisplayUnits _lastViewProfile = SmvDisplayUnits.RawCounts;
+    private string? _lastUnitCaption;
+    private string? _lastVoltageHeading;
+    private string? _lastCurrentHeading;
+    private string? _lastReferenceHeading;
+    private string? _lastTimeAxisCaption;
+    private string? _lastSyncLabel;
+    private string? _lastSyncDetail;
+    private Visibility _lastPowerVisibility = Visibility.Collapsed;
     private string _lastDisplayedPublisherKey = string.Empty;
     private long _frameCount;
 
@@ -635,20 +643,55 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
         _powerTotal = power?.Total;
         NotifyPowerStatus();
         UpdateDigSubPhasors();
-        Notify(nameof(UnitStatus));
-        Notify(nameof(VoltageGroupHeading));
-        Notify(nameof(CurrentGroupHeading));
-        Notify(nameof(PhaseReferenceText));
-        Notify(nameof(TimeAxisCaption));
-        Notify(nameof(SyncLabel));
-        Notify(nameof(SyncDetail));
-        Notify(nameof(SyncBackground));
-        Notify(nameof(SyncForeground));
+
+        // Static panel text and sync brush are *not* frame-rate content.
+        // Invalidate only when identity/profile/status actually changes.
+        if (_lastUnitCaption != UnitStatus)
+        {
+            _lastUnitCaption = UnitStatus;
+            Notify(nameof(UnitStatus));
+        }
+        if (_lastVoltageHeading != VoltageGroupHeading)
+        {
+            _lastVoltageHeading = VoltageGroupHeading;
+            Notify(nameof(VoltageGroupHeading));
+        }
+        if (_lastCurrentHeading != CurrentGroupHeading)
+        {
+            _lastCurrentHeading = CurrentGroupHeading;
+            Notify(nameof(CurrentGroupHeading));
+        }
+        if (_lastReferenceHeading != PhaseReferenceText)
+        {
+            _lastReferenceHeading = PhaseReferenceText;
+            Notify(nameof(PhaseReferenceText));
+        }
+        if (_lastTimeAxisCaption != TimeAxisCaption)
+        {
+            _lastTimeAxisCaption = TimeAxisCaption;
+            Notify(nameof(TimeAxisCaption));
+        }
+        if (_lastSyncLabel != SyncLabel)
+        {
+            _lastSyncLabel = SyncLabel;
+            Notify(nameof(SyncLabel));
+            Notify(nameof(SyncBackground));
+            Notify(nameof(SyncForeground));
+        }
+        if (_lastSyncDetail != SyncDetail)
+        {
+            _lastSyncDetail = SyncDetail;
+            Notify(nameof(SyncDetail));
+        }
     }
 
     private void NotifyPowerStatus()
     {
-        Notify(nameof(PowerVisibility));
+        if (_lastPowerVisibility != PowerVisibility)
+        {
+            _lastPowerVisibility = PowerVisibility;
+            Notify(nameof(PowerVisibility));
+        }
         Notify(nameof(PowerP));
         Notify(nameof(PowerQ));
         Notify(nameof(PowerS));
