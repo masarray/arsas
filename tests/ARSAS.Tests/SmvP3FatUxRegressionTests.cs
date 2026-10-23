@@ -62,8 +62,9 @@ public sealed class SmvP3FatUxRegressionTests
         Assert.Contains("_pendingAnalysis = new PendingAnalysis(snapshot, selectedKey, generation);", code);
         Assert.Contains("while (_pendingAnalysis is { } pending)", code);
         Assert.Contains("if (generation != _generation || analysis != _analysisGeneration", code);
-        Assert.Contains("Measurements[rowIndex] = next;", code);
-        Assert.Contains("if (!Equals(Measurements[rowIndex], next))", code);
+        Assert.Contains("Measurements[rowIndex].Apply(next);", code);
+        Assert.Contains("new SmvMeasurementLiveRow(next)", code);
+        Assert.Contains("VoltageMeasurements.Refresh();", code);
         Assert.Contains("selectedKey != Volatile.Read(ref _selectedKey)", code);
         var presentation = code[code.IndexOf("private void UpdateUnitPresentation(", StringComparison.Ordinal)..];
         Assert.DoesNotContain("Measurements.Clear();", presentation);
