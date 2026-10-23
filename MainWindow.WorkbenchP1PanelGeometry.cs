@@ -345,7 +345,8 @@ public partial class MainWindow
         CommandPanelExpander.Collapsed -= P1DockExpander_ExpandedCollapsed;
         CommandPanelExpander.IsVisibleChanged -= P1DockExpander_IsVisibleChanged;
         MainTabs.SelectionChanged -= P1PanelGeometry_MainTabsSelectionChanged;
-        _persistentWorkbench?.Shell.SizeChanged -= P1DockHost_SizeChanged;
+        if (_persistentWorkbench is { } host)
+            host.Shell.SizeChanged -= P1DockHost_SizeChanged;
         Closed -= P1PanelGeometry_Closed;
         _p1PanelGeometry = null;
     }
