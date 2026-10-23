@@ -42,6 +42,11 @@ public static class IedBrowserTypedWriteAdmission
                 x is "Oper" or "SBO" or "SBOw" or "Cancel"))
             return "Control-service members must use IEC Control, not generic Write.";
 
+        // Existing ctlModel workflow invalidates cached control authority and
+        // re-inspects the descriptor. Generic data Write MUST NOT bypass it.
+        if (segments[^1] == "ctlModel")
+            return "ctlModel requires the existing guarded ConfigureControlModel workflow.";
+
         // Deliberately conservative initial admission. SV substitution,
         // setting groups, report/GOOSE blocks, BL and vendor-specific FCs need
         // individual lifecycles/authorization before promotion.
