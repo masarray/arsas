@@ -161,13 +161,17 @@ public sealed class StaticDataSetReportProjectionAccumulatorTests
     }
 
     [Fact]
-    public void IpWizard_DoesNotRunEditableAddressBindingOnEveryKeystroke()
+    public void IpWizard_DoesNotWritePreferencesOrBindWholeAddressOnEveryOctetKeystroke()
     {
         var xaml = File.ReadAllText(FindRepoFile("IpConnectWizardWindow.xaml"));
-
-        Assert.Contains("IsTextSearchEnabled=\"False\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("RelayIpAddress, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=LostFocus", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("RelayIpAddress, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=PropertyChanged", xaml, StringComparison.Ordinal);
+        var code = File.ReadAllText(FindRepoFile("IpConnectWizardWindow.xaml.cs"));
+        Assert.Contains("x:Name=\"Octet1Box\"", xaml);
+        Assert.Contains("x:Name=\"Octet4Box\"", xaml);
+        Assert.Contains("UpdateSourceTrigger=LostFocus", xaml);
+        Assert.DoesNotContain("RelayIpAddress, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=PropertyChanged", xaml);
+        Assert.Contains("DataObject.AddPastingHandler", code);
+        Assert.Contains("if (_rememberDiscoveryEndpoint)", code);
+        Assert.DoesNotContain("RecordLastDiscoveryEndpoint", code[..code.IndexOf("private void Connect_Click", StringComparison.Ordinal)]);
     }
 
     private static NativeReportValueUpdate Update(string reference, string value)
