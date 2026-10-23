@@ -59,7 +59,8 @@ public sealed record SmvDisplayMeasurement(
         ? $"Total RMS: {RmsText} · fundamental (selected coherent timebase DFT): {FundamentalRmsText} · waveform distortion/DC may make these differ"
         : $"Total RMS: {RmsText} · no stable fundamental phase";
     public string AngleText => HasFundamental
-        ? "∠" + PhaseDegrees.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + "°"
+        ? "∠" + (Math.Abs(PhaseDegrees) < 0.05 ? 0.0 : PhaseDegrees)
+            .ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + "°"
         : "—";
 
     public static string FormatMagnitude(double value, string unit)
