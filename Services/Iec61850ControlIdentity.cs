@@ -86,7 +86,7 @@ public static class Iec61850ControlIdentity
     public static SignalDefinition[] DiscoveredIndependentCswiControls(
         IEnumerable<SignalDefinition> signals)
         => signals.Where(s => !s.IsSelected && IsIndependentCswiCandidate(s) &&
-                              (s.HasControlServiceEvidence || s.ControlModelResolved))
+                              s.HasControlServiceEvidence)
             .GroupBy(s => Normalize(s.ObjectReference), StringComparer.OrdinalIgnoreCase)
             .Select(g => g.OrderByDescending(s => s.ControlSupportsOperate)
                 .ThenByDescending(s => s.ControlModelResolved).First())
@@ -181,7 +181,7 @@ public static class Iec61850ControlIdentity
         // remain independent and fail closed. Do NOT infer operability here.
         if (ln == "CSWI" &&
             dataObject.Equals("Pos", StringComparison.OrdinalIgnoreCase) &&
-            (signal.HasControlServiceEvidence || signal.ControlModelResolved))
+            signal.HasControlServiceEvidence)
             return (0, signal.ControlSupportsOperate
                 ? "Switch controller · CSWI"
                 : "Switch controller · CSWI · verification required");
