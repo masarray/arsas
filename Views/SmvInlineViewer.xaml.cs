@@ -73,7 +73,7 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
         => SmvEngineeringDisplay.Effective(_visibleSnapshot, RequestedUnits);
 
     public string PhaseReferenceText => ActiveUnits == SmvDisplayUnits.NineTwoLe
-        ? "Ia (Ch1) · 0°" : "Ch1 · 0° reference";
+        ? "Ua (Ch5) · ∠0° reference" : "Ch1 · ∠0° reference";
 
     public string UnitStatus => RequestedUnits switch
     {
@@ -450,7 +450,10 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
         // The immutable wire/DSP vectors remain raw. Scaling is presentation-only.
         // WPF collections remain bounded to at most the 8 displayed channels.
         Measurements.Clear();
-        foreach (var raw in _visibleVectors)
+        // The phase reference is selected at PRESENTATION time; no received
+        // sample, total RMS or fundamental magnitude is reinterpreted.
+        var presentationVectors = SmvDigSubPresentationAdapter.RelativeMeasurements(_visibleVectors, profile);
+        foreach (var raw in presentationVectors)
             Measurements.Add(SmvEngineeringDisplay.Present(raw, profile));
         UpdateDigSubPhasors();
         Notify(nameof(UnitStatus));
