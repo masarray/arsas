@@ -243,11 +243,27 @@ public sealed class WaveformPanelControl : FrameworkElement
         var showVoltage = !string.Equals(ShowMode, "Current", StringComparison.OrdinalIgnoreCase);
         var showCurrent = !string.Equals(ShowMode, "Voltage", StringComparison.OrdinalIgnoreCase);
 
+        // Legacy DigSub groups are named after Ch1–4 and Ch5–8, not 9-2LE
+        // semantics. In the explicit 9-2LE profile, Ch5–8 is Ua/Ub/Uc/Un
+        // and MUST occupy the top pane; Ch1–4 (Ia/Ib/Ic/In) is below it.
+        // RAW preserves its original unverified group A/B order.
+        var nineTwoLe = snapshot.CurrentSeries.FirstOrDefault()?.Unit == "V" &&
+                        snapshot.VoltageSeries.FirstOrDefault()?.Unit == "A";
         var visibleLanes = new List<LaneDefinition>(2);
-        if (showVoltage)
-            visibleLanes.Add(new LaneDefinition(snapshot.VoltageSeries.FirstOrDefault()?.Unit == "A" ? "CURRENT · Ch1–4" : "RAW Ch1–4", snapshot.VoltageSeries.FirstOrDefault()?.Unit ?? "counts", snapshot.VoltageSeries));
-        if (showCurrent)
-            visibleLanes.Add(new LaneDefinition(snapshot.CurrentSeries.FirstOrDefault()?.Unit == "V" ? "VOLTAGE · Ch5–8" : "RAW Ch5–8", snapshot.CurrentSeries.FirstOrDefault()?.Unit ?? "counts", snapshot.CurrentSeries));
+        if (nineTwoLe)
+        {
+            if (showCurrent)
+                visibleLanes.Add(new LaneDefinition("VOLTAGE · Ch5–8", "V", snapshot.CurrentSeries));
+            if (showVoltage)
+                visibleLanes.Add(new LaneDefinition("CURRENT · Ch1–4", "A", snapshot.VoltageSeries));
+        }
+        else
+        {
+            if (showVoltage)
+                visibleLanes.Add(new LaneDefinition("RAW Ch1–4", "counts", snapshot.VoltageSeries));
+            if (showCurrent)
+                visibleLanes.Add(new LaneDefinition("RAW Ch5–8", "counts", snapshot.CurrentSeries));
+        }
 
         if (visibleLanes.Count == 0)
         {
