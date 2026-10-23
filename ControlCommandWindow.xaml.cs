@@ -56,7 +56,14 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
     public string CurrentValue { get => _currentValue; private set => Set(ref _currentValue, value); }
     public string EngineStatusText { get => _engineStatusText; private set => Set(ref _engineStatusText, value); }
     public string SequenceText { get => _sequenceText; private set => Set(ref _sequenceText, value); }
-    public string ControlEvidenceText { get => _controlEvidenceText; private set => Set(ref _controlEvidenceText, value); }
+    public string ControlEvidenceText
+    {
+        get => _controlEvidenceText;
+        private set
+        {
+            if (Set(ref _controlEvidenceText, value)) Raise(nameof(CanCopyEvidence));
+        }
+    }
     public string SelectedValue { get => _selectedValue; set { if (Set(ref _selectedValue, value)) Raise(nameof(CanSend)); } }
     public string ModelShortText { get => _modelShortText; private set => Set(ref _modelShortText, value); }
     public string SequenceHint { get => _sequenceHint; private set => Set(ref _sequenceHint, value); }
@@ -123,10 +130,13 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             Raise(nameof(CanClose));
             Raise(nameof(CanReinspect));
             Raise(nameof(CanEdit));
+            Raise(nameof(CanCopyEvidence));
             Raise(nameof(SendButtonText));
         }
     }
     public bool CanClose => !_commandFlightActive;
+    public bool CanCopyEvidence => !IsBusy && !_commandFlightActive &&
+        !string.IsNullOrWhiteSpace(ControlEvidenceText);
     public bool CanReinspect => !_commandFlightActive && !IsBusy;
     public bool CanEdit => IsReady && !IsBusy && !_commandAttempted;
     public bool IsReady
@@ -335,6 +345,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             Raise(nameof(CanClose));
             Raise(nameof(CanReinspect));
             IsBusy = false;
+            Raise(nameof(CanCopyEvidence));
             Raise(nameof(CanSend));
             Raise(nameof(CanEdit));
         }
@@ -499,6 +510,28 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
         var converted = ColorConverter.ConvertFromString(hex);
         var color = converted is Color parsed ? parsed : Colors.Transparent;
         return new SolidColorBrush(color);
+    }
+
+    private void CopyEvidence_Click(object sender, RoutedEventArgs e)
+    {
+        if (!CanCopyEvidence) return;
+        // Pure local clipboard export: NO read, Select, Operate, Cancel, Write,
+        // reconnect or other MMS/network action is permitted in this handler.
+        var snapshot = new Iec61850ControlFatEvidence(
+            DateTimeOffset.UtcNow,
+            DeviceSummary, Telegram, ControlCdcText, ControlModelText,
+            CurrentValue, SelectedValue, SelectedOriginCategory, OriginatorId,
+            InterlockCheck, SynchroCheck, TestMode, CommandStage, CommandStatus,
+            ControlNumberText, TerminationText, WireTimelineText, ControlEvidenceText);
+        try
+        {
+            Clipboard.SetText(snapshot.ToClipboardText());
+            CopyEvidenceButton.Content = "Copied";
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            CopyEvidenceButton.Content = "Copy failed";
+        }
     }
 
     private void Close_Click(object sender, RoutedEventArgs e)
