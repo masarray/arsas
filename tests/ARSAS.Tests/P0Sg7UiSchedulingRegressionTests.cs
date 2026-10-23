@@ -22,7 +22,11 @@ public sealed class P0Sg7UiSchedulingRegressionTests
             .Split("private void Signal_PropertyChanged(")[0];
         Assert.Contains("processedPoints < UiPointBatchLimit", flush);
         Assert.Contains("Stopwatch.GetTimestamp() < uiDeadlineTicks", flush);
-        Assert.Contains("_priorityPointUiKeys.TryDequeue(out var pointKey)", flush);
+        Assert.Contains("TryDequeueUiPointKey(processedPoints, out var pointKey)", flush);
+        var viewport = Read("MainWindow.LivePointViewportPriority.cs");
+        Assert.Contains("_priorityPointUiKeys.TryDequeue(out key)", viewport);
+        Assert.Contains("_pendingPointUiKeys.TryDequeue(out key)", viewport);
+        Assert.Contains("(processedPoints & 3) == 3", viewport);
         Assert.Contains("_pendingPointSnapshots.TryRemove(pointKey, out var pending)", flush);
         Assert.DoesNotContain("_pendingPointSnapshots.Keys.ToArray()", flush);
         Assert.Contains("CanonicalPointSnapshotAuthority.Project(", flush);
