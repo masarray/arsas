@@ -138,13 +138,13 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Margin="0,0,7,0">
                                 <TextBlock Text="ctlNum" Style="{StaticResource ControlFieldLabel}"/>
-                                <TextBox Text="{Binding ControlNumberText}" IsReadOnly="True"
+                                <TextBox Text="{Binding ControlNumberText, Mode=OneWay}" IsReadOnly="True"
                                          Height="30" Padding="7,5"
                                          ToolTip="Assigned by the native IEC control service; never guessed"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1" Margin="7,0,0,0">
                                 <TextBlock Text="Termination" Style="{StaticResource ControlFieldLabel}"/>
-                                <TextBox Text="{Binding TerminationText}" IsReadOnly="True"
+                                <TextBox Text="{Binding TerminationText, Mode=OneWay}" IsReadOnly="True"
                                          Height="30" Padding="7,5"/>
                             </StackPanel>
                         </Grid>
