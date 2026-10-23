@@ -28,7 +28,7 @@ public sealed class SsotV2LargeGridSearchSortBudgetTests
                     FunctionalConstraint = "ST"
                 }));
             var expectedFirst = points[0];
-            var grid = new DataGrid { Name = "GlobalLiveGrid", ItemsSource = points };
+            var grid = new DataGrid { Name = "GlobalLiveGrid", ItemsSource = points, CanUserAddRows = false };
             var view = Assert.IsType<ListCollectionView>(
                 CollectionViewSource.GetDefaultView(points));
             view.CustomSort = IecNaturalGlobalMonitorSort.Instance;
@@ -50,7 +50,7 @@ public sealed class SsotV2LargeGridSearchSortBudgetTests
                 new() { DeviceName = "GE", IecReference = "LD/CSWI10.Pos.stVal" },
                 new() { DeviceName = "GE", IecReference = "LD/CSWI2.Pos.stVal" }
             ]);
-            var grid = new DataGrid { Name = "GlobalLiveGrid", ItemsSource = points };
+            var grid = new DataGrid { Name = "GlobalLiveGrid", ItemsSource = points, CanUserAddRows = false };
             var view = Assert.IsType<ListCollectionView>(
                 CollectionViewSource.GetDefaultView(points));
 
