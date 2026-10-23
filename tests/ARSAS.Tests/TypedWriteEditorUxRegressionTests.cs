@@ -106,6 +106,8 @@ public sealed class TypedWriteEditorUxRegressionTests
         Assert.Contains("row.ResetToReadback(actual.CurrentText);", batch);
         Assert.Contains("var readbackMismatch = false;", batch);
         Assert.Contains("MmsDataCodec.Encode(steps[i].ProposedValue)", batch);
+        Assert.Contains("baseline.GvaSignature, preview.GvaSignature", batch);
+        Assert.Contains("MmsDataCodec.Encode(baseline.OldValue)", batch);
         Assert.Contains("WriteBrowserDataAttributesAsync(", batch);
         Assert.Contains("TryFreezePlan(selected,", batch);
         Assert.Contains("No automatic retry", batch, StringComparison.OrdinalIgnoreCase);
