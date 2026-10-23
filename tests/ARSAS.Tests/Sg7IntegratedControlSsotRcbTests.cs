@@ -89,6 +89,57 @@ public sealed class Sg7IntegratedControlSsotRcbTests
     }
 
     [Fact]
+    public void NativeMmsRead_PublishesToCanonicalBeforeUi_WithReportPrecedenceAndEpochFence()
+    {
+        var store = new IedBrowserLiveValues();
+        var epoch = store.BeginAssociation();
+        const string exact = "SG7_BCUMeter/ACsrcMMXU1.A.phsA.cVal.mag.f";
+        var read = new ResolvedIecSignalRead(new Iec61850ReadValue
+        {
+            Value = 125.25d, Quality = "Good",
+            DeviceTimestamp = "2026-10-23 12:00 UTC"
+        }, exact);
+        Assert.True(Iec61850MonitorRuntime.PublishVerifiedMmsReadToCanonical(
+            store, epoch, read, "MX", "FLOAT32", "Good", "12:00"));
+        Assert.True(store.TryGet(exact, "MX", out var initial));
+        Assert.Equal("125.25", initial.Value);
+        Assert.Equal("MMS Read", initial.Source);
+        Assert.Equal(epoch, initial.Association);
+        Assert.False(store.TryGet(exact.Replace(".cVal.", ".instCVal."), "MX", out _));
+
+        Assert.True(store.PublishForAssociation(epoch, exact, "MX",
+            "130.5", "questionable", "12:01", "Report"));
+        Assert.True(Iec61850MonitorRuntime.PublishVerifiedMmsReadToCanonical(
+            store, epoch, read, "MX", "FLOAT32", "Good", "12:02"));
+        Assert.True(store.TryGet(exact, "MX", out var reported));
+        Assert.Equal("130.5", reported.Value);
+        Assert.Equal("Report", reported.Source);
+        Assert.Equal("questionable", reported.Quality);
+
+        store.BeginAssociation();
+        Assert.False(Iec61850MonitorRuntime.PublishVerifiedMmsReadToCanonical(
+            store, epoch, read, "MX", "FLOAT32", "Good", "12:03"));
+        Assert.False(store.TryGet(exact, "MX", out _));
+    }
+
+    [Fact]
+    public void NativeMmsRead_DoesNotPublishStructuresOrControlParameters()
+    {
+        var store = new IedBrowserLiveValues();
+        var epoch = store.BeginAssociation();
+        var structure = new ResolvedIecSignalRead(
+            new Iec61850ReadValue { Value = "Structure(3)" },
+            "SG7_BCUSystem/BkrCSWI1.Pos.stVal");
+        Assert.False(Iec61850MonitorRuntime.PublishVerifiedMmsReadToCanonical(
+            store, epoch, structure, "ST", "Dbpos", "", ""));
+        Assert.False(Iec61850MonitorRuntime.PublishVerifiedMmsReadToCanonical(
+            store, epoch, new ResolvedIecSignalRead(true,
+                "SG7_BCUSystem/BkrCSWI1.Pos.Oper.ctlVal"),
+            "CO", "BOOLEAN", "", ""));
+        Assert.False(store.TryGet("SG7_BCUSystem/BkrCSWI1.Pos.stVal", "ST", out _));
+    }
+
+    [Fact]
     public void IntegrationContract_OneIngressWriter_NoWpfPublishOrBypassedOperate()
     {
         var runtime = Read("Services/Iec61850MonitorRuntime.cs");

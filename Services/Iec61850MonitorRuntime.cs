@@ -2569,6 +2569,20 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
 
                 var normalizedQuality = NormalizeQuality(quality);
                 var normalizedTimestamp = string.IsNullOrWhiteSpace(deviceTimestamp) ? "-" : deviceTimestamp;
+                // Read evidence must enter SSOT before WPF. Awaited companion
+                // reads can outlive an association; reject obsolete sessions.
+                var readAssociation = session.BrowserObservationAssociation;
+                if (readAssociation == 0 ||
+                    !_sessions.TryGetValue(session.Device.DeviceId, out var readOwner) ||
+                    !ReferenceEquals(readOwner, session) ||
+                    !session.Client.IsConnected || !session.Device.IsConnected ||
+                    session.Device.LiveValues.Association != readAssociation)
+                    continue;
+                PublishVerifiedMmsReadToCanonical(
+                    session.Device.LiveValues, readAssociation, resolved,
+                    point.FunctionalConstraint, point.IecDataType,
+                    normalizedQuality, normalizedTimestamp);
+
                 var pollDetectedChange = state.HasValue && !string.Equals(state.Value, display, StringComparison.Ordinal);
                 var sourceMode = "MMS polling";
                 var reason = "cyclic";
@@ -2633,6 +2647,40 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                     session.ConsecutiveSessionErrors++;
             }
         }
+    }
+
+    /// <summary>
+    /// Route an actual successful native scalar MMS Read to canonical SSOT,
+    /// not a Report or WPF-origin observation. Only the exact wire-resolved
+    /// reference/FC may be written. Non-scalar and CO values fail closed.
+    /// </summary>
+    internal static bool PublishVerifiedMmsReadToCanonical(
+        IedBrowserLiveValues liveValues, long association,
+        ResolvedIecSignalRead resolved, string functionalConstraint,
+        string declaredDataType, string quality, string timestamp)
+    {
+        ArgumentNullException.ThrowIfNull(liveValues);
+        ArgumentNullException.ThrowIfNull(resolved);
+        if (association <= 0 || string.IsNullOrWhiteSpace(resolved.EffectiveReference) ||
+            functionalConstraint is not ("ST" or "MX" or "CF" or "DC" or "SP" or "SG" or "SE" or "EX"))
+            return false;
+
+        var rich = resolved.Value as Iec61850ReadValue;
+        var scalar = Iec61850ReadValue.Unwrap(resolved.Value);
+        if (scalar is not (string or bool or byte or sbyte or short or ushort
+            or int or uint or long or ulong or float or double or decimal))
+            return false;
+        var rawText = scalar is IFormattable formattable
+            ? formattable.ToString(null, CultureInfo.InvariantCulture)
+            : scalar.ToString();
+        return liveValues.PublishForAssociation(
+            association, resolved.EffectiveReference, functionalConstraint,
+            rawText, quality, timestamp, "MMS Read",
+            rich?.UtcTimeEvidence, rich?.QualityEvidence,
+            typedBoolean: scalar is bool flag ? flag : null,
+            verifiedStringWireKind: rich?.VerifiedStringWireKind,
+            declaredDataType: declaredDataType,
+            readWireShapeEvidence: rich?.WireShapeEvidence);
     }
 
     private void ApplyValueUpdate(
