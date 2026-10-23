@@ -48,10 +48,11 @@ public sealed class IedBrowserWriteAndDockViewportRegressionTests
     public void DockGeometryRecomputesAgainstActualShellNotInventedMinimum()
     {
         var source = Read("MainWindow.WorkbenchP1PanelGeometry.cs");
-        Assert.Contains("shell.SizeChanged += P1DockHost_SizeChanged;", source);
-        Assert.Contains("var measured = _persistentWorkbench?.Shell.ActualHeight ?? 0d;", source);
-        Assert.Contains("availableHeight - 160d", source);
-        Assert.Contains("state.DockRow.MaxHeight = upper;", source);
+        Assert.Contains("shell.SizeChanged += P1DockShell_SizeChanged;", source);
+        Assert.Contains("if (state.ApplyingGeometry || state.DockDragging) return;", source);
+        Assert.Contains("var availableHeight = _persistentWorkbench?.Shell.ActualHeight ?? ActualHeight;", source);
+        Assert.Contains("availableHeight - 130d", source);
+        Assert.Contains("state.DockRow.MaxHeight = maxDock;", source);
         Assert.DoesNotContain("Math.Max(520, _persistentWorkbench", source);
     }
 
