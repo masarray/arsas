@@ -38,6 +38,28 @@ public sealed class IedBrowserUnifiedWriteUxTests
     }
 
     [Fact]
+    public void UnverifiedDiscreteEnumRemainsVisibleButCannotBecomeEditableOrReachWire()
+    {
+        var row = new IedBrowserWriteRow("LD0/ATCC1.TapChg.oprVal", "CF", "ENUMERATED");
+        row.ApplyLiveRead(MmsDataValue.Integer(2));
+        Assert.True(row.HasVerifiedRead);
+        Assert.True(row.IsUnverifiedEnum);
+        Assert.Equal(System.Windows.Visibility.Collapsed, row.TextEditorVisibility);
+        Assert.Equal(System.Windows.Visibility.Collapsed, row.BooleanEditorVisibility);
+        Assert.Equal(System.Windows.Visibility.Visible, row.PlaceholderVisibility);
+        Assert.Contains("unverified", row.PlaceholderText);
+        Assert.Throws<NotSupportedException>(() =>
+            IedBrowserWritePlan.EncodeValue(row.DataType, "2", row.Reference));
+
+        // Native final boundary also rejects forged Control/ctlModel paths.
+        var native = Read("Services/NativeIec61850Client.BrowserWrite.cs");
+        Assert.Contains("generic MMS Write forbidden.", native);
+        Assert.Contains("segment.Equals(\"ctlModel\"", native);
+        var source = Read("Models/IedBrowserWritePlan.cs");
+        Assert.Contains(".Where(target => !target.Reference.EndsWith(\".ctlModel\"", source);
+    }
+
+    [Fact]
     public void UnifiedWindow_DoesNotRequestWriteDuringReadOrOpen()
     {
         var src = Read("IedBrowserWriteWindow.xaml.cs");
