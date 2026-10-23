@@ -18,6 +18,7 @@ public partial class MainWindow
 {
     private readonly HashSet<DataGrid> _iecNaturallySortedGrids = new();
     private bool _globalNaturalSortThresholdQueued;
+    private bool _globalNaturalSortLargeMode;
 
     private void ExplorerLiveGrid_Loaded(object sender, RoutedEventArgs e)
     {
@@ -51,17 +52,20 @@ public partial class MainWindow
 
             if (ReferenceEquals(grid, GlobalLiveGrid))
             {
-                // The global ItemsSource instance is stable while device sets
-                // accumulate. ItemsSource-change alone never sees the 2,049th
-                // point; remove our old small-list sort at the growth boundary.
+                // Source instance stays stable as device sets grow/shrink.
+                // Re-evaluate only when crossing the 2048-point threshold;
+                // not for each of the next 32,900 incoming point additions.
+                _globalNaturalSortLargeMode = GlobalPoints.Count > 2048;
                 GlobalPoints.CollectionChanged += (_, _) =>
                 {
-                    if (GlobalPoints.Count <= 2048 || _globalNaturalSortThresholdQueued)
+                    if ((GlobalPoints.Count > 2048) == _globalNaturalSortLargeMode ||
+                        _globalNaturalSortThresholdQueued)
                         return;
                     _globalNaturalSortThresholdQueued = true;
                     grid.Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
                     {
                         _globalNaturalSortThresholdQueued = false;
+                        _globalNaturalSortLargeMode = GlobalPoints.Count > 2048;
                         ApplyIecNaturalSort(grid, comparer);
                     }));
                 };
