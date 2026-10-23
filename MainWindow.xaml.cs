@@ -77,6 +77,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         set
         {
             if (ReferenceEquals(_selectedDevice, value)) return;
+            using var selectionPerf = IedBrowserPerformanceProbe.Measure(
+                "IED.Select", value?.Name, value?.Signals.Count ?? 0);
             if (_selectedDevice != null)
             {
                 _selectedDevice.IsActive = false;
@@ -2577,6 +2579,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void UiFlushTimer_Tick(object? sender, EventArgs e)
     {
+        using var flushPerf = IedBrowserPerformanceProbe.Measure(
+            "UI.Flush", SelectedDevice?.Name, _pendingPointSnapshots.Count);
         FlushGooseSubscriberUi();
 
         var pointChanged = false;
