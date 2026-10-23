@@ -525,7 +525,8 @@
                         </Grid>
                         <!-- Power values share one reserved row; do not place status
                              in an undefined grid row or expand over waveform/table. -->
-                        <Border Grid.Row="4" Background="#F3F8FF" BorderBrush="#D6E5F7"
+                        <Border Grid.Row="4" Visibility="{Binding PowerVisibility}"
+                                Background="#F3F8FF" BorderBrush="#D6E5F7"
                                 BorderThickness="1" CornerRadius="6" Padding="8,5"
                                 ToolTip="{Binding PowerDetails}">
                             <Grid>
