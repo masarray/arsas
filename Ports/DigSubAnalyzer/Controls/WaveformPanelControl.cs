@@ -1226,8 +1226,13 @@ public sealed class WaveformPanelControl : FrameworkElement
         }
 
         var fraction = Math.Clamp((mouse.X - outerPadding - plotInsetX) / availableWidth, 0.0, 1.0);
-        var count = Math.Max(2, snapshot.VoltageSeries.Concat(snapshot.CurrentSeries)
-            .Select(series => series.Samples.Count).DefaultIfEmpty(2).Max());
+        // The pointer hot path must not create LINQ enumerators or temporary
+        // arrays; received data is already bounded and read-only.
+        var count = 2;
+        foreach (var series in snapshot.VoltageSeries)
+            count = Math.Max(count, series.Samples.Count);
+        foreach (var series in snapshot.CurrentSeries)
+            count = Math.Max(count, series.Samples.Count);
         var sampleIndex = (int)Math.Round(fraction * (count - 1));
         if (_cursorVisible && _cursorLane == lane && _cursorSampleIndex == sampleIndex)
             return; // sample quantization avoids per-pixel redraw on high-rate mouse moves.
