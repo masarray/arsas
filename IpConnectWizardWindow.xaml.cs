@@ -38,8 +38,8 @@ public partial class IpConnectWizardWindow : Window
     private readonly ICollectionView _historyView;
     private bool _updatingOctets;
     private bool _rawAddressMode;
-    private const double CollapsedDialogHeight = 323;
-    private const double ExpandedDialogHeight = 378;
+    private const double CollapsedDialogHeight = 308;
+    private const double ExpandedDialogHeight = 372;
     public int MmsPort { get; private set; } = 102;
 
     // UI projection ONLY; UserPreferenceStore remains the sole persistence authority.
