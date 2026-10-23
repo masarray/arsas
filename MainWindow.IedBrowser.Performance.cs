@@ -1,5 +1,7 @@
 using System.Runtime.CompilerServices;
 using AR.Iec61850.Discovery;
+using AR.Iec61850.Scl.Export;
+using ArIED61850Tester.Services;
 using ArIED61850Tester.Models;
 
 namespace ArIED61850Tester;
@@ -15,6 +17,11 @@ public partial class MainWindow
     private Iec61850MonitorDevice? _iedBrowserAwaitedSchemaDevice;
     private Iec61850MonitorDevice? _iedBrowserPreparingDevice;
     private LiveIedModelDiscoveryDocument? _iedBrowserPreparingModel;
+
+    private string _iedBrowserInventoryKey = "";
+    private Task<SclReportControlInventoryResult>? _iedBrowserInventoryTask;
+    private Task<SclReportControlInventoryResult>? _iedBrowserAwaitedInventory;
+    private Iec61850MonitorDevice? _iedBrowserAwaitedInventoryDevice;
 
     private Task<IedBrowserAcceptanceMetrics>? _iedBrowserMetricsFlight;
     private Iec61850MonitorDevice? _iedBrowserMetricsDevice;
@@ -58,7 +65,12 @@ public partial class MainWindow
             return true;
         }
         var task = _iedBrowserSchemaTasks.GetValue(model, source =>
-            Task.Run(() => new IedBrowserSchemaIndex(source)));
+            Task.Run(() =>
+            {
+                using var measure = IedBrowserPerformanceProbe.Measure(
+                    "Schema.Index", device.Name);
+                return new IedBrowserSchemaIndex(source);
+            }));
         if (task.IsCompletedSuccessfully)
         {
             _iedBrowserValueSchemaIndex = task.Result;
@@ -99,6 +111,67 @@ public partial class MainWindow
         RefreshIedBrowser();
     }
 
+    private bool TryResolveIedBrowserSclInventory(Iec61850MonitorDevice device,
+        LiveIedModelDiscoveryDocument? model, string sourcePath, DateTime sourceStamp,
+        out SclReportControlInventoryResult? inventory)
+    {
+        inventory = null;
+        if (sourceStamp == DateTime.MinValue) return true;
+        var iedName = EffectiveSclIedName(device);
+        var accessPoint = device.SclAccessPointName;
+        var key = string.Join("|", sourcePath, sourceStamp.Ticks,
+            iedName, accessPoint);
+        if (!string.Equals(_iedBrowserInventoryKey, key, StringComparison.Ordinal) ||
+            _iedBrowserInventoryTask is null)
+        {
+            _iedBrowserInventoryKey = key;
+            _iedBrowserInventoryTask = Task.Run(() =>
+            {
+                using var measure = IedBrowserPerformanceProbe.Measure(
+                    "SCL.Inventory", device.Name);
+                return SclReportControlFilter.InspectFile(sourcePath, iedName, accessPoint);
+            });
+        }
+        var task = _iedBrowserInventoryTask;
+        if (!task.IsCompleted)
+        {
+            if (model is not null) ShowIedBrowserPreparing(device, model);
+            else IedBrowserDetailStatus.Text = "Reading SCL inventory on background worker…";
+            if (!ReferenceEquals(_iedBrowserAwaitedInventory, task) ||
+                !ReferenceEquals(_iedBrowserAwaitedInventoryDevice, device))
+            {
+                _iedBrowserAwaitedInventory = task;
+                _iedBrowserAwaitedInventoryDevice = device;
+                _ = CompleteIedBrowserInventoryAsync(task, device, model,
+                    device.LiveValues.Association);
+            }
+            return false;
+        }
+        if (!task.IsCompletedSuccessfully)
+        {
+            IedBrowserDetailStatus.Text = "Source inventory unavailable · " +
+                (task.Exception?.GetBaseException().Message ?? "worker canceled");
+            return true; // Same nonfatal behavior as the previous source-file inspector.
+        }
+        inventory = task.Result;
+        return true;
+    }
+
+    private async Task CompleteIedBrowserInventoryAsync(
+        Task<SclReportControlInventoryResult> task,
+        Iec61850MonitorDevice device, LiveIedModelDiscoveryDocument? model, long association)
+    {
+        try { await task; }
+        catch (Exception) { /* Nonfatal inventory failure is displayed on next refresh. */ }
+        if (_applicationCancellation.IsCancellationRequested ||
+            MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
+            !ReferenceEquals(SelectedDevice, device) ||
+            !ReferenceEquals(device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel, model) ||
+            device.LiveValues.Association != association)
+            return;
+        RefreshIedBrowser();
+    }
+
     // SSOT coverage is not a five-Hz UI task. Model declarations are indexed
     // separately; the observation ledger itself is never copied or modified.
     private void QueueIedBrowserAcceptanceMetrics(
@@ -123,8 +196,12 @@ public partial class MainWindow
         var enumEvidence = _iedBrowserSclEnumEvidence;
         _iedBrowserMetricsStartedUtc = DateTime.UtcNow;
         var flight = Task.Run(() =>
-            IedBrowserAcceptanceMetrics.Capture(model, device.LiveValues,
-                enumEvidence, failures));
+        {
+            using var measure = IedBrowserPerformanceProbe.Measure(
+                "Metrics.Capture", device.Name);
+            return IedBrowserAcceptanceMetrics.Capture(model, device.LiveValues,
+                enumEvidence, failures);
+        });
         _iedBrowserMetricsFlight = flight;
         _ = PublishIedBrowserAcceptanceMetricsAsync(
             flight, device, model, association);
