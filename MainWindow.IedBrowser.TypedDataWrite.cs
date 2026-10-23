@@ -54,12 +54,14 @@ public partial class MainWindow
             .LogicalNodes.FirstOrDefault(ln => string.Equals(ln.Name, lnName, StringComparison.Ordinal))?
             .DataObjects.FirstOrDefault(obj => string.Equals(obj.Reference, owner.Reference, StringComparison.Ordinal));
         if (liveOwner is null) return null;
-        var selected = IedBrowserLiveValues.CanonicalReference(row.ValueReference);
+        // Never treat a synthetic parent display/reference as a selected
+        // leaf. The clicked row must expose the EXACT MMS DA identity from
+        // live discovery, not a canonicalised proxy/engineering projection.
         var candidates = liveOwner.Attributes.Where(attr =>
                 string.Equals(attr.FunctionalConstraint, row.FunctionalConstraint,
                     StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(IedBrowserLiveValues.CanonicalReference(attr.MmsReference),
-                    selected, StringComparison.Ordinal))
+                string.Equals(attr.MmsReference, row.ValueReference,
+                    StringComparison.Ordinal))
             .Take(2).ToArray();
         if (candidates.Length != 1) return null; // duplicates are ambiguous.
         var exact = candidates[0];
