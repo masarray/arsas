@@ -359,8 +359,9 @@ public partial class IpConnectWizardWindow : Window
         if (HistoryListBox.SelectedItem is not UserPreferenceStore.RecentEndpointDetail selection)
             return;
         ApplyAddress(selection.IpAddress);
-        if (selection.ConfirmedSuccessful)
-            MmsPortText = selection.MmsPort.ToString(CultureInfo.InvariantCulture);
+        // Selecting history restores the exact saved IP:port, even when unverified.
+        // This is recall only; the connection still requires explicit submission.
+        MmsPortText = selection.MmsPort.ToString(CultureInfo.InvariantCulture);
         HistoryPopup.IsOpen = false;
         if (ManualAddressCheck.IsChecked == true) RawIpBox.Focus();
         else Octet1Box.Focus();
