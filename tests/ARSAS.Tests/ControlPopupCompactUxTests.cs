@@ -29,8 +29,7 @@ public sealed class ControlPopupCompactUxTests
         Assert.Equal("2", scroll.Attribute("Grid.Row")?.Value);
         Assert.Equal("Auto", scroll.Attribute("VerticalScrollBarVisibility")?.Value);
         var send = xml.Descendants(p + "Button").Single(b => (string?)b.Attribute(x + "Name") == "SendCommandButton");
-        Assert.Equal("4", send.Attribute("Grid.Column")?.Value is null
-            ? send.Parent?.Attribute("Grid.Row")?.Value : send.Parent?.Attribute("Grid.Row")?.Value);
+        Assert.Equal("4", send.Parent?.Attribute("Grid.Row")?.Value);
         Assert.Equal("{Binding CanSend}", send.Attribute("IsEnabled")?.Value);
         var footer = send.Parent!;
         Assert.Equal("4", footer.Attribute("Grid.Row")?.Value);
@@ -77,6 +76,20 @@ public sealed class ControlPopupCompactUxTests
         Assert.Contains("IsBusy", source);
         Assert.Contains("e.Cancel = true;", source);
         Assert.Contains("IsEnabled=\"{Binding CanClose}\"", markup);
+    }
+
+    [Fact]
+    public void TestFlag_NeverBypassesExplicitControlAuthorization()
+    {
+        var code = Source("ControlCommandWindow.xaml.cs");
+        var start = code.IndexOf("public bool CanSend =>", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var section = code[start..code.IndexOf("public ControlCommandWindow(", start, StringComparison.Ordinal)];
+        Assert.Contains("ConfirmLiveCommand;", section);
+        Assert.DoesNotContain("TestMode || ConfirmLiveCommand", section);
+        Assert.Contains("LiveCommandWarning.Visibility = IsReady ?", code);
+        Assert.Contains("if (TestMode)", code);
+        Assert.Contains("ConfirmLiveCommand = false;", code);
     }
 
     [Theory]
