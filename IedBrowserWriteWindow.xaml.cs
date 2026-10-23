@@ -211,20 +211,26 @@ public partial class IedBrowserWriteWindow : Window
                     "NOT VERIFIED: " + result.Detail;
                 if (!result.Succeeded)
                 {
-                    StatusText.Text = "STOP: " + passed + " of " + staged.Count +
-                        " completed; " + row.Reference + ": " + result.Detail +
-                        " Later rows were NOT sent. Verify on IED before retry.";
+                    StatusText.Text = "Write ditolak: " +
+                        (result.Detail.Length > 130 ? result.Detail[..127] + "…" : result.Detail) +
+                        $" · {passed}/{staged.Count} verified. No automatic retry.";
+            ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(255, 242, 228));
                     return;
                 }
                 passed++;
             }
             StatusText.Text = "Verified " + passed + "/" + staged.Count +
                 " configuration DA(s) using native MMS readback. No IEC Operate issued.";
+            ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(232, 248, 237));
         }
         catch (Exception ex)
         {
-            StatusText.Text = "STOP after " + passed + " completed · " + ex.Message +
-                " Outcome of interrupted Write may be UNKNOWN. Never retry automatically.";
+            StatusText.Text = "Write unresolved: " + ex.Message +
+                " · no automatic retry.";
+            ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(255, 242, 228));
         }
         finally { SetBusy(false); }
     }
