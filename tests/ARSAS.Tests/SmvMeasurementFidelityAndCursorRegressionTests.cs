@@ -97,6 +97,8 @@ public sealed class SmvMeasurementFidelityAndCursorRegressionTests
         Assert.Contains("_cursorSampleIndex == sampleIndex", wave);
         Assert.Contains("_cursorLane == laneIndex", wave);
         Assert.Contains("if (stacked && traces > 0)", wave);
+        Assert.Contains("if (!stacked && IsSilentZeroTrace(series.Samples))", wave);
+        Assert.Contains("if (samples[i] != 0.0)", wave);
         Assert.Contains("var y = rect.Top + (i + 0.5) * band", wave);
         Assert.DoesNotContain("var pen = i == 2 ? ZeroPen", wave);
         Assert.DoesNotContain("DispatcherTimer", wave);
