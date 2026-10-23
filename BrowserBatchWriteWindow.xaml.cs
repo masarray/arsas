@@ -112,7 +112,7 @@ public partial class BrowserBatchWriteWindow : Window
     }
 
     // The first bounded visible batch is read-only hydrated on open, like
-    // IEDScout. No blank "new value" textbox and NO hidden Write/Operate.
+    // reference engineering application. No blank "new value" textbox and NO hidden Write/Operate.
     // Larger DOs can use Read on an explicitly selected, unhydrated row.
     private async Task PrimeTypedRowsAsync()
     {
