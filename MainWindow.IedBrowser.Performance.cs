@@ -1,0 +1,155 @@
+using System.Runtime.CompilerServices;
+using AR.Iec61850.Discovery;
+using ArIED61850Tester.Models;
+
+namespace ArIED61850Tester;
+
+public partial class MainWindow
+{
+    // Weak model keys: indexed declarations are reused when returning to SG7_BCU,
+    // without retaining replaced engineering models indefinitely.
+    private readonly ConditionalWeakTable<LiveIedModelDiscoveryDocument, Task<IedBrowserSchemaIndex>>
+        _iedBrowserSchemaTasks = new();
+    private Task<IedBrowserSchemaIndex>? _iedBrowserAwaitedSchema;
+    private Iec61850MonitorDevice? _iedBrowserAwaitedSchemaDevice;
+    private Iec61850MonitorDevice? _iedBrowserPreparingDevice;
+    private LiveIedModelDiscoveryDocument? _iedBrowserPreparingModel;
+
+    private Task<IedBrowserAcceptanceMetrics>? _iedBrowserMetricsFlight;
+    private Iec61850MonitorDevice? _iedBrowserMetricsDevice;
+    private LiveIedModelDiscoveryDocument? _iedBrowserMetricsModel;
+    private long _iedBrowserMetricsAssociation;
+    private DateTime _iedBrowserMetricsStartedUtc;
+
+    private void ShowIedBrowserPreparing(Iec61850MonitorDevice device,
+        LiveIedModelDiscoveryDocument model)
+    {
+        if (ReferenceEquals(_iedBrowserPreparingDevice, device) &&
+            ReferenceEquals(_iedBrowserPreparingModel, model))
+            return;
+        _iedBrowserPreparingDevice = device;
+        _iedBrowserPreparingModel = model;
+        // Never leave the previous IED's tree clickable during model preparation.
+        _iedBrowserNavigationRenderTicket++;
+        _iedBrowserRenderedPage = null;
+        _iedBrowserNavigation.SelectFromTree(null);
+        _iedBrowserSyncingSelection = true;
+        try
+        {
+            IedBrowserTreeGrid.SelectedItem = null;
+            _iedBrowserTree.Reset([]);
+            IedBrowserTreeGrid.ItemsSource = _iedBrowserTree.Rows;
+            ReplaceIedBrowserDetails([]);
+        }
+        finally { _iedBrowserSyncingSelection = false; }
+        IedBrowserObjectPath.Text = device.Name + " · preparing engineering model";
+        IedBrowserDetailStatus.Text = "Indexing model on background worker…";
+    }
+
+    private bool TryActivateIedBrowserSchema(
+        Iec61850MonitorDevice device, LiveIedModelDiscoveryDocument? model)
+    {
+        if (ReferenceEquals(_iedBrowserValueSchemaIndex?.SourceModel, model))
+            return true;
+        if (model is null)
+        {
+            _iedBrowserValueSchemaIndex = null;
+            return true;
+        }
+        var task = _iedBrowserSchemaTasks.GetValue(model, source =>
+            Task.Run(() => new IedBrowserSchemaIndex(source)));
+        if (task.IsCompletedSuccessfully)
+        {
+            _iedBrowserValueSchemaIndex = task.Result;
+            _iedBrowserPreparingDevice = null;
+            _iedBrowserPreparingModel = null;
+            return true;
+        }
+        ShowIedBrowserPreparing(device, model);
+        if (task.IsFaulted || task.IsCanceled)
+        {
+            IedBrowserDetailStatus.Text = "Model indexing unavailable · " +
+                (task.Exception?.GetBaseException().Message ?? "worker canceled");
+            return false;
+        }
+        if (!ReferenceEquals(_iedBrowserAwaitedSchema, task) ||
+            !ReferenceEquals(_iedBrowserAwaitedSchemaDevice, device))
+        {
+            _iedBrowserAwaitedSchema = task;
+            _iedBrowserAwaitedSchemaDevice = device;
+            _ = CompleteIedBrowserSchemaAsync(task, device, model,
+                device.LiveValues.Association);
+        }
+        return false;
+    }
+
+    private async Task CompleteIedBrowserSchemaAsync(
+        Task<IedBrowserSchemaIndex> task, Iec61850MonitorDevice device,
+        LiveIedModelDiscoveryDocument model, long association)
+    {
+        try { await task; }
+        catch (Exception) { /* The faulted state is shown by the guarded caller. */ }
+        if (_applicationCancellation.IsCancellationRequested ||
+            MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
+            !ReferenceEquals(SelectedDevice, device) ||
+            !ReferenceEquals(device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel, model) ||
+            device.LiveValues.Association != association)
+            return;
+        RefreshIedBrowser();
+    }
+
+    // SSOT coverage is not a five-Hz UI task. Model declarations are indexed
+    // separately; the observation ledger itself is never copied or modified.
+    private void QueueIedBrowserAcceptanceMetrics(
+        Iec61850MonitorDevice device, LiveIedModelDiscoveryDocument model)
+    {
+        var association = device.LiveValues.Association;
+        var sameScope = ReferenceEquals(_iedBrowserMetricsDevice, device) &&
+                        ReferenceEquals(_iedBrowserMetricsModel, model) &&
+                        _iedBrowserMetricsAssociation == association;
+        if (!sameScope)
+        {
+            _iedBrowserMetricsDevice = device;
+            _iedBrowserMetricsModel = model;
+            _iedBrowserMetricsAssociation = association;
+            IedBrowserSubtitle.ToolTip = "IEC SSOT · calculating read-only coverage…";
+        }
+        if (_iedBrowserMetricsFlight is { IsCompleted: false } ||
+            (sameScope && DateTime.UtcNow - _iedBrowserMetricsStartedUtc <
+                TimeSpan.FromSeconds(5)))
+            return;
+        var failures = _iedBrowserReadFailureEvidence?.SnapshotCurrent(device, 32);
+        var enumEvidence = _iedBrowserSclEnumEvidence;
+        _iedBrowserMetricsStartedUtc = DateTime.UtcNow;
+        var flight = Task.Run(() =>
+            IedBrowserAcceptanceMetrics.Capture(model, device.LiveValues,
+                enumEvidence, failures));
+        _iedBrowserMetricsFlight = flight;
+        _ = PublishIedBrowserAcceptanceMetricsAsync(
+            flight, device, model, association);
+    }
+
+    private async Task PublishIedBrowserAcceptanceMetricsAsync(
+        Task<IedBrowserAcceptanceMetrics> flight,
+        Iec61850MonitorDevice device, LiveIedModelDiscoveryDocument model, long association)
+    {
+        IedBrowserAcceptanceMetrics metrics;
+        try { metrics = await flight; }
+        catch (Exception ex)
+        {
+            if (ReferenceEquals(SelectedDevice, device) &&
+                ReferenceEquals(_iedBrowserMetricsFlight, flight))
+                IedBrowserSubtitle.ToolTip = "IEC SSOT coverage unavailable · " + ex.Message;
+            return;
+        }
+        if (_applicationCancellation.IsCancellationRequested ||
+            MainTabs.SelectedIndex != IedBrowserWorkspaceIndex ||
+            !ReferenceEquals(SelectedDevice, device) ||
+            !ReferenceEquals(_iedBrowserMetricsFlight, flight) ||
+            !ReferenceEquals(device.LiveDiscoveryModel, model) ||
+            device.LiveValues.Association != association)
+            return;
+        IedBrowserSubtitle.ToolTip = metrics.Summary +
+            " · sampled " + DateTime.Now.ToString("HH:mm:ss");
+    }
+}
