@@ -15,8 +15,9 @@ public sealed class SmvP3PresentationSourceRegressionTests
         Assert.Contains("Text=\"{Binding PowerQ}\"", xaml);
         Assert.Contains("Text=\"{Binding PowerS}\"", xaml);
         Assert.Contains("Text=\"{Binding PowerPf}\"", xaml);
-        Assert.Contains("ItemsSource=\"{Binding PowerPhases}\"", xaml);
-        Assert.Contains("IsExpanded=\"False\"", xaml);
+        Assert.Contains("ToolTip=\"{Binding PowerDetails}\"", xaml);
+        Assert.Contains("Grid.Row=\"6\" Text=\"{Binding UnitStatus}\"", xaml);
+        Assert.DoesNotContain("Header=\"Per-phase P / Q₁ / S / PF\"", xaml);
         var power = Source("Views/SmvPowerMeasurements.cs");
         Assert.Contains("SmvEngineeringDisplay.Effective(snapshot, selected) != SmvDisplayUnits.NineTwoLe", power);
         Assert.Contains("!snapshot.IsCleanProof", power);
