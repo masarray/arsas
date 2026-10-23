@@ -20,7 +20,7 @@ public sealed class MultiGridNaturalSortRegressionTests
         Assert.Contains(grids, g=>(string?)g.Attribute("Loaded")=="ExplorerLiveGrid_Loaded" &&
             ((string?)g.Attribute("ItemsSource"))?.Contains("SelectedDevice.Points")==true);
         Assert.Contains(grids, g=>(string?)g.Attribute("Loaded")=="CommandGrid_Loaded" &&
-            ((string?)g.Attribute("ItemsSource"))?.Contains("SelectedDevice.OperableCommandSignals")==true);
+            ((string?)g.Attribute("ItemsSource"))?.Contains("SelectedDevice.CommandSignals")==true);
         Assert.Contains(grids, g=>(string?)g.Attribute("Loaded")=="GlobalLiveGrid_Loaded" &&
             ((string?)g.Attribute("ItemsSource"))?.Contains("GlobalPoints")==true);
         var sort=Read("MainWindow.IecNaturalSort.cs");
@@ -106,12 +106,14 @@ public sealed class MultiGridNaturalSortRegressionTests
 
             var first = visual();
             Assert.Equal(75, first.Length);
-            Assert.Equal(breakers.Select(s => s.ObjectReference),
-                first.Take(4).Select(s => s.ObjectReference));
-            Assert.Equal(switches.Select(s => s.ObjectReference),
-                first.Skip(4).Take(3).Select(s => s.ObjectReference));
+            // CSWI is the explicitly requested operator-first IEC switch
+            // control tier; XCBR/XSWI remain discoverable below it.
             Assert.Equal(cswi.Select(s => s.ObjectReference),
-                first.Skip(7).Take(4).Select(s => s.ObjectReference));
+                first.Take(4).Select(s => s.ObjectReference));
+            Assert.Equal(breakers.Select(s => s.ObjectReference),
+                first.Skip(4).Take(4).Select(s => s.ObjectReference));
+            Assert.Equal(switches.Select(s => s.ObjectReference),
+                first.Skip(8).Take(3).Select(s => s.ObjectReference));
             Assert.Equal(ggios.Select(s => s.ObjectReference),
                 first.Skip(11).Select(s => s.ObjectReference));
 
@@ -123,7 +125,7 @@ public sealed class MultiGridNaturalSortRegressionTests
                 selected.ControlCurrentValue = i % 2 == 0 ? "Open" : "Closed";
                 device.RefreshCommandSignalProjection();
                 view.Refresh();
-                Assert.Same(selected, visual()[0]);
+                Assert.Same(cswi[0], visual()[0]);
             }
             Assert.False(selected.ControlInterlockCheck);
         });
