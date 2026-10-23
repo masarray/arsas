@@ -83,6 +83,24 @@ public sealed class IedBrowserWriteEditorMaterialUxRegressionTests
         Assert.DoesNotContain("IedBrowserWriteButton.Content =", Read("MainWindow.IedBrowser.TypedDataWrite.cs"));
     }
 
+    [Fact]
+    public void Browser_HasOneVisibleStableWrite_AndNativeFallbackForAdditionalConfigurationFCs()
+    {
+        var main = XDocument.Parse(Read("MainWindow.xaml"));
+        var primary = main.Descendants(P + "Button").Single(b =>
+            (string?)b.Attribute(X + "Name") == "IedBrowserWriteButton");
+        var duplicate = main.Descendants(P + "Button").Single(b =>
+            (string?)b.Attribute(X + "Name") == "IedBrowserConfigWriteButton");
+        Assert.Null(primary.Attribute("Visibility"));
+        Assert.Equal("Collapsed", (string?)duplicate.Attribute("Visibility"));
+        var router = Read("MainWindow.IedBrowser.TypedDataWrite.cs");
+        Assert.Contains("IedBrowserWriteValues_Click(sender, e)", router);
+        Assert.Contains("new ControlModelWriteWindow(_runtime, device, modelSignal)", router);
+        Assert.Contains("new BrowserDataWriteWindow(_runtime, device, attribute)", router);
+        Assert.Contains("new BrowserBatchWriteWindow(_runtime, device, model, owner)", router);
+        Assert.DoesNotContain("IedBrowserWriteButton.Content =", router);
+    }
+
     private static string Read(string relative)
     {
         DirectoryInfo? dir = new(AppContext.BaseDirectory);
