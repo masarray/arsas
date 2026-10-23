@@ -125,8 +125,15 @@ public partial class MainWindow
         var ctlModel = BrowserSelectedControlModelSignal();
         var selected = ctlModel is null ? BrowserWritableSelectedAttribute() : null;
         var selectedDo = ctlModel is null && selected is null ? BrowserWritableSelectedDo() : null;
+        // A single fixed Write button owns both existing typed and expanded
+        // configuration editors. The UI never shows two competing Write actions.
+        var currentPage = _iedBrowserNavigation.Current;
+        var modernScope = SelectedDevice is { IsConnected: true, IsDemo: false, IsBusy: false } device &&
+            device.LiveDiscoveryModel is not null && _iedBrowserReadOperation is null &&
+            (currentPage?.Kind is "DO" or "DA" ||
+             currentPage?.Kind == "LN" && !string.IsNullOrWhiteSpace(_iedBrowserSelectedDoReference));
         IedBrowserWriteButton.IsEnabled =
-            ctlModel is not null || selected is not null || selectedDo is not null;
+            ctlModel is not null || selected is not null || selectedDo is not null || modernScope;
         // The button always reads "Write". Selection changes the action/tooltip,
         // never the caption, width or Material pencil visual.
         IedBrowserWriteButton.ToolTip = ctlModel is not null
@@ -154,10 +161,12 @@ public partial class MainWindow
         var modelSignal = BrowserSelectedControlModelSignal();
         var attribute = modelSignal is null ? BrowserWritableSelectedAttribute() : null;
         var owner = modelSignal is null && attribute is null ? BrowserWritableSelectedDo() : null;
-        if (device is null || (modelSignal is null && attribute is null && owner is null))
+        if (device is null) return;
+        if (modelSignal is null && attribute is null && owner is null)
         {
-            IedBrowserSubtitle.Text =
-                "Write requires a current online CF/SP/DC attribute or exact owning DO.";
+            // SG/SE and other native supported configuration leaves retain
+            // their dedicated unified typed editor. No additional button.
+            IedBrowserWriteValues_Click(sender, e);
             RefreshIedBrowserWriteButton();
             return;
         }
