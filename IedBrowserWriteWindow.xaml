@@ -110,12 +110,15 @@
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock x:Name="StatusText" Grid.Column="0"
-                       Foreground="#58718B" FontSize="10.5"
-                       TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                       VerticalAlignment="Center" Margin="0,0,9,0"
-                       ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
-                       Text="Reading current MMS values…"/>
+            <Border x:Name="ResultBanner" Grid.Column="0"
+                    Background="Transparent" CornerRadius="6"
+                    Padding="8,5" Margin="0,0,7,0">
+                <TextBlock x:Name="StatusText" Foreground="#314B63" FontSize="10.5"
+                           TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center"
+                           ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
+                           Text="Reading current MMS values…"/>
+            </Border>
             <Button Grid.Column="1" x:Name="ReadButton" Width="82" Height="32"
                     Margin="0,0,7,0" Style="{StaticResource SoftButton}" Click="Read_Click">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
