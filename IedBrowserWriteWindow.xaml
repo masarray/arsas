@@ -82,7 +82,7 @@
                                     <ComboBoxItem Tag="3" Content="3 · direct-enhanced"/>
                                     <ComboBoxItem Tag="4" Content="4 · sbo-enhanced"/>
                                 </ComboBox>
-                                <TextBlock Text="Reading IED…" VerticalAlignment="Center"
+                                <TextBlock Text="{Binding PlaceholderText}" VerticalAlignment="Center"
                                            Foreground="#8193A7" FontSize="10"
                                            Visibility="{Binding PlaceholderVisibility}"/>
                             </Grid>
