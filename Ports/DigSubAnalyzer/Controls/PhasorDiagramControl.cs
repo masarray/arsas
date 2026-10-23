@@ -197,7 +197,7 @@ public sealed class PhasorDiagramControl : FrameworkElement
             DrawArrow(dc, center, tip, arrowPen, item.Family == PhasorFamily.Voltage ? 9.5 : 8.0);
             dc.Pop();
             vectors.Add(new RenderedVector(item, tip, brush,
-                CreateText(ToPhaseLabel(item.Name), 11.0, brush, LabelTypeface)));
+                CreateText(FormatPhasorLabel(item), 11.3, brush, LabelTypeface)));
         }
 
         dc.DrawEllipse(OriginInnerBrush, null, center, 4.2, 4.2);
@@ -283,6 +283,15 @@ public sealed class PhasorDiagramControl : FrameworkElement
         2 => PhaseTBrush,
         _ => PhaseRBrush
     };
+
+    public static string FormatPhasorLabel(PhasorDisplayItem item)
+    {
+        if (item.AngleDegrees is not double angle || !double.IsFinite(angle))
+            return ToPhaseLabel(item.Name);
+        if (Math.Abs(angle) < 0.05) angle = 0.0;
+        return ToPhaseLabel(item.Name) + "  ∠" +
+            angle.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + "°";
+    }
 
     private static string ToPhaseLabel(string name) => name switch
     {
