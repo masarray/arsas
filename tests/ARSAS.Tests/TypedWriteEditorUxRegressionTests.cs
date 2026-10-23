@@ -82,8 +82,8 @@ public sealed class TypedWriteEditorUxRegressionTests
     {
         var main = Source("MainWindow.xaml");
         XDocument.Parse(main);
-        Assert.Contains("x:Name=\\\"IedBrowserWriteDoButton\\\"", main);
-        Assert.Contains("Click=\\\"IedBrowserWriteDo_Click\\\"", main);
+        Assert.Contains("x:Name=\"IedBrowserWriteDoButton\"", main);
+        Assert.Contains("Click=\"IedBrowserWriteDo_Click\"", main);
         var route = Source("MainWindow.IedBrowser.TypedDataWrite.cs");
         Assert.Contains("BrowserWritableSelectedDo(allowLeafSelection: true)", route);
         Assert.Contains("dialog.VerifiedWriteOccurred", route);
@@ -113,8 +113,8 @@ public sealed class TypedWriteEditorUxRegressionTests
     public void EmbeddedInter_AlsoUsedForReferenceAndCodeTypography()
     {
         var xaml = Source("App.xaml");
-        Assert.Contains("<FontFamily x:Key=\\\"AppFontFamily\\\">./Assets/Fonts/#Inter</FontFamily>", xaml);
-        Assert.Contains("<FontFamily x:Key=\\\"AppCodeFontFamily\\\">./Assets/Fonts/#Inter</FontFamily>", xaml);
+        Assert.Contains("<FontFamily x:Key=\"AppFontFamily\">./Assets/Fonts/#Inter</FontFamily>", xaml);
+        Assert.Contains("<FontFamily x:Key=\"AppCodeFontFamily\">./Assets/Fonts/#Inter</FontFamily>", xaml);
         Assert.DoesNotContain("Cascadia Mono, Consolas</FontFamily>", xaml);
         foreach (var file in new[]
         {
