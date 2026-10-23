@@ -76,14 +76,56 @@ public partial class MainWindow
         return exact;
     }
 
+    // A DO focus has a bounded local list of live attributes, never an IED-wide scan.
+    // The dialog checks the exact same current live model and association again.
+    private LiveIedDataObjectModel? BrowserWritableSelectedDo()
+    {
+        if (SelectedDevice is not { IsConnected: true, IsDemo: false, IsBusy: false,
+                                   IsMonitoring: false, IsBrowserReading: false } device ||
+            device.LiveValues.IsOffline || device.LiveDiscoveryModel is null ||
+            _iedBrowserReadOperation is not null)
+            return null;
+
+        var page = _iedBrowserNavigation.Current;
+        var focused = page?.Payload switch
+        {
+            LiveIedDataObjectModel obj => obj.Reference,
+            LiveIedLogicalNodeModel when !string.IsNullOrWhiteSpace(_iedBrowserSelectedDoReference)
+                => _iedBrowserSelectedDoReference,
+            _ => null
+        };
+        if (string.IsNullOrWhiteSpace(focused)) return null;
+        var slash = focused.IndexOf('/');
+        var dot = slash < 0 ? -1 : focused.IndexOf('.', slash + 1);
+        if (slash < 1 || dot <= slash + 1) return null;
+
+        var owner = device.LiveDiscoveryModel.LogicalDevices
+            .FirstOrDefault(ld => string.Equals(ld.MmsDomain, focused[..slash], StringComparison.Ordinal))?
+            .LogicalNodes.FirstOrDefault(ln => string.Equals(ln.Name,
+                focused[(slash + 1)..dot], StringComparison.Ordinal))?
+            .DataObjects.FirstOrDefault(obj => string.Equals(obj.Reference, focused, StringComparison.Ordinal));
+        if (owner is null || owner.Attributes.Count is 0 or > 256) return null;
+
+        return owner.Attributes.Any(a =>
+            a.FunctionalConstraint is "CF" or "SP" or "DC" &&
+            !string.IsNullOrWhiteSpace(a.MmsReference) &&
+            !a.MmsReference.Contains("$Oper", StringComparison.Ordinal) &&
+            !a.MmsReference.Contains("$SBO", StringComparison.Ordinal) &&
+            !a.MmsReference.EndsWith("$ctlModel", StringComparison.Ordinal))
+            ? owner : null;
+    }
+
     private void RefreshIedBrowserWriteButton()
     {
         if (IedBrowserWriteButton is null) return;
         var selected = BrowserWritableSelectedAttribute();
-        IedBrowserWriteButton.IsEnabled = selected is not null;
-        IedBrowserWriteButton.ToolTip = selected is null
-            ? "Select one online, exact CF/SP/DC data attribute. Status, control and ctlModel use separate services."
-            : "Inspect live GVA type/readback, preview a diff and confirm one MMS Write. No automatic Operate.";
+        var selectedDo = selected is null ? BrowserWritableSelectedDo() : null;
+        IedBrowserWriteButton.IsEnabled = selected is not null || selectedDo is not null;
+        IedBrowserWriteButton.ToolTip = selected is not null
+            ? "Exact DA: inspect live GVA, review old/new and confirm one MMS Write."
+            : selectedDo is not null
+                ? "Exact DO: select changed attributes, inspect and confirm sequential non-atomic Writes."
+                : "Focus an online CF/SP/DC Data Attribute or its exact DO. Status, control and ctlModel use separate services.";
     }
 
     private void IedBrowserDetailList_SelectionChanged(
@@ -97,19 +139,31 @@ public partial class MainWindow
     {
         var device = SelectedDevice;
         var attribute = BrowserWritableSelectedAttribute();
-        if (device is null || attribute is null)
+        var owner = attribute is null ? BrowserWritableSelectedDo() : null;
+        if (device is null || (attribute is null && owner is null))
         {
             IedBrowserSubtitle.Text =
-                "Write requires an exact, current, online CF/SP/DC Data Attribute selection.";
+                "Write requires a current online CF/SP/DC attribute or exact owning DO.";
             RefreshIedBrowserWriteButton();
             return;
         }
 
-        var dialog = new BrowserDataWriteWindow(_runtime, device, attribute)
+        if (attribute is not null)
         {
-            Owner = this
-        };
-        dialog.ShowDialog();
+            var dialog = new BrowserDataWriteWindow(_runtime, device, attribute)
+            {
+                Owner = this
+            };
+            dialog.ShowDialog();
+        }
+        else if (owner is not null && device.LiveDiscoveryModel is { } model)
+        {
+            var dialog = new BrowserBatchWriteWindow(_runtime, device, model, owner)
+            {
+                Owner = this
+            };
+            dialog.ShowDialog();
+        }
         RefreshIedBrowserWriteButton();
         // A successful MMS Write is NOT process feedback. An explicit Read or
         // subsequent verified report remains the only live value authority.
