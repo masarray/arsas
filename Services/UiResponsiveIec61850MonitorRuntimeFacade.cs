@@ -80,6 +80,24 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     public int ConnectedDeviceCount => _inner.ConnectedDeviceCount;
     public int MonitoringDeviceCount => _inner.MonitoringDeviceCount;
 
+    // Explicit operator Browser configuration lane; the facade owns the same
+    // bounded per-device flight and never runs the native sync prefix on WPF.
+    // Inner runtime validates LIVE model, association, typed FC and quarantine.
+    public Task<AR.Iec61850.Mms.MmsReadResult> ReadBrowserConfigurationAsync(
+        string deviceId, AR.Iec61850.Discovery.LiveIedModelDiscoveryDocument model,
+        long association, IedBrowserWriteRow target, CancellationToken cancellationToken)
+        => RunDeviceOperationAsync(deviceId, cancellationToken,
+            token => _inner.ReadBrowserConfigurationAsync(
+                deviceId, model, association, target, token));
+
+    public Task<BrowserMmsWriteOutcome> WriteBrowserConfigurationAsync(
+        string deviceId, AR.Iec61850.Discovery.LiveIedModelDiscoveryDocument model,
+        long association, IedBrowserWriteRow target,
+        AR.Iec61850.Mms.MmsDataValue desired, CancellationToken cancellationToken)
+        => RunDeviceOperationAsync(deviceId, cancellationToken,
+            token => _inner.WriteBrowserConfigurationAsync(
+                deviceId, model, association, target, desired, token));
+
     public Task<int> ReadBrowserValuesAsync(
         Iec61850MonitorDevice device,
         IReadOnlyList<IedBrowserReadTarget> targets,
