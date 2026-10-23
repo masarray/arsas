@@ -155,9 +155,49 @@ public sealed class StaticDataSetReportProjectionAccumulatorTests
         var source = File.ReadAllText(FindRepoFile("Services/Iec61850MonitorRuntime.cs"))
             .Replace("\r\n", "\n", StringComparison.Ordinal);
         Assert.Contains("session.StaticProjectionPoints = staticDataSetReportOnly", source);
+        Assert.Contains("session.StaticReportProjection.Prepare(", source);
+        Assert.Contains("session.StaticReportProjection.ClearPrepared();", source);
         Assert.Contains("session.StaticProjectionPoints,\n                        sourceUpdate)", source);
         Assert.Contains("session.StaticProjectionPoints = [];", source);
         Assert.DoesNotContain("session.Points.Values.ToArray(),\n                        sourceUpdate)", source);
+    }
+
+    [Fact]
+    public void PreparedStaticReportIndex_UsesExactMembershipAndResetsLeafEvidence()
+    {
+        const string parent = "SG7_BCUMeter/ACsrcMHAI1.ThdA";
+        var model = Model(DataObject(parent, "ThdA",
+            Attribute(parent + ".phsA.cVal.mag.f", "phsA.cVal.mag.f"),
+            Attribute(parent + ".phsB.cVal.mag.f", "phsB.cVal.mag.f"),
+            Attribute(parent + ".phsC.cVal.mag.f", "phsC.cVal.mag.f")));
+        var points = new[] { Point(parent) };
+        var projection = new StaticDataSetReportProjectionAccumulator();
+        projection.Prepare(model, points);
+
+        Assert.Empty(projection.Project(model, points,
+            Update(parent + ".phsA.instCVal.mag.f", "999")));
+        Assert.Empty(projection.Project(model, points,
+            Update(parent + ".phsA.cVal.mag.f", "1")));
+        Assert.Empty(projection.Project(model, points,
+            Update(parent + ".phsB.cVal.mag.f", "2")));
+        var aggregate = Assert.Single(projection.Project(model, points,
+            Update(parent + ".phsC.cVal.mag.f", "3")));
+        Assert.Equal("A=1, B=2, C=3", aggregate.Value);
+        Assert.Equal(parent, aggregate.Reference);
+
+        // A new MMS association cannot inherit previous partial GI leaves.
+        projection.Reset();
+        Assert.Empty(projection.Project(model, points,
+            Update(parent + ".phsC.cVal.mag.f", "4")));
+        projection.ClearPrepared();
+        projection.Reset();
+        Assert.Empty(projection.Project(model, points,
+            Update(parent + ".phsA.cVal.mag.f", "5")));
+        Assert.Empty(projection.Project(model, points,
+            Update(parent + ".phsB.cVal.mag.f", "6")));
+        var nonIndexed = Assert.Single(projection.Project(model, points,
+            Update(parent + ".phsC.cVal.mag.f", "7")));
+        Assert.Equal("A=5, B=6, C=7", nonIndexed.Value);
     }
 
     [Fact]

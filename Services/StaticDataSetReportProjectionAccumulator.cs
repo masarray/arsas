@@ -43,6 +43,48 @@ public sealed class StaticDataSetReportProjectionAccumulator
     private readonly Dictionary<string, CompanionMetadata> _metadataByReference =
         new(StringComparer.OrdinalIgnoreCase);
 
+    // Membership is immutable for one monitor selection. Prepare once, then
+    // resolve descendants via their ancestor path rather than walking every
+    // selected IED point and rebuilding a query per InformationReport leaf.
+    // This is an index of identities, NEVER another value store.
+    private IReadOnlyCollection<Iec61850MonitorPoint>? _preparedPoints;
+    private LiveIedModelDiscoveryDocument? _preparedModel;
+    private HashSet<string>? _exactSelected;
+    private Dictionary<string, Iec61850MonitorPoint>? _aggregateByReference;
+    private readonly Dictionary<string, SchemaSafeAggregateProjectionService.ReadPlan>
+        _plannedAggregates = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _unsupportedAggregates =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    public void Prepare(LiveIedModelDiscoveryDocument? model,
+        IReadOnlyCollection<Iec61850MonitorPoint> monitoredPoints)
+    {
+        ArgumentNullException.ThrowIfNull(monitoredPoints);
+        ClearPrepared();
+        _preparedModel = model;
+        _preparedPoints = monitoredPoints;
+        _exactSelected = new HashSet<string>(monitoredPoints.Select(point =>
+            NormalizeReference(point.IecReference)), StringComparer.Ordinal);
+        _aggregateByReference = monitoredPoints
+            .Where(point => IsAggregate(point.IecReference))
+            .GroupBy(point => NormalizeReference(point.IecReference), StringComparer.Ordinal)
+            // Multiple bindings with the same IEC reference are ambiguous.
+            // The fast path refuses to choose one by arbitrary array order.
+            .Where(group => group.Count() == 1)
+            .ToDictionary(group => group.Key, group => group.Single(),
+                StringComparer.Ordinal);
+    }
+
+    public void ClearPrepared()
+    {
+        _preparedPoints = null;
+        _preparedModel = null;
+        _exactSelected = null;
+        _aggregateByReference = null;
+        _plannedAggregates.Clear();
+        _unsupportedAggregates.Clear();
+    }
+
     public void Reset()
     {
         _leavesByParent.Clear();
@@ -74,13 +116,20 @@ public sealed class StaticDataSetReportProjectionAccumulator
         if (!effectiveUpdate.HasValue)
             return new[] { effectiveUpdate };
 
-        var exactSelected = monitoredPoints.Any(point =>
-            ReferencesEqual(point.IecReference, effectiveUpdate.Reference));
+        var usePrepared = ReferenceEquals(monitoredPoints, _preparedPoints) &&
+            ReferenceEquals(authorityModel, _preparedModel) &&
+            _exactSelected is not null && _aggregateByReference is not null;
+        var exactSelected = usePrepared
+            ? _exactSelected!.Contains(updateReference)
+            : monitoredPoints.Any(point =>
+                ReferencesEqual(point.IecReference, effectiveUpdate.Reference));
 
-        var aggregateParents = monitoredPoints
-            .Where(point => IsAggregate(point.IecReference))
-            .Where(point => IsDescendant(updateReference, NormalizeReference(point.IecReference)))
-            .ToArray();
+        var aggregateParents = usePrepared
+            ? FindPreparedAggregateParents(updateReference)
+            : monitoredPoints
+                .Where(point => IsAggregate(point.IecReference))
+                .Where(point => IsDescendant(updateReference, NormalizeReference(point.IecReference)))
+                .ToArray();
 
         // A semantic child may not be assigned to an aggregate unless its parent is unique.
         // In an ambiguous model, preserve only an independently selected exact child.
@@ -88,13 +137,22 @@ public sealed class StaticDataSetReportProjectionAccumulator
             return exactSelected ? new[] { effectiveUpdate } : aggregateParents.Length == 0 ? new[] { effectiveUpdate } : Array.Empty<NativeReportValueUpdate>();
 
         var parent = aggregateParents[0];
-        if (!SchemaSafeAggregateProjectionService.TryBuildReadPlan(
-                authorityModel,
-                parent.IecReference,
-                out var plan,
-                out _))
-        {
+        var parentKey = NormalizeReference(parent.IecReference);
+        if (usePrepared && _unsupportedAggregates.Contains(parentKey))
             return exactSelected ? new[] { effectiveUpdate } : Array.Empty<NativeReportValueUpdate>();
+
+        if (!usePrepared || !_plannedAggregates.TryGetValue(parentKey, out var plan))
+        {
+            if (!SchemaSafeAggregateProjectionService.TryBuildReadPlan(
+                    authorityModel, parent.IecReference, out plan, out _))
+            {
+                if (usePrepared)
+                    _unsupportedAggregates.Add(parentKey);
+                return exactSelected ? new[] { effectiveUpdate } : Array.Empty<NativeReportValueUpdate>();
+            }
+
+            if (usePrepared)
+                _plannedAggregates[parentKey] = plan;
         }
 
         var expectedLeaf = plan.Leaves.FirstOrDefault(leaf =>
@@ -106,7 +164,6 @@ public sealed class StaticDataSetReportProjectionAccumulator
             return exactSelected ? new[] { effectiveUpdate } : Array.Empty<NativeReportValueUpdate>();
         }
 
-        var parentKey = NormalizeReference(parent.IecReference);
         if (!_leavesByParent.TryGetValue(parentKey, out var leaves))
         {
             leaves = new Dictionary<string, LeafState>(StringComparer.OrdinalIgnoreCase);
@@ -130,6 +187,29 @@ public sealed class StaticDataSetReportProjectionAccumulator
         return exactSelected
             ? new[] { effectiveUpdate, projected }
             : new[] { projected };
+    }
+
+    private Iec61850MonitorPoint[] FindPreparedAggregateParents(string descendant)
+    {
+        // IEC semantic member paths have bounded dot-separated depth in
+        // practice. Explicit cap also protects against malicious/unexpected
+        // MMS references while never guessing an ancestor on overflow.
+        if (_aggregateByReference is null || descendant.Length > 1024)
+            return [];
+        Iec61850MonitorPoint? first = null;
+        var depth = 0;
+        for (var dot = descendant.LastIndexOf('.'); dot > 0;
+             dot = descendant.LastIndexOf('.', dot - 1))
+        {
+            if (++depth > 32)
+                return [];
+            if (!_aggregateByReference.TryGetValue(descendant[..dot], out var parent))
+                continue;
+            if (first is not null)
+                return [first, parent]; // ambiguous; caller rejects both
+            first = parent;
+        }
+        return first is null ? [] : [first];
     }
 
     private void RememberCompanionMetadata(string updateReference, NativeReportValueUpdate update)
