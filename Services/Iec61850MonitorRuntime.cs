@@ -1085,7 +1085,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                         session.BrowserObservationAssociation, point.IecReference,
                         point.FunctionalConstraint, out var read))
                     continue;
-                ApplyValueUpdate(session, point, read.Value, read.Quality,
+                ApplyValueUpdate(session, point,
+                    FormatStaticSnapshotRead(point, read), read.Quality,
                     read.DeviceTimestamp, "MMS Snapshot Read",
                     $"Existing MMS Read at {read.ObservedUtc:O}; " +
                     "awaiting first routed InformationReport for this monitor",
@@ -2706,6 +2707,9 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
 
         var rich = resolved.Value as Iec61850ReadValue;
         var scalar = Iec61850ReadValue.Unwrap(resolved.Value);
+        if (scalar is double d && !double.IsFinite(d) ||
+            scalar is float f && !float.IsFinite(f))
+            return false;
         if (scalar is not (string or bool or byte or sbyte or short or ushort
             or int or uint or long or ulong or float or double or decimal))
             return false;
@@ -2728,6 +2732,21 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
     /// the association-scoped canonical ledger is the only value authority.
     /// Report observations and SOE remain exclusively receive-path owned.
     /// </summary>
+    /// <summary>
+    /// One display-only formatter for Report and actual MMS Snapshot Read.
+    /// DPC/Dbpos must show the correct Open/Close two-bit status rather than
+    /// a misleading bare integer; raw ledger evidence is never modified.
+    /// </summary>
+    internal static string FormatStaticSnapshotRead(
+        Iec61850MonitorPoint point, IedBrowserObservedValue evidence)
+    {
+        ArgumentNullException.ThrowIfNull(point);
+        ArgumentNullException.ThrowIfNull(evidence);
+        return Iec61850ValueFormatter.FormatReportProcessValue(
+            evidence.Value, point.IecDataType, point.Unit,
+            point.Category, point.IecReference);
+    }
+
     private void ConsumeStaticReadJournal(DeviceSession session)
     {
         if (!session.StaticDataSetReportOnly || !session.Device.IsMonitoring ||
@@ -2781,7 +2800,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
             !session.Device.IsConnected || !session.Client.IsConnected ||
             session.Device.LiveValues.Association != association)
             return;
-        ApplyValueUpdate(session, point, read.Value, read.Quality,
+        ApplyValueUpdate(session, point,
+            FormatStaticSnapshotRead(point, read), read.Quality,
             read.DeviceTimestamp, "MMS Snapshot Read",
             $"Explicit MMS Read at {read.ObservedUtc:O}; " +
             "awaiting first routed InformationReport",

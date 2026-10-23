@@ -166,6 +166,27 @@ public sealed class Sg7IntegratedControlSsotRcbTests
     }
 
     [Fact]
+    public void StaticMmsSnapshot_DpcPresentationUsesOperatorDbposWithoutChangingRawEvidence()
+    {
+        var point = new Iec61850MonitorPoint
+        {
+            IecReference = "SG7_BCUSystem/BkrCSWI1.Pos.stVal",
+            FunctionalConstraint = "ST",
+            IecDataType = "Dbpos", Category = "Position"
+        };
+        var store = new IedBrowserLiveValues();
+        var epoch = store.BeginAssociation();
+        Assert.True(store.PublishForAssociation(epoch, point.IecReference,
+            "ST", "2", "Good", "12:01", "MMS Read"));
+        Assert.True(Iec61850MonitorRuntime.TryGetStaticInitialRead(
+            store, epoch, point.IecReference, "ST", out var raw));
+        Assert.Equal("2", raw.Value);
+        Assert.Equal("Close [10]",
+            Iec61850MonitorRuntime.FormatStaticSnapshotRead(point, raw));
+        Assert.Equal("2", raw.Value);
+    }
+
+    [Fact]
     public void StaticReportReadJournal_IsBounded_ReadOnlyAndNeverSynthesizesSoe()
     {
         var runtime = Read("Services/Iec61850MonitorRuntime.cs");
