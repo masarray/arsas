@@ -152,9 +152,18 @@ public sealed class P109WCommandDockLifecycleArchitectureTests
         var inspect = client[start..stop];
         var invalidate = inspect.IndexOf("await InvalidateCachedControlSessionAsync(", StringComparison.Ordinal);
         var typed = inspect.IndexOf("var semantic = ArControl.Iec61850ControlSemanticResolver.Resolve(", StringComparison.Ordinal);
-        var finalCommit = inspect.LastIndexOf("signal.ClearLiveControlAuthority();", StringComparison.Ordinal);
-        var authorize = inspect.IndexOf("signal.ControlSemanticVerified = semantic.IsCommandSafe && descriptor.IsOperationallyReady;", StringComparison.Ordinal);
-        Assert.True(invalidate >= 0 && typed > invalidate && finalCommit > typed && authorize > finalCommit);
+        // Current implementation composes all three independent safety inputs
+        // BEFORE it can publish authority. A mere semantic CDC match must not
+        // bypass the consumer's exact Boolean DPC status-reference fence.
+        var proof = inspect.IndexOf("var fullyVerified = semantic.IsCommandSafe &&", StringComparison.Ordinal);
+        var identity = inspect.IndexOf("descriptor.IsOperationallyReady && exactDpcBooleanFeedback;", StringComparison.Ordinal);
+        var revoke = inspect.LastIndexOf("signal.ClearLiveControlAuthority();", StringComparison.Ordinal);
+        var authorize = inspect.IndexOf("signal.ControlSemanticVerified = fullyVerified;", StringComparison.Ordinal);
+        Assert.True(invalidate >= 0 && typed > invalidate && proof > typed &&
+                    identity > proof && revoke > identity && authorize > revoke);
+        Assert.Contains("if (!fullyVerified ||", inspect, StringComparison.Ordinal);
+        Assert.Contains("if (fullyVerified)", inspect, StringComparison.Ordinal);
+        Assert.Contains("signal.AcceptVerifiedLiveControlCdc(effectiveCdc);", inspect, StringComparison.Ordinal);
         Assert.Contains("signal.ControlModelText = probe.Decoded", inspect, StringComparison.Ordinal);
         Assert.Contains("signal.ControlModelText = modelText;", inspect, StringComparison.Ordinal);
         Assert.DoesNotContain("signal.ClearLiveControlAuthority();\n            signal.ControlModelText = \"Auto-detect\";\n            await Invalidate", inspect, StringComparison.Ordinal);
