@@ -6,6 +6,7 @@ namespace ArIED61850Tester;
 
 public partial class MainWindow
 {
+    private readonly IedBrowserUnitProjectionCache _iedBrowserUnitCache = new();
     // Weak model keys: indexed declarations are reused when returning to SG7_BCU,
     // without retaining replaced engineering models indefinitely.
     private readonly ConditionalWeakTable<LiveIedModelDiscoveryDocument, Task<IedBrowserSchemaIndex>>
