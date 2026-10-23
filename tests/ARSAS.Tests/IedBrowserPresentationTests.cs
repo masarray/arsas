@@ -141,9 +141,19 @@ public sealed class IedBrowserPresentationTests
         var projection = new IedBrowserTreeProjection();
         projection.Reset(roots);
         Assert.Equal(
-            ["GOOSE", "Reports", "Setting Groups", "Files", "DataSets", "Data Model"],
+            ["Reports", "DataSets", "Data Model", "Files", "GOOSE", "Setting Groups"],
             projection.Rows.Select(x => x.Title).ToArray());
+        Assert.Equal(
+            ["category/reports", "category/datasets", "category/model",
+             "category/files", "category/goose", "category/settings"],
+            projection.Rows.Select(x => x.Key).ToArray());
         Assert.All(projection.Rows, x => Assert.Equal(0, x.Depth));
+
+        // A disconnected or SCL-only session retains the same category routes;
+        // reordering must not depend on live MMS or create placeholder children.
+        var withoutLiveModel = IedBrowserPresentation.Roots(null, Array.Empty<RcbExportRow>());
+        Assert.Equal(projection.Rows.Select(x => x.Key).ToArray(),
+            withoutLiveModel.Select(x => x.Key).ToArray());
     }
 
     [Fact]

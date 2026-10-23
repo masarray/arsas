@@ -380,16 +380,12 @@ public static class IedBrowserPresentation
             Func<IReadOnlyList<IedBrowserTreeRow>> children)
             => new("category/" + key, name, "Category", 0, loadChildren: children);
 
+        // ARSAS navigation order is a presentation choice, not a wire/model contract.
+        // Stable category keys and lazy children preserve existing selected paths and
+        // avoid any additional MMS discovery, control or report requests.
         var categories = new List<IedBrowserTreeRow>
         {
-            Category("GOOSE", "goose", () => BlockGroups(
-                IedBrowserGooseDirectory.Resolve(model, sclModel), "GoCB", labelIed)),
             Category("Reports", "reports", () => ReportGroups(rcbs, labelIed)),
-            Category("Setting Groups", "settings", () => BlockGroups(model?.SettingGroupControls, "SGCB", labelIed)),
-            // Files inventory belongs exclusively in the right-side
-            // virtualized grid. Nested file nodes duplicate content and
-            // inflate the compact engineering navigation.
-            new("category/files", "Files", "Category", 0),
             Category("DataSets", "datasets", () => DataSetGroups(model?.DataSets, labelIed)),
             Category("Data Model", "model", () =>
                 model?.LogicalDevices.Select(ld =>
@@ -405,7 +401,14 @@ public static class IedBrowserPresentation
                                             new IedBrowserTreeRow("model/da/" + attr.MmsReference + "/" + ordinal,
                                                 attr.AttributePath, "DA", 4, attr)).ToArray()))
                                     .ToArray())).ToArray())).ToArray()
-                    ?? Array.Empty<IedBrowserTreeRow>())
+                    ?? Array.Empty<IedBrowserTreeRow>()),
+            // Files inventory belongs exclusively in the right-side
+            // virtualized grid. Nested file nodes duplicate content and
+            // inflate the compact engineering navigation.
+            new("category/files", "Files", "Category", 0),
+            Category("GOOSE", "goose", () => BlockGroups(
+                IedBrowserGooseDirectory.Resolve(model, sclModel), "GoCB", labelIed)),
+            Category("Setting Groups", "settings", () => BlockGroups(model?.SettingGroupControls, "SGCB", labelIed))
         };
         return categories; // ARSAS IED Explorer already owns device selection; never duplicate it.
     }
