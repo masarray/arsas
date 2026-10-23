@@ -27,7 +27,11 @@ public static class SmvDigSubPresentationAdapter
             var channelUnits = SmvEngineeringDisplay.Describe(channel.ChannelIndex, profile);
             var series = new WaveformSeriesModel
             {
-                Name = $"Ch{channel.ChannelIndex}", // fixed color identity shared with RAW
+                // The 9-2LE operator profile already supplies Ia/Ib/Ic/In and
+                // Ua/Ub/Uc/Un. Do not force beginners to cross-map "Ch1" in
+                // the plot against "Ia" in the measurement table.
+                Name = profile == SmvDisplayUnits.NineTwoLe
+                    ? channelUnits.Name : $"Ch{channel.ChannelIndex}",
                 Unit = channelUnits.Unit,
                 Freshness = ChannelFreshness.Live,
                 Samples = channelUnits.Scale == 1 ? aligned : aligned.Select(v => v * channelUnits.Scale).ToArray(),
