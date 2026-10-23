@@ -4,6 +4,7 @@ using System.Windows.Media;
 
 namespace ARSAS.Tests;
 
+[Collection("WpfStaIsolation")]
 public sealed class FieldRegressionFixTests
 {
     [Fact]

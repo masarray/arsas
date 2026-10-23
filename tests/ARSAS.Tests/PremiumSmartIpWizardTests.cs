@@ -9,6 +9,7 @@ using ArIED61850Tester.Services;
 
 namespace ARSAS.Tests;
 
+[Collection("WpfStaIsolation")]
 public sealed class PremiumSmartIpWizardTests
 {
     [Theory]

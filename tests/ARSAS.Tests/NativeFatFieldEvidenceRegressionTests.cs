@@ -9,6 +9,7 @@ using ArIED61850Tester.Services.IoTesting;
 
 namespace ARSAS.Tests;
 
+[Collection("WpfStaIsolation")]
 public sealed class NativeFatFieldEvidenceRegressionTests
 {
     [Fact]

@@ -13,6 +13,7 @@ namespace ARSAS.Tests;
 /// Regression gates for SG7-size WPF search/sort scheduling. This is a
 /// presentation test: no MMS acquisition, SOE or command operation is mocked.
 /// </summary>
+[Collection("WpfStaIsolation")]
 public sealed class SsotV2LargeGridSearchSortBudgetTests
 {
     [Fact]
