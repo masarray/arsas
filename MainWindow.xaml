@@ -4,7 +4,7 @@
         xmlns:views="clr-namespace:ArIED61850Tester.Views"
         Title="ARSAS - Smart IEC 61850 Communication Tester"
         Height="900" Width="1480" MinHeight="760" MinWidth="1180"
-        WindowStartupLocation="CenterScreen" Background="{StaticResource AppBackgroundGradient}"
+        WindowStartupLocation="CenterScreen" WindowState="Maximized" Background="{StaticResource AppBackgroundGradient}"
         FontFamily="{StaticResource AppFontFamily}"
         UseLayoutRounding="True" SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Ideal"
