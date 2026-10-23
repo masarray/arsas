@@ -153,7 +153,9 @@ public sealed class P109WCommandDockLifecycleArchitectureTests
         var invalidate = inspect.IndexOf("await InvalidateCachedControlSessionAsync(", StringComparison.Ordinal);
         var typed = inspect.IndexOf("var semantic = ArControl.Iec61850ControlSemanticResolver.Resolve(", StringComparison.Ordinal);
         var finalCommit = inspect.LastIndexOf("signal.ClearLiveControlAuthority();", StringComparison.Ordinal);
-        var authorize = inspect.IndexOf("signal.ControlSemanticVerified = semantic.IsCommandSafe && descriptor.IsOperationallyReady;", StringComparison.Ordinal);
+        var authorize = inspect.IndexOf("signal.ControlSemanticVerified = fullyVerified;", StringComparison.Ordinal);
+        Assert.Contains("exactDpcBooleanFeedback = HasExactDpcBooleanFeedback(descriptor, effectiveCdc)", inspect);
+        Assert.Contains("descriptor.IsOperationallyReady && exactDpcBooleanFeedback", inspect);
         Assert.True(invalidate >= 0 && typed > invalidate && finalCommit > typed && authorize > finalCommit);
         Assert.Contains("signal.ControlModelText = probe.Decoded", inspect, StringComparison.Ordinal);
         Assert.Contains("signal.ControlModelText = modelText;", inspect, StringComparison.Ordinal);
