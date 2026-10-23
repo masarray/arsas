@@ -202,6 +202,23 @@ public sealed class PremiumSmartIpWizardTests
     }
 
     [Fact]
+    public void FullIpv6Paste_SwitchesToRawBeforeAnySingleOctetValidation()
+    {
+        var source = File.ReadAllText(Find("IpConnectWizardWindow.xaml.cs"));
+        var method = source.IndexOf("private void Octet_Pasting(", StringComparison.Ordinal);
+        var next = source.IndexOf("private void HistoryButton_Click(", method, StringComparison.Ordinal);
+        Assert.True(method >= 0 && next > method);
+        var paste = source[method..next];
+        var fullIpv6 = paste.IndexOf(
+            "fullAddress.AddressFamily == AddressFamily.InterNetworkV6", StringComparison.Ordinal);
+        var decimalPath = paste.IndexOf("if (pasted.Contains('.'))", StringComparison.Ordinal);
+        Assert.True(fullIpv6 >= 0 && decimalPath > fullIpv6,
+            "Full IPv6 paste must bypass IPv4 octet validation.");
+        Assert.Contains("ApplyAddress(pasted)", paste, StringComparison.Ordinal);
+        Assert.Contains("RawIpBox.Focus()", paste, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void HistorySelection_AndKeyboardHandlers_DoNotDirectlyInitiateConnections()
     {
         var source = File.ReadAllText(Find("IpConnectWizardWindow.xaml.cs"));
