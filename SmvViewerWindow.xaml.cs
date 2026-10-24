@@ -32,7 +32,7 @@ public partial class SmvViewerWindow : Window, INotifyPropertyChanged
     private CancellationTokenSource? _captureCancellation;
     private SmvSnapshotResult? _snapshot;
     private string _statusText = string.Empty;
-    private string _captureStatusText = "Select an adapter and stream, then capture a bounded two-cycle snapshot.";
+    private string _captureStatusText = "Select an Ethernet adapter, then capture the first received SV stream or select a configured stream.";
     private string _snapshotBadgeText = "No snapshot";
     private string _snapshotSummaryText = "No Sampled Values snapshot has been captured yet.";
     private string _snapshotEvidenceText = "The snapshot will report stream identity, payload shape, sample-counter continuity and a static raw waveform.";
@@ -49,13 +49,17 @@ public partial class SmvViewerWindow : Window, INotifyPropertyChanged
             ? "MMS endpoint unassigned"
             : $"{device.IpAddress}:{device.Port}";
 
+        // First-run capture must not require an SCL definition from another IED.
+        // The unfiltered option receives the first real SV observed on Ethernet.
+        Streams.Add(SmvStreamRow.AnyReceived());
         foreach (var row in BuildRows(device))
             Streams.Add(row);
 
-        SelectedStream = Streams.FirstOrDefault();
-        StatusText = Streams.Count == 0
-            ? "No Sampled Value control block is configured in the opened SCL model or discovered from this IED."
-            : $"{Streams.Count:N0} Sampled Value stream definition(s) are available. Snapshot capture is passive and does not write to the IED.";
+        SelectedStream = Streams[0];
+        var configured = Streams.Count - 1;
+        StatusText = configured == 0
+            ? "Ready for passive SV capture on Ethernet. Select the correct Npcap adapter and Capture to discover the first stream."
+            : $"Capture any received SV stream or choose one of {configured:N0} configured stream(s). No network frame is transmitted.";
         DataContext = this;
     }
 
@@ -126,9 +130,11 @@ public partial class SmvViewerWindow : Window, INotifyPropertyChanged
     }
 
     public string SelectedStreamDetail => SelectedStream == null
-        ? "Select one stream before starting the bounded capture."
-        : $"{SelectedStream.Source} • {SelectedStream.ControlReference} • DataSet {SelectedStream.DataSetReference} • " +
-          $"APPID {SelectedStream.AppId} • {SelectedStream.MemberCount} member(s).";
+        ? "Select an SV stream or the auto-discovery option."
+        : SelectedStream.Source == "Live Ethernet (auto)"
+            ? "Automatically capture the first decodable SV stream arriving on the selected Ethernet adapter. No SCL, APPID, MAC or svID filter is required."
+            : $"{SelectedStream.Source} • {SelectedStream.ControlReference} • DataSet {SelectedStream.DataSetReference} • " +
+              $"APPID {SelectedStream.AppId} • {SelectedStream.MemberCount} member(s).";
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
@@ -548,6 +554,25 @@ public partial class SmvViewerWindow : Window, INotifyPropertyChanged
 
 public sealed class SmvStreamRow
 {
+    /// <summary>
+    /// Passive first-stream discovery. The capture request normalizes "-"
+    /// into unrestricted APPID, MAC, svID and timebase hints.
+    /// </summary>
+    public static SmvStreamRow AnyReceived() => new()
+    {
+        Source = "Live Ethernet (auto)",
+        ControlReference = "First received SV stream",
+        StreamId = "-",
+        DataSetReference = "-",
+        AppId = "-",
+        DestinationMac = "-",
+        Vlan = "-",
+        SampleRate = "-",
+        SampleMode = "-",
+        NumberOfAsdu = "-",
+        MemberCount = 0
+    };
+
     public string Source { get; init; } = string.Empty;
     public string ControlReference { get; init; } = string.Empty;
     public string StreamId { get; init; } = string.Empty;
