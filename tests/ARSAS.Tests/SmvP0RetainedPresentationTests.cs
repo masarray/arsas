@@ -27,13 +27,13 @@ public sealed class SmvP0RetainedPresentationTests
         var voltage = new SmvDisplayMeasurement(6, "Ub", "V", 49.999,
             49.999, -160, true);
         Assert.Equal("∠200.0°", voltage.AngleText);
-        Assert.Equal("Ub 49.999 V ∠200.0°", PhasorDiagramControl.FormatPhasorLabel(
+        Assert.Equal("Ub 50V ∠200°", PhasorDiagramControl.FormatPhasorLabel(
             new PhasorDisplayItem
             {
                 Name = "Ub", Unit = "V", Family = PhasorFamily.Voltage,
                 Magnitude = 49.999, AngleDegrees = -160
             }));
-        Assert.Equal("Ia 1.002 A ∠15.0°", PhasorDiagramControl.FormatPhasorLabel(
+        Assert.Equal("Ia 1.002A ∠15°", PhasorDiagramControl.FormatPhasorLabel(
             new PhasorDisplayItem
             {
                 Name = "Ia", Unit = "A", Family = PhasorFamily.Current,
