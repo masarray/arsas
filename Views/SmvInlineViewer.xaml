@@ -374,9 +374,12 @@
 
             <Grid Grid.Column="4">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="1.1*" MinHeight="235"/>
+                    <RowDefinition Height="*" MinHeight="235"/>
                     <RowDefinition Height="8"/>
-                    <RowDefinition Height="0.9*" MinHeight="220"/>
+                    <!-- Measurement sizes to its actual four fixed channel rows.
+                         All released height expands the phasor, including in RAW
+                         where the whole Power card is Collapsed. -->
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
                 <Border Grid.Row="0" Style="{StaticResource SvPane}" Padding="9">
                     <Grid>
@@ -407,7 +410,7 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="6"/>
-                            <RowDefinition Height="*" MinHeight="0"/>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="5"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="3"/>
@@ -436,7 +439,7 @@
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="4"/>
-                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
                                 <TextBlock Text="{Binding VoltageGroupHeading}" FontSize="11.5"
                                            FontWeight="SemiBold" Foreground="#31567F" Margin="5,0,0,0"
@@ -481,7 +484,7 @@
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="4"/>
-                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
                                 <TextBlock Text="{Binding CurrentGroupHeading}" FontSize="11.5"
                                            FontWeight="SemiBold" Foreground="#31567F" Margin="5,0,0,0"
@@ -532,37 +535,68 @@
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="4"/>
                                     <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
-                                <DockPanel Grid.Row="0">
-                                    <TextBlock Text="3φ POWER" FontSize="10.7" FontWeight="SemiBold"
-                                               Foreground="#234E80" DockPanel.Dock="Left"/>
-                                    <TextBlock Text="{Binding PowerStatusShort}" FontSize="9.5"
-                                               Foreground="#617D9A" HorizontalAlignment="Right"
-                                               TextTrimming="CharacterEllipsis" TextAlignment="Right"/>
-                                </DockPanel>
-                                <UniformGrid Grid.Row="1" Columns="4" Margin="0,4,0,0">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="P " FontSize="10.5" Foreground="#557292"/>
-                                        <TextBlock Text="{Binding PowerP}" FontSize="11.5" FontWeight="SemiBold"
-                                                   Foreground="#183A65"/>
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="Q₁ " FontSize="10.5" Foreground="#557292"/>
-                                        <TextBlock Text="{Binding PowerQ}" FontSize="11.5" FontWeight="SemiBold"
-                                                   Foreground="#183A65"/>
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="S " FontSize="10.5" Foreground="#557292"/>
-                                        <TextBlock Text="{Binding PowerS}" FontSize="11.5" FontWeight="SemiBold"
-                                                   Foreground="#183A65"/>
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="PF " FontSize="10.5" Foreground="#557292"/>
-                                        <TextBlock Text="{Binding PowerPf}" FontSize="11.5" FontWeight="SemiBold"
-                                                   Foreground="#183A65"/>
-                                    </StackPanel>
-                                </UniformGrid>
+                                <Grid Grid.Row="0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="3φ POWER" FontSize="10.5"
+                                               FontWeight="SemiBold" Foreground="#234E80"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding PowerStatusShort}"
+                                               FontSize="9.4" Foreground="#617D9A"
+                                               HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"
+                                               Margin="10,0,0,0" ToolTip="{Binding PowerStatus}"/>
+                                </Grid>
+                                <!-- Four equal-width instrument readouts, aligned
+                                     on a common baseline; no nested horizontal
+                                     StackPanels competing for their columns. -->
+                                <Grid Grid.Row="2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid Grid.Column="0" Margin="2,0,7,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="ACTIVE · P" Foreground="#617D9A" FontSize="9.2"/>
+                                        <TextBlock Grid.Row="1" Text="{Binding PowerP}" Foreground="#183A65"
+                                                   FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                    <Grid Grid.Column="1" Margin="7,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="REACTIVE · Q₁" Foreground="#617D9A" FontSize="9.2"/>
+                                        <TextBlock Grid.Row="1" Text="{Binding PowerQ}" Foreground="#183A65"
+                                                   FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                    <Grid Grid.Column="2" Margin="7,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="APPARENT · S" Foreground="#617D9A" FontSize="9.2"/>
+                                        <TextBlock Grid.Row="1" Text="{Binding PowerS}" Foreground="#183A65"
+                                                   FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                    <Grid Grid.Column="3" Margin="7,0,2,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="POWER FACTOR" Foreground="#617D9A" FontSize="9.2"/>
+                                        <TextBlock Grid.Row="1" Text="{Binding PowerPf}" Foreground="#183A65"
+                                                   FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                </Grid>
                             </Grid>
                         </Border>
                         <TextBlock Grid.Row="6" Text="{Binding UnitStatus}"
