@@ -87,8 +87,8 @@ public sealed class SmvP3FatUxRegressionTests
         Assert.Equal("A", current.Unit);
         Assert.Equal("V", voltage.Unit);
         var view = Read("Views/SmvInlineViewer.xaml.cs");
-        Assert.Contains("RAW Group A · Ch1–4 (counts)", view);
-        Assert.Contains("RAW Group B · Ch5–8 (counts)", view);
+        Assert.Contains("RAW · Ch1–4", view);
+        Assert.Contains("RAW · Ch5–8", view);
         Assert.Contains("Voltage/Current grouping is unverified", view);
     }
 
