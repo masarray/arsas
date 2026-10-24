@@ -380,7 +380,7 @@ public static class IedBrowserPresentation
             Func<IReadOnlyList<IedBrowserTreeRow>> children)
             => new("category/" + key, name, "Category", 0, loadChildren: children);
 
-        // Fixed operator order independent of discovery/IEDScout/source order.
+        // Fixed operator order independent of discovery and MMS source ordering.
         // Do not alphabetize or feed category navigation into MMS discovery.
         var categories = new List<IedBrowserTreeRow>
         {
