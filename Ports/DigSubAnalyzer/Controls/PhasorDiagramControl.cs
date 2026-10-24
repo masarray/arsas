@@ -273,21 +273,14 @@ public sealed class PhasorDiagramControl : FrameworkElement
         }
         dc.Pop();
 
-        // Numeric scale evidence comes from the SAME six vectors as arrows.
-        // This footer is a visual reference (per-family maximum), not a
-        // calibration claim or one shared physical voltage/current scale.
-        var voltageUnit = _visualItems.FirstOrDefault(item =>
-            item.Family == PhasorFamily.Voltage && IsRenderable(item))?.Unit ?? "counts";
-        var currentUnit = _visualItems.FirstOrDefault(item =>
-            item.Family == PhasorFamily.Current && IsRenderable(item))?.Unit ?? "counts";
-        var voltageScaleText = PhasorScaleCaption.Format(voltageUnit == "V" ? "U" : "A", voltageMax, voltageUnit);
-        var currentScaleText = PhasorScaleCaption.Format(currentUnit == "A" ? "I" : "B", currentMax, currentUnit);
-        DrawText(dc, $"{voltageScaleText}   ·   {currentScaleText}",
-            10.0, new Point(6, height - 31), TextSecondaryBrush, BodyTypeface);
-        DrawText(dc, voltageUnit == "V" && currentUnit == "A"
-            ? "9-2LE · U solid / I dashed · independent scales"
-            : "RAW A solid · RAW B dashed · independent count scales",
-            9.5, new Point(6, height - 15), TextMutedBrush, BodyTypeface);
+        // The six callouts already display magnitudes. Avoid two further
+        // lines repeating normalization/calibration explanations below them.
+        // Still distinguish the independently normalized vector families.
+        var mapped = _visualItems.Any(item => item.Unit is "V" or "A");
+        DrawText(dc, mapped
+            ? "U solid · I dashed · separate scales"
+            : "RAW A solid · B dashed · separate scales",
+            9.8, new Point(6, height - 17), TextMutedBrush, BodyTypeface);
         if (!IsStreamLive)
             DrawText(dc, "STALE · last valid samples", 11, new Point(7, 5), StaleBrush, LabelTypeface);
     }
