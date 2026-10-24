@@ -139,7 +139,7 @@ public partial class MainWindow
             if (GooseAdapters.Count == 0)
                 await EnsureGooseAdaptersForNavigationAsync();
             if (Dispatcher.HasShutdownStarted || MainTabs.SelectedIndex != GooseSubscriberTabIndex ||
-                IsGooseCapturing || GooseActionBusy)
+                !ReferenceEquals(SelectedDevice, device) || IsGooseCapturing || GooseActionBusy)
                 return;
 
             // Capture a frozen list on the WPF thread before examining network
@@ -164,7 +164,7 @@ public partial class MainWindow
                 route = $"Network adapter routing could not be resolved: {ex.Message}. Select the capture adapter manually.";
             }
             if (Dispatcher.HasShutdownStarted || MainTabs.SelectedIndex != GooseSubscriberTabIndex ||
-                IsGooseCapturing || GooseActionBusy)
+                !ReferenceEquals(SelectedDevice, device) || IsGooseCapturing || GooseActionBusy)
                 return;
             _gooseCaptureContextHint = route.Contains("Same-PC", StringComparison.Ordinal)
                 ? "Same-PC simulator: verify it actually publishes Ethernet GOOSE on this adapter."
