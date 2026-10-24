@@ -8,7 +8,9 @@ namespace ArIED61850Tester;
 public partial class MainWindow
 {
     // 0 = selected IED; 1 = all IEDs. Never filters the capture/decoder.
-    private int _gooseIedScopeIndex;
+    // The station-bus sniffer is independent of the selected MMS IED.
+    // Show all observed publishers until an operator deliberately scopes them.
+    private int _gooseIedScopeIndex = 1;
     private ListCollectionView? _gooseEventScopeView;
     private ListCollectionView? _gooseStreamScopeView;
 
@@ -32,6 +34,18 @@ public partial class MainWindow
         : SelectedDevice is null
             ? "No IED selected; showing all GOOSE publishers."
             : $"Only confirmed {SelectedDevice.Name} GOOSE streams. Unresolved publishers remain in All IED mode.";
+
+    public string GooseEmptyTimelineTitle =>
+        GooseIedScopeIndex == 0 && GooseEvents.Count > 0
+            ? "No GOOSE events match the selected IED"
+            : "Waiting for a meaningful event";
+
+    public string GooseEmptyTimelineDescription =>
+        GooseIedScopeIndex == 0 && GooseEvents.Count > 0
+            ? $"{GooseEvents.Count:N0} event(s) received from other or unresolved publishers. Select All IED GOOSE signals to see them."
+            : GooseFrames > 0
+                ? $"{GooseFrames:N0} GOOSE frame(s) received. Unchanged retransmissions are summarized; enable Retransmissions to inspect every frame."
+                : "New publishers, changed values and new warnings appear here.";
 
     private ListCollectionView CreateGooseEventsView()
     {
@@ -58,6 +72,8 @@ public partial class MainWindow
         _gooseEventScopeView?.Refresh();
         _gooseStreamScopeView?.Refresh();
         Raise(nameof(GooseSelectedScopeHint));
+        Raise(nameof(GooseEmptyTimelineTitle));
+        Raise(nameof(GooseEmptyTimelineDescription));
         _settingGooseLiveSelection = true;
         try
         {
