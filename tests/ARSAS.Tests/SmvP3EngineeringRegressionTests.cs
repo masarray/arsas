@@ -123,8 +123,8 @@ public sealed class SmvP3EngineeringRegressionTests
             Name = "Ub", Family = PhasorFamily.Voltage,
             Magnitude = 100, AngleDegrees = -120, Unit = "V"
         };
-        Assert.Contains("Ub 100 V ∠240.0°", PhasorDiagramControl.FormatPhasorLabel(item));
-        Assert.Contains("Ua 100 V ∠0.0°", PhasorDiagramControl.FormatPhasorLabel(
+        Assert.Contains("Ub 100V ∠240°", PhasorDiagramControl.FormatPhasorLabel(item));
+        Assert.Contains("Ua 100V ∠0°", PhasorDiagramControl.FormatPhasorLabel(
             new PhasorDisplayItem { Name = "Ua", Family = PhasorFamily.Voltage,
                 Magnitude = 100, AngleDegrees = -0.001, Unit = "V" }));
     }
