@@ -49,6 +49,21 @@ public sealed class SmvP1VisualDensityTests
     }
 
     [Fact]
+    public void NarrowPhasorHost_RetainsAngleAndVectorWithoutOverflowingMagnitude()
+    {
+        var item = new PhasorDisplayItem
+        {
+            Name = "Ub", Unit = "V", Family = PhasorFamily.Voltage,
+            Magnitude = 49.999, AngleDegrees = -160
+        };
+        Assert.Equal("Ub 50V ∠200°", PhasorDiagramControl.FormatPhasorLabel(item));
+        Assert.Equal("Ub ∠200°", PhasorDiagramControl.FormatPhasorLabel(item, fitNarrow: true));
+        var renderer = Source("Ports/DigSubAnalyzer/Controls/PhasorDiagramControl.cs");
+        Assert.Contains("var fitNarrow = width < 420;", renderer);
+        Assert.Contains("engineeringLabels = !fitNarrow", renderer);
+    }
+
+    [Fact]
     public void PhasorPlot_MeasuresTextWidthBeforePlacingCircle_AndKeepsLeaderTip()
     {
         var renderer = Source("Ports/DigSubAnalyzer/Controls/PhasorDiagramControl.cs");
