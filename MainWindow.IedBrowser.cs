@@ -381,6 +381,12 @@ public partial class MainWindow
         // A dedicated read-only MMS association is used if monitoring is active.
         // Its bounded reads never interfere with the reporting session.
 
+        var postWriteRequest = (sender as Button)?.Tag as IedBrowserPostWriteReadRequest;
+        if (postWriteRequest is not null && !postWriteRequest.Matches(device))
+        {
+            IedBrowserDetailStatus.Text = "IED association changed; post-Write Read cancelled.";
+            return;
+        }
         var configRequest = (sender as Button)?.Tag as IedBrowserVisibleConfigurationReadRequest;
         var companionRequest = (sender as Button)?.Tag as IedBrowserExactCompanionReadRequest;
         // A selected Report's CF unit hydration is a READ OF THE REFERENCED
@@ -388,9 +394,11 @@ public partial class MainWindow
         // ordinary typed Read → association-fenced LiveValues pipeline.
         var reportUnitRequest = sender is Button { Tag: "ReportUnitAuto" };
         var automatic = sender is Button { Tag: "Auto" } ||
-            configRequest is not null || companionRequest is not null || reportUnitRequest;
+            configRequest is not null || companionRequest is not null ||
+            reportUnitRequest || postWriteRequest is not null;
         var readAll = sender is Button { Tag: "All" };
-        if (!readAll && !reportUnitRequest && companionRequest is null)
+        if (!readAll && !reportUnitRequest && companionRequest is null &&
+            postWriteRequest is null)
         {
             switch (IedBrowserReadPlan.SelectionKind(_iedBrowserNavigation.Current))
             {
@@ -425,7 +433,14 @@ public partial class MainWindow
             targets = IedBrowserReadPlan.PrioritizeExplicitLn(targets);
         if (automatic)
         {
-            if (reportUnitRequest)
+            if (postWriteRequest is not null)
+            {
+                // Exactly the DA(s) the operator attempted, regardless of
+                // tree selection or the current LN page. The ordinary MMS
+                // Read result inbox is the ONLY publisher to LiveValues.
+                targets = postWriteRequest.Targets;
+            }
+            else if (reportUnitRequest)
             {
                 if (currentPage is not { Kind: "RCB", Payload: RcbExportRow })
                     return;
@@ -514,7 +529,7 @@ public partial class MainWindow
         // Admission is claimed only after a concrete, nonempty verified plan
         // reaches the read handler. A queued Dispatcher callback is NOT a read.
         // Rejected/busy/cancelled preflight cannot poison a future visit.
-        var automaticKey = automatic && currentPage is not null
+        var automaticKey = automatic && postWriteRequest is null && currentPage is not null
             ? IedBrowserFocusedAdmission.PageKey(
                 currentPage.Key, reportUnitRequest ? "|unit-CF" :
                     companionRequest is not null
@@ -535,7 +550,13 @@ public partial class MainWindow
         // connection and reject a previously planned schema.
         IedBrowserReadBindingIndex? bindingIndex = null;
         var cts = CancellationTokenSource.CreateLinkedTokenSource(_applicationCancellation.Token);
-        if (automatic) cts.CancelAfter(TimeSpan.FromSeconds(15));
+        if (automatic)
+        {
+            if (postWriteRequest is null)
+                cts.CancelAfter(TimeSpan.FromSeconds(15));
+            else
+                cts.CancelAfter(TimeSpan.FromSeconds(30));
+        }
         // Read All may include thousands of attributes. It is cancellable by the
         // operator, never a new continuous acquisition/polling process.
         _iedBrowserReadOperation = cts;
@@ -544,6 +565,9 @@ public partial class MainWindow
         if (!automatic || currentPage?.Kind != "SGCB")
             _iedBrowserReadFailureEvidence = null;
         var sourceDevice = device;
+        // A post-Write refresh must prove NEW exact association-bound MMS evidence;
+        // a cached pre-Write observation is never a successful readback.
+        var postWriteBaselineRevision = sourceDevice.LiveValues.Version;
         var successes = 0;
         var failures = 0;
         var unverifiedReadTargets = 0;
@@ -756,6 +780,35 @@ public partial class MainWindow
                         : "\nFirst unavailable attributes (no scalar was published):\n" +
                           string.Join("\n", failureExamples));
                 RefreshIedBrowserVisibleValues();
+                if (postWriteRequest is not null)
+                {
+                    // The Browser owns this fresh Read and the visible grid.
+                    // Verify all attempted exact reference/FC keys obtained
+                    // a new MMS Read since the post-Write sweep started.
+                    var verified = 0;
+                    foreach (var target in postWriteRequest.Targets)
+                    {
+                        if (sourceDevice.LiveValues.TryGet(target.Reference,
+                                target.FunctionalConstraint, out var observed,
+                                preferReport: false) &&
+                            !observed.IsStale &&
+                            observed.Association == readAssociation &&
+                            observed.Revision > postWriteBaselineRevision &&
+                            string.Equals(observed.Source, "MMS Read",
+                                StringComparison.Ordinal))
+                            verified++;
+                    }
+                    var writeOutcome = string.IsNullOrWhiteSpace(postWriteRequest.WriteStatus)
+                        ? "Write attempted" : postWriteRequest.WriteStatus;
+                    var readOutcome = verified == postWriteRequest.Targets.Count
+                        ? $"Data Model refreshed from IED · {verified}/{postWriteRequest.Targets.Count} DA MMS Read verified."
+                        : $"Data Model Read incomplete · {verified}/{postWriteRequest.Targets.Count} DA refreshed; " +
+                          $"{failures} Read failed. Check the leaf before another Write.";
+                    // A successful Read of the actual old value never upgrades
+                    // a rejected Write into an apparent Write success.
+                    IedBrowserDetailStatus.Text = writeOutcome + " · " + readOutcome;
+                    IedBrowserDetailStatus.ToolTip = IedBrowserDetailStatus.Text;
+                }
                 // A few permanently refused SG leaves must not block the next
                 // finite SGCB chunk. Per-page auto admission still caps attempts
                 // to three; this never becomes Read All or cyclic polling.
@@ -767,7 +820,13 @@ public partial class MainWindow
         {
             DrainReadResults(); // retain observations completed before cancellation
             if (ReferenceEquals(SelectedDevice, sourceDevice))
+            {
                 IedBrowserSubtitle.Text = $"Read cancelled · {successes:N0} value(s) received; no settings changed.";
+                if (postWriteRequest is not null)
+                    IedBrowserDetailStatus.Text =
+                        postWriteRequest.WriteStatus +
+                        " · Data Model Read interrupted · verify the exact DA before another Write.";
+            }
         }
         catch (Exception ex)
         {
@@ -776,6 +835,9 @@ public partial class MainWindow
             {
                 device.MarkDiscoveryFailed(ex.Message);
                 IedBrowserSubtitle.Text = "Read failed: " + ex.Message;
+                if (postWriteRequest is not null)
+                    IedBrowserDetailStatus.Text =
+                        postWriteRequest.WriteStatus + " · Data Model not refreshed · MMS Read failed: " + ex.Message;
             }
         }
         finally
