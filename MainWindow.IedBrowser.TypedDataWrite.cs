@@ -175,6 +175,10 @@ public partial class MainWindow
                 Owner = this
             };
             dialog.ShowDialog();
+            if (dialog.WriteAttempted && device.LiveDiscoveryModel is { } model)
+                QueueIedBrowserPostWriteRead(device, model, dialog.WriteAssociation,
+                    new[] { (Reference: modelSignal.ObjectReference + ".ctlModel", Fc: "CF") },
+                    dialog.WriteStatus);
             if (dialog.VerifiedWriteOccurred && device.IsConnected)
                 _ = RefreshControlValuesAsync(device, force: true);
         }
@@ -185,6 +189,9 @@ public partial class MainWindow
                 Owner = this
             };
             dialog.ShowDialog();
+            if (dialog.WriteAttempted && device.LiveDiscoveryModel is { } model)
+                QueueIedBrowserPostWriteRead(device, model, dialog.WriteAssociation,
+                    new[] { dialog.AttemptedLeaf }, dialog.WriteStatus);
         }
         else if (owner is not null && device.LiveDiscoveryModel is { } model)
         {
@@ -193,6 +200,9 @@ public partial class MainWindow
                 Owner = this
             };
             dialog.ShowDialog();
+            if (dialog.AttemptedLeaves.Count > 0)
+                QueueIedBrowserPostWriteRead(device, model, dialog.WriteAssociation,
+                    dialog.AttemptedLeaves, dialog.WriteStatus);
         }
         RefreshIedBrowserWriteButton();
         // A successful MMS Write is NOT process feedback. An explicit Read or
@@ -214,7 +224,32 @@ public partial class MainWindow
             Owner = this
         };
         dialog.ShowDialog();
+        if (dialog.AttemptedLeaves.Count > 0)
+            QueueIedBrowserPostWriteRead(device, model, dialog.WriteAssociation,
+                dialog.AttemptedLeaves, dialog.WriteStatus);
         RefreshIedBrowserWriteButton();
+    }
+
+    private void QueueIedBrowserPostWriteRead(
+        Iec61850MonitorDevice device, LiveIedModelDiscoveryDocument model,
+        long association, IReadOnlyCollection<(string Reference, string Fc)> attempted,
+        string status)
+    {
+        // Never push the popup's preview into Data Model. Resolve exact,
+        // uniquely declared live DA identities, then enter the SAME typed MMS
+        // Read → SSOT → visible-row pipeline as the Browser Read button.
+        var request = IedBrowserPostWriteReadRequest.Create(
+            device, model, association, attempted);
+        if (request is null || !ReferenceEquals(SelectedDevice, device))
+        {
+            IedBrowserDetailStatus.Text =
+                "Post-Write Read unavailable: IED association/model changed.";
+            return;
+        }
+        IedBrowserDetailStatus.Text = string.IsNullOrWhiteSpace(status)
+            ? "Reading written DA from IED into Data Model…"
+            : status;
+        IedBrowserReadValues_Click(new Button { Tag = request }, new RoutedEventArgs());
     }
 
 }
