@@ -381,6 +381,12 @@ public partial class MainWindow
         // A dedicated read-only MMS association is used if monitoring is active.
         // Its bounded reads never interfere with the reporting session.
 
+        var postWriteRequest = (sender as Button)?.Tag as IedBrowserPostWriteReadRequest;
+        if (postWriteRequest is not null && !postWriteRequest.Matches(device))
+        {
+            IedBrowserDetailStatus.Text = "IED association changed; post-Write Read cancelled.";
+            return;
+        }
         var configRequest = (sender as Button)?.Tag as IedBrowserVisibleConfigurationReadRequest;
         var companionRequest = (sender as Button)?.Tag as IedBrowserExactCompanionReadRequest;
         // A selected Report's CF unit hydration is a READ OF THE REFERENCED
@@ -388,9 +394,11 @@ public partial class MainWindow
         // ordinary typed Read → association-fenced LiveValues pipeline.
         var reportUnitRequest = sender is Button { Tag: "ReportUnitAuto" };
         var automatic = sender is Button { Tag: "Auto" } ||
-            configRequest is not null || companionRequest is not null || reportUnitRequest;
+            configRequest is not null || companionRequest is not null ||
+            reportUnitRequest || postWriteRequest is not null;
         var readAll = sender is Button { Tag: "All" };
-        if (!readAll && !reportUnitRequest && companionRequest is null)
+        if (!readAll && !reportUnitRequest && companionRequest is null &&
+            postWriteRequest is null)
         {
             switch (IedBrowserReadPlan.SelectionKind(_iedBrowserNavigation.Current))
             {
@@ -425,7 +433,14 @@ public partial class MainWindow
             targets = IedBrowserReadPlan.PrioritizeExplicitLn(targets);
         if (automatic)
         {
-            if (reportUnitRequest)
+            if (postWriteRequest is not null)
+            {
+                // Exactly the DA(s) the operator attempted, regardless of
+                // tree selection or the current LN page. The ordinary MMS
+                // Read result inbox is the ONLY publisher to LiveValues.
+                targets = postWriteRequest.Targets;
+            }
+            else if (reportUnitRequest)
             {
                 if (currentPage is not { Kind: "RCB", Payload: RcbExportRow })
                     return;
@@ -514,7 +529,7 @@ public partial class MainWindow
         // Admission is claimed only after a concrete, nonempty verified plan
         // reaches the read handler. A queued Dispatcher callback is NOT a read.
         // Rejected/busy/cancelled preflight cannot poison a future visit.
-        var automaticKey = automatic && currentPage is not null
+        var automaticKey = automatic && postWriteRequest is null && currentPage is not null
             ? IedBrowserFocusedAdmission.PageKey(
                 currentPage.Key, reportUnitRequest ? "|unit-CF" :
                     companionRequest is not null
