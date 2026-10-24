@@ -27,7 +27,7 @@ public sealed record IedBrowserPostWriteReadRequest(
         var attributes = model.LogicalDevices.SelectMany(ld => ld.LogicalNodes)
             .SelectMany(ln => ln.DataObjects)
             .SelectMany(obj => obj.Attributes)
-            .Where(attr => attr.FunctionalConstraint is "CF" or "DC" or "SP")
+            .Where(attr => attr.FunctionalConstraint is "CF" or "DC" or "SP" or "SG" or "SE")
             .ToLookup(attr => IedBrowserLiveValues.CanonicalReference(attr.MmsReference) +
                               "|" + attr.FunctionalConstraint.ToUpperInvariant(),
                       StringComparer.Ordinal);
@@ -36,7 +36,7 @@ public sealed record IedBrowserPostWriteReadRequest(
         foreach (var (reference, fc) in attempted)
         {
             if (string.IsNullOrWhiteSpace(reference) ||
-                fc is not ("CF" or "DC" or "SP")) return null;
+                fc is not ("CF" or "DC" or "SP" or "SG" or "SE")) return null;
             var key = IedBrowserLiveValues.CanonicalReference(reference) + "|" + fc;
             if (!seen.Add(key)) continue;
             var group = attributes[key].Take(2).ToArray();
