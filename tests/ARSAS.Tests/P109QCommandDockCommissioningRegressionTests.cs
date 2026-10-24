@@ -193,4 +193,24 @@ public sealed class P109QCommandDockCommissioningRegressionTests
         Assert.Contains("Iec61850ControlFlightAdmission.TryEnter(", runtime);
         Assert.Contains("CONTROL_OUTCOME_UNKNOWN_TIMEOUT", runtime);
     }
+
+    [Theory]
+    [InlineData(0, "0  [status-only]")]
+    [InlineData(1, "1  [direct-with-normal-security]")]
+    [InlineData(2, "2  [sbo-with-normal-security]")]
+    [InlineData(3, "3  [direct-with-enhanced-security]")]
+    [InlineData(4, "4  [sbo-with-enhanced-security]")]
+    public void CtlModelPickerNeverShowsInternalRecordName(int code, string label)
+    {
+        var choice = new ArIED61850Tester.ControlModelWriteWindow.ModelChoice(
+            (Iec61850ControlModelKind)code, label);
+        Assert.Equal(label, choice.ToString());
+        Assert.DoesNotContain("ModelChoice", choice.ToString());
+
+        var xaml = Read("ControlModelWriteWindow.xaml");
+        Assert.Contains("DisplayMemberPath=\"Label\"", xaml);
+        Assert.Contains("Width=\"580\"", xaml);
+        Assert.Contains("MaxDropDownHeight=\"245\"", xaml);
+    }
+
 }
