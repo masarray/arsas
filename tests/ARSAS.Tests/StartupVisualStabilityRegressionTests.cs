@@ -66,14 +66,17 @@ public sealed class StartupVisualStabilityRegressionTests
         var doc = XDocument.Parse(source);
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
-        Assert.InRange(int.Parse(doc.Root!.Attribute("Width")!.Value), 460, 490);
+        Assert.InRange(int.Parse(doc.Root!.Attribute("Width")!.Value), 390, 430);
+        Assert.Equal("410", (string?)doc.Root.Attribute("MinWidth"));
+        Assert.Equal("410", (string?)doc.Root.Attribute("MaxWidth"));
 
         var host = doc.Descendants(presentation + "Border")
             .Single(node => node.Attribute(xaml + "Name")?.Value == "IpEditorHost");
-        Assert.Equal("43", (string?)host.Attribute("Height"));
-        Assert.Equal("265", (string?)host.Attribute("Width"));
+        Assert.Equal("44", (string?)host.Attribute("Height"));
+        Assert.Null(host.Attribute("Width"));
+        Assert.Equal("Stretch", (string?)host.Attribute("HorizontalAlignment"));
         Assert.Equal("Manual", (string?)doc.Root.Attribute("SizeToContent"));
-        Assert.Equal("350", (string?)doc.Root.Attribute("Height"));
+        Assert.Equal("348", (string?)doc.Root.Attribute("Height"));
         Assert.DoesNotContain("ManualAddressCheck", source, StringComparison.Ordinal);
 
         var editor = doc.Descendants(presentation + "StackPanel")
