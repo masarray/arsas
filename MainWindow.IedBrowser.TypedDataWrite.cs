@@ -239,7 +239,7 @@ public partial class MainWindow
         // uniquely declared live DA identities, then enter the SAME typed MMS
         // Read → SSOT → visible-row pipeline as the Browser Read button.
         var request = IedBrowserPostWriteReadRequest.Create(
-            device, model, association, attempted);
+            device, model, association, attempted, status);
         if (request is null || !ReferenceEquals(SelectedDevice, device))
         {
             IedBrowserDetailStatus.Text =

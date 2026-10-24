@@ -10,13 +10,14 @@ namespace ArIED61850Tester.Models;
 /// </summary>
 public sealed record IedBrowserPostWriteReadRequest(
     string DeviceId, long Association, LiveIedModelDiscoveryDocument Model,
-    IReadOnlyList<IedBrowserReadTarget> Targets)
+    IReadOnlyList<IedBrowserReadTarget> Targets, string WriteStatus = "")
 {
     public static IedBrowserPostWriteReadRequest? Create(
         Iec61850MonitorDevice device,
         LiveIedModelDiscoveryDocument? model,
         long association,
-        IReadOnlyCollection<(string Reference, string Fc)> attempted)
+        IReadOnlyCollection<(string Reference, string Fc)> attempted,
+        string writeStatus = "")
     {
         if (model is null || !device.IsConnected || device.IsDemo ||
             device.LiveValues.IsOffline || device.LiveValues.Association != association ||
@@ -47,7 +48,8 @@ public sealed record IedBrowserPostWriteReadRequest(
                 string.IsNullOrWhiteSpace(attr.SclBType) ? attr.MmsType : attr.SclBType));
         }
         return targets.Count == 0 ? null :
-            new IedBrowserPostWriteReadRequest(device.DeviceId, association, model, targets);
+            new IedBrowserPostWriteReadRequest(device.DeviceId, association, model, targets,
+                writeStatus);
     }
 
     public bool Matches(Iec61850MonitorDevice device)
