@@ -410,7 +410,8 @@
                         </Grid>
                         <dig:PhasorDiagramControl x:Name="PhasorView" Grid.Row="2"
                                 ItemsSource="{Binding CurrentPhasors}"
-                                IsStreamLive="{Binding IsLiveSnapshot}"/>
+                                IsStreamLive="{Binding IsLiveSnapshot}"
+                                ToolTip="Voltage/current (or RAW A/B) arrows use separate magnitude scales. Full measurement precision is shown below."/>
                     </Grid>
                 </Border>
 
@@ -619,7 +620,7 @@
                 <DockPanel>
                     <Ellipse Width="7" Height="7" Fill="#16A34A" VerticalAlignment="Center"
                              Margin="0,0,8,0" DockPanel.Dock="Left"/>
-                    <TextBlock Text="{Binding CaptureStatus}" FontSize="10.5"
+                    <TextBlock Text="{Binding CaptureBrief}" FontSize="10.5"
                                Foreground="#425F85" TextTrimming="CharacterEllipsis"
                                ToolTip="{Binding CaptureStatus}"/>
                 </DockPanel>
