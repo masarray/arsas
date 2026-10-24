@@ -33,7 +33,8 @@ public sealed class SmvP3FatUxRegressionTests
             (string?)x.Attribute("Text") == "{Binding UnitStatus}");
         Assert.Equal("6", (string?)footer.Attribute("Grid.Row"));
         Assert.DoesNotContain("IsExpanded=\"False\"", power.ToString());
-        Assert.Contains("Text=\"{Binding PowerStatusShort}\"", power.ToString());
+        Assert.Contains("Text=\"3φ Power\"", power.ToString());
+        Assert.Contains("ToolTip=\"{Binding PowerStatus}\"", power.ToString());
         Assert.Equal(2, xaml.Descendants().Count(x => x.Name.LocalName == "DataGrid"));
     }
 
