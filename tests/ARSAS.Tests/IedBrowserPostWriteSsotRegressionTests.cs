@@ -67,6 +67,25 @@ public sealed class IedBrowserPostWriteSsotRegressionTests
     }
 
     [Fact]
+    public void PostWriteBrowserRead_DemandsNewExactSsotEvidence_NotOldPopupOrCachedData()
+    {
+        var pipeline = Source("MainWindow.IedBrowser.cs");
+        Assert.Contains("var postWriteBaselineRevision = sourceDevice.LiveValues.Version;", pipeline);
+        Assert.Contains("observed.Revision > postWriteBaselineRevision", pipeline);
+        Assert.Contains("observed.Association == readAssociation", pipeline);
+        Assert.Contains("preferReport: false", pipeline);
+        Assert.Contains("string.Equals(observed.Source, \"MMS Read\"", pipeline);
+        Assert.Contains("postWriteRequest.Targets", pipeline);
+        Assert.Contains("RefreshIedBrowserVisibleValues();", pipeline);
+        Assert.Contains("Data Model refreshed from IED", pipeline);
+        Assert.Contains("Data Model Read incomplete", pipeline);
+        Assert.Contains("Data Model not refreshed", pipeline);
+        Assert.Contains("Data Model Read interrupted", pipeline);
+        Assert.Contains("TimeSpan.FromSeconds(30)", pipeline);
+        Assert.DoesNotContain("postWriteRequest.Targets.First().Value", pipeline);
+    }
+
+    [Fact]
     public void PostWriteReadRequest_FailsClosedAcrossReconnectOrAmbiguousDataModel()
     {
         var source = Source("Models/IedBrowserPostWriteReadRequest.cs");
