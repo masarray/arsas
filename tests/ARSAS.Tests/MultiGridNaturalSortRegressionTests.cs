@@ -133,6 +133,91 @@ public sealed class MultiGridNaturalSortRegressionTests
     }
 
     [Fact]
+    public void RealWpfZivDockShowsLiveTapBeforeFourStatusOnlyCswi_WithoutSourceMutation()
+    {
+        RunInSta(() =>
+        {
+            static SignalDefinition Control(string reference, string cdc, string model, bool verified)
+            {
+                var signal = new SignalDefinition
+                {
+                    Name = reference,
+                    ObjectReference = reference,
+                    IsControlSignal = true,
+                    IsSelected = true,
+                    HasControlServiceEvidence = true,
+                    FunctionalConstraint = "CO",
+                    ControlCdc = cdc,
+                    ControlModelText = model
+                };
+                if (verified)
+                {
+                    signal.AcceptVerifiedLiveControlCdc(cdc);
+                    signal.ControlSemanticVerified = true;
+                }
+                return signal;
+            }
+            var tap = Control("ZIVAVRLD1/ATCC1.TapChg", "BSC",
+                "Select Before Operate (SBO) • Normal security", true);
+            var cswi = Enumerable.Range(1, 4)
+                .Select(i => Control($"ZIVAVRLD1/CSWI{i}.Pos", "DPC", "Status only", false))
+                .ToArray();
+            var device = new Iec61850MonitorDevice();
+            device.Signals.ReplaceAll([..cswi, tap]);
+            device.RecountSelectedSignals();
+            Assert.True(tap.ControlSupportsOperate);
+            Assert.All(cswi, s => Assert.False(s.ControlSupportsOperate));
+            Assert.Same(tap, device.CommandSignals[0]);
+
+            // This is the actual WPF collection view that painted the
+            // reported field screenshot incorrectly despite source order.
+            var grid = new DataGrid
+            {
+                CanUserAddRows = false, CanUserDeleteRows = false,
+                CanUserSortColumns = false, ItemsSource = device.CommandSignals
+            };
+            var view = Assert.IsType<ListCollectionView>(
+                CollectionViewSource.GetDefaultView(grid.ItemsSource));
+            view.SortDescriptions.Clear();
+            view.CustomSort = IecNaturalCommandSort.Instance;
+            SignalDefinition[] Visual() => view.Cast<SignalDefinition>().ToArray();
+
+            Assert.Same(tap, Visual()[0]);
+            Assert.Equal(cswi, Visual().Skip(1));
+            Assert.Equal(5, Visual().Length);
+
+            // Report/value churn must not recycle rows or elevate read-only
+            // controls. Changing process values never changes ctlModel.
+            var changes = 0;
+            device.CommandSignals.CollectionChanged += (_, _) => changes++;
+            for (var i = 0; i < 100; ++i)
+            {
+                tap.ControlCurrentValue = (i % 2 + 1).ToString();
+                device.RefreshCommandSignalProjection();
+            }
+            Assert.Equal(0, changes);
+            Assert.Same(tap, Visual()[0]);
+            Assert.All(Visual().Skip(1), s => Assert.False(s.ControlSupportsOperate));
+        });
+    }
+
+    [Fact]
+    public void CommandGridForbidsHeaderSortingAndResetsViewportOnIedSwitch()
+    {
+        var xaml = Read("MainWindow.xaml");
+        var xml = XDocument.Parse(xaml);
+        XNamespace wpf = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var command = xml.Descendants(wpf + "DataGrid")
+            .Single(g => (string?)g.Attribute(x + "Name") == "EquipmentCommandGrid");
+        Assert.Equal("False", (string?)command.Attribute("CanUserSortColumns"));
+
+        var code = Read("MainWindow.xaml.cs");
+        Assert.Contains("ScrollVerifiedEquipmentCommandsIntoView();", code);
+        Assert.Contains("scroll.ScrollToTop();", code);
+    }
+
+    [Fact]
     public void CommandComparatorDoesNotTreatUnverifiedNamesAsOperatePermission()
     {
         var gg = new SignalDefinition { ObjectReference = "SG7_BCUMaster/GGIO2.DPCSO01",
