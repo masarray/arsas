@@ -793,10 +793,16 @@ public partial class MainWindow
                                 StringComparison.Ordinal))
                             verified++;
                     }
-                    IedBrowserDetailStatus.Text = verified == postWriteRequest.Targets.Count
-                        ? $"Data Model refreshed from IED · {verified}/{postWriteRequest.Targets.Count} DA MMS Read verified."
+                    var writeOutcome = string.IsNullOrWhiteSpace(postWriteRequest.WriteStatus)
+                        ? "Write attempted" : postWriteRequest.WriteStatus;
+                    var readOutcome = verified == postWriteRequest.Targets.Count
+                        ? $"Data Model refreshed · {verified}/{postWriteRequest.Targets.Count} DA MMS Read verified."
                         : $"Data Model Read incomplete · {verified}/{postWriteRequest.Targets.Count} DA refreshed; " +
                           $"{failures} Read failed. Check the leaf before another Write.";
+                    // A successful Read of the actual old value never upgrades
+                    // a rejected Write into an apparent Write success.
+                    IedBrowserDetailStatus.Text = writeOutcome + " · " + readOutcome;
+                    IedBrowserDetailStatus.ToolTip = IedBrowserDetailStatus.Text;
                 }
                 // A few permanently refused SG leaves must not block the next
                 // finite SGCB chunk. Per-page auto admission still caps attempts
@@ -813,7 +819,8 @@ public partial class MainWindow
                 IedBrowserSubtitle.Text = $"Read cancelled · {successes:N0} value(s) received; no settings changed.";
                 if (postWriteRequest is not null)
                     IedBrowserDetailStatus.Text =
-                        "Data Model Read interrupted · verify the exact DA before another Write.";
+                        postWriteRequest.WriteStatus +
+                        " · Data Model Read interrupted · verify the exact DA before another Write.";
             }
         }
         catch (Exception ex)
@@ -825,7 +832,7 @@ public partial class MainWindow
                 IedBrowserSubtitle.Text = "Read failed: " + ex.Message;
                 if (postWriteRequest is not null)
                     IedBrowserDetailStatus.Text =
-                        "Data Model not refreshed · MMS Read failed: " + ex.Message;
+                        postWriteRequest.WriteStatus + " · Data Model not refreshed · MMS Read failed: " + ex.Message;
             }
         }
         finally
