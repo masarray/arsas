@@ -14,6 +14,10 @@ public sealed record SntpNetworkBinding(
     public string Summary => DirectedBroadcast == null
         ? $"{InterfaceName} • {LocalAddress}"
         : $"{InterfaceName} • {LocalAddress} → {DirectedBroadcast}";
+
+    // Safe fallback for non-templated controls and accessibility helpers:
+    // displaying a binding must never expose "SntpNetworkBinding".
+    public override string ToString() => LocalAddress.ToString();
 }
 
 /// <summary>
