@@ -347,7 +347,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 else if (selectionMode == SclSignalSelectionMode.StaticDataSet)
                 {
                     foreach (var importedDevice in selectableDevices)
-                        ApplyStaticDataSetSelection(importedDevice);
+                    {
+                        importedDevice.BeginReportingProgress("Preparing Static DataSet reporting…");
+                        try
+                        {
+                            await ApplyStaticDataSetSelection(importedDevice);
+                        }
+                        finally
+                        {
+                            // Non-primary imported IEDs are selected but do not
+                            // auto-start monitoring; do not leave their bar active.
+                            if (!ReferenceEquals(importedDevice, firstImported))
+                                importedDevice.CompleteReportingProgress();
+                        }
+                    }
 
                     AddLog("INFO", "SCL", $"Static DataSet selection is shared by Engineering and FAT for {selectableDevices.Length} IED workspace(s).");
                     if (firstImported is { SelectedLiveSignalCount: > 0 })
@@ -363,6 +376,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                             await StartDeviceMonitorAsync(firstImported);
                         }
                     }
+                    firstImported?.CompleteReportingProgress();
                 }
                 else if (selectionMode == SclSignalSelectionMode.BrowseIed)
                 {
@@ -2405,6 +2419,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             RemoveDevicePoints(device.DeviceId);
             device.Points.Clear();
 
+            device.UpdateReportingProgress(84, "Arming configured BRCB/URCB reports…");
             SetStatus($"{device.Name}: arming static/dynamic IEC 61850 reporting…");
             var points = await _runtime.StartMonitoringAsync(
                 device,
@@ -2425,6 +2440,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             foreach (var point in points)
                 signalProjection.ProjectReportedSignals(device.LiveValues,
                     projectionAssociation, point.IecReference, point.FunctionalConstraint);
+            device.UpdateReportingProgress(96, "Applying initial report-backed signal grid…");
             device.RefreshComputed();
             RaiseWorkspaceCounts();
             if (navigateToExplorer)

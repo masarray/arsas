@@ -112,10 +112,13 @@ public partial class MainWindow
 
         if (dialog.Selection == IedWorkspaceTaskChoice.StaticDataSet)
         {
-            if (device.IsMonitoring)
-                await StopDeviceMonitorAsync(device);
+            device.BeginReportingProgress("Preparing Static DataSet reporting…");
+            try
+            {
+                if (device.IsMonitoring)
+                    await StopDeviceMonitorAsync(device);
 
-            ApplyStaticDataSetSelection(device);
+            await ApplyStaticDataSetSelection(device);
             if (device.SelectedLiveSignalCount == 0)
             {
                 SetStatus($"{device.Name}: Static DataSet selected, but no report-authoritative process leaf is available to monitor.");
@@ -143,7 +146,12 @@ public partial class MainWindow
 
             if (!device.IsMonitoring)
                 await StartDeviceMonitorAsync(device);
-            return;
+                return;
+            }
+            finally
+            {
+                device.CompleteReportingProgress();
+            }
         }
 
         if (dialog.Selection != IedWorkspaceTaskChoice.ManualSignals)
