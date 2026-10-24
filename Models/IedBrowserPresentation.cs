@@ -56,6 +56,26 @@ public sealed class IedBrowserTreeRow : ObservableObject
         ? Visibility.Visible : Visibility.Collapsed;
     public string RcbEnabledTooltip => _rcbEnabledTooltip;
 
+    // RptEna (a verified MMS Read) and current-session successful RCB
+    // activation are separate evidences. Show the requested activity icon
+    // for either, without falsely claiming that a local activation is a
+    // fresh remote RptEna read or that another client's RCB belongs to us.
+    public Visibility RcbActivityIconVisibility =>
+        RcbEnabledVisibility == Visibility.Visible ||
+        Payload is RcbExportRow
+        {
+            Availability: AR.Iec61850.Mms.MmsRcbOperationalAvailability.UsedByCaller
+        }
+            ? Visibility.Visible : Visibility.Collapsed;
+    public string RcbActivityIconTooltip => RcbEnabledVisibility == Visibility.Visible
+        ? RcbEnabledTooltip
+        : Payload is RcbExportRow
+          {
+              Availability: AR.Iec61850.Mms.MmsRcbOperationalAvailability.UsedByCaller
+          }
+            ? RcbUsageTooltip
+            : string.Empty;
+
     public bool SetRcbEnabled(bool verified, string tooltip)
     {
         if (Payload is not RcbExportRow) return false;
@@ -67,6 +87,8 @@ public sealed class IedBrowserTreeRow : ObservableObject
         _rcbEnabledTooltip = tooltip;
         Raise(nameof(RcbEnabledVisibility));
         Raise(nameof(RcbEnabledTooltip));
+        Raise(nameof(RcbActivityIconVisibility));
+        Raise(nameof(RcbActivityIconTooltip));
         return true;
     }
     public string RcbUsageTooltip => Payload is RcbExportRow report
@@ -88,6 +110,8 @@ public sealed class IedBrowserTreeRow : ObservableObject
     {
         if (Payload is not RcbExportRow) return;
         Raise(nameof(RcbUsageTooltip));
+        Raise(nameof(RcbActivityIconVisibility));
+        Raise(nameof(RcbActivityIconTooltip));
     }
 
     private bool _isExpanded;
@@ -288,6 +312,8 @@ public sealed record IedBrowserDetailRow(
     public Visibility RcbEnabledVisibility => NavigateTo?.RcbEnabledVisibility ?? Visibility.Collapsed;
     public string RcbEnabledTooltip => NavigateTo?.RcbEnabledTooltip ?? "";
     public string RcbUsageTooltip => NavigateTo?.RcbUsageTooltip ?? "";
+    public Visibility RcbActivityIconVisibility => NavigateTo?.RcbActivityIconVisibility ?? Visibility.Collapsed;
+    public string RcbActivityIconTooltip => NavigateTo?.RcbActivityIconTooltip ?? "";
 
     /// <summary>Mirror the same RCB node's active state in the right list.</summary>
     public void RefreshRcbUsage()
@@ -299,6 +325,10 @@ public sealed record IedBrowserDetailRow(
             new PropertyChangedEventArgs(nameof(RcbEnabledTooltip)));
         PropertyChanged?.Invoke(this,
             new PropertyChangedEventArgs(nameof(RcbUsageTooltip)));
+        PropertyChanged?.Invoke(this,
+            new PropertyChangedEventArgs(nameof(RcbActivityIconVisibility)));
+        PropertyChanged?.Invoke(this,
+            new PropertyChangedEventArgs(nameof(RcbActivityIconTooltip)));
         if (Kind == "Object") Value = rcb.StatusText;
     }
 
