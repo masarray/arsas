@@ -9,7 +9,7 @@ public sealed class SmvP3PresentationSourceRegressionTests
     {
         var xaml = Source("Views/SmvInlineViewer.xaml");
         Assert.Contains("Text=\"{Binding SyncLabel}\"", xaml);
-        Assert.Contains("ToolTip=\"{Binding SyncDetail}\"", xaml);
+        Assert.Contains("PlacementTarget.DataContext.SyncDetail", xaml);
         Assert.Contains("Text=\"{Binding TimeAxisCaption}\"", xaml);
         Assert.Contains("Text=\"{Binding PowerP}\"", xaml);
         Assert.Contains("Text=\"{Binding PowerQ}\"", xaml);
