@@ -50,26 +50,6 @@ The active release automation has intentionally separate responsibilities. Maint
 
 The packaging scripts under `scripts/` remain active implementation details of these workflows. Do not remove a script merely because it is not called from application code; verify its workflow consumer first.
 
-## One-click development EXE from GitHub Actions
-
-For **PR/FAT builds**, the successful `Build ARSAS` workflow publishes
-`ARSAS-<version>-win-x64-portable.exe` using
-`actions/upload-artifact@v7` with `archive: false`. Its link in the
-workflow run's **Artifacts** section downloads the actual portable
-`.exe`, with **no ZIP extraction**. This behavior was introduced by
-GitHub Actions in February 2026; older workflow runs still deliver ZIP.
-
-The **canonical sealed Windows package** remains a separate, immutable
-CI artifact containing its executable, build identity, manifests and
-validation data. This direct-download convenience does not relax checks,
-convert a development build into a production release, or alter official
-stable-release assets. Download the EXE only from a passing exact-source
-CI run, and verify the EXE SHA-256 recorded by that run.
-
-GitHub uses the **original file basename** as the artifact name when
-`archive: false` is set; `name:` is ignored for a non-zipped artifact.
-Other multi-file/test-evidence artifacts intentionally remain archives.
-
 ## Public assets
 
 A successful stable release publishes these stable asset names:

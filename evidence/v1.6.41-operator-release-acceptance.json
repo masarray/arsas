@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "recordType": "sanitized-operator-release-acceptance",
+  "status": "operator-approved-limited-public-release",
+  "releaseTag": "v1.6.41",
+  "decision": {
+    "releaseApproved": true,
+    "acceptanceDate": "2026-10-13",
+    "source": "User explicitly approved public release after providing installed v1.6.41 screenshots and diagnostic report",
+    "acceptanceScope": "operator-approved functionality, not a blanket IEC 61850 interoperability or event-continuity certification"
+  },
+  "installedBuild": {
+    "appVersion": "1.6.41",
+    "appAssemblyRevision": "44eacf200ab20c0453e62a88ad71f472821ec5a2",
+    "engineVersion": "1.6.41",
+    "engineCommit": "036e2c00d83a0815b6160147b14ea05975057965"
+  },
+  "scope": {
+    "legacyRcbDialogRetained": true,
+    "eventPropertiesIncluded": true,
+    "iedBrowserExcluded": true,
+    "newRcbExporterExcluded": true,
+    "staticDatasetReportOnly": true,
+    "cyclicMmsProcessPollingForbidden": true
+  },
+  "observations": {
+    "windowsGui": {
+      "nativeTitleBarVersionVisible": true,
+      "rcbOldDialogVisible": true,
+      "eventPropertiesDrawerVisible": true,
+      "twoIedsConnectedAndMonitoring": true
+    },
+    "zivavr": {
+      "staticDatasetMembers": 8,
+      "representedMembers": 8,
+      "reportBackedPoints": 8,
+      "unresolved": 0,
+      "configuredRcbRoutesRouted": 1,
+      "reportedRoutes": 1,
+      "reportFrames": 53,
+      "processUpdates": 252,
+      "giReasonFrames": 1,
+      "cyclicMmsProcessPolling": 0,
+      "commandsWithWireAcceptanceAndProcessFeedback": [
+        "ATCC1.TapChg Raise DirectNormal",
+        "ATCC1.TapChg Lower SboNormal",
+        "ATCC1.TapChg Raise SboNormal",
+        "CSWI1.Pos Open SboNormal"
+      ],
+      "ctlModelWriteAndReadbackVerified": true
+    },
+    "bcuge": {
+      "staticDatasetMembers": 124,
+      "representedMembers": 124,
+      "initialDisplayedValues": 67,
+      "initialExpectedValues": 67,
+      "unresolved": 0,
+      "configuredRcbRoutesRouted": 6,
+      "reportedRoutes": 6,
+      "reportFrames": 41,
+      "processUpdates": 530,
+      "cyclicMmsProcessPolling": 0,
+      "commandsWithWireAcceptanceAndProcessFeedback": [
+        "CSWI3.Pos Open",
+        "CSWI4.Pos Open"
+      ]
+    },
+    "continuity": {
+      "findingCounts": {
+        "zivavr": 9,
+        "bcuge": 9
+      },
+      "bufferOverflowObserved": true,
+      "sequenceDiscontinuitiesObserved": true,
+      "soeCompletenessVerified": false,
+      "explanation": "Report gaps, buffer overflow and possible replay/reset were observed; no confirmed lost-SOE-event conclusion or complete continuity claim."
+    },
+    "testMedium": {
+      "protocol": "IEC 61850 MMS",
+      "deviceIdentityObserved": true,
+      "hardwareIdentityIndependentlyAttested": false,
+      "explanation": "Diagnostic shows endpoints also assigned to the local PC; test could involve locally hosted device simulation and should not be called independent physical relay qualification."
+    },
+    "provenance": {
+      "evidenceBasis": "Operator-provided screenshots and diagnostic text, redacted into this record; raw diagnostic retained only by user",
+      "sourceInstalledAppRevisionIsSyntheticPrMerge": true
+    }
+  },
+  "qualification": {
+    "hardwarePhysicallyAttested": false,
+    "completeSoeContinuityVerified": false,
+    "scopedOperatorAcceptance": true
+  }
+}

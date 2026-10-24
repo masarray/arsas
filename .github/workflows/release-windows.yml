@@ -63,11 +63,11 @@ jobs:
           python-version: '3.12'
 
       - name: Run offline release-ready and installer-verifier fixtures
+        shell: bash
         run: |
-          python .\ArIED61850Tester\scripts\test-ci-release-ready.py
-          if ($LASTEXITCODE -ne 0) { throw 'Release-ready metadata gate fixtures failed.' }
-          python .\ArIED61850Tester\scripts\test-ci-installer-reuse.py
-          if ($LASTEXITCODE -ne 0) { throw 'Validated-installer verifier fixtures failed.' }
+          set -euo pipefail
+          python ./ArIED61850Tester/scripts/test-ci-release-ready.py
+          python ./ArIED61850Tester/scripts/test-ci-installer-reuse.py
 
       - name: Wait for exact immutable release dependencies
         id: ready
@@ -76,9 +76,9 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           $proofPath = Join-Path $env:RUNNER_TEMP 'arsas-release-ready.json'
-          python .\ArIED61850Tester\scripts\wait-ci-release-ready.py `
+          python ./ArIED61850Tester/scripts/wait-ci-release-ready.py `
             --repository $env:GITHUB_REPOSITORY `
-            --source-dir .\ArIED61850Tester `
+            --source-dir ./ArIED61850Tester `
             --source-sha $env:GITHUB_SHA `
             --ref-type $env:GITHUB_REF_TYPE `
             --ref-name $env:GITHUB_REF_NAME `

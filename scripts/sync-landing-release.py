@@ -181,8 +181,9 @@ def generated_notes(
         "schemaVersion": 1,
         "product": "ARSAS",
         "version": version,
-        "title": f"ARSAS {version} stable release",
-        "titleId": f"Stable release ARSAS {version}",
+        # The template already prefixes "ARSAS {STABLE_VERSION}".
+        "title": "Stable release improvements",
+        "titleId": "Peningkatan rilis stabil",
         "summary": f"ARSAS {version} is the latest verified stable Windows release. Package identity, download links, checksums and publication evidence are synchronized automatically from the tagged GitHub Release.",
         "summaryId": f"ARSAS {version} adalah stable release Windows terverifikasi terbaru. Identitas paket, link download, checksum, dan publication evidence disinkronkan otomatis dari GitHub Release bertag.",
         "highlights": highlights,

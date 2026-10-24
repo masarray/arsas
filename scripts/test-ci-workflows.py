@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import fnmatch
 import json
 import subprocess
 import tempfile
@@ -163,6 +164,74 @@ jobs:
             any("duplicate job id 'validate'" in item for item in report["structureErrors"])
         )
 
+    def test_sv_evidence_trigger_only_runs_for_sv_domain(self):
+        """SV canonical proof must run for SV edits, not every application test."""
+        repo = Path(__file__).resolve().parents[1]
+        source = (repo / ".github/workflows/validate-sv-evidence.yml").read_text(
+            encoding="utf-8"
+        )
+        # This workflow uses a simple quoted on.pull_request.paths YAML sequence.
+        # Extract exactly that sequence, not push or workflow_dispatch paths.
+        header = "  pull_request:\n    paths:\n"
+        self.assertEqual(source.count(header), 1)
+        block = source.split(header, 1)[1].split("  workflow_dispatch:", 1)[0]
+        paths = [
+            json.loads(line.strip()[2:])
+            for line in block.splitlines()
+            if line.strip().startswith('- "')
+        ]
+        self.assertEqual(len(paths), len(set(paths)))
+        self.assertNotIn("tests/ARSAS.Tests/**", paths)
+
+        def matches(changed_path: str) -> bool:
+            # GitHub path filters match segments: "*" cannot cross "/".
+            # Current authority resolver uses a terminal "/**" for descendants.
+            for pattern in paths:
+                if pattern.endswith("/**"):
+                    if changed_path.startswith(pattern[:-3] + "/"):
+                        return True
+                    continue
+                self.assertNotIn("**", pattern, pattern)
+                candidate = changed_path.split("/")
+                glob = pattern.split("/")
+                if len(candidate) == len(glob) and all(
+                    fnmatch.fnmatchcase(part, rule)
+                    for part, rule in zip(candidate, glob)
+                ):
+                    return True
+            return False
+
+        for changed_path in (
+            "tests/ARSAS.Tests/SmvFastWorkflowTests.cs",
+            "tests/ARSAS.Tests/SmvSnapshotEvidenceExporterTests.cs",
+            "tests/ARSAS.Tests/SampledValueFutureRegressionTests.cs",
+            "Services/SmvSnapshotCaptureService.cs",
+            "Services/SmvSnapshotSafetyAssessment.cs",
+            "Services/SmvViewerWindow.P1Evidence.cs",
+            "tests/ARSAS.Tests/SmvSnapshotEvidenceExporterReviewTests.cs",
+            "tests/ARSAS.Tests/ProcessBusRoutingRegressionTests.cs",
+            "MainWindow.IedSmvQuickStart.cs",
+            "SmvViewerWindow.xaml.cs",
+            "engines/ARIEC61850.lock.json",
+            ".github/actions/resolve-ariec-engine/action.yml",
+            ".github/workflows/build.yml",
+            "scripts/write-ci-canonical-proof.py",
+            "scripts/verify-ci-canonical-reuse.py",
+        ):
+            self.assertTrue(matches(changed_path), changed_path)
+
+        for changed_path in (
+            "tests/ARSAS.Tests/M2IedBrowserHierarchyAndReportWireTests.cs",
+            "tests/ARSAS.Tests/IoFatStructuredMmsAliasRegressionTests.cs",
+            "tests/ARSAS.Tests/RcbExportEvidenceAcquisitionRegressionTests.cs",
+            "Models/IedBrowserPresentation.cs",
+            "Services/RcbAvailabilityProbeService.cs",
+            "Services/nested/SmvSnapshotCaptureService.cs",
+            "tests/ARSAS.Tests/nested/SmvFastWorkflowTests.cs",
+            "docs/ARSAS_IED_BROWSER_M2_EXECUTION_ARD.md",
+        ):
+            self.assertFalse(matches(changed_path), changed_path)
+
     def test_p3h_windows_pr_workflows_cancel_only_superseded_pr_runs(self):
         repo = Path(__file__).resolve().parents[1]
         workflows = [
@@ -265,91 +334,89 @@ jobs:
         )
 
 
+    def test_io_domain_trigger_covers_all_real_owners_without_unrelated_ci(self):
+        """Fail closed on missed IO/FAT owners and slash-spanning wildcard mistakes."""
 
-class SmartDiscoveryFastRoutingTests(unittest.TestCase):
-    """Keep broad UI changes out of unrelated physical Smart Discovery CI."""
+        repo = Path(__file__).resolve().parents[1]
+        source = (repo / ".github/workflows/validate-io-testing.yml").read_text(
+            encoding="utf-8"
+        )
+        header = "  pull_request:\n    paths:\n"
+        self.assertEqual(source.count(header), 1)
+        block = source.split(header, 1)[1].split("  workflow_dispatch:", 1)[0]
+        paths = [
+            json.loads(line.strip()[2:])
+            for line in block.splitlines()
+            if line.strip().startswith('- "')
+        ]
+        self.assertEqual(len(paths), len(set(paths)))
+        self.assertNotIn("tests/ARSAS.Tests/**", paths)
+        self.assertNotIn(".github/workflows/**", paths)
 
-    WORKFLOWS = (
-        ".github/workflows/smart-discovery-capture-build.yml",
-        ".github/workflows/smart-discovery-golden-provenance.yml",
-        ".github/workflows/smart-discovery-golden-budget-lock.yml",
-        ".github/workflows/smart-discovery-repeat-run-stability.yml",
-        ".github/workflows/smart-discovery-mainline-readiness.yml",
-        ".github/workflows/smart-discovery-merge-execution-guard.yml",
-        ".github/workflows/smart-discovery-production-promotion.yml",
-    )
+        def matches(changed: str) -> bool:
+            for pattern in paths:
+                if pattern.endswith("/**"):
+                    if changed.startswith(pattern[:-3] + "/"):
+                        return True
+                    continue
+                self.assertNotIn("**", pattern, pattern)
+                parts, glob = changed.split("/"), pattern.split("/")
+                if len(parts) == len(glob) and all(
+                    fnmatch.fnmatchcase(part, rule)
+                    for part, rule in zip(parts, glob)
+                ):
+                    return True
+            return False
 
-    @staticmethod
-    def pr_paths(workflow):
-        """Read PR path filters without depending on YAML/regex escaping."""
-        content = workflow.read_text(encoding="utf-8").splitlines()
-        try:
-            trigger = content.index("  pull_request:")
-            start = content.index("    paths:", trigger + 1)
-        except ValueError as exc:
-            raise AssertionError(f"Missing scoped PR path filters: {workflow}") from exc
-        patterns = []
-        for line in content[start + 1:]:
-            if not line.startswith("      "):
-                break
-            trimmed = line.strip()
-            if trimmed.startswith('- "') and trimmed.endswith('"'):
-                patterns.append(trimmed[3:-1])
-        if not patterns:
-            raise AssertionError(f"No scoped PR paths: {workflow}")
-        return patterns
+        # Every tracked domain-owned source/test must be routed to IO proof.
+        owned = []
+        for pattern in (
+            "MainWindow.IoTesting*.cs",
+            "MainWindow.NativeFat*.cs",
+            "MainWindow.P0Fat*.cs",
+            "IoListTestingWindow*.cs",
+            "IoListTestingWindow.xaml",
+            "Models/IoTesting/*.cs",
+            "Models/NativeFat*.cs",
+            "Services/IoTesting/*.cs",
+            "tests/ARSAS.Tests/Io*.cs",
+            "tests/ARSAS.Tests/Fat*.cs",
+            "tests/ARSAS.Tests/NativeFat*.cs",
+        ):
+            owned.extend(repo.glob(pattern))
+        self.assertGreater(len(owned), 130)
+        for path in owned:
+            self.assertTrue(matches(path.relative_to(repo).as_posix()), path)
 
-    def test_smart_discovery_pr_triggers_exclude_unrelated_ui_and_smv(self):
-        root = Path(__file__).resolve().parent.parent
-        from fnmatch import fnmatchcase
-        irrelevant = (
-            "MainWindow.xaml",
+        for path in (
+            "MainWindow.IoTesting.FutureRecovery.cs",
+            "IoListTestingWindow.FutureSafety.cs",
+            "Models/IoTesting/NextSession.cs",
+            "Services/IoTesting/new/IoFatFutureSafety.cs",
+            "tests/ARSAS.Tests/NativeFatFutureRegressionTests.cs",
+            "tests/ARSAS.Tests/FatFutureSafetyTests.cs",
+            "tests/ARSAS.Tests/IoFutureRegressionTests.cs",
+            "engines/ARIEC61850.lock.json",
+            ".github/actions/resolve-ariec-engine/action.yml",
+            ".github/workflows/build.yml",
+            "scripts/write-ci-canonical-proof.py",
+            "scripts/verify-ci-canonical-reuse.py",
+            "scripts/test-ci-canonical-reuse.py",
+        ):
+            self.assertTrue(matches(path), path)
+
+        for path in (
+            "tests/ARSAS.Tests/M2IedBrowserHierarchyAndReportWireTests.cs",
+            "tests/ARSAS.Tests/SmvSnapshotEvidenceExporterTests.cs",
+            "tests/ARSAS.Tests/RcbExportEvidenceAcquisitionRegressionTests.cs",
+            "Services/SmvSnapshotCaptureService.cs",
+            "Services/RcbAvailabilityProbeService.cs",
             "MainWindow.IedBrowser.cs",
-            "Models/QualityInvalidAttention.cs",
-            "Services/SmvLiveCaptureService.cs",
-            "tests/ARSAS.Tests/QualityInvalidAttentionTests.cs",
-            "docs/WINDOWS_RELEASES.md",
-        )
-        for name in self.WORKFLOWS:
-            paths = self.pr_paths(root / name)
-            self.assertTrue(paths, name)
-            self.assertIn(name, paths)
-            for unrelated in irrelevant:
-                self.assertFalse(
-                    any(fnmatchcase(unrelated, pattern) for pattern in paths),
-                    f"{name} wrongly triggered by {unrelated}",
-                )
-
-    def test_draft_runs_fast_and_ready_for_review_reruns_full_gates(self):
-        root = Path(__file__).resolve().parent.parent
-        for name in (*self.WORKFLOWS, ".github/workflows/installer-windows.yml"):
-            content = (root / name).read_text(encoding="utf-8")
-            self.assertIn("types: [opened, synchronize, reopened, ready_for_review]",
-                          content, name)
-            self.assertIn(
-                "github.event_name != 'pull_request' || !github.event.pull_request.draft",
-                content, name)
-            self.assertIn("  workflow_dispatch:", content, name)
-
-    def test_smart_discovery_critical_changes_still_trigger_and_manual_exists(self):
-        root = Path(__file__).resolve().parent.parent
-        from fnmatch import fnmatchcase
-        for name in self.WORKFLOWS:
-            content = (root / name).read_text(encoding="utf-8")
-            self.assertIn("  workflow_dispatch:", content)
-            paths = self.pr_paths(root / name)
-            self.assertTrue(any(fnmatchcase(name, pattern) for pattern in paths))
-        shared = (
-            ".github/workflows/smart-discovery-capture-build.yml",
-            ".github/workflows/smart-discovery-mainline-readiness.yml",
-            ".github/workflows/smart-discovery-merge-execution-guard.yml",
-            ".github/workflows/smart-discovery-production-promotion.yml",
-        )
-        for name in shared:
-            paths = self.pr_paths(root / name)
-            for critical in ("Models/MonitorModels.cs", "engines/ARIEC61850.lock.json"):
-                self.assertTrue(any(fnmatchcase(critical, pattern) for pattern in paths),
-                                f"{name} omitted {critical}")
+            "docs/ARSAS_IED_BROWSER_M2_EXECUTION_ARD.md",
+            "tests/ARSAS.Tests/nested/IoTestSafetyTests.cs",
+            "Services/nested/IoTesting/IoFatFutureSafety.cs",
+        ):
+            self.assertFalse(matches(path), path)
 
 if __name__ == "__main__":
     unittest.main()

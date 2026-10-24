@@ -202,7 +202,9 @@ jobs:
             git add landing/latest.json landing/release-notes.json
             git commit -m "docs: synchronize ARSAS ${{ steps.version.outputs.version }} release landing"
             git fetch origin main
-            git rebase origin/main
+            # Preserve unrelated, tracked generated-state edits when rebasing.
+            # Only the two checked-in release records above are committed.
+            git -c rebase.autoStash=true rebase origin/main
             git push origin HEAD:main
           fi
 
