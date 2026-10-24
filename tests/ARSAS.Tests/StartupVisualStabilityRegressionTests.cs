@@ -45,7 +45,9 @@ public sealed class StartupVisualStabilityRegressionTests
     public void ResponsiveNavigation_OwnsShellHeight_WithoutLateClobber()
     {
         var main = XDocument.Parse(Read("MainWindow.xaml"));
-        Assert.Equal("Maximized", (string?)main.Root?.Attribute("WindowState"));
+        Assert.Equal("Normal", (string?)main.Root?.Attribute("WindowState"));
+        Assert.Equal("CenterScreen", (string?)main.Root?.Attribute("WindowStartupLocation"));
+        Assert.Contains("WorkstationWindowStartupBounds.Apply(window);", app, StringComparison.Ordinal);
 
         var responsive = Read("MainWindow.NavigationLayoutFix.cs");
         var p2 = Read("P2IndustrialWorkstationUx.cs");
