@@ -76,9 +76,12 @@ public sealed class P109WCommandDockLifecycleArchitectureTests
 
         var shell = Source("MainWindow.PersistentWorkbench.cs");
         Assert.Contains("public bool DockExpanded { get; set; }", shell, StringComparison.Ordinal);
-        Assert.DoesNotContain("DockExpandedByWorkspace", shell, StringComparison.Ordinal);
-        Assert.Contains("CommandPanelExpander.IsExpanded == state.DockExpanded", shell, StringComparison.Ordinal);
+        Assert.Contains("public bool SmvDockExpanded { get; set; } = false;", shell, StringComparison.Ordinal);
+        Assert.Contains("workspaceIndex == EngineeringNavigationRoute.SmvWorkspaceIndex", shell, StringComparison.Ordinal);
+        Assert.Contains("CommandPanelExpander.IsExpanded == desiredExpanded", shell, StringComparison.Ordinal);
         Assert.Contains("state.DockExpanded = expanded;", shell, StringComparison.Ordinal);
+        Assert.Contains("state.SmvDockExpanded = expanded;", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("RefreshControlValuesAsync(SelectedDevice", shell, StringComparison.Ordinal);
     }
 
     [Fact]
