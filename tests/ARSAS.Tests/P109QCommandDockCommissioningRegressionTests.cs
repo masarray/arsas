@@ -203,7 +203,7 @@ public sealed class P109QCommandDockCommissioningRegressionTests
     public void CtlModelPickerNeverShowsInternalRecordName(int code, string label)
     {
         var choice = new ArIED61850Tester.ControlModelWriteWindow.ModelChoice(
-            (AR.Iec61850.Control.Iec61850ControlModelKind)code, label);
+            (Iec61850ControlModelKind)code, label);
         Assert.Equal(label, choice.ToString());
         Assert.DoesNotContain("ModelChoice", choice.ToString());
 
