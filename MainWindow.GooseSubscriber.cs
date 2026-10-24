@@ -37,6 +37,8 @@ public partial class MainWindow
     private long _gooseOtherFrames;
     private bool _gooseWorkspaceActivationScheduled;
     private bool _gooseBindingRefreshScheduled;
+    // Native adapter discovery must never execute during a tab navigation.
+    private bool _gooseNavigationAdapterScanInFlight;
 
     public BulkObservableCollection<GooseAdapterOption> GooseAdapters { get; } = new();
     public BulkObservableCollection<GooseStreamRow> GooseStreams { get; } = new();
@@ -133,23 +135,59 @@ public partial class MainWindow
             return;
 
         _gooseWorkspaceActivationScheduled = true;
-        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        // GOOSE tab switching is presentation-only. Model compilation already
+        // follows workspace changes, and Start/Refresh Models can explicitly
+        // request a fresh catalog. Neither SCL scans nor synchronous Npcap
+        // enumeration belong on the navigation/rendering dispatcher path.
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
         {
             _gooseWorkspaceActivationScheduled = false;
-            try
-            {
-                RefreshGooseBindingPreview();
-                if (GooseAdapters.Count == 0)
-                    RefreshGooseAdapters();
-            }
-            catch (Exception ex)
-            {
-                // The selected tab has already rendered by this point. Keep the workspace
-                // usable in unbound/wire-order mode instead of letting a model or native
-                // dependency exception abort TabControl content creation.
-                ApplyGooseWorkspaceFallback("GOOSE workspace initialization failed", ex);
-            }
+            if (MainTabs.SelectedIndex != GooseSubscriberTabIndex || IsGooseCapturing)
+                return;
+            if (GooseAdapters.Count == 0)
+                _ = LoadGooseAdaptersForNavigationAsync();
         }));
+    }
+
+    private async Task LoadGooseAdaptersForNavigationAsync()
+    {
+        if (_gooseNavigationAdapterScanInFlight || IsGooseCapturing ||
+            Dispatcher.HasShutdownStarted || GooseAdapters.Count != 0)
+            return;
+
+        _gooseNavigationAdapterScanInFlight = true;
+        try
+        {
+            // Native enumerations can stall several seconds on multi-NIC PCs.
+            // Only the discovery occurs on a worker; every bound collection
+            // mutation stays on WPF's synchronization context.
+            var adapters = await Task.Run(
+                () => _gooseSubscriberRuntime.ListAdapters());
+            if (Dispatcher.HasShutdownStarted || IsGooseCapturing ||
+                GooseAdapters.Count != 0)
+                return;
+            var previousName = SelectedGooseAdapter?.Name;
+            GooseAdapters.ReplaceAll(adapters);
+            SelectedGooseAdapter = adapters.FirstOrDefault(adapter =>
+                previousName is not null &&
+                adapter.Name.Equals(previousName, StringComparison.OrdinalIgnoreCase));
+            GooseStatusText = adapters.Count == 0
+                ? "No Npcap/WinPcap adapters found. Install Npcap, then refresh adapters."
+                : $"{adapters.Count:N0} capture adapter(s) available. Choose the station Ethernet adapter and press Start.";
+        }
+        catch (Exception ex)
+        {
+            // Failing optional capture discovery must not freeze or blank the tab.
+            if (!Dispatcher.HasShutdownStarted && !IsGooseCapturing)
+            {
+                GooseStatusText = $"Npcap adapter discovery failed: {DescribeGooseFailure(ex)}";
+                AddLog("WARN", "GOOSE", GooseStatusText);
+            }
+        }
+        finally
+        {
+            _gooseNavigationAdapterScanInFlight = false;
+        }
     }
 
     private void RefreshGooseAdapters_Click(object sender, RoutedEventArgs e)
