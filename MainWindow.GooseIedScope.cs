@@ -33,6 +33,10 @@ public partial class MainWindow
     public string GooseEmptyEventTitle => GooseEvents.Count == 0
         ? "Waiting for the first meaningful GOOSE event"
         : "No events match the selected IED";
+    public System.Windows.Visibility GooseShowAllPublishersVisibility =>
+        GooseIedScopeIndex == 0 && GooseEvents.Count > 0 &&
+        !GooseVisibleEvents.Cast<GooseEventRow>().Any()
+            ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
     public string GooseEmptyEventDetail => GooseEvents.Count == 0
         ? "Frames are captured independently. New publishers and actual changes will appear here."
         : $"Captured {GooseEvents.Count:N0} timeline event(s), but none has a verified publisher identity matching the selected IED. Choose All IED GOOSE signals to view them.";
@@ -70,6 +74,7 @@ public partial class MainWindow
         Raise(nameof(GooseSelectedScopeHint));
         Raise(nameof(GooseEmptyEventTitle));
         Raise(nameof(GooseEmptyEventDetail));
+        Raise(nameof(GooseShowAllPublishersVisibility));
         _settingGooseLiveSelection = true;
         try
         {
