@@ -253,9 +253,9 @@ public sealed class WaveformPanelControl : FrameworkElement
         if (nineTwoLe)
         {
             if (showCurrent)
-                visibleLanes.Add(new LaneDefinition("VOLTAGE · Ch5–8", "V", snapshot.CurrentSeries));
+                visibleLanes.Add(new LaneDefinition("VOLTAGE", "V", snapshot.CurrentSeries));
             if (showVoltage)
-                visibleLanes.Add(new LaneDefinition("CURRENT · Ch1–4", "A", snapshot.VoltageSeries));
+                visibleLanes.Add(new LaneDefinition("CURRENT", "A", snapshot.VoltageSeries));
         }
         else
         {
@@ -363,7 +363,8 @@ public sealed class WaveformPanelControl : FrameworkElement
         if (MarkersEnabled && _cursorVisible && _cursorLane == laneIndex)
             DrawCursor(dc, innerRect, plotSeries, amplitudeMax, stacked, snapshot);
 
-        DrawTimebaseLabel(dc, innerRect, snapshot);
+        if (laneIndex == 0)
+            DrawTimebaseLabel(dc, innerRect, snapshot);
     }
 
     private IReadOnlyList<WaveformSeriesModel> BuildVisibleSeries(
@@ -1158,10 +1159,21 @@ public sealed class WaveformPanelControl : FrameworkElement
 
     private static void DrawTimebaseLabel(DrawingContext dc, Rect rect, WaveformSnapshot snapshot)
     {
-        var sampleRateText = snapshot.SampleRateHz > 0 ? $"{snapshot.SampleRateHz:0.#} Hz sample" : "Sample rate pending";
-        var frequencyText = snapshot.MeasuredFrequencyHz > 0 ? $"{snapshot.MeasuredFrequencyHz:0.###} Hz signal" : "Signal frequency pending";
-        dc.DrawText(CreateText(sampleRateText, 10.3, MutedBrush, LabelTypeface), new Point(rect.Left, rect.Bottom + 23));
-        dc.DrawText(CreateText(frequencyText, 10.3, MutedBrush, LabelTypeface), new Point(rect.Right - 106, rect.Bottom + 23));
+        // Share this technical caption once, never duplicate pending text.
+        if (snapshot.SampleRateHz > 0 && double.IsFinite(snapshot.SampleRateHz))
+        {
+            var rate = snapshot.SampleRateHz >= 1000
+                ? (snapshot.SampleRateHz / 1000.0).ToString("0.###", CultureInfo.InvariantCulture) + " kS/s"
+                : snapshot.SampleRateHz.ToString("0.#", CultureInfo.InvariantCulture) + " S/s";
+            dc.DrawText(CreateText(rate, 10.3, MutedBrush, LabelTypeface),
+                new Point(rect.Left, rect.Bottom + 23));
+        }
+        if (snapshot.MeasuredFrequencyHz > 0 && double.IsFinite(snapshot.MeasuredFrequencyHz))
+        {
+            var label = CreateText(snapshot.MeasuredFrequencyHz.ToString("0.##",
+                CultureInfo.InvariantCulture) + " Hz", 10.3, MutedBrush, LabelTypeface);
+            dc.DrawText(label, new Point(rect.Right - label.Width, rect.Bottom + 23));
+        }
     }
 
     // Presentation only: no fade animations/timers or per-sample state.
