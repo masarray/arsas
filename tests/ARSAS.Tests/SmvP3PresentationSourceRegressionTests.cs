@@ -41,7 +41,7 @@ public sealed class SmvP3PresentationSourceRegressionTests
         Assert.Contains("var referenceSample = SmvWaveformTimeAxis.ReferenceSample", wave);
 
         var diagram = Source("Ports/DigSubAnalyzer/Controls/PhasorDiagramControl.cs");
-        Assert.Contains("CreateText(FormatPhasorLabel(item)", diagram);
+        Assert.Contains("CreateText(FormatPhasorLabel(item, fitNarrow)", diagram);
         Assert.Contains("SmvAnglePresentation.Normalize360(angle)", diagram);
 
         foreach (var path in new[]
