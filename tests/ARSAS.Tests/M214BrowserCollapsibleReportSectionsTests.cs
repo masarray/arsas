@@ -22,28 +22,31 @@ public sealed class M214BrowserCollapsibleReportSectionsTests
         };
         var model = new IedBrowserDetailProjection();
         model.Reset(source);
-        Assert.Equal(source.Length, model.Rows.Count);
+        // User-requested default: passive last-Report metadata is collapsed.
+        // Trigger/options stay with the independent control-block section.
+        Assert.Equal(source.Length - 2, model.Rows.Count);
         var controls = Assert.Single(model.Rows, row =>
             row.Kind == "Section" && row.Name == "Control Block attributes");
         var received = Assert.Single(model.Rows, row =>
             row.Kind == "Section" && row.Name == "Information received in last Report");
         Assert.True(controls.IsExpanded);
-        Assert.True(received.IsExpanded);
+        Assert.False(received.IsExpanded);
         Assert.Equal(4, controls.GetChildren().Count);
         Assert.Equal(2, received.GetChildren().Count);
         model.Toggle(controls);
         Assert.False(controls.IsExpanded);
         Assert.DoesNotContain(model.Rows, row => row.Name == "Enabled / RptEna");
-        Assert.Contains(model.Rows, row => row.Name == "Received frame count");
+        Assert.DoesNotContain(model.Rows, row => row.Name == "Received frame count");
         Assert.Contains(model.Rows, row => row.Name == "Data");
         model.Toggle(received);
-        Assert.DoesNotContain(model.Rows, row => row.Name == "Received frame count");
+        Assert.Contains(model.Rows, row => row.Name == "Received frame count");
         Assert.DoesNotContain(model.Rows, row => row.Name == "Trigger options");
         model.Toggle(controls);
-        model.Toggle(received);
         Assert.Equal(source.Length, model.Rows.Count);
         Assert.Equal("true", Assert.Single(model.Rows,
             row => row.Name == "Enabled / RptEna").Value);
+        model.Toggle(received);
+        Assert.DoesNotContain(model.Rows, row => row.Name == "Received frame count");
     }
 
     [Fact]
@@ -57,9 +60,12 @@ public sealed class M214BrowserCollapsibleReportSectionsTests
         var model = new IedBrowserDetailProjection();
         model.Reset(source);
         var section = model.Rows[0];
+        Assert.False(section.IsExpanded);
         model.Toggle(section);
-        // The retained projected child is refreshed from the canonical
-        // ledger when the operator re-expands; no independent value cache.
+        Assert.Equal("1", model.Rows[1].Value);
+        // Retained projected child can be refreshed from canonical ledger
+        // even while collapsed; expansion never creates a parallel value store.
+        model.Toggle(section);
         section.GetChildren()[0].Value = "2";
         model.Toggle(section);
         Assert.Equal("2", model.Rows[1].Value);
