@@ -67,6 +67,21 @@ public sealed class Rc0OperatorGuiSizingRcbGooseRegressionTests
         Assert.Contains("RefreshGooseBindingPreview();\n            ResetGooseView", source, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void IedCardGooseQuickStart_AlsoAvoidsNativeNicWorkOnDispatcher()
+    {
+        var source = Read("MainWindow.IedGooseQuickStart.cs");
+        Assert.Contains("await EnsureGooseAdaptersForNavigationAsync()", source, StringComparison.Ordinal);
+        Assert.Contains("var candidates = GooseAdapters.ToArray();", source, StringComparison.Ordinal);
+        Assert.Contains("await Task.Run(() =>", source, StringComparison.Ordinal);
+        Assert.Contains("capturedAdapters ?? GooseAdapters.ToArray()", source, StringComparison.Ordinal);
+        // Quick start remains an explicit operator path, not an auto-start
+        // from incidental tab switching or an editable adapter binding.
+        Assert.Contains("MainTabs.SelectedIndex = GooseSubscriberTabIndex", source, StringComparison.Ordinal);
+        Assert.Contains("StartGooseSubscriber_Click(this, new RoutedEventArgs())", source, StringComparison.Ordinal);
+        Assert.Contains("_pendingIedGooseAutoStart = device;", source, StringComparison.Ordinal);
+    }
+
     private static string Read(string path)
     {
         for (DirectoryInfo? dir = new(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
