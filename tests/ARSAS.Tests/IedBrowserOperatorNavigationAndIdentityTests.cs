@@ -1,6 +1,7 @@
 using System.IO;
 using System.Linq;
 using System.Xml.Linq;
+using ArIED61850Tester.Models;
 
 namespace ARSAS.Tests;
 
