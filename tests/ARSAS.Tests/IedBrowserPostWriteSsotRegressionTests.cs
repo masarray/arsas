@@ -52,6 +52,8 @@ public sealed class IedBrowserPostWriteSsotRegressionTests
         Assert.Contains("new[] { dialog.AttemptedLeaf }", toolbar);
         Assert.Contains("dialog.AttemptedLeaves, dialog.WriteStatus", toolbar);
         Assert.Contains("IedBrowserReadValues_Click(new Button { Tag = request }", toolbar);
+        Assert.Contains("_iedBrowserReadOperation is not null || device.IsBusy", toolbar);
+        Assert.Contains("await Task.Delay(100);", toolbar);
         Assert.DoesNotContain("device.LiveValues.Publish(", toolbar);
         var legacy = Source("MainWindow.IedBrowser.Write.cs");
         Assert.Contains("editor.AttemptedLeaves, editor.WriteStatus", legacy);
