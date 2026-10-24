@@ -21,6 +21,9 @@ public partial class ControlModelWriteWindow : Window
     private readonly CancellationTokenSource _cancellation = new();
     private bool _busy;
     public bool VerifiedWriteOccurred { get; private set; }
+    public bool WriteAttempted { get; private set; }
+    public string WriteStatus { get; private set; } = "";
+    public long WriteAssociation { get; private set; }
     private bool _liveModelReady;
     private Iec61850ControlModelKind _liveModel = Iec61850ControlModelKind.Unknown;
     // Read/GVA evidence belongs to one live MMS association and one immutable
@@ -151,10 +154,12 @@ public partial class ControlModelWriteWindow : Window
         _liveModelReady = false;
         ModelPicker.IsEnabled = false;
         UpdateWriteButton();
-        StatusLabel.Text = "Writing and reading back ctlModel…";
+        StatusLabel.Text = "Writing ctlModel…";
         ResultBanner.Background = System.Windows.Media.Brushes.Transparent;
         string? failure = null;
         bool verified = false;
+        WriteAttempted = true;
+        WriteAssociation = _inspectedAssociation;
         try
         {
             // The pinned native dispatcher checks expected-old value and
@@ -180,24 +185,14 @@ public partial class ControlModelWriteWindow : Window
         }
         finally
         {
-            // Always refresh the displayed DA from the live IED, including
-            // rejected and uncertain Writes. Read only; never retry Write.
-            if (!_cancellation.IsCancellationRequested && IsLoaded)
-            {
-                await ReadModelAsync();
-                if (verified && _liveModelReady && _liveModel == selected.Model)
-                {
-                    StatusLabel.Text = $"Write verified · Readback: {(int)_liveModel} ({selected.Label})";
-                    ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(232, 248, 237));
-                }
-                else
-                {
-                    ShowWriteFailure(failure ?? "Readback did not confirm the requested value.");
-                }
-            }
+            WriteStatus = verified
+                ? "ctlModel Write verified; refreshing Data Model…"
+                : "ctlModel Write ditolak / unknown: " +
+                  (string.IsNullOrWhiteSpace(failure) ? "IED did not verify Write." : failure);
             _busy = false;
-            UpdateWriteButton();
+            // Browser owns the post-Write MMS Read and SSOT publication.
+            // Close the editor immediately, including on rejected Writes.
+            if (IsLoaded) Close();
         }
     }
 

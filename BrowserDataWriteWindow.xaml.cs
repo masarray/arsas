@@ -26,6 +26,11 @@ public partial class BrowserDataWriteWindow : Window
         !_lifetime.IsCancellationRequested;
     private IedBrowserNativeWritePreview? _preview;
     private bool _busy;
+    public bool WriteAttempted { get; private set; }
+    public long WriteAssociation { get; private set; }
+    public string WriteStatus { get; private set; } = "";
+    public (string Reference, string Fc) AttemptedLeaf =>
+        (_reference.Domain + "/" + _reference.Item, _reference.FunctionalConstraint);
 
     public BrowserDataWriteWindow(
         Iec61850MonitorRuntime runtime,
@@ -175,23 +180,23 @@ public partial class BrowserDataWriteWindow : Window
         NewValueBox.IsEnabled = false;
         BoolPicker.IsEnabled = false;
         StatusLabel.Text = "Writing…";
-        string feedback = "Write not verified.";
-        bool accepted = false;
-        bool readbackVerified = false;
+        bool verified = false;
+        string feedback = "IED did not verify Write.";
+        WriteAttempted = true;
+        WriteAssociation = _association;
         try
         {
             var step = new IedBrowserTypedWriteStep(
                 _reference, p.GvaSignature, p.OldValue, proposed);
             var outcome = await _runtime.WriteBrowserDataAttributesAsync(
                 _device, new[] { step }, true, _lifetime.Token);
-            if (!CurrentAssociation) return;
-            var result = outcome.Rows.Single();
-            accepted = outcome.Verified == 1;
-            feedback = accepted ? "Write accepted" : "Write ditolak: " + result.Message;
+            verified = outcome.Verified == 1;
+            feedback = verified ? "Write verified" :
+                "Write ditolak: " + (outcome.Rows.FirstOrDefault()?.Message ?? "IED refused");
         }
         catch (OperationCanceledException)
         {
-            feedback = "Write uncertain: connection interrupted.";
+            feedback = "Write outcome unknown: connection interrupted.";
         }
         catch (Exception ex)
         {
@@ -199,62 +204,11 @@ public partial class BrowserDataWriteWindow : Window
         }
         finally
         {
-            // Independent live GVA/Read after every attempted Write, even
-            // when the IED rejected it. Never send an automatic retry.
-            _preview = null;
-            if (CurrentAssociation)
-            {
-                try
-                {
-                    var readback = await _runtime.PreviewBrowserDataAttributeWriteAsync(
-                        _device, _reference, _lifetime.Token);
-                    if (CurrentAssociation && readback is
-                        { IsAvailable: true, OldValue: not null, Type: not null } live)
-                    {
-                        CurrentLabel.Text = "Current: " + live.CurrentText;
-                        TypeLabel.Text = live.Type.MmsType;
-                        _preview = live;
-                        if (live.Type.MmsType == "boolean")
-                        {
-                            BoolPicker.Visibility = Visibility.Visible;
-                            NewValueBox.Visibility = Visibility.Collapsed;
-                            BoolPicker.SelectedIndex = live.CurrentText.Equals(
-                                "true", StringComparison.OrdinalIgnoreCase) ? 0 :
-                                live.CurrentText.Equals("false", StringComparison.OrdinalIgnoreCase) ? 1 : -1;
-                            BoolPicker.IsEnabled = BoolPicker.SelectedIndex >= 0;
-                        }
-                        else
-                        {
-                            BoolPicker.Visibility = Visibility.Collapsed;
-                            NewValueBox.Visibility = Visibility.Visible;
-                            NewValueBox.Text = live.CurrentText;
-                            NewValueBox.IsEnabled = true;
-                        }
-                        var matches = MmsDataCodec.Encode(live.OldValue).AsSpan()
-                            .SequenceEqual(MmsDataCodec.Encode(proposed));
-                        readbackVerified = accepted && matches;
-                        feedback = readbackVerified
-                            ? "Write verified · Readback: " + live.CurrentText
-                            : accepted ? "Write not verified: readback differs (" + live.CurrentText + ")"
-                            : feedback + " · Current: " + live.CurrentText;
-                    }
-                    else
-                    {
-                        feedback += " · Readback unavailable.";
-                    }
-                }
-                catch (Exception ex) when (ex is not OutOfMemoryException)
-                {
-                    feedback += " · Readback unavailable: " + ex.Message;
-                }
-            }
+            WriteStatus = feedback;
             _busy = false;
-            RefreshInput();
-            ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
-                readbackVerified
-                    ? System.Windows.Media.Color.FromRgb(232, 248, 237)
-                    : System.Windows.Media.Color.FromRgb(255, 242, 228));
-            StatusLabel.Text = feedback.Length > 165 ? feedback[..162] + "…" : feedback;
+            // No duplicate read of the value inside this popup. Browser will
+            // issue its own exact live MMS Read and publish only into SSOT.
+            if (IsLoaded) Close();
         }
     }
 
