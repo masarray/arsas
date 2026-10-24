@@ -122,7 +122,7 @@ public partial class MainWindow
         MainTabs.SelectedIndex = GooseSubscriberTabIndex;
         UpdateNavigationVisuals(GooseSubscriberTabIndex, animate: true);
         ActivateGooseSubscriberWorkspace();
-        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(async () =>
         {
             if (Dispatcher.HasShutdownStarted || MainTabs.SelectedIndex != GooseSubscriberTabIndex)
                 return;
@@ -133,13 +133,39 @@ public partial class MainWindow
                     : "GOOSE capture is busy. Wait for the current operation.";
                 return;
             }
+            // Share the same asynchronous Npcap discovery as ordinary tab
+            // navigation. A background worker also resolves OS NIC routing:
+            // neither scan can block the first GOOSE frame/render.
             if (GooseAdapters.Count == 0)
-                RefreshGooseAdapters();
+                await EnsureGooseAdaptersForNavigationAsync();
+            if (Dispatcher.HasShutdownStarted || MainTabs.SelectedIndex != GooseSubscriberTabIndex ||
+                IsGooseCapturing || GooseActionBusy)
+                return;
 
-            // Exact OS/Npcap interface identity selects the candidate, not an
-            // adapter's display name or the presence of a single remaining NIC.
-            // The selected NIC is an observation point, NOT proof of GOOSE emission.
-            var proposed = ResolveGooseAdapterForIed(device, out var route);
+            // Capture a frozen list on the WPF thread before examining network
+            // interfaces off-thread. The candidate is observation only, not
+            // proof that an IED is publishing Ethernet GOOSE.
+            var candidates = GooseAdapters.ToArray();
+            GooseAdapterOption? proposed;
+            string route;
+            try
+            {
+                var resolved = await Task.Run(() =>
+                {
+                    var adapter = ResolveGooseAdapterForIed(device, out var evidence, candidates);
+                    return (Adapter: adapter, Evidence: evidence);
+                });
+                proposed = resolved.Adapter;
+                route = resolved.Evidence;
+            }
+            catch (Exception ex)
+            {
+                proposed = null;
+                route = $"Network adapter routing could not be resolved: {ex.Message}. Select the capture adapter manually.";
+            }
+            if (Dispatcher.HasShutdownStarted || MainTabs.SelectedIndex != GooseSubscriberTabIndex ||
+                IsGooseCapturing || GooseActionBusy)
+                return;
             _gooseCaptureContextHint = route.Contains("Same-PC", StringComparison.Ordinal)
                 ? "Same-PC simulator: verify it actually publishes Ethernet GOOSE on this adapter."
                 : "If no frames arrive, check the publisher, station NIC and VLAN.";
@@ -163,7 +189,8 @@ public partial class MainWindow
 
     private GooseAdapterOption? ResolveGooseAdapterForIed(
         Iec61850MonitorDevice device,
-        out string routeDetail)
+        out string routeDetail,
+        IReadOnlyList<GooseAdapterOption>? capturedAdapters = null)
     {
         routeDetail = "No route was resolved.";
         if (!IPAddress.TryParse(device.IpAddress, out var target) ||
@@ -187,7 +214,8 @@ public partial class MainWindow
                         .Select(unicast => unicast.Address)
                         .ToArray()))
                 .ToArray();
-            var selection = GooseAdapterSelectionPolicy.Resolve(target, route, interfaces, GooseAdapters.ToArray());
+            var selection = GooseAdapterSelectionPolicy.Resolve(
+                target, route, interfaces, capturedAdapters ?? GooseAdapters.ToArray());
             routeDetail = selection.Evidence;
             return selection.Adapter;
         }
