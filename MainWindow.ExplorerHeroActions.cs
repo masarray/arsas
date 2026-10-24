@@ -65,21 +65,21 @@ public partial class MainWindow
         actionPanel.Children.Clear();
         actionPanel.Children.Add(CreateExplorerHeroButton(
             "Add IED",
-            "LucidePlus",
+            "OperatorAddIedIcon",
             "PrimaryButton",
             AddRelay_Click,
             Brushes.White,
             new Thickness(0, 0, 10, 0)));
         actionPanel.Children.Add(CreateExplorerHeroButton(
             "Open SCL",
-            "LucideFileInput",
+            "MaterialUploadFileIcon",
             "SoftButton",
             OpenScl_Click,
             null,
             new Thickness(0, 0, 10, 0)));
         actionPanel.Children.Add(CreateExplorerHeroButton(
             "Open Project",
-            "LucideFolderOpen",
+            "MaterialFolderOpenIcon",
             "SoftButton",
             OpenProject_Click,
             null,
@@ -99,10 +99,17 @@ public partial class MainWindow
         var icon = new System.Windows.Shapes.Path
         {
             Data = TryFindResource(iconResource) as Geometry,
-            Style = TryFindResource("LucideIcon") as Style
+            Style = TryFindResource("MaterialIconGlyph") as Style
         };
         if (iconStroke != null)
-            icon.Stroke = iconStroke;
+            icon.Fill = iconStroke;
+        else
+            icon.SetBinding(System.Windows.Shapes.Shape.FillProperty,
+                new Binding(nameof(Control.Foreground))
+                {
+                    RelativeSource = new RelativeSource(
+                        RelativeSourceMode.FindAncestor, typeof(Button), 1)
+                });
 
         var content = new StackPanel
         {

@@ -67,9 +67,15 @@ public sealed class StaticAcquisitionParitySnapshot
     public bool DualIngressTrafficProven => Status == StaticAcquisitionParityStatus.Equivalent &&
         Discovery?.AllPlannedTargetsRouted == true && OpenScl?.AllPlannedTargetsRouted == true;
 
+    // A missing peer path does not undo real Report frames received from
+    // the Discovery path. Distinguish single-path proof from dual-path parity.
     public string TrafficQualificationSummary => DualIngressTrafficProven
         ? "DUAL INGRESS TRAFFIC PROVEN (routed static RCB data from both paths)"
-        : $"TRAFFIC PENDING • Discovery {Discovery?.RoutedTrafficSummary ?? "not captured"} • Open SCL {OpenScl?.RoutedTrafficSummary ?? "not captured"}";
+        : Discovery?.AllPlannedTargetsRouted == true && OpenScl is null
+            ? $"DISCOVERY REPORT INGRESS PROVEN • {Discovery.RoutedTrafficSummary} • Open SCL parity not captured"
+        : OpenScl?.AllPlannedTargetsRouted == true && Discovery is null
+            ? $"OPEN SCL REPORT INGRESS PROVEN • {OpenScl.RoutedTrafficSummary} • Discovery parity not captured"
+        : $"DUAL INGRESS PARITY PENDING • Discovery {Discovery?.RoutedTrafficSummary ?? "not captured"} • Open SCL {OpenScl?.RoutedTrafficSummary ?? "not captured"}";
 
     public string Summary => Status switch
     {

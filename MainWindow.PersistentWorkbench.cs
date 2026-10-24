@@ -36,18 +36,13 @@ public partial class MainWindow
         public bool ApplyingDockState { get; set; }
         public bool SuppressDockStateCapture { get; set; }
 
-        // P0 defaults: command-centric views open the dock, observational views do not.
-        // A user's manual expand/collapse choice is then retained per workspace for the
-        // remainder of the session.
-        public Dictionary<int, bool> DockExpandedByWorkspace { get; } = new()
-        {
-            [0] = true,   // IEC 61850 Explorer
-            [1] = false,  // Live Monitor
-            [2] = true,   // Event Log
-            [3] = false,  // Alarm
-            [4] = false,  // GOOSE Subscriber
-            [5] = false   // Diagnostics
-        };
+        // The Command Dock is ONE shared visual instance, not a per-tab child.
+        // Preserve its user-chosen expansion state across navigation. Replaying
+        // different per-tab defaults repeatedly unloaded/reloaded command rows.
+        public bool DockExpanded { get; set; } = true;
+        // SV inspection is independent of MMS command admission. Default
+        // collapsed, but retain the operator's explicit override per workspace.
+        public bool SmvDockExpanded { get; set; } = false;
     }
 
     [ModuleInitializer]
@@ -134,6 +129,10 @@ public partial class MainWindow
         // Remove before adding: WPF elements can have only one logical/visual parent.
         legacyExplorerLayout.Children.Remove(explorerPane);
         legacyCommandParent.Children.Remove(CommandPanelExpander);
+        // The legacy tab still has a named Grid.RowDefinition after the
+        // expander moves. Release any previous Star height immediately, even
+        // if the selected device has many controls.
+        ExplorerCommandDockRow.Height = GridLength.Auto;
         root.Children.Remove(MainTabs);
 
         // The old Explorer tab now owns only its right-hand data workspace.
@@ -149,6 +148,15 @@ public partial class MainWindow
         shell.Children.Add(explorerPane);
 
         MainTabs.Margin = new Thickness(0);
+        // TabControl's header consumes part of the shell star row. Forcing the
+        // tab CONTENT MinHeight to the full shell-row height clipped its lower
+        // Live Signal Values under the Command Dock, especially at 100–150% DPI.
+        // Keep the content stretchable and let WPF measure the actual tab viewport.
+        MainTabs.VerticalAlignment = VerticalAlignment.Stretch;
+        MainTabs.VerticalContentAlignment = VerticalAlignment.Stretch;
+        MainTabs.MinHeight = 0;
+        legacyExplorerLayout.VerticalAlignment = VerticalAlignment.Stretch;
+        legacyExplorerLayout.MinHeight = 0;
         Grid.SetColumn(MainTabs, 2);
         Grid.SetRow(MainTabs, 0);
         Grid.SetRowSpan(MainTabs, 1);
@@ -376,18 +384,26 @@ public partial class MainWindow
         if (state == null || state.ApplyingDockState || state.SuppressDockStateCapture)
             return;
 
-        state.DockExpandedByWorkspace[MainTabs.SelectedIndex] = expanded;
+        if (MainTabs.SelectedIndex == EngineeringNavigationRoute.SmvWorkspaceIndex)
+            state.SmvDockExpanded = expanded;
+        else
+            state.DockExpanded = expanded;
     }
 
     private void ApplyP0CommandDockState(PersistentWorkbenchState state, int workspaceIndex)
     {
-        if (!state.DockExpandedByWorkspace.TryGetValue(workspaceIndex, out var expanded))
-            expanded = false;
+        // Restore the operator choice for each purpose, while initially hiding
+        // MMS commands on passive SV inspection. Do not recreate the panel or
+        // invoke any control/refresh operation as a navigation side effect.
+        var desiredExpanded = workspaceIndex == EngineeringNavigationRoute.SmvWorkspaceIndex
+            ? state.SmvDockExpanded : state.DockExpanded;
+        if (CommandPanelExpander.IsExpanded == desiredExpanded)
+            return;
 
         state.ApplyingDockState = true;
         try
         {
-            CommandPanelExpander.IsExpanded = expanded;
+            CommandPanelExpander.IsExpanded = desiredExpanded;
         }
         finally
         {

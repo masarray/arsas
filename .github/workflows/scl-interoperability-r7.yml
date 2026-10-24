@@ -14,6 +14,14 @@ on:
       - "MainWindow.xaml.cs"
       - "Services/CanonicalSclReloadValidator.cs"
       - "engines/ARIEC61850.lock.json"
+      - "Services/NativeIec61850Client.cs"
+      - "Services/NativeIec61850Client.EmptyOctetRead.cs"
+      - "Models/IedBrowserReadValuePolicy.cs"
+      - "Models/IedBrowserReadCompletionAccounting.cs"
+      - "Models/IedBrowserReadEvidenceBundle.cs"
+      - "Models/StaticAcquisitionParityModels.cs"
+      - "MainWindow.IedBrowser.cs"
+      - "tests/ARSAS.Tests/P0D*.cs"
       - "evidence/interoperability-reference-target.json"
       - "docs/INTEROPERABILITY_REFERENCE_CONTRACT.md"
       - "tests/ARSAS.Tests/CanonicalLiveSclExportRegressionTests.cs"
@@ -82,7 +90,15 @@ jobs:
           }
 
           . .\ARSAS\scripts\test-p10-9f-core-routing-trial.ps1
+          . .\ARSAS\scripts\test-m217k-typed-status-trial.ps1
           $coreRoutingTrialValid = Test-P109FCoreRoutingTrial -Lock $lock
+          $m217KTrialValid = Test-M217KTypedStatusTrial -Lock $lock
+          . .\ARSAS\scripts\test-p0-a-identity-trial.ps1
+          $p0AIdentityTrialValid = Test-P0AIdentityTrial -Lock $lock
+          . .\ARSAS\scripts\test-p0-b-rcb-trial.ps1
+          $p0BRcbTrialValid = Test-P0BRcbPlannerTrial -Lock $lock
+          . .\ARSAS\scripts\test-p0-c-typed-read-trial.ps1
+          $p0CTypedReadTrialValid = Test-P0CTypedReadTrial -Lock $lock
           $trial = $lock.smartInteroperabilityCodeTrial
           if ($null -ne $trial -and $lock.commit -eq $trial.exactCommit) {
             if ([int]$lock.sourcePullRequest -ne 148 -or
@@ -148,8 +164,37 @@ jobs:
             }
             Write-Host 'P10 trusted-SCL identity trial accepted for code CI ONLY; R7/R10 physical gate unchanged.'
           }
+          elseif ($m217KTrialValid -or $p0AIdentityTrialValid -or $p0BRcbTrialValid -or $p0CTypedReadTrialValid) {
+            if ($env:GITHUB_BASE_REF -eq 'main' -or $env:GITHUB_REF_NAME -eq 'main') {
+              throw 'M2.17-K is not physically accepted and cannot run as a mainline promotion.'
+            }
+            Write-Host 'M2.17-K exact typed C264 engine trial accepted for CI ONLY; R7/R10 physical authority remains historical.'
+          }
           elseif ($coreRoutingTrialValid) {
             Write-Host 'P10.9F routing core accepted for CodeVerified staging CI ONLY; R7/R10 physical authority unchanged.'
+          }
+          elseif ($lock.commit -ceq 'f75e323e9f8443aa20e0a3818a1d5d77255b2c0f') {
+            $typed = $lock.globalTypedControlStageTrial
+            if ($null -eq $typed -or
+                $lock.ref -cne 'main' -or
+                [int]$lock.sourcePullRequest -ne 192 -or
+                $typed.exactCommit -cne $lock.commit -or
+                $typed.baseEngineCommit -cne '9c7cb40364023a7b217e5ec31ab3105ba90142eb' -or
+                $lock.p0CStageObservationTrial.exactCommit -cne $typed.baseEngineCommit -or
+                [int]$typed.enginePullRequest -ne 192 -or
+                [long]$typed.engineCiRun -ne 39909260816L -or
+                $typed.status -cne 'engine-ci-success-consumer-trial-not-physical' -or
+                -not [bool]$typed.typedStatusReadRequired -or
+                -not [bool]$typed.sameDataObjectFeedbackRequired -or
+                -not [bool]$typed.ctlModelAndOperShapeRequired -or
+                -not [bool]$typed.sbowEnhancedSafetyRequired -or
+                -not [bool]$typed.noAutomaticOperate -or
+                -not [bool]$typed.physicalQualificationRequired -or
+                -not [bool]$typed.mainlinePromotionForbidden -or
+                $env:GITHUB_BASE_REF -eq 'main' -or $env:GITHUB_REF_NAME -eq 'main') {
+              throw 'Unqualified typed-control staging pin cannot replace physical R7/R10 authority.'
+            }
+            Write-Host 'Exact typed-control staging trial accepted for draft CI only; R7/R10 physical acceptance unchanged.'
           }
           elseif ($lock.commit -eq $convergence.activeStack.engineModelAndScl.head) {
             if ([int]$lock.sourcePullRequest -notin @(134, 135) -or

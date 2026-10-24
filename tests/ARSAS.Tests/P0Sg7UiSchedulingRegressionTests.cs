@@ -1,0 +1,102 @@
+namespace ARSAS.Tests;
+
+/// <summary>
+/// Source-path safety checks for the physical SG7 GUI scheduling failure.
+/// WPF benchmarks still require an instrumented Windows/IED FAT; these guards
+/// prevent accidentally restoring unbounded Dispatcher work in future merges.
+/// </summary>
+public sealed class P0Sg7UiSchedulingRegressionTests
+{
+    [Fact]
+    public void SnapshotReportCoalescing_IsLosslessForEdgesAndUsesBoundedUiSlices()
+    {
+        var source = Read("MainWindow.xaml.cs");
+        var ingress = source.Split("private void Runtime_PointUpdated(")[1]
+            .Split("private void Runtime_EventRaised(")[0];
+        Assert.Contains("_pendingPointSnapshots.TryAdd(key,", ingress);
+        Assert.Contains("_pendingPointSnapshots.TryUpdate(key, merged, current)", ingress);
+        Assert.Contains("CanonicalPointSnapshotAuthority.Merge(current, snapshot)", ingress);
+        Assert.Contains("_pendingPointUiKeys.Enqueue(key)", ingress);
+
+        var flush = source.Split("private void UiFlushTimer_Tick(")[1]
+            .Split("private void Signal_PropertyChanged(")[0];
+        Assert.Contains("processedPoints < UiPointBatchLimit", flush);
+        Assert.Contains("Stopwatch.GetTimestamp() < uiDeadlineTicks", flush);
+        Assert.Contains("TryDequeueUiPointKey(processedPoints, out var pointKey)", flush);
+        var viewport = Read("MainWindow.LivePointViewportPriority.cs");
+        Assert.Contains("_priorityPointUiKeys.TryDequeue(out key)", viewport);
+        Assert.Contains("_pendingPointUiKeys.TryDequeue(out key)", viewport);
+        Assert.Contains("(processedPoints & 3) == 3", viewport);
+        Assert.Contains("_pendingPointSnapshots.TryRemove(pointKey, out var pending)", flush);
+        Assert.DoesNotContain("_pendingPointSnapshots.Keys.ToArray()", flush);
+        Assert.Contains("CanonicalPointSnapshotAuthority.Project(", flush);
+        // The receive/runtime lane owns canonical publication. A WPF frame
+        // is presentation only and cannot re-publish evidence on its timer.
+        Assert.DoesNotContain("observedOwner.LiveValues.PublishReport(", flush);
+        Assert.Contains("eventBatch.Count < UiEventBatchLimit", flush);
+        Assert.Contains("diagnosticBatch.Count < UiDiagnosticBatchLimit", flush);
+        Assert.Contains("Events.AddRange(eventBatch)", flush); // FIFO SOE not latest-wins
+        Assert.Contains("Logs.AddRange(diagnosticBatch)", flush);
+        Assert.DoesNotContain("_pendingEvents.Clear()", flush);
+    }
+
+    [Fact]
+    public void ExplorerSearch_HasOneFilterOwner_NoPerRowStringJoinOrDoubleRefresh()
+    {
+        var primary = Read("MainWindow.LiveSearch.cs");
+        var dynamic = Read("MainWindow.LiveSignalSearch.cs");
+        var sorting = Read("MainWindow.IecNaturalSort.cs");
+        Assert.Contains("if (_liveSignalSearchInstalled", primary);
+        Assert.Contains("ApplyLiveSignalSearch();", primary);
+        Assert.Contains("_unifiedExplorerSearchText", dynamic);
+        Assert.Contains("_unifiedLiveSearchTokens", dynamic);
+        Assert.Contains("LiveSignalSearchContains(", dynamic);
+        Assert.DoesNotContain("_liveSignalSearchView.Refresh()", dynamic);
+        Assert.DoesNotContain("string.Join('\\n', new[]", dynamic);
+        Assert.Contains("sourceCollection.Count <= 2048", dynamic);
+        Assert.Contains("Count: > 2048", sorting);
+        Assert.Contains("grid.Name is \"ExplorerLiveValuesGrid\" or \"GlobalLiveGrid\"", sorting);
+    }
+
+    [Fact]
+    public void GooseUiBatch_AvoidsWholeDictionaryAllocation()
+    {
+        var goose = Read("MainWindow.GooseSubscriber.cs");
+        var flush = goose.Split("private void FlushGooseSubscriberUi()")[1]
+            .Split("private GooseBindingCatalog BuildGooseBindingCatalog()")[0];
+        Assert.Contains("foreach (var pair in _pendingGooseFrames)", flush);
+        Assert.DoesNotContain("_pendingGooseFrames.ToArray()", flush);
+        Assert.Contains("processed >= 64", flush);
+    }
+
+    [Fact]
+    public void BrowserSelection_DetailProjectionRunsBehindSingleWorkerGate()
+    {
+        var browser = Read("MainWindow.IedBrowser.cs");
+        var worker = Read("MainWindow.IedBrowser.AsyncDetails.cs");
+        var render = browser.Split("private void RenderIedBrowserSelection(")[1];
+
+        Assert.Contains("++_iedBrowserDetailBuildGeneration", render);
+        Assert.Contains("BuildIedBrowserDetailsAsync(row, model,", render);
+        Assert.DoesNotContain("ReplaceIedBrowserDetails(IedBrowserPresentation.Details(", render);
+        Assert.Contains("SemaphoreSlim _iedBrowserDetailBuildGate = new(1, 1)", worker);
+        Assert.Contains("_iedBrowserDetailBuildGate.WaitAsync(", worker);
+        Assert.Contains("Task.Run(() =>", worker);
+        Assert.Contains("IedBrowserPresentation.Details(page, model, connected, designModel)", worker);
+        Assert.Contains("generation != _iedBrowserDetailBuildGeneration", worker);
+        Assert.Contains("owner?.LiveValues.Association != association", worker);
+        Assert.Contains("ReplaceIedBrowserDetails(rows)", worker);
+        Assert.Contains("QueueIedBrowserFocusedRead(page)", worker);
+    }
+
+    private static string Read(string name)
+    {
+        for (DirectoryInfo? folder = new(AppContext.BaseDirectory);
+             folder is not null; folder = folder.Parent)
+        {
+            var path = Path.Combine(folder.FullName, name);
+            if (File.Exists(path)) return File.ReadAllText(path);
+        }
+        throw new FileNotFoundException(name);
+    }
+}

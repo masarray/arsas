@@ -166,6 +166,18 @@ internal static class DiagnosticReportBuilder
                 }
                 builder.AppendLine($"Connected        : {device.IsConnected}");
                 builder.AppendLine($"Monitoring       : {device.IsMonitoring}");
+                // Diagnostic projection only: no MMS reads, new caches, or
+                // synthetic values. Samples are scoped to the active IED.
+                builder.AppendLine($"Browser ledger   : association={device.LiveValues.Association}, version={device.LiveValues.Version}, offline={device.LiveValues.IsOffline}");
+                var hydrationFailures = device.InitialHydrationFailures?
+                    .SnapshotCurrent(device, maxEntries: 12) ??
+                    Array.Empty<IedBrowserReadFailureSample>();
+                builder.AppendLine($"Initial MMS errors (sample max 12): {hydrationFailures.Count}");
+                foreach (var evidence in hydrationFailures)
+                {
+                    var detail = evidence.Reason.Replace('\r', ' ').Replace('\n', ' ');
+                    builder.AppendLine($"  {evidence.Reference} [{evidence.FunctionalConstraint}] : {detail}");
+                }
                 builder.AppendLine($"Busy             : {device.IsBusy}");
                 builder.AppendLine($"Status           : {device.Status}");
                 builder.AppendLine($"Detail           : {device.Detail}");
@@ -187,6 +199,29 @@ internal static class DiagnosticReportBuilder
                     if (evidence.Length > 480) evidence = evidence[..480] + "…";
                     builder.AppendLine($"  {command.ObjectReference} | CDC={command.ControlCdc} | liveVerifiedCdc={command.VerifiedLiveControlCdc} | dataSetCdc={command.DataSetAdvisoryCdc} | model={command.ControlModelText} | canOperate={command.ControlSupportsOperate} | {evidence}");
                 }
+                // A static DataSet may report XCBR/XSWI Pos but omit the
+                // separate command-owning CSWI.Pos in another LD. Report the
+                // live discovery candidates independently of user selection;
+                // diagnostic visibility NEVER grants an MMS control command.
+                var independentCswi = device.LiveDiscoveryModel is not null
+                    ? Iec61850ControlIdentity.IndependentCswiInspectionCandidates(device.Signals)
+                    : [];
+                var cswiTotal = device.Signals
+                    .Count(s => !s.IsSelected &&
+                        Iec61850ControlIdentity.IsIndependentCswiCandidate(s));
+                builder.AppendLine($"CSWI outside DataSet: live candidates={cswiTotal}, bounded candidates={independentCswi.Length}, typed-operable={independentCswi.Count(s => s.ControlSupportsOperate)}, unresolved/status-only={independentCswi.Count(s => !s.ControlSupportsOperate)}; discovery does not imply command authority");
+                foreach (var cswi in independentCswi.Take(12))
+                {
+                    var note = (cswi.ControlInspectionEvidence ?? string.Empty)
+                        .Replace('\r', ' ').Replace('\n', ' ');
+                    if (note.Length > 180) note = note[..180] + "…";
+                    builder.AppendLine($"  CSWI {cswi.ObjectReference} | model={cswi.ControlModelText} | verifiedCDC={cswi.VerifiedLiveControlCdc} | operable={cswi.ControlSupportsOperate} | {note}");
+                }
+                // Side-effect-free SCD ↔ wire-model command parity for Siemens,
+                // ZIV and other vendors; do not confuse offline ctlModel design
+                // intent with a live MMS inspection or promote StatusOnly rows.
+                foreach (var parity in Iec61850SclLiveCswiParityDiagnostic.Summarize(device))
+                    builder.AppendLine(parity);
                 builder.AppendLine($"Logical Devices  : {EmptyAsUnavailable(device.LogicalDeviceSummary)}");
                 builder.AppendLine($"Identity source  : {EmptyAsUnavailable(device.IdentitySource)}");
 
@@ -197,6 +232,14 @@ internal static class DiagnosticReportBuilder
                     builder.AppendLine("DataSet inventory:");
                     foreach (var line in Iec61850DataSetCompletenessDiagnostic.FormatReportLines(completeness))
                         builder.AppendLine($"  {line}");
+                    // Exact FCD/FCDA conflict diagnostics from the already
+                    // attached model. This never opens an MMS association,
+                    // reads a value, or changes Report/Read ownership.
+                    var fcConflicts = IedBrowserDataSetFcConflictDiagnostic.Evaluate(
+                        dataSetModel, maxSamples: 12);
+                    builder.AppendLine($"DataSet FC model conflicts: {fcConflicts.TotalCount} across {fcConflicts.CheckedMembers} declared member(s)");
+                    foreach (var conflict in fcConflicts.Samples)
+                        builder.AppendLine($"  {conflict.DataSet} :: {conflict.Reference} [{conflict.FunctionalConstraint}] · inconsistent FCD/FCDA coverage");
                 }
                 else
                 {

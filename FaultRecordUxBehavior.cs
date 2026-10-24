@@ -197,8 +197,10 @@ internal static class FaultRecordUxBehavior
         Button fileButton,
         Button rcbButton)
     {
-        var hasGoose = device.SclWorkspace?.GooseStreams.Count > 0 ||
-                       device.LiveDiscoveryModel?.GooseControlBlocks.Count > 0;
+        // An Ethernet/Npcap probe is not evidence that this IED defines a GoCB.
+        // Connected IEDs require live-model proof; offline SCL inventory is
+        // explicitly advisory until the next association.
+        var hasGoose = device.HasGooseControlBlock;
         var hasSmv = device.SclWorkspace?.SampledValuesStreams.Count > 0 ||
                      device.LiveDiscoveryModel?.SampledValueControlBlocks.Count > 0;
 
@@ -211,10 +213,10 @@ internal static class FaultRecordUxBehavior
 
         ApplyState(
             gooseButton,
-            hasGoose ? CapabilityState.Available : CapabilityState.ProbeReady,
+            hasGoose ? CapabilityState.Available : CapabilityState.Unavailable,
             hasGoose
-                ? $"Monitor IEC 61850 GOOSE frames for {device.Name}"
-                : $"Monitor raw GOOSE frames for {device.Name} (no GoCB model configured)");
+                ? $"Open GOOSE monitoring for {device.Name} (GoCB present; frames still unverified)"
+                : $"{device.Name}: no {(device.IsConnected ? "live" : "SCL-declared")} GoCB; GOOSE unavailable");
         ApplyState(
             smvButton,
             hasSmv ? CapabilityState.Available : CapabilityState.Unavailable,
@@ -235,8 +237,8 @@ internal static class FaultRecordUxBehavior
             rcbButton,
             hasRcbInventory ? CapabilityState.Available : CapabilityState.Unavailable,
             hasRcbInventory
-                ? $"Select and export one RCB for legacy SAS import from {device.Name}"
-                : $"Open SCL or complete live discovery before using RCB Export for {device.Name}");
+                ? $"Browse Report Control Blocks and details for {device.Name}"
+                : $"Open SCL or complete live discovery before browsing RCBs for {device.Name}");
     }
 
     private static void ApplyState(Button button, CapabilityState state, string toolTip)
@@ -270,6 +272,8 @@ internal static class FaultRecordUxBehavior
     {
         // The visible GOOSE capability pill is the operator's CTA. Route through
         // the same adapter-pick workflow as any other GOOSE shortcut.
+        if (!device.HasGooseControlBlock)
+            return;
         mainWindow.OpenIedGooseSubscriber(device);
         mainWindow.Activate();
     }

@@ -26,13 +26,29 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly CancellationTokenSource _applicationCancellation = new();
     private readonly Dictionary<string, HashSet<string>> _pendingProjectSelections = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<SignalDefinition, Iec61850MonitorDevice> _signalOwners = new();
-    private readonly ConcurrentDictionary<string, PendingPointUpdate> _pendingPointSnapshots = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, CanonicalPointSnapshotBatch> _pendingPointSnapshots = new(StringComparer.Ordinal);
+    // A point key enters this queue only when absent from the coalescing map.
+    // Large SG7 bursts are consumed in bounded slices, not a full-map UI sweep.
+    private readonly ConcurrentQueue<string> _pendingPointUiKeys = new();
+    private readonly ConcurrentQueue<string> _priorityPointUiKeys = new();
+    private const int UiPointBatchLimit = 192;
+    private const int UiEventBatchLimit = 160;
+    private const int UiDiagnosticBatchLimit = 80;
+    // Informational totals may trail process values by <1 second. Individual
+    // point bindings and lossless SOE never wait for the summary refresh.
+    private long _nextUiPointSummaryTicks;
+    // Monitoring-lifetime O(1) immutable reference/FC lookup for SignalDefinition.
+    // Rebuilt after the selected signal/point model is materialized.
+    private readonly Dictionary<string, IedBrowserReadBindingIndex> _canonicalSignalProjections =
+        new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Iec61850MonitorPoint> _pointIndex = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentQueue<Iec61850EventEntry> _pendingEvents = new();
     private readonly ConcurrentQueue<DiagnosticEntry> _pendingDiagnostics = new();
     private readonly Dictionary<string, DateTime> _reportPulseUntil = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> _pointHighlightUntil = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<SignalDefinition>> _controlFeedbackIndex = new(StringComparer.OrdinalIgnoreCase);
+    // UI-only scheduling ownership; never a second control/session authority.
+    private readonly HashSet<Iec61850MonitorDevice> _controlRefreshInProgress = new();
     private readonly DispatcherTimer _uiFlushTimer;
     private readonly DispatcherTimer _progressAnimationTimer;
     // One timer per window: concurrent negative command results replace the
@@ -63,7 +79,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public string NewDeviceIp { get => _newDeviceIp; set => Set(ref _newDeviceIp, value); }
     public string NewDevicePort { get => _newDevicePort; set => Set(ref _newDevicePort, value); }
     public int PollingIntervalMs { get => _pollingIntervalMs; set => Set(ref _pollingIntervalMs, Math.Clamp(value, 50, 600000)); }
-    public string LastStatusText { get => _lastStatusText; set => Set(ref _lastStatusText, value); }
+    public string LastStatusText
+    {
+        get => _lastStatusText;
+        set => Set(ref _lastStatusText, FormatSingleLineStatus(value));
+    }
+
+    // Diagnostics owns full exceptions, including stack traces. The bottom
+    // strip is one short summary, never a resizable log or multi-line surface.
+    public static string FormatSingleLineStatus(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "Ready";
+        var first = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault()?.Trim() ?? "Ready";
+        return first.Length <= 180 ? first : first[..177] + "…";
+    }
 
     public Iec61850MonitorDevice? SelectedDevice
     {
@@ -71,12 +101,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         set
         {
             if (ReferenceEquals(_selectedDevice, value)) return;
+            using var selectionPerf = IedBrowserPerformanceProbe.Measure(
+                "IED.Select", value?.Name, value?.Signals.Count ?? 0);
             if (_selectedDevice != null)
             {
                 _selectedDevice.IsActive = false;
                 ClearPendingControlConfirmations(_selectedDevice);
             }
             _selectedDevice = value;
+            // WPF LoadingRow now prioritizes actual virtualized viewport rows
+            // on this device switch. Never assume the first 48 data-model rows
+            // are currently visible after scroll/filter/sort.
             if (_selectedDevice != null)
             {
                 ClearPendingControlConfirmations(_selectedDevice);
@@ -94,7 +129,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             Raise(nameof(ActiveIedSubtitle));
             RaiseWorkspaceCounts();
             TryAutoExpandCommandPanelOnce(_selectedDevice);
+            // The persistent Dock may retain the previous IED's viewport.
+            // Reposition once on real IED selection, never on report ingress.
+            if (CommandPanelExpander?.IsExpanded == true)
+                ScrollVerifiedEquipmentCommandsIntoView();
             ApplyExplorerLiveSearchFilter();
+            if (MainTabs?.SelectedIndex == IedBrowserWorkspaceIndex)
+                RefreshIedBrowser();
             // ctlModel inspection is preloaded independently of the Expander. Avoid
             // changing the row set after the panel's first frame has already painted.
         }
@@ -120,13 +161,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public MainWindow()
     {
         InitializeComponent();
-        // Use the actual compiled ARSAS assembly version, not a duplicated
-        // title-bar constant that can drift from the installed package.
-        var installedVersion = typeof(MainWindow).Assembly.GetName().Version;
-        Title = installedVersion is { Build: >= 0 }
-            ? $"ARSAS v{installedVersion.ToString(3)} — Smart IEC 61850 Communication Tester"
-            : "ARSAS — Smart IEC 61850 Communication Tester";
+        // Register before first WPF layout; initial realized row events can
+        // precede Loaded, while the existing Loaded hooks stay idempotent.
+        AttachLivePointViewportPriority(ExplorerLiveValuesGrid);
+        AttachLivePointViewportPriority(GlobalLiveGrid);
+        // The actual deployed assembly version, never an invented UI number.
+        var assembly = typeof(MainWindow).Assembly;
+        var compiled = assembly.GetCustomAttributes(
+                typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+            .FirstOrDefault()?.InformationalVersion;
+        var version = (compiled ?? assembly.GetName().Version?.ToString() ?? "")
+            .Split('+', 2)[0].TrimStart('v', 'V');
+        if (version.Length > 0)
+            Title = $"ARSAS v{version} - Smart IEC 61850 Communication Tester";
         DataContext = this;
+        Devices.CollectionChanged += (_, _) => _uiPointOwnersDirty = true;
         _controlShoutTimer.Tick += (_, _) =>
         {
             _controlShoutTimer.Stop();
@@ -276,8 +326,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             SetStatus(status);
             AddLog("INFO", "SCL", status);
 
+            // A valid discovered/SCL IED schema is enough to browse even when
+            // no process signals were materialized into the SCADA catalog.
             var selectableDevices = importedDevices
-                .Where(device => device.Signals.Count > 0)
+                .Where(device => device.Signals.Count > 0 ||
+                    (device.LiveDiscoveryModel ?? device.SclWorkspace?.DesignModel)
+                        is { LogicalDevices.Count: > 0 })
                 .Distinct()
                 .ToArray();
             SclSignalSelectionMode? sharedSelectionMode = null;
@@ -292,25 +346,54 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 }
                 else if (selectionMode == SclSignalSelectionMode.StaticDataSet)
                 {
-                    foreach (var importedDevice in selectableDevices)
-                        ApplyStaticDataSetSelection(importedDevice);
-
-                    AddLog("INFO", "SCL", $"Static DataSet selection is shared by Engineering and FAT for {selectableDevices.Length} IED workspace(s).");
-                    if (firstImported is { SelectedLiveSignalCount: > 0 })
+                    var staged = new List<Iec61850MonitorDevice>();
+                    try
                     {
-                        var connected = firstImported.IsConnected ||
-                                        await ConnectUsingSavedModelAsync(firstImported);
-                        if (connected && !firstImported.IsMonitoring)
+                        foreach (var importedDevice in selectableDevices)
                         {
-                            await _runtime.EnrichSelectedStaticDataSetUnitsAsync(
-                                firstImported,
-                                _applicationCancellation.Token);
-                            firstImported.RefreshComputed();
-                            await StartDeviceMonitorAsync(firstImported);
+                            importedDevice.BeginReportingProgress("Preparing Static DataSet reporting…");
+                            staged.Add(importedDevice);
+                            await ApplyStaticDataSetSelection(importedDevice);
+                            if (importedDevice.IsReportingProgressCanceled)
+                                return; // preempted by operator Stop
+                            if (!ReferenceEquals(importedDevice, firstImported))
+                                importedDevice.CompleteReportingProgress();
+                        }
+
+                        AddLog("INFO", "SCL", $"Static DataSet selection is shared by Engineering and FAT for {selectableDevices.Length} IED workspace(s).");
+                        if (firstImported is { SelectedLiveSignalCount: > 0 } &&
+                            !firstImported.IsReportingProgressCanceled)
+                        {
+                            var connected = firstImported.IsConnected ||
+                                            await ConnectUsingSavedModelAsync(firstImported);
+                            if (connected && !firstImported.IsReportingProgressCanceled &&
+                                !firstImported.IsMonitoring)
+                            {
+                                firstImported.UpdateReportingProgress(80, "Verifying engineering units…");
+                                await _runtime.EnrichSelectedStaticDataSetUnitsAsync(
+                                    firstImported, _applicationCancellation.Token);
+                                firstImported.RefreshComputed();
+                                if (!firstImported.IsReportingProgressCanceled)
+                                    await StartDeviceMonitorAsync(firstImported);
+                            }
                         }
                     }
+                    finally
+                    {
+                        foreach (var stagedDevice in staged)
+                            stagedDevice.CompleteReportingProgress();
+                    }
                 }
-                else
+                else if (selectionMode == SclSignalSelectionMode.BrowseIed)
+                {
+                    // Inspect the first imported IED's verified engineering model.
+                    // A multi-IED import retains all cards for subsequent selection;
+                    // no signal selection/FAT mutation or report session is created.
+                    if (firstImported is not null)
+                        OpenIedBrowserModel(firstImported);
+                    AddLog("INFO", "SCL", $"Browse IED selected for {firstImported?.Name ?? "first IED"}; no monitoring started.");
+                }
+                else if (selectionMode == SclSignalSelectionMode.Manual)
                 {
                     AddLog("INFO", "SCL", "Manual Signal Selection is shared by Engineering and FAT; each imported IED keeps its own checkbox state.");
                     foreach (var importedDevice in selectableDevices)
@@ -326,7 +409,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             // Importing through Engineering must update an already-loaded FAT project as
             // the same workspace mutation. The selection decision has already been applied,
             // so the hidden FAT view receives the new IEDs without a second prompt or reset.
-            if (_loadedIoFatWindow is { IsLoaded: true } loadedFat && sharedSelectionMode.HasValue)
+            if (_loadedIoFatWindow is { IsLoaded: true } loadedFat &&
+                sharedSelectionMode is SclSignalSelectionMode.StaticDataSet or SclSignalSelectionMode.Manual)
             {
                 var newFatSourcePaths = importedSources
                     .Where(imported => !loadedFat.Project.Sources.Any(source =>
@@ -794,9 +878,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (sender is not Button button || !int.TryParse(button.Tag?.ToString(), out var index))
             return;
-        index = Math.Clamp(index, 0, NativeFatWorkspaceIndex);
-        MainTabs.SelectedIndex = index;
-        UpdateNavigationVisuals(index, animate: true);
+        MainTabs.SelectedIndex = EngineeringNavigationRoute.TabForButton(index);
+        UpdateNavigationVisuals(MainTabs.SelectedIndex, animate: true);
     }
 
     private void MainTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -810,10 +893,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         if (MainTabs.SelectedIndex != 2)
             HideEventDetails();
+        if (MainTabs.SelectedIndex != IedBrowserWorkspaceIndex)
+        {
+            CancelIedBrowserRead();
+            _iedBrowserFileTransferOperation?.Cancel();
+        }
         if (MainTabs.SelectedIndex == 2)
         {
             foreach (var device in Devices)
                 device.ClearUnreadEvents();
+        }
+        else if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
+        {
+            RefreshIedBrowser();
         }
         else if (MainTabs.SelectedIndex == 4)
         {
@@ -825,6 +917,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             ClearDiagnosticAlert();
         }
+        else if (MainTabs.SelectedIndex == EngineeringNavigationRoute.SmvWorkspaceIndex)
+        {
+            // Switching tabs must never start Npcap discovery or SV capture.
+            // The explicit Open SMV Capture command retains the fast workflow.
+            PrepareSelectedSmvWorkspace();
+        }
 
         UpdateNavigationVisuals(MainTabs.SelectedIndex, animate: true);
     }
@@ -834,18 +932,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (WorkflowPillTranslate == null)
             return;
 
-        index = Math.Clamp(index, 0, NativeFatWorkspaceIndex);
+        index = EngineeringNavigationRoute.ButtonForTab(index);
 
-        // MainWindow is the single owner of all seven Engineering destinations.
+        // MainWindow is the single owner of all eight operator destinations.
         // Keep the same density used by the proven workstation shell while allowing
         // enough width for the Explorer label and the new canonical FAT sibling.
         var availableWidth = ActualWidth > 0d ? ActualWidth : 1480d;
-        var shellWidth = availableWidth >= 1700d ? 1085d : availableWidth >= 1380d ? 995d : 805d;
+        var shellWidth = Math.Min(1190d, Math.Max(842d, availableWidth - 360d));
         WorkflowNavShell.Width = shellWidth;
         WorkflowNavShell.MinWidth = shellWidth;
 
         var contentWidth = Math.Max(0d, shellWidth - WorkflowNavShell.Padding.Left - WorkflowNavShell.Padding.Right);
-        var cellWidth = contentWidth / 7d;
+        var cellWidth = contentWidth / 8d;
         WorkflowPill.Width = Math.Max(1d, cellWidth - 2d);
         var target = index * cellWidth;
 
@@ -865,13 +963,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var buttons = new[]
         {
+            NavIedBrowserButton,
             NavExplorerButton,
-            NavLiveButton,
             NavEventsButton,
             NavAlarmButton,
             NavGooseButton,
-            NavDiagnosticsButton,
-            NavNativeFatButton
+            NavSmvButton,
+            NavNativeFatButton,
+            NavDiagnosticsButton
         };
         for (var i = 0; i < buttons.Length; i++)
             buttons[i].Foreground = i == index ? Brushes.White : new SolidColorBrush(Color.FromRgb(71, 84, 103));
@@ -886,6 +985,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!EnsureSclEndpointBinding(device)) return false;
 
         RememberCurrentSelectionForReconnect(device);
+        ResetControlPreloadAttempts(device);
         RemoveDevicePoints(device.DeviceId);
         device.Points.Clear();
         device.RefreshComputed();
@@ -917,6 +1017,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 _signalOwners[signal] = device;
             }
             device.Signals.AddRange(signals);
+            // Full discovery returns before the GUI signal catalog is attached.
+            // Project already-verified initial MMS Read evidence from the
+            // per-IED ledger once; no duplicate value cache or MMS activity.
+            if (device.IsConnected)
+                new IedBrowserReadBindingIndex(device).ProjectCurrentReadSignals(
+                    device.LiveValues, device.LiveValues.Association);
             device.HasDiscoveryCache = signals.Count > 0;
             ApplySclLiveComparison(device, signals);
             ScheduleGooseBindingRefreshFromWorkspace();
@@ -931,6 +1037,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             }
 
             var restoredCount = RestoreSignalSelection(device);
+            // Real discovery/selection change: one read-only preflight, never
+            // periodic work triggered by tab navigation.
+            _ = PreloadControlModelsAsync();
             device.RefreshComputed();
             RaiseWorkspaceCounts();
             SetStatus($"{device.Name}: discovery complete, {device.SignalCount} readable signal(s), {restoredCount} saved selection(s) restored.");
@@ -944,7 +1053,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             device.RefreshComputed();
 
             var discoveredDataSetCount = device.LiveDiscoveryModel?.DataSets.Count ?? 0;
-            if (openWizard && (device.SignalCount > 0 || discoveredDataSetCount > 0))
+            var discoveredLdCount = device.LiveDiscoveryModel?.LogicalDevices.Count ?? 0;
+            if (openWizard && (device.SignalCount > 0 ||
+                               discoveredDataSetCount > 0 || discoveredLdCount > 0))
             {
                 if ((selectDevice || ReferenceEquals(SelectedDevice, device)) && !_signalSelectionWizardOpen)
                 {
@@ -1070,6 +1181,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             }
 
             device.RecountSelectedSignals();
+            _ = PreloadControlModelsAsync();
             await WaitForDiscoveryProgressAnimationAsync(device, TimeSpan.FromMilliseconds(900));
             RaiseWorkspaceCounts();
             if (device.HasSclDesignModel)
@@ -1217,10 +1329,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             SynchronizeAllEngineeringSelectionsToFat(device);
             SaveSignalSelectionMemory(device);
+            _ = PreloadControlModelsAsync();
             device.RefreshComputed();
             RebuildControlFeedbackIndex(device);
-            if (CommandPanelExpander?.IsExpanded == true && device.IsConnected)
-                _ = RefreshControlValuesAsync(device);
+            // A tab/Expander is not a reason for an extra MMS read. The
+            // one-shot preload above examines newly selected unresolved roots.
             RaiseWorkspaceCounts();
 
             if (device.SelectedLiveSignalCount == 0)
@@ -1294,6 +1407,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // Stop is a preemptive safety lane even while Connect/Start is busy.
         if (!TryGetDeviceFromButton(sender, out var device) || device.IsStopping) return;
         SelectedDevice = device;
+        if (device.IsReportingProgressActive)
+            device.CancelReportingProgress(); // Stop preempts report setup.
         if (device.IsDemo)
         {
             StopDemoDevice(device);
@@ -1361,10 +1476,58 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         await OpenSignalSelectionWizardAsync(device);
     }
 
-    private async void CommandPanel_Expanded(object sender, RoutedEventArgs e)
+    private void CommandPanel_Expanded(object sender, RoutedEventArgs e)
     {
-        if (SelectedDevice != null)
-            await RefreshControlValuesAsync(SelectedDevice, force: true);
+        // This is a layout event, NOT an MMS discovery/inspection request.
+        // The command model is preloaded on real association/selection changes.
+        // A manual Refresh values remains available for explicit readback.
+        ResizeCommandDockForVerifiedControls();
+        ScrollVerifiedEquipmentCommandsIntoView();
+    }
+
+    // The dock is a virtualized DataGrid: when verified equipment rows are
+    // inserted ahead of an existing generic I/O inventory, WPF can preserve
+    // the old vertical viewport at GGIO despite the sorted backing collection.
+    // Scroll to the first verified equipment DO, never manufacture a command.
+    private void ScrollVerifiedEquipmentCommandsIntoView()
+    {
+        if (SelectedDevice is not { } device || EquipmentCommandGrid is null)
+            return;
+        var first = device.CommandSignals.FirstOrDefault(signal =>
+            signal.ControlSupportsOperate &&
+            Iec61850ControlIdentity.CommandDockDisplayPriority(signal) < 100);
+        if (first is null)
+            return;
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded,
+            new Action(() =>
+            {
+                if (!ReferenceEquals(SelectedDevice, device) ||
+                    !device.CommandSignals.Contains(first))
+                    return;
+
+                // ScrollIntoView alone only ensures visibility, so a Tap
+                // already visible on the LAST row would remain at the bottom.
+                // Reset the virtualized viewport on expand/device switch only.
+                if (EquipmentCommandGrid.Template?.FindName(
+                        "DG_ScrollViewer", EquipmentCommandGrid) is ScrollViewer scroll)
+                    scroll.ScrollToTop();
+                EquipmentCommandGrid.ScrollIntoView(first);
+            }));
+    }
+
+    private void CommandPanel_Collapsed(object sender, RoutedEventArgs e)
+        => ResizeCommandDockForVerifiedControls();
+
+    private void ResizeCommandDockForVerifiedControls()
+    {
+        if (ExplorerCommandDockRow is null) return;
+        // The Command Dock is reparented into the shared shell by P0.
+        // Its previous Explorer tab row is now EMPTY. Giving that row Star
+        // height for >5 controls silently steals half the Live Values viewport.
+        ExplorerCommandDockRow.Height = ExplorerCommandDockLayoutPolicy.LegacyRowHeight(
+            dockReparented: _persistentWorkbench is not null,
+            commandExpanded: CommandPanelExpander?.IsExpanded == true,
+            controlCount: SelectedDevice?.CommandSignals.Count ?? 0);
     }
 
     private async void RefreshCommandValues_Click(object sender, RoutedEventArgs e)
@@ -1384,65 +1547,117 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!device.IsConnected)
             return;
 
-        // Never gate inspection on an operable-only UI projection.
-        var candidates = Iec61850ControlIdentity.DistinctSelected(device.Signals)
-            .Where(signal => force || !signal.ControlModelResolved ||
-                             signal.ControlCurrentValue == "-")
-            .ToArray();
-        if (candidates.Length == 0)
+        // The native runtime serializes inspection and Operate on one
+        // _controlCommandGate. Enqueuing three parallel UI inspections cannot
+        // improve MMS throughput, but places extra reads ahead of user control.
+        // One refresh owner per device; do not create another inspection queue.
+        if (!_controlRefreshInProgress.Add(device))
         {
-            RebuildControlFeedbackIndex(device);
+            if (force && ReferenceEquals(SelectedDevice, device))
+                SetStatus($"{device.Name}: control inspection is already running; retry Refresh once it completes.");
             return;
         }
 
-        using var throttle = new SemaphoreSlim(3, 3);
-        await Task.WhenAll(candidates.Select(async signal =>
+        try
         {
-            await throttle.WaitAsync(_applicationCancellation.Token);
-            signal.ControlInspectionBusy = true;
-            try
+            var candidates = Iec61850ControlIdentity.DistinctSelected(device.Signals)
+                .Where(signal => Iec61850ControlIdentity.NeedsInspection(signal, force))
+                .ToArray();
+            if (candidates.Length == 0)
             {
-                var capabilities = await _runtime.InspectControlAsync(
-                    device.DeviceId,
-                    signal,
-                    _applicationCancellation.Token);
-                if (!signal.ControlCommandBusy)
-                {
-                    signal.ControlCurrentValue = capabilities.CurrentValue;
-                    signal.ControlInspectionEvidence =
-                        $"{capabilities.ControlModelReference} | {capabilities.ControlModelText} | " +
-                        $"{capabilities.EngineControlServiceStatus} | {capabilities.DiscoveryEvidence}";
-                    signal.ControlLastResult = capabilities.EngineControlServiceStatus;
-                    if (!capabilities.SupportsOperate)
-                        AddLog("INFO", device.Name,
-                            $"Read-only control inspection {signal.ObjectReference}: " +
-                            signal.ControlInspectionEvidence);
-                }
+                RebuildControlFeedbackIndex(device);
+                return;
             }
-            catch (OperationCanceledException)
-            {
-                // Application shutdown or device removal.
-            }
-            catch (Exception ex)
-            {
-                if (!signal.ControlCommandBusy)
-                {
-                    signal.ControlInspectionEvidence =
-                        $"{signal.ObjectReference}: inspection failed; {ex.GetType().Name}: {ex.Message}";
-                    signal.ControlLastResult = $"Status read failed: {ex.Message}";
-                }
-            }
-            finally
-            {
-                signal.ControlInspectionBusy = false;
-                throttle.Release();
-            }
-        }));
 
-        device.RefreshCommandSignalProjection();
-        RebuildControlFeedbackIndex(device);
-        TryAutoExpandCommandPanelOnce(device);
-        SetStatus($"{device.Name}: refreshed {candidates.Length} control value(s).");
+            var completed = 0;
+            foreach (var signal in candidates)
+            {
+                // Input/confirmation has priority over the next diagnostic
+                // read. Never place another inspection behind an active
+                // operator command on this association.
+                await System.Windows.Threading.Dispatcher.Yield(DispatcherPriority.Background);
+                if (!device.IsConnected || _applicationCancellation.IsCancellationRequested ||
+                    device.CommandSignals.Any(active => active.ControlCommandBusy))
+                    break;
+                if (!Iec61850ControlIdentity.NeedsInspection(signal, force))
+                    continue;
+
+                signal.ControlInspectionBusy = true;
+                try
+                {
+                    var capabilities = await _runtime.InspectControlAsync(
+                        device.DeviceId,
+                        signal,
+                        _applicationCancellation.Token);
+                    if (!signal.ControlCommandBusy)
+                    {
+                        signal.ControlCurrentValue = capabilities.CurrentValue;
+                        signal.ControlInspectionEvidence =
+                            $"{capabilities.ControlModelReference} | {capabilities.ControlModelText} | " +
+                            $"{capabilities.EngineControlServiceStatus} | {capabilities.DiscoveryEvidence}";
+                        signal.ControlLastResult = capabilities.EngineControlServiceStatus;
+                        if (!capabilities.SupportsOperate)
+                            AddLog("INFO", device.Name,
+                                $"Read-only control inspection {signal.ObjectReference}: " +
+                                signal.ControlInspectionEvidence);
+                    }
+                    completed++;
+                }
+                catch (OperationCanceledException)
+                {
+                    // Application shutdown or device removal.
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    if (!signal.ControlCommandBusy)
+                    {
+                        signal.ControlInspectionEvidence =
+                            $"{signal.ObjectReference}: inspection failed; {ex.GetType().Name}: {ex.Message}";
+                        signal.ControlLastResult = $"Status read failed: {ex.Message}";
+                    }
+                }
+                finally
+                {
+                    signal.ControlInspectionBusy = false;
+                }
+            }
+
+            device.RefreshCommandSignalProjection();
+            RebuildControlFeedbackIndex(device);
+            if (ReferenceEquals(SelectedDevice, device))
+            {
+                ResizeCommandDockForVerifiedControls();
+                SetStatus($"{device.Name}: completed {completed}/{candidates.Length} control inspection(s).");
+            }
+            TryAutoExpandCommandPanelOnce(device);
+        }
+        finally
+        {
+            _controlRefreshInProgress.Remove(device);
+        }
+    }
+
+    private bool RejectCommandWhenIedFlightUnavailable(
+        Iec61850MonitorDevice? device, SignalDefinition signal)
+    {
+        // The UI is advisory. The runtime's atomic association-wide gate is
+        // authoritative, including sticky uncertain-outcome quarantine.
+        // Reuse existing CommandSignals state instead of mirroring a new
+        // runtime busy flag into the WPF view model.
+        if (device is null ||
+            !device.CommandSignals.Any(active => active.ControlCommandBusy))
+            return false;
+        const string reason =
+            "another IED command is still active or its wire outcome is unresolved";
+        signal.ControlLastResult = "Command not sent: " + reason +
+            ". Verify process status before recovery.";
+        AddLog("WARN", device.Name,
+            $"CONTROL_UI_SINGLE_FLIGHT: rejected {signal.ObjectReference}; " +
+            "same-IED control flight already active or quarantined; no Operate requested.");
+        SetStatus($"{device.Name}: {signal.Name} — command not sent; {reason}.");
+        ShowControlShout(Iec61850ControlShout.FromLocalRejection(reason));
+        return true;
     }
 
     private async void ControlStageAction_Click(object sender, RoutedEventArgs e)
@@ -1454,6 +1669,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var device = _signalOwners.TryGetValue(signal, out var owner) ? owner : SelectedDevice;
         if (device is null || !device.IsConnected || signal.ControlInspectionBusy || signal.ControlCommandBusy)
+            return;
+        if (RejectCommandWhenIedFlightUnavailable(device, signal))
             return;
         DismissControlShout();
 
@@ -1521,6 +1738,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
 
         var device = _signalOwners.TryGetValue(signal, out var owner) ? owner : SelectedDevice;
+        if (RejectCommandWhenIedFlightUnavailable(device, signal))
+            return;
         AddLog("INFO", device?.Name ?? "IED",
             $"Confirm click received: {signal.ObjectReference}; pending={signal.ControlConfirmationPending}; action={signal.ControlPendingAction}; value={signal.ControlPendingValue}; commandBusy={signal.ControlCommandBusy}; inspectionBusy={signal.ControlInspectionBusy}.");
 
@@ -1568,6 +1787,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         var device = _signalOwners.TryGetValue(signal, out var owner) ? owner : SelectedDevice;
+        if (RejectCommandWhenIedFlightUnavailable(device, signal))
+            return;
         if (!signal.TryBeginDirectControlCommand(
                 requestedValue,
                 button.Content?.ToString()?.Trim() ?? requestedValue,
@@ -1663,8 +1884,47 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (OperationCanceledException)
         {
-            signal.ControlLastResult = "Command cancelled.";
-            SetStatus($"{device.Name}: {signal.Name} command cancelled.");
+            signal.ControlLastResult = "Command cancelled; if Operate was already dispatched, verify actual IED position.";
+            SetStatus($"{device.Name}: {signal.Name} command cancelled; verify the final process state.");
+        }
+        catch (InvalidOperationException ex) when (
+            ex.Message.Contains("command NOT SENT", StringComparison.OrdinalIgnoreCase))
+        {
+            // A rejected local admission is NOT an MMS failure and not an
+            // UNKNOWN process outcome. Surface the precise busy/stop reason
+            // instead of the generic "Command failed" control popup.
+            signal.ControlLastResult = ex.Message;
+            AddLog("WARN", device.Name,
+                $"CONTROL_UI_NOT_SENT: {signal.ObjectReference}; {ex.Message}");
+            SetStatus($"{device.Name}: {signal.Name} — command NOT SENT (IED busy/stopping).");
+            MarkDiagnosticAlert();
+            ShowControlShout(Iec61850ControlShout.FromLocalRejection(
+                ex.Message + " Allow the current IED operation to finish before retrying."));
+        }
+        catch (InvalidOperationException ex) when (
+            ex.Message.Contains("control", StringComparison.OrdinalIgnoreCase) &&
+            (ex.Message.Contains("in progress", StringComparison.OrdinalIgnoreCase) ||
+             ex.Message.Contains("unresolved", StringComparison.OrdinalIgnoreCase)))
+        {
+            signal.ControlLastResult = "Command NOT SENT: " + ex.Message;
+            AddLog("WARN", device.Name,
+                $"CONTROL_UI_LOCAL_GATE: {signal.ObjectReference}; {ex.Message}");
+            SetStatus($"{device.Name}: {signal.Name} — command not sent; prior flight active or unresolved.");
+            MarkDiagnosticAlert();
+            ShowControlShout(Iec61850ControlShout.FromLocalRejection(
+                "another control flight is active or unresolved. Verify actual IED status before retrying"));
+        }
+        catch (TimeoutException ex)
+        {
+            signal.ControlLastResult =
+                "Control outcome UNKNOWN — MMS flight exceeded deadline. " +
+                "Verify IED process state and reconnect before another command.";
+            AddLog("ERROR", device.Name,
+                $"CONTROL_UI_TIMEOUT: {signal.ObjectReference}; {ex.Message}");
+            SetStatus($"{device.Name}: {signal.Name} control outcome UNKNOWN; check Diagnostics.");
+            MarkDiagnosticAlert();
+            ShowControlShout(Iec61850ControlShout.FromLocalRejection(
+                "Control timed out with UNKNOWN wire outcome. Verify the IED position and reconnect; do not blindly retry"));
         }
         catch (Exception ex)
         {
@@ -2167,6 +2427,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             RemoveDevicePoints(device.DeviceId);
             device.Points.Clear();
 
+            device.UpdateReportingProgress(84, "Arming configured BRCB/URCB reports…");
             SetStatus($"{device.Name}: arming static/dynamic IEC 61850 reporting…");
             var points = await _runtime.StartMonitoringAsync(
                 device,
@@ -2179,6 +2440,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             RebuildControlFeedbackIndex(device);
             foreach (var point in points)
                 _pointIndex[point.PointKey] = point;
+            var signalProjection = new IedBrowserReadBindingIndex(device);
+            _canonicalSignalProjections[device.DeviceId] = signalProjection;
+            // A first static Report may arrive before StartMonitoringAsync
+            // returns; seed those existing observations once, not by rereading MMS.
+            var projectionAssociation = device.LiveValues.Association;
+            foreach (var point in points)
+                signalProjection.ProjectReportedSignals(device.LiveValues,
+                    projectionAssociation, point.IecReference, point.FunctionalConstraint);
+            device.UpdateReportingProgress(96, "Applying initial report-backed signal grid…");
             device.RefreshComputed();
             RaiseWorkspaceCounts();
             if (navigateToExplorer)
@@ -2211,6 +2481,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         device.ReportPulseActive = false;
         _reportPulseUntil.Remove(device.DeviceId);
         RemoveDeviceHighlights(device.DeviceId);
+        _canonicalSignalProjections.Remove(device.DeviceId);
         MarkDevicePointsInactive(device, disconnected: false);
         EnsureOfflinePointProjection(device);
         device.RefreshComputed();
@@ -2218,8 +2489,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         SetStatus($"{device.Name}: monitoring paused; last observed values are not live.");
     }
 
-    private static void ResetControlReadinessForNewAssociation(Iec61850MonitorDevice device)
+    private void ResetControlReadinessForNewAssociation(Iec61850MonitorDevice device)
     {
+        ResetControlPreloadAttempts(device);
         foreach (var signal in device.Signals.Where(s => s.IsValidControlObject))
         {
             signal.ClearControlConfirmation();
@@ -2279,6 +2551,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     // them as live data or raise new SOE events during the transition.
     private void MarkDevicePointsInactive(Iec61850MonitorDevice device, bool disconnected)
     {
+        _canonicalSignalProjections.Remove(device.DeviceId);
         var label = disconnected ? "Offline" : "Paused";
         foreach (var point in device.Points)
         {
@@ -2336,10 +2609,29 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void Runtime_PointUpdated(Iec61850PointSnapshot snapshot)
     {
-        _pendingPointSnapshots.AddOrUpdate(
-            snapshot.Point.PointKey,
-            _ => new PendingPointUpdate(snapshot, snapshot.IsValueEdge),
-            (_, current) => current.Merge(snapshot));
+        var key = CanonicalPointSnapshotAuthority.UiQueueKey(snapshot.Point);
+        // AddOrUpdate's value-factory may run multiple times under contention.
+        // Only enqueue after a successful first insert; failed compare/exchange
+        // retries preserve association/revision semantics of Merge.
+        while (true)
+        {
+            if (_pendingPointSnapshots.TryGetValue(key, out var current))
+            {
+                var merged = CanonicalPointSnapshotAuthority.Merge(current, snapshot);
+                if (_pendingPointSnapshots.TryUpdate(key, merged, current))
+                    return;
+            }
+            else if (_pendingPointSnapshots.TryAdd(key,
+                new CanonicalPointSnapshotBatch(snapshot, snapshot.IsValueEdge)))
+            {
+                _pendingPointUiKeys.Enqueue(key);
+                // Queue urgent work only for rows WPF has actually realized.
+                // Exact FC-qualified identity; no second value store or SOE.
+                if (_livePointViewport.IsRealized(key))
+                    _priorityPointUiKeys.Enqueue(key);
+                return;
+            }
+        }
     }
 
     private void Runtime_EventRaised(Iec61850EventEntry entry)
@@ -2355,7 +2647,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         foreach (var device in Devices)
         {
-            if (device.IsBusy)
+            // Discovery owns its own local easing; Browser Read already supplies
+            // direct throttled percentages and must not advance stale discovery.
+            if (device.IsDiscoveryProgressActive)
                 device.AdvanceDiscoveryProgressAnimation();
         }
     }
@@ -2373,24 +2667,71 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void UiFlushTimer_Tick(object? sender, EventArgs e)
     {
+        using var flushPerf = IedBrowserPerformanceProbe.Measure(
+            "UI.Flush", SelectedDevice?.Name, _pendingPointSnapshots.Count);
         FlushGooseSubscriberUi();
 
         var pointChanged = false;
-        foreach (var pointKey in _pendingPointSnapshots.Keys.ToArray())
+        // Strict per-dispatch budget: a large initial SG7 data image must not
+        // monopolize WPF input/rendering. Queue holds only unique pending keys;
+        // latest canonical observation remains in the coalescing map.
+        var uiStartTicks = Stopwatch.GetTimestamp();
+        var uiDeadlineTicks = uiStartTicks + Stopwatch.Frequency / 125; // ~8 ms
+        var processedPoints = 0;
+        var deviceOwners = UiPointOwners();
+        while (processedPoints < UiPointBatchLimit &&
+               Stopwatch.GetTimestamp() < uiDeadlineTicks &&
+               TryDequeueUiPointKey(processedPoints, out var pointKey))
         {
             if (!_pendingPointSnapshots.TryRemove(pointKey, out var pending)) continue;
+            processedPoints++;
             var snapshot = pending.Snapshot;
             var point = snapshot.Point;
-            if (snapshot.Sequence < point.Sequence)
+            if (!deviceOwners.TryGetValue(point.DeviceId, out var observedOwner) ||
+                !string.Equals(observedOwner.DeviceId, point.DeviceId,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                // DeviceId is project-deserializable. If it was rebound
+                // in-place without an ObservableCollection mutation, rebuild
+                // once instead of dropping valid session observations.
+                _uiPointOwnersDirty = true;
+                deviceOwners = UiPointOwners();
+                if (!deviceOwners.TryGetValue(point.DeviceId, out observedOwner))
+                    continue;
+            }
+            // Reject queued frames from an earlier MMS connection even if
+            // the new session resets its point Sequence counter to zero.
+            // Never re-activate Paused/Offline rows from late runtime callbacks.
+            // A real live monitoring association must be stamped at ingress;
+            // legacy unstamped snapshots cannot cross a reconnect boundary.
+            if (!observedOwner.IsConnected || !observedOwner.IsMonitoring)
                 continue;
-            var qualityChanged = !string.Equals(point.Quality, snapshot.Quality, StringComparison.Ordinal);
-            var uiDetectedEdge = point.ApplyProcessValue(snapshot.Value);
+            // Demo is an explicitly synthetic UI mode without an MMS
+            // association. Real IED snapshots must carry their exact session
+            // stamp; never treat an unstamped real callback as current.
+            if (!observedOwner.IsDemo &&
+                (snapshot.ObservationAssociation == 0 ||
+                 snapshot.ObservationAssociation != observedOwner.LiveValues.Association))
+                continue;
+            // Guard both pre-dispatch coalescing and already-rendered state.
+            // Same-association status/q/t updates may share semantic Sequence,
+            // but publication revisions distinguish their real receive order.
+            if (point.LastSnapshotAssociation == snapshot.ObservationAssociation &&
+                (snapshot.Sequence < point.Sequence ||
+                 (snapshot.SnapshotRevision > 0 &&
+                  snapshot.SnapshotRevision <= point.LastSnapshotRevision)))
+                continue;
+            var presentation = CanonicalPointSnapshotAuthority.Project(
+                observedOwner, point, snapshot);
+            var qualityChanged = !string.Equals(
+                point.Quality, presentation.Quality, StringComparison.Ordinal);
+            var uiDetectedEdge = point.ApplyProcessValue(presentation.Value);
             if (pending.HasValueEdge || snapshot.IsValueEdge || uiDetectedEdge)
                 MarkPointRecentlyChanged(point);
-            point.Quality = snapshot.Quality;
+            point.Quality = presentation.Quality;
             point.IsOffline = false;
-            point.DeviceTimestamp = snapshot.DeviceTimestamp;
-            point.SourceMode = snapshot.SourceMode;
+            point.DeviceTimestamp = presentation.DeviceTimestamp;
+            point.SourceMode = presentation.SourceMode;
             // The immutable runtime snapshot aggregates only RCBs that have
             // actually delivered this signal on the current association.
             // A non-value status snapshot cannot erase prior routed sources.
@@ -2398,6 +2739,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             point.Reason = snapshot.Reason;
             point.Status = snapshot.Status;
             point.Sequence = snapshot.Sequence;
+            point.LastSnapshotAssociation = snapshot.ObservationAssociation;
+            point.LastSnapshotRevision = snapshot.SnapshotRevision;
+            // This is the same coalesced UI snapshot that updates Explorer,
+            // Live Monitor and SOE. Browser never has its own report decoder.
+            // Canonical ingress remains first authority. The point snapshot
+            // is a compatibility mirror only when Report evidence is absent.
+            // Canonical Report compatibility mirror is admitted on the runtime
+            // ingress lane BEFORE this WPF tick, never on the Dispatcher.
+            // Never mirror the payload into signals directly. Only the actual
+            // canonical Report observation with matching association can feed
+            // selected SignalDefinition presentation rows.
+            if (snapshot.IsReportTraffic &&
+                _canonicalSignalProjections.TryGetValue(observedOwner.DeviceId,
+                    out var signalProjection))
+                signalProjection.ProjectReportedSignals(observedOwner.LiveValues,
+                    snapshot.ObservationAssociation, point.IecReference,
+                    point.FunctionalConstraint);
             if (uiDetectedEdge || pending.HasValueEdge || snapshot.IsValueEdge || qualityChanged)
             {
                 UpdateCommandFeedbackFromLivePoint(point);
@@ -2405,19 +2763,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             }
             if (snapshot.IsReportTraffic)
             {
-                var device = Devices.FirstOrDefault(item => item.DeviceId.Equals(point.DeviceId, StringComparison.OrdinalIgnoreCase));
-                if (device != null)
-                {
-                    device.HasReportStream = true;
-                    device.ReportPulseActive = true;
-                    _reportPulseUntil[device.DeviceId] = DateTime.UtcNow.AddMilliseconds(650);
-                }
+                observedOwner.HasReportStream = true;
+                observedOwner.ReportPulseActive = true;
+                _reportPulseUntil[observedOwner.DeviceId] = DateTime.UtcNow.AddMilliseconds(650);
             }
             pointChanged = true;
         }
 
         var eventBatch = new List<Iec61850EventEntry>(256);
-        while (eventBatch.Count < 1000 && _pendingEvents.TryDequeue(out var entry))
+        while (eventBatch.Count < UiEventBatchLimit && _pendingEvents.TryDequeue(out var entry))
             eventBatch.Add(entry);
         if (eventBatch.Count > 0)
         {
@@ -2442,7 +2796,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         var diagnosticBatch = new List<DiagnosticEntry>(128);
-        while (diagnosticBatch.Count < 500 && _pendingDiagnostics.TryDequeue(out var diagnostic))
+        while (diagnosticBatch.Count < UiDiagnosticBatchLimit && _pendingDiagnostics.TryDequeue(out var diagnostic))
             diagnosticBatch.Add(diagnostic);
         if (diagnosticBatch.Count > 0)
         {
@@ -2485,8 +2839,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             }
         }
 
-        if (pointChanged || eventBatch.Count > 0 || diagnosticBatch.Count > 0)
+        var nowTicks = Stopwatch.GetTimestamp();
+        if (eventBatch.Count > 0 || diagnosticBatch.Count > 0 ||
+            (pointChanged && nowTicks >= _nextUiPointSummaryTicks))
+        {
             RaiseWorkspaceCounts();
+            _nextUiPointSummaryTicks = nowTicks + Stopwatch.Frequency;
+        }
+        if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
+            RefreshIedBrowserVisibleValues();
     }
 
     private void Signal_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -2830,12 +3191,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             UiFlushTimer_Tick(null, EventArgs.Empty);
             devices = Devices.ToArray();
             logs = Logs.ToArray();
+            // Freeze the passive Browser evidence before any asynchronous
+            // diagnostic probe; no network request is made for GOOSE here.
+            var browserGooseEvidence = CaptureIedBrowserGooseEvidence();
             var report = await DiagnosticReportBuilder.BuildAsync(
                 devices,
                 logs,
                 SelectedDevice,
                 _applicationCancellation.Token);
 
+            report += browserGooseEvidence;
             Clipboard.SetText(report, TextDataFormat.UnicodeText);
             SetStatus($"Diagnostic report copied ({report.Length:N0} characters). Paste it into the support conversation.");
             AddLog("INFO", "Diagnostics", "Support diagnostic report copied to clipboard.");
@@ -3102,6 +3467,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void RemoveDevicePoints(string deviceId)
     {
+        _canonicalSignalProjections.Remove(deviceId);
         for (var index = GlobalPoints.Count - 1; index >= 0; index--)
         {
             if (GlobalPoints[index].DeviceId.Equals(deviceId, StringComparison.OrdinalIgnoreCase))
@@ -3206,18 +3572,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private static string NormalizeReference(string? reference)
         => (reference ?? string.Empty).Trim().Replace('$', '.').Replace("..", ".").ToLowerInvariant();
-
-    private sealed record PendingPointUpdate(Iec61850PointSnapshot Snapshot, bool HasValueEdge)
-    {
-        public PendingPointUpdate Merge(Iec61850PointSnapshot next)
-        {
-            // A command-confirmed snapshot can overtake an older report/poll snapshot in
-            // the 100 ms UI batching queue. Never let a lower process sequence roll the
-            // command row and live grid back to the previous breaker state.
-            var newest = next.Sequence < Snapshot.Sequence ? Snapshot : next;
-            return new PendingPointUpdate(newest, HasValueEdge || next.IsValueEdge);
-        }
-    }
 
     private static string Csv(string value)
         => "\"" + (value ?? string.Empty).Replace("\"", "\"\"") + "\"";

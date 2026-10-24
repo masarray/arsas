@@ -32,8 +32,8 @@ public static class Iec61850ValueFormatter
             sbyte b => AppendUnit(b.ToString(CultureInfo.InvariantCulture), unit),
             short s => AppendUnit(s.ToString(CultureInfo.InvariantCulture), unit),
             ushort s => AppendUnit(s.ToString(CultureInfo.InvariantCulture), unit),
-            int i when dataType.Equals("Enum", StringComparison.OrdinalIgnoreCase) && i == 1 => "Open",
-            int i when dataType.Equals("Enum", StringComparison.OrdinalIgnoreCase) && i == 2 => "Closed",
+            // Generic IEC enums (Mod, Beh, Health, etc.) have their own
+            // mappings. 1/2 are NOT universally Open/Close.
             int i => AppendUnit(i.ToString(CultureInfo.InvariantCulture), unit),
             uint i => AppendUnit(i.ToString(CultureInfo.InvariantCulture), unit),
             long l => AppendUnit(l.ToString(CultureInfo.InvariantCulture), unit),
@@ -68,6 +68,11 @@ public static class Iec61850ValueFormatter
         if (TryExtractStructuredScalar(normalizedValue, dataType, out var structuredScalar))
             normalizedValue = structuredScalar;
 
+        // IEC 61850 BSC ValWithTrans.posVal is SIGNED INT8 (-64..63).
+        // Even stale Boolean/SPC metadata must not reinterpret 0/1 as states.
+        if (IsBscStepPosition(reference, dataType))
+            return FormatBscStepPosition(normalizedValue, unit);
+
         if (IsPositionSemantic(dataType, category, reference) &&
             TryNormalizeDbpos(normalizedValue, out var dbpos))
         {
@@ -82,6 +87,44 @@ public static class Iec61850ValueFormatter
         }
 
         return FormatNormalizedValue(normalizedValue, dataType, unit);
+    }
+
+    public static bool IsBscStepPosition(string? reference, string? dataType)
+    {
+        var path = (reference ?? string.Empty).Trim().Replace('$', '.');
+        return path.EndsWith(".valWTr.posVal", StringComparison.OrdinalIgnoreCase) ||
+               (string.Equals(dataType?.Trim(), "BSC", StringComparison.OrdinalIgnoreCase) &&
+                path.EndsWith(".posVal", StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static string FormatBscStepPosition(object? value, string? unit = null)
+    {
+        string? number = value switch
+        {
+            sbyte x when x is >= -64 and <= 63 => x.ToString(CultureInfo.InvariantCulture),
+            byte x when x <= 63 => x.ToString(CultureInfo.InvariantCulture),
+            short x when x is >= -64 and <= 63 => x.ToString(CultureInfo.InvariantCulture),
+            ushort x when x <= 63 => x.ToString(CultureInfo.InvariantCulture),
+            int x when x is >= -64 and <= 63 => x.ToString(CultureInfo.InvariantCulture),
+            uint x when x <= 63 => x.ToString(CultureInfo.InvariantCulture),
+            long x when x is >= -64 and <= 63 => x.ToString(CultureInfo.InvariantCulture),
+            ulong x when x <= 63 => x.ToString(CultureInfo.InvariantCulture),
+            string text when sbyte.TryParse(text.Trim(), NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out var step) &&
+                step is >= -64 and <= 63 => step.ToString(CultureInfo.InvariantCulture),
+            _ => null
+        };
+        if (number != null)
+            return AppendUnit(number, unit ?? string.Empty);
+        // Never make up a step number from a raw Boolean shape mismatch.
+        return value switch
+        {
+            null => "-",
+            bool boolean => boolean
+                ? "true (BSC INT8 type mismatch)"
+                : "false (BSC INT8 type mismatch)",
+            _ => value.ToString() ?? "-"
+        };
     }
 
     private static bool IsPositionSemantic(string dataType, string category, string reference)
@@ -197,6 +240,7 @@ public static class Iec61850ValueFormatter
     private static bool IsDbposDataType(string dataType)
         => dataType.Equals("Dbpos", StringComparison.OrdinalIgnoreCase) ||
            dataType.Equals("DPC", StringComparison.OrdinalIgnoreCase) ||
+           dataType.Equals("DPS", StringComparison.OrdinalIgnoreCase) ||
            dataType.Equals("DoublePointStatus", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsNumericDataType(string dataType)
@@ -211,6 +255,32 @@ public static class Iec61850ValueFormatter
                normalized.Contains("bcr", StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// An actual two-bit MMS BIT STRING renders as one octet with exactly
+    /// six unused low bits. Only this wire-proven representation can rescue a
+    /// missing CDC type, and ONLY with an exact model ST.stVal/q declaration.
+    /// Reject trailing text, wrong bit length and nonzero padding. Raw evidence
+    /// is never changed; this function is presentation-only.
+    /// </summary>
+    public static bool TryNormalizeTwoBitWireStatus(string? text, out int code)
+    {
+        code = 0;
+        // Raw IED presentation can be malformed or adversarial. The canonical
+        // two-bit renderer is a few dozen characters, so bound regex work.
+        if (string.IsNullOrWhiteSpace(text) || text.Length > 64) return false;
+        var rendered = Regex.Match(
+            text,
+            @"^\s*bits\(\s*(?:0x)?([0-9a-f]{2})\s*,\s*unused\s*=\s*6\s*\)\s*$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (!rendered.Success ||
+            !byte.TryParse(rendered.Groups[1].Value, NumberStyles.HexNumber,
+                CultureInfo.InvariantCulture, out var octet) ||
+            (octet & 0x3f) != 0)
+            return false;
+        code = octet >> 6;
+        return true;
+    }
+
     private static bool TryParseDbposText(string text, out int code)
     {
         code = 0;
@@ -220,18 +290,8 @@ public static class Iec61850ValueFormatter
         if (bracketCode.Success)
             return TryParseBits(bracketCode.Groups[1].Value, out code);
 
-        var renderedBits = Regex.Match(
-            text,
-            @"bits\(\s*(?:0x)?([0-9a-f]{2})\s*,\s*unused\s*=\s*(\d+)\s*\)",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        if (renderedBits.Success &&
-            byte.TryParse(renderedBits.Groups[1].Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var raw) &&
-            int.TryParse(renderedBits.Groups[2].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var unused) &&
-            unused == 6)
-        {
-            code = (raw >> unused) & 0x03;
+        if (TryNormalizeTwoBitWireStatus(text, out code))
             return true;
-        }
 
         var compact = text.Trim().Replace(" ", "").Replace("_", "").Replace("-", "").ToLowerInvariant();
         switch (compact)

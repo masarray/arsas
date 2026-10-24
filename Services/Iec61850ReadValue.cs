@@ -1,4 +1,6 @@
 using System.Globalization;
+using AR.Iec61850.Mms;
+using ArIED61850Tester.Protocol.Mms;
 
 namespace ArIED61850Tester.Services;
 
@@ -11,6 +13,20 @@ public sealed class Iec61850ReadValue
     public string SourceReference { get; init; } = string.Empty;
     public string ReadReference { get; init; } = string.Empty;
     public string Projection { get; init; } = string.Empty;
+
+    // Positive wire-kind proof, not inferred from the rendered display. Only
+    // direct, primitive MMS string results with matching projected CLR text
+    // receive this marker. A parent structure can never claim this proof.
+    public MmsDataKind? VerifiedStringWireKind { get; internal set; }
+
+    // Diagnostic only: decoded kind/counts without BER or scalar payload.
+    // Does not claim GVA, invokeID capture or remote interoperability.
+    public string WireShapeEvidence { get; internal set; } = string.Empty;
+
+    // Authoritative engine-owned UTC-Time evidence. Available only when
+    // a direct MMS .t read preserved the original eight wire bytes.
+    public Iec61850UtcTimeEvidence? UtcTimeEvidence { get; internal set; }
+    public MmsQualityEvidence? QualityEvidence { get; internal set; }
 
     public bool HasQuality => !string.IsNullOrWhiteSpace(Quality) && Quality != "-";
     public bool HasDeviceTimestamp => !string.IsNullOrWhiteSpace(DeviceTimestamp) && DeviceTimestamp != "-";

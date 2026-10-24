@@ -59,6 +59,26 @@ public sealed class ZivBscStepControlRegressionTests
         Assert.False(Iec61850BscStepControlPolicy.MovementConfirmed("Lower", "12", "13"));
     }
 
+    [Theory]
+    [InlineData("0", "0")]
+    [InlineData("1", "1")]
+    [InlineData("-2", "-2")]
+    public void CommandDock_UsesLiveBscStepStatusNotSavedBooleanHint(
+        string actual, string expected)
+    {
+        var signal = new SignalDefinition
+        {
+            ObjectReference = "ZIVAVRLD1/ATCC1.TapChg",
+            FunctionalConstraint = "CO",
+            IsControlSignal = true,
+            ControlCdc = "BSC",
+            ControlStatusReference = "ZIVAVRLD1/ATCC1.TapChg.valWTr.posVal",
+            ControlValueType = "Boolean", // deliberately stale discovery type
+            ControlCurrentValue = actual
+        };
+        Assert.Equal(expected, signal.ControlProcessValue.DisplayValue);
+    }
+
     [Fact]
     public void BscShowsRaiseLowerNotSwitchNorSetpoint()
     {

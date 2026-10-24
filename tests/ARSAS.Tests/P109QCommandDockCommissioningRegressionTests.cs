@@ -88,8 +88,20 @@ public sealed class P109QCommandDockCommissioningRegressionTests
     public void CommandDockHasConstrainedResponsiveViewportAndInspector()
     {
         var xaml = Read("MainWindow.xaml");
-        Assert.DoesNotContain("ExplorerCommandRow", xaml);
-        Assert.DoesNotContain("CommandPanel_Collapsed", xaml);
+        Assert.Contains("ExplorerCommandDockRow", xaml);
+        Assert.Contains("CommandPanel_Collapsed", xaml);
+        Assert.DoesNotContain("MaxHeight=\"260\"", xaml);
+        Assert.Contains("Height=\"*\"/>", xaml);
+        var main = Read("MainWindow.xaml.cs");
+        // The legacy explorer row must not steal half the live-signal viewport
+        // once the operator dock has been moved to the persistent shell.
+        Assert.Contains("ResizeCommandDockForVerifiedControls()", main);
+        Assert.Contains("ExplorerCommandDockLayoutPolicy.LegacyRowHeight(", main);
+        Assert.Contains("dockReparented: _persistentWorkbench is not null", main);
+        var transfer = Read("MainWindow.PersistentWorkbench.cs");
+        Assert.Contains("ExplorerCommandDockRow.Height = GridLength.Auto;", transfer);
+        var policy = Read("Models/ExplorerCommandDockLayoutPolicy.cs");
+        Assert.Contains("dockReparented || !commandExpanded || controlCount <= 5", policy);
         Assert.Contains("RowHeight=\"43\" MinRowHeight=\"42\"", xaml);
         Assert.Contains("Height=\"29\" MinHeight=\"29\"", xaml);
         var styles = Read("App.xaml");
@@ -102,7 +114,8 @@ public sealed class P109QCommandDockCommissioningRegressionTests
         Assert.Contains("<StackPanel Margin=\"0,0\">", xaml);
         Assert.DoesNotContain("<StackPanel Margin=\"0,0\" ToolTip=\"{Binding ControlInspectionEvidence}\"", xaml);
         Assert.Contains("ScrollViewer.VerticalScrollBarVisibility=\"Auto\"", xaml);
-        Assert.Contains("Grid.Column=\"1\" Content=\"Model\"", xaml);
+        Assert.Contains("Grid.Column=\"1\" Content=\"ctlModel\"", xaml);
+        Assert.Contains("Style=\"{StaticResource CommandDockCtlModelButton}\"", xaml);
         Assert.Contains("Click=\"ControlDetails_Click\"", xaml);
     }
 
@@ -133,7 +146,8 @@ public sealed class P109QCommandDockCommissioningRegressionTests
         var ui = Read("ControlModelWriteWindow.xaml");
         var handler = Read("ControlModelWriteWindow.xaml.cs");
         Assert.Contains("new ControlModelWriteWindow(", code);
-        Assert.Contains("Content=\"Write\"", ui);
+        Assert.Contains("<TextBlock Text=\"Write\" VerticalAlignment=\"Center\"/>", ui);
+        Assert.Contains("Data=\"{StaticResource MaterialEditIcon}\"", ui);
         Assert.Contains("ItemsSource=\"{Binding Choices}\"", ui);
         Assert.DoesNotContain("Type the exact object reference", ui);
         Assert.DoesNotContain("I am authorized to change", ui);
@@ -150,7 +164,8 @@ public sealed class P109QCommandDockCommissioningRegressionTests
         Assert.Contains("public Task<AR.Iec61850.Control.Iec61850ControlModelConfigurationResult> ConfigureControlModelAsync(", facade);
         Assert.Contains("_inner.ConfigureControlModelAsync(deviceId, signal, expected, requested, token)", facade);
         Assert.Contains("RunDeviceOperationAsync(", facade);
-        Assert.Contains("Background=\"#F4F7FB\"", ui);
+        Assert.Contains("Background=\"#F5F7FB\"", ui);
+        Assert.Contains("FontFamily=\"{StaticResource AppFontFamily}\"", ui);
         Assert.DoesNotContain("new ControlCommandWindow(", code);
     }
 
@@ -173,6 +188,9 @@ public sealed class P109QCommandDockCommissioningRegressionTests
         Assert.Contains("signal.ControlModelText = \"Auto-detect\";", client);
         Assert.Contains("OPERATOR_CTL_MODEL_CONFIGURATION", runtime);
         Assert.Contains("_activeControlTargets.TryAdd(targetKey, 0)", runtime);
-        Assert.Contains("Interlocked.Increment(ref session.ControlCommandActive)", runtime);
+        // A single atomic IED-wide flight now protects ctlModel Write and
+        // ordinary Operate. Increment-and-reject was not a safe admission gate.
+        Assert.Contains("Iec61850ControlFlightAdmission.TryEnter(", runtime);
+        Assert.Contains("CONTROL_OUTCOME_UNKNOWN_TIMEOUT", runtime);
     }
 }

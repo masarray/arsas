@@ -2,36 +2,23 @@ name: Smart Discovery Mainline Readiness
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
-      - "*.cs"
-      - "**/*.cs"
-      - "*.csproj"
-      - "**/*.csproj"
-      - "*.sln"
-      - "**/*.sln"
-      - "*.props"
-      - "**/*.props"
-      - "*.targets"
-      - "**/*.targets"
-      - "global.json"
-      - "*.xaml"
-      - "**/*.xaml"
-      - "app.manifest"
-      - "VERSION"
-      - ".release/**"
-      - ".github/workflows/**"
-      - "Assets/**"
-      - "Resources/**"
-      - "installer/**"
-      - "engine-patches/**"
-      - "landing/release-notes*.json"
-      - "landing/latest.json"
-      - "engines/**"
-      - "scripts/**"
-      - "tests/**"
-      - "evidence/**"
+      # Fast PR routing: only Smart Discovery authority/dependencies trigger this gate.
+      - "Services/NativeIec61850Client*.cs"
+      - "Services/*SmartDiscovery*.cs"
+      - "Services/Iec61850MonitorRuntime.cs"
+      - "Models/MonitorModels.cs"
+      - "ArIED61850Tester.csproj"
+      - "Directory.Build.*"
+      - "engines/ARIEC61850.lock.json"
+      - "scripts/enable-smart-discovery-capture.ps1"
+      - "scripts/*smart-discovery*"
+      - "evidence/interoperability-reference-target.json"
+      - "evidence/smart-discovery-*.json"
+      - "tests/ARSAS.Tests/*SmartDiscovery*.cs"
       - "docs/INTEROPERABILITY_REFERENCE_CONTRACT.md"
-      - ".github/workflows/smart-discovery-*.yml"
+      - ".github/workflows/smart-discovery-mainline-readiness.yml"
   workflow_dispatch:
 
 permissions:
@@ -44,6 +31,7 @@ concurrency:
 
 jobs:
   mainline-readiness:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Require R10 physical authority before mainline review
     runs-on: windows-latest
     steps:
@@ -110,7 +98,15 @@ jobs:
           # P10.1: exact, bounded and ancestry-checked code-trial allowlist.
           # This never grants field acceptance or mainline promotion.
           . .\scripts\test-p10-9f-core-routing-trial.ps1
+          . .\scripts\test-m217k-typed-status-trial.ps1
           $coreRoutingTrialValid = Test-P109FCoreRoutingTrial -Lock $lock
+          $m217KTrialValid = Test-M217KTypedStatusTrial -Lock $lock
+          . .\scripts\test-p0-a-identity-trial.ps1
+          $p0AIdentityTrialValid = Test-P0AIdentityTrial -Lock $lock
+          . .\scripts\test-p0-b-rcb-trial.ps1
+          $p0BRcbTrialValid = Test-P0BRcbPlannerTrial -Lock $lock
+          . .\scripts\test-p0-c-typed-read-trial.ps1
+          $p0CTypedReadTrialValid = Test-P0CTypedReadTrial -Lock $lock
           $trial = $lock.smartInteroperabilityCodeTrial
           $serverAt = $lock.sclServerAtTrial
           $closure = $lock.datasetFirstDiscoveryTrial
@@ -162,7 +158,7 @@ jobs:
                       $lock.commit -eq $p10.exactCommit -and
                       [int]$lock.sourcePullRequest -eq 161
 
-          if ($originalTrial -or $serverAtTrial -or $datasetTrial -or $p10Trial -or $coreRoutingTrialValid) {
+          if ($originalTrial -or $serverAtTrial -or $datasetTrial -or $p10Trial -or $coreRoutingTrialValid -or $m217KTrialValid -or $p0AIdentityTrialValid -or $p0BRcbTrialValid -or $p0CTypedReadTrialValid) {
             if (-not $historicalTrialValid -or
                 $lock.ref -ne 'main') {
               throw 'Stacked trial identity or ancestor authority is inconsistent.'
@@ -172,19 +168,9 @@ jobs:
             }
             Write-Host "Stacked consumer trial accepted for CI against $($lock.commit); no mainline physical promotion."
           }
-          elseif ($lock.commit -eq $association.engine.testedHead -and
-                  [int]$lock.sourcePullRequest -eq 143) {
-            Write-Host 'Historical, independently physically accepted R10 engine authority retained.'
-          }
-          else {
-            # A narrowly scoped public product-release decision is NOT a fresh
-            # R10 physical relay qualification. Bind exact tested binary/engine,
-            # operator decision, permitted UI scope and negative SOE evidence.
-            . .\scripts\test-exact-operator-release-acceptance.ps1
-            if (-not (Test-ExactOperatorReleaseAcceptance -Lock $lock -SourceRoot (Get-Location).Path)) {
-              throw 'Exact v1.6.41 operator release proof missing, mismatched, or overclaiming physical qualification.'
-            }
-            Write-Host 'Exact v1.6.41 operator-approved public release scope verified; independent R10 hardware qualification is NOT claimed.'
+          elseif ($lock.commit -ne $association.engine.testedHead -or
+                  [int]$lock.sourcePullRequest -ne 143) {
+            throw 'Runtime engine pin is neither the physically accepted authority nor an exact ancestry-bound stacked CodeVerified trial.'
           }
 
           "ENGINE_REPOSITORY=$($lock.repository)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append

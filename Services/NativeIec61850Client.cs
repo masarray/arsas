@@ -54,6 +54,22 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
     public string DetectedIedName => DetectedIdentity.IedName;
     public LiveIedModelDiscoveryDocument? LastLiveModel => _liveModel;
 
+    /// <summary>
+    /// Explicit Browser-only schema binding for a secondary read-only association.
+    /// The caller must hold a current same-IED live-discovery lease; never accept
+    /// SCL declarations as authoritative online MMS attribute inventories.
+    /// This installs only the ARIEC scalar/structure projection schema, with
+    /// no discovery, reports, subscription or MMS write side effects.
+    /// </summary>
+    internal void BindIsolatedBrowserReadSchema(LiveIedModelDiscoveryDocument verifiedLiveModel)
+    {
+        ArgumentNullException.ThrowIfNull(verifiedLiveModel);
+        if (!IsConnected || _liveModel is not null || _lastDiscovery is not null)
+            throw new InvalidOperationException(
+                "Read-only Browser schema binding requires a connected, fresh secondary MMS client.");
+        _liveModel = verifiedLiveModel;
+    }
+
     public async Task ConnectAsync(string ipAddress, int port, CancellationToken cancellationToken)
     {
         await DisposeControlSessionsAsync().ConfigureAwait(false);
@@ -479,10 +495,18 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             cancellationToken).ConfigureAwait(false);
 
         var updates = new List<NativeReportValueUpdate>();
+        var wireEvidence = new List<NativeBrowserReportRawEvidence>();
         var frames = new List<NativeReportFrameMetadata>();
         var warnings = new List<string>();
         foreach (var report in slice.Reports)
         {
+            // Engine reports contain MMS raw type/width, which the normalized
+            // value display no longer preserves. Extract before projection,
+            // without any additional association or process polling.
+            // Only exact live LN-root GVA declaration order may bind nested
+            // WYE/DEL phase q/t bits; the consumer's association-fenced
+            // report ledger remains authoritative after this extraction.
+            wireEvidence.AddRange(IedBrowserReportWireEvidence.Extract(report, _liveModel));
             var header = report.Header;
             // ARIEC already decodes the actual InformationReport OptFlds BIT STRING.
             // Preserve its evidence rather than guessing option presence from a
@@ -577,6 +601,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             Message = slice.Message,
             ReportFrames = frames,
             Updates = updates,
+            BrowserRawEvidence = wireEvidence,
             Warnings = warnings.Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
         };
     }
@@ -1039,7 +1064,11 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                     attempts.Add($"{candidate.Label}/smart: {smart.ReadResult.Message}");
                     if (smart.ReadResult.IsSuccess)
                     {
-                        var projected = ProjectReadValue(smart.ReadResult.Value, dataType, candidate.Reference, objectReference);
+                        var projected = AttachBrowserWireEvidence(
+                            PreserveVerifiedEmptyOctet(
+                                ProjectReadValue(smart.ReadResult.Value, dataType, candidate.Reference, objectReference),
+                                smart.ReadResult.Value, dataType),
+                            smart.ReadResult.Value, objectReference);
                         if (projected != null)
                         {
                             LastErrorMessage = $"ARIEC61850 read OK via {candidate.Label}/smart. {smart.ResolveResult.Message}";
@@ -1064,7 +1093,11 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 attempts.Add($"{candidate.Label}/direct {normalized}: {(result.IsSuccess ? "OK" : result.Message)}");
                 if (result.IsSuccess)
                 {
-                    var projected = ProjectReadValue(result.Value, dataType, candidate.Reference, objectReference);
+                    var projected = AttachBrowserWireEvidence(
+                        PreserveVerifiedEmptyOctet(
+                                ProjectReadValue(result.Value, dataType, candidate.Reference, objectReference),
+                                result.Value, dataType),
+                        result.Value, objectReference);
                     if (projected != null)
                     {
                         LastErrorMessage = $"ARIEC61850 read OK via {candidate.Label}/direct: {normalized}. {result.Message}";
@@ -1087,6 +1120,50 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
     }
 
     /// <summary>
+    /// A rendered UTC string is never authority for time-quality bits. Only
+    /// the pinned ARIEC decoder's direct MMS UTC-Time value AND original eight
+    /// raw bytes may populate Browser t quality. Structured parent timestamps
+    /// and report TimeOfEntry do not satisfy this leaf-level proof.
+    /// </summary>
+    private static Iec61850ReadValue? AttachBrowserWireEvidence(
+        Iec61850ReadValue? projected, ArMms.MmsDataValue? raw, string reference)
+    {
+        if (projected is null || raw is null) return projected;
+        projected.WireShapeEvidence = IedBrowserReadWireShapeEvidence.Describe(raw);
+        if (raw.Kind is ArMms.MmsDataKind.VisibleString or ArMms.MmsDataKind.MmsString &&
+            raw.Value is string decoded &&
+            projected.Value is string scalar &&
+            string.Equals(decoded, scalar, StringComparison.Ordinal) &&
+            string.Equals(projected.SourceReference, reference, StringComparison.Ordinal) &&
+            // A successful parent DO read is NOT proof of this exact leaf.
+            // Only the primitive response to the same canonical leaf can
+            // override the conservative display-only array heuristic.
+            string.Equals(
+                IedBrowserLiveValues.CanonicalReference(projected.ReadReference),
+                IedBrowserLiveValues.CanonicalReference(reference),
+                StringComparison.Ordinal))
+            projected.VerifiedStringWireKind = raw.Kind;
+        if ((reference.EndsWith(".q", StringComparison.Ordinal) ||
+             reference.EndsWith("$q", StringComparison.Ordinal)) &&
+            raw.Kind == ArMms.MmsDataKind.BitString &&
+            ArIED61850Tester.Protocol.Mms.MmsQualityDecoder.TryDecode(
+                raw.RawValue.ToArray(), out var verifiedQuality))
+            projected.QualityEvidence = verifiedQuality;
+        if ((reference.EndsWith(".t", StringComparison.Ordinal) ||
+             reference.EndsWith("$t", StringComparison.Ordinal) ||
+             // SGCB LActTm is the model-verified last-active-group UTC-Time.
+             reference.EndsWith(".LActTm", StringComparison.Ordinal) ||
+             reference.EndsWith("$LActTm", StringComparison.Ordinal)) &&
+            raw.Kind == ArMms.MmsDataKind.UtcTime)
+        {
+            var evidence = ArMms.Iec61850UtcTimeEvidence.Decode(raw);
+            if (evidence.IsDecoded && evidence.HasWireProvenance)
+                projected.UtcTimeEvidence = evidence;
+        }
+        return projected;
+    }
+
+    /// <summary>
     /// Opt-in commissioning only. An exact ctlModel CF Write is allowed once
     /// and only after engine preflight confirms the expected live model.
     /// Serializes with normal control operations; never issues SBO/Operate.
@@ -1105,12 +1182,14 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             try
             {
                 var service = new ArControl.Iec61850ControlService();
-                return await RunMmsOperationAsync(
+                var result = await RunMmsOperationAsync(
                     () => service.ConfigureControlModelAsync(_session, signal.ObjectReference,
                         (ArControl.Iec61850ControlModel)(int)expected,
                         (ArControl.Iec61850ControlModel)(int)target,
                         cancellationToken),
                     cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                return result;
             }
             finally
             {
@@ -1118,11 +1197,17 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 // A subsequent explicit read-only inspection must rebuild authority.
                 await InvalidateCachedControlSessionAsync(signal.ObjectReference)
                     .ConfigureAwait(false);
-                signal.ClearControlConfirmation();
-                signal.ClearLiveControlAuthority();
-                signal.ControlModelText = "Auto-detect";
-                signal.ControlInspectionEvidence =
-                    "ctlModel configuration attempted: fresh typed live inspection required.";
+                // On session teardown/timeout the runtime invalidates old
+                // authority. The stale native task must not reset a new
+                // association's SignalDefinition after it finishes late.
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    signal.ClearControlConfirmation();
+                    signal.ClearLiveControlAuthority();
+                    signal.ControlModelText = "Auto-detect";
+                    signal.ControlInspectionEvidence =
+                        "ctlModel configuration attempted: fresh typed live inspection required.";
+                }
             }
         }
         finally
@@ -1149,6 +1234,31 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             await stale.DisposeAsync().ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// One read-only CF ctlModel probe, using the established association and its
+    /// native MMS single-flight. Does not open Oper/SBOw, write or cache authority.
+    /// A status-only control costs one MMS Read instead of a full typed inspection.
+    /// </summary>
+    public async Task<ArControl.Iec61850ControlModelProbe> ProbeControlModelAsync(
+        SignalDefinition signal, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(signal);
+        if (!signal.IsValidControlObject || !_session.IsMmsInitiated)
+            throw new InvalidOperationException("A connected IEC control DataObject root is required.");
+        await _controlCommandGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await RunMmsOperationAsync(
+                () => new ArControl.Iec61850ControlService().ProbeControlModelAsync(
+                    _session, signal.ObjectReference, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _controlCommandGate.Release();
+        }
+    }
+
     public async Task<Iec61850ControlCapabilities> InspectControlAsync(
         SignalDefinition signal,
         CancellationToken cancellationToken)
@@ -1159,6 +1269,15 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         try
         {
             return await InspectControlCoreAsync(signal, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            // A failed/aborted inspection cannot leave the prior association
+            // proof available to stage a later command. Preserve the old row
+            // while the read is in flight, but fail closed on an actual error.
+            signal.ClearLiveControlAuthority();
+            signal.ControlModelText = "Auto-detect";
+            throw;
         }
         finally
         {
@@ -1183,10 +1302,13 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             // Another engineering client may have changed CF ctlModel since the
             // previous inspection; cached control sessions are not authoritative.
             signal.ClearControlConfirmation();
-            signal.ClearLiveControlAuthority();
-            signal.ControlModelText = "Auto-detect";
+            // Do not publish a transient Unverified/Auto-detect row while the
+            // fresh typed descriptor is still being read. The native command
+            // gate keeps Operate behind this inspection; UI marks inspection
+            // busy. Revoke or replace the proof only on final result.
             await InvalidateCachedControlSessionAsync(signal.ObjectReference).ConfigureAwait(false);
             control = await GetOrOpenControlSessionAsync(signal, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
         }
         catch (InvalidOperationException discoveryError) when (_session.IsMmsInitiated)
         {
@@ -1196,7 +1318,8 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 () => new ArControl.Iec61850ControlService().ProbeControlModelAsync(
                     _session, signal.ObjectReference, cancellationToken),
                 cancellationToken).ConfigureAwait(false);
-            signal.ControlSemanticVerified = false;
+            cancellationToken.ThrowIfCancellationRequested();
+            signal.ClearLiveControlAuthority();
             signal.ControlModelText = probe.Decoded
                 ? FriendlyControlModel(probe.ControlModel)
                 : "Unknown";
@@ -1230,9 +1353,11 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         var semantic = ArControl.Iec61850ControlSemanticResolver.Resolve(
             descriptor, signal.ControlCdc, signal.ControlStatusReference);
         var effectiveCdc = semantic.Cdc;
+        var exactDpcBooleanFeedback = HasExactDpcBooleanFeedback(descriptor, effectiveCdc);
         var status = await RunMmsOperationAsync(
             () => control.ReadStatusAsync(cancellationToken),
             cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         var normalizedStatus = NormalizeControlFeedback(effectiveCdc, status.DisplayValue, status.State);
         var currentValue = status.IsSuccess ? normalizedStatus.Value : "-";
         var currentState = normalizedStatus.State.ToString();
@@ -1242,7 +1367,9 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         // TapOpR/TapOpL -> TapChg.valWTr.posVal. The native descriptor remains the source
         // of truth for the command sequence, while the preferred feedback reference makes
         // commissioning feedback more useful for pulse-style controls.
-        if (!string.IsNullOrWhiteSpace(signal.ControlStatusReference) &&
+        if (!(effectiveCdc.Equals("DPC", StringComparison.OrdinalIgnoreCase) &&
+              descriptor.CtlValSpecification.MmsType.Equals("boolean", StringComparison.OrdinalIgnoreCase)) &&
+            !string.IsNullOrWhiteSpace(signal.ControlStatusReference) &&
             !string.Equals(signal.ControlStatusReference, descriptor.StatusReference, StringComparison.OrdinalIgnoreCase))
         {
             var preferred = await ReadValueAsync(
@@ -1250,6 +1377,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 "ST",
                 string.IsNullOrWhiteSpace(signal.ControlValueType) ? "Unknown" : signal.ControlValueType,
                 cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             if (preferred != null)
             {
                 var normalizedPreferred = NormalizeControlFeedback(
@@ -1268,21 +1396,36 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         var modelText = FriendlyControlModel(descriptor.ControlModel);
         var valueType = MapControlValueType(descriptor, effectiveCdc);
 
-        if (semantic.IsCommandSafe)
+        // Atomic visual publication boundary: after ALL awaited descriptor
+        // and status reads have finished, install one complete typed proof.
+        // A changed CDC cannot reuse the previous association's verified CDC.
+        // Reinspection of an unchanged, already verified command must not
+        // publish an interim disabled state. Only an actual semantic change
+        // revokes authority. This removes avoidable Command Dock flicker.
+        var fullyVerified = semantic.IsCommandSafe &&
+            descriptor.IsOperationallyReady && exactDpcBooleanFeedback;
+        if (!fullyVerified ||
+            (signal.VerifiedLiveControlCdc.Length > 0 &&
+             !signal.VerifiedLiveControlCdc.Equals(effectiveCdc, StringComparison.OrdinalIgnoreCase)))
+            signal.ClearLiveControlAuthority();
+        if (fullyVerified)
             signal.AcceptVerifiedLiveControlCdc(effectiveCdc);
         else
             signal.ControlCdc = effectiveCdc;
-        signal.ControlSemanticVerified = semantic.IsCommandSafe;
         signal.ControlValueType = valueType;
         signal.ControlCurrentValue = currentValue;
         signal.ControlStatusReference = statusReference;
         signal.ControlModelReference = $"{descriptor.ObjectReference}.ctlModel";
         signal.ControlModelText = modelText;
+        // Publish operability last; a partial inspection never authorizes
+        // a user action. Native Operate still validates its own descriptor.
+        signal.ControlSemanticVerified = fullyVerified;
         signal.ControlInspectionEvidence =
             $"{descriptor.ObjectReference}.ctlModel | {modelText} | " +
             $"typedCdc={descriptor.Cdc}, effectiveCdc={effectiveCdc}, " +
             $"ctlVal={descriptor.CtlValSpecification.Signature}, status={statusReference}, " +
-            $"semanticSafe={semantic.IsCommandSafe} | {semantic.Reason} | {descriptor.DiscoveryEvidence}";
+            $"semanticSafe={semantic.IsCommandSafe}, exactDpcBooleanFeedback={exactDpcBooleanFeedback} | " +
+            $"{semantic.Reason} | {descriptor.DiscoveryEvidence}";
 
         return new Iec61850ControlCapabilities
         {
@@ -1297,24 +1440,52 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             CurrentValue = currentValue,
             CurrentState = currentState,
             EngineControlServiceAvailable = true,
-            IsOperationallyReady = descriptor.IsOperationallyReady && semantic.IsCommandSafe,
+            IsOperationallyReady = fullyVerified,
             SupportsCommandTermination = descriptor.SupportsCommandTermination,
             SupportsTimeActivatedOperate = descriptor.SupportsTimeActivatedOperate,
             SboTimeoutText = FormatControlTimeout(descriptor.SboTimeout),
             OperTimeoutText = FormatControlTimeout(descriptor.OperTimeout),
             SequenceText = FriendlyControlSequence(descriptor.ControlModel),
             DiscoveryEvidence = descriptor.DiscoveryEvidence,
-            EngineControlServiceStatus = semantic.IsCommandSafe
-                ? "ARIEC61850 Smart Control is ready. CDC, live ctlVal, status and Direct/SBO semantics agree."
-                : semantic.Reason
+            EngineControlServiceStatus = !exactDpcBooleanFeedback
+                ? "DPC Boolean blocked: live stVal is not the exact same-object status reference."
+                : fullyVerified
+                    ? "ARIEC61850 Smart Control is ready. CDC, live ctlVal, status and Direct/SBO semantics agree."
+                    : semantic.Reason
         };
+    }
+
+    /// <summary>
+    /// Consumer read-only identity fence for typed DPC Boolean Oper.ctlVal.
+    /// A lookalike status .stVal on another object cannot authorize command.
+    /// Native ARIEC semantics and Operate gating remain independent.
+    /// </summary>
+    internal static bool HasExactDpcBooleanFeedback(
+        ArControl.Iec61850ControlObjectDescriptor descriptor, string cdc)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        if (!string.Equals(cdc, "DPC", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(descriptor.CtlValSpecification.MmsType,
+                "boolean", StringComparison.OrdinalIgnoreCase))
+            return true;
+        return !string.IsNullOrWhiteSpace(descriptor.ObjectReference) &&
+            string.Equals(descriptor.StatusReference,
+                descriptor.ObjectReference + ".stVal", StringComparison.Ordinal);
     }
 
     public async Task<Iec61850ControlCommandResult> ExecuteControlAsync(
         Iec61850ControlCommandRequest request,
         CancellationToken cancellationToken)
     {
-        await _controlCommandGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        // This is the final per-association command admission gate, shared
+        // with live control inspection and ctlModel configuration. The UI
+        // facade's own nonqueue gate cannot prove that this native gate is
+        // free: never hide a pending Operate behind a long inspection.
+        // A rejected admission has NOT sent an MMS Select/Operate.
+        if (!await _controlCommandGate.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+            throw new InvalidOperationException(
+                "IEC 61850 command NOT SENT: this MMS association is busy inspecting, " +
+                "configuring, or executing another control. Retry after it completes.");
         try
         {
             return await ExecuteControlCoreAsync(request, cancellationToken).ConfigureAwait(false);
@@ -1337,12 +1508,22 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
 
         var totalStopwatch = Stopwatch.StartNew();
         var control = await GetOrOpenControlSessionAsync(request.Signal, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         var descriptor = control.Descriptor;
         var semantic = ArControl.Iec61850ControlSemanticResolver.Resolve(
             descriptor, request.Signal.ControlCdc, request.Signal.ControlStatusReference);
         var effectiveCdc = semantic.Cdc;
-        request.Signal.ControlSemanticVerified = semantic.IsCommandSafe;
+        // Revalidate live typed feedback inside the FINAL native command gate,
+        // not only during Command Dock inspection. This runs before building
+        // a value, performing Select/Operate or reading substitute feedback.
+        var exactDpcBooleanFeedback = HasExactDpcBooleanFeedback(descriptor, effectiveCdc);
+        request.Signal.ControlSemanticVerified =
+            semantic.IsCommandSafe && exactDpcBooleanFeedback;
         var capabilities = BuildControlCapabilities(descriptor, request.Signal, "-", effectiveCdc);
+        if (!exactDpcBooleanFeedback)
+            return ControlFailure("Validation",
+                "DPC Boolean control NOT SENT: live stVal does not belong to this exact control object.",
+                capabilities, request.ValueText);
         if (!semantic.IsCommandSafe)
             return ControlFailure("Validation",
                 "Unsafe or ambiguous IEC 61850 control semantics: " + semantic.Reason,
@@ -1377,6 +1558,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             request.Signal.ControlValueType,
             effectiveCdc,
             cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
 
         capabilities = BuildControlCapabilities(descriptor, request.Signal, initialFeedback.Value, effectiveCdc);
         request.Signal.ControlCdc = capabilities.ControlCdc;
@@ -1419,6 +1601,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             action = await RunMmsOperationAsync(
                 () => control.OperateAsync(nativeRequest, cancellationToken),
                 cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
         }
         catch (OperationCanceledException)
         {
@@ -1500,6 +1683,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             initialFeedback.Value,
             Math.Clamp(request.FeedbackTimeoutMs, 1000, 30000),
             cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         feedbackStopwatch.Stop();
         totalStopwatch.Stop();
 
@@ -2943,6 +3127,16 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
     {
         var now = DateTime.Now;
         var signals = new List<SignalDefinition>();
+        // The canonical projection is a one-shot, bounded list. Index only
+        // references already emitted by its typed plan; the index is not a
+        // second value store and is discarded after this discovery flight.
+        var seenReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var indexedCount = 0;
+        void IndexEmittedSignals()
+        {
+            while (indexedCount < signals.Count)
+                seenReferences.Add(NormalizeReference(signals[indexedCount++].ObjectReference));
+        }
 
         foreach (var logicalDevice in model.LogicalDevices)
         {
@@ -2969,13 +3163,19 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 // Some IEDs expose the LN shell and DataSet/RCB correctly, but their online
                 // data-object tree is shallow. Keep every logical-node instance separate; the
                 // later probe/runtime decides readable vs polling fallback.
-                AddArIecLogicalNodeFallbackTargets(signals, logicalDevice, logicalNode, logicalDeviceDomainHint, now);
+                IndexEmittedSignals();
+                AddArIecLogicalNodeFallbackTargets(signals, logicalDevice, logicalNode,
+                    logicalDeviceDomainHint, now, seenReferences);
             }
         }
 
+        IndexEmittedSignals();
         foreach (var fallback in NativeMmsDiscoveryMapper.BuildSignals(fallbackSnapshot))
         {
-            if (!signals.Any(s => ReferencesEqual(s.ObjectReference, fallback.ObjectReference)))
+            // The old Any() scan repeated normalized reference comparisons for
+            // every fallback candidate, making projection cost grow quadratically.
+            // Preserve first-source precedence and insertion order exactly.
+            if (seenReferences.Add(NormalizeReference(fallback.ObjectReference)))
                 signals.Add(fallback);
         }
 
@@ -3428,7 +3628,8 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         object logicalDevice,
         LiveIedLogicalNodeModel logicalNode,
         string logicalDeviceDomainHint,
-        DateTime now)
+        DateTime now,
+        ISet<string> seenReferences)
     {
         var lnClass = (logicalNode.LnClass ?? string.Empty).ToUpperInvariant();
         if (lnClass is not ("MMXU" or "MMXN" or "GGIO" or "CSWI" or "XCBR" or "XSWI" or "PTOC" or "PTRC" or "PDIF" or "PDIS" or "PIOC" or "PTOV" or "PTUV" or "PTEF" or "PDEF" or "RBRF"))
@@ -3446,7 +3647,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 continue;
 
             var reference = $"{lnReference}.{point.Path}";
-            if (signals.Any(s => ReferencesEqual(s.ObjectReference, reference)))
+            if (!seenReferences.Add(NormalizeReference(reference)))
                 continue;
 
             signals.Add(CreateArIecSignal(
@@ -3741,38 +3942,32 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         var attributes = dataObject.Attributes ?? Array.Empty<LiveIedDataAttributeModel>();
         var hasControlOperation = attributes.Any(attribute =>
         {
-            var fc = attribute.FunctionalConstraint ?? string.Empty;
-            var path = attribute.AttributePath ?? string.Empty;
-            return fc.Equals("CO", StringComparison.OrdinalIgnoreCase) &&
-                   (path.Contains("Oper", StringComparison.OrdinalIgnoreCase) ||
-                    path.Contains("SBO", StringComparison.OrdinalIgnoreCase) ||
-                    path.Contains("Cancel", StringComparison.OrdinalIgnoreCase) ||
-                    path.EndsWith("ctlVal", StringComparison.OrdinalIgnoreCase));
+            if (!string.Equals(attribute.FunctionalConstraint, "CO", StringComparison.OrdinalIgnoreCase))
+                return false;
+            var segments = (attribute.AttributePath ?? string.Empty)
+                .Replace('$', '.').Split('.', StringSplitOptions.RemoveEmptyEntries);
+            return segments.Any(segment => segment.Equals("Oper", StringComparison.OrdinalIgnoreCase) ||
+                                           segment.Equals("SBO", StringComparison.OrdinalIgnoreCase) ||
+                                           segment.Equals("SBOw", StringComparison.OrdinalIgnoreCase) ||
+                                           segment.Equals("Cancel", StringComparison.OrdinalIgnoreCase));
         });
 
         var controlModelAttribute = attributes.FirstOrDefault(attribute =>
         {
             var path = attribute.AttributePath ?? string.Empty;
             var reference = attribute.ObjectReference ?? string.Empty;
-            return path.EndsWith("ctlModel", StringComparison.OrdinalIgnoreCase) ||
-                   reference.EndsWith(".ctlModel", StringComparison.OrdinalIgnoreCase);
+            return string.Equals(attribute.FunctionalConstraint, "CF", StringComparison.OrdinalIgnoreCase) &&
+                   (path.EndsWith("ctlModel", StringComparison.OrdinalIgnoreCase) ||
+                    reference.EndsWith(".ctlModel", StringComparison.OrdinalIgnoreCase));
         });
 
-        var hasControlStateEvidence = attributes.Any(attribute =>
-        {
-            var path = attribute.AttributePath ?? string.Empty;
-            var reference = attribute.ObjectReference ?? string.Empty;
-            return path.Contains("stSeld", StringComparison.OrdinalIgnoreCase) ||
-                   path.Contains("ctlNum", StringComparison.OrdinalIgnoreCase) ||
-                   reference.Contains(".stSeld", StringComparison.OrdinalIgnoreCase) ||
-                   reference.Contains(".ctlNum", StringComparison.OrdinalIgnoreCase);
-        });
+        // ST values and inferred CDC do not authorize command candidates.
 
         var cdc = (dataObject.InferredCdc ?? string.Empty).Trim().ToUpperInvariant();
         if (string.IsNullOrWhiteSpace(cdc))
             cdc = InferControlCdc(logicalNode, dataObject, attributes, hasControlOperation);
 
-        if (!hasControlOperation && !hasControlStateEvidence && controlModelAttribute == null && !ControllableCdcs.Contains(cdc))
+        if (!hasControlOperation && controlModelAttribute == null)
             return;
 
         var reference = (dataObject.Reference ?? string.Empty).Trim().Replace('$', '.');
@@ -3811,6 +4006,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             Confidence = hasControlOperation ? "High" : "Medium",
             IsSelected = false,
             IsControlSignal = true,
+            HasControlServiceEvidence = true,
             ControlCdc = cdc,
             ControlModelReference = controlModelReference.Replace('$', '.'),
             ControlStatusReference = BuildControlStatusReference(reference, cdc),

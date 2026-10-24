@@ -33,20 +33,13 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
   <sub>One persistent multi-IED shell for discovery, live values, reporting, events, alarms, guarded control, FAT, files and diagnostics.</sub>
 </div>
 
-> **Current stable release: [ARSAS v1.6.41](https://github.com/masarray/arsas/releases/tag/v1.6.41).** The installed version is visible in the native window title. Event Log categories and the read-only Event Properties drawer are included; the established RCB Export Filter remains the default. Installer, portable EXE, checksums, SBOM and provenance belong to the exact published release. Engine revision: [`engines/ARIEC61850.lock.json`](engines/ARIEC61850.lock.json).
+> **Current public stable: ARSAS v1.6.41.** [Download the published stable release](https://github.com/masarray/arsas/releases/tag/v1.6.41). The historical v1.6.40 field acceptance and the v1.6.41 scoped operator release apply only to their recorded source/engine identities. This release-candidate branch uses a different trial engine pin and requires its own qualification; do not infer relay FAT or SOE continuity from a green CI run.
 >
-> **Historical field baseline:** [v1.6.40 installed-release physical verification](docs/V1-6-40_INSTALLED_RELEASE_FIELD_ACCEPTANCE.md) documents the older *exact* app/engine pair, 2.395 s Smart Discovery, 58/58 report-backed runtime points, and zero cyclic MMS process polling. These observations must not be attributed to the different v1.6.41 engine pin. Also see [v1.6.39 physical rejection](evidence/v1.6.39-physical-rejection.json).
+> **Field acceptance record:** [v1.6.40 installed-release physical verification](docs/V1-6-40_INSTALLED_RELEASE_FIELD_ACCEPTANCE.md) documents the exact release/engine pair, 2.395 s Smart Discovery, 58/58 report-backed runtime points, and zero cyclic MMS process polling. This is distinct from the [v1.6.39 physical rejection](evidence/v1.6.39-physical-rejection.json).
 >
 > **Evidence boundary:** those counts describe the recorded physical qualification target, not a universal claim for every IED. Download identity, SHA-256, SBOM, provenance, and attestations remain tied to the published GitHub Release.
 
-## What's new in v1.6.41
-
-- **Visible version** — title bar reads the installed assembly and displays `ARSAS v1.6.41`.
-- **Readable Event Log and Event Properties** — Spontaneous, GI, Integrity, Quality, Data update, Poll, State change and Buffer are supported when justified by event evidence. A read-only, auto-hiding details drawer retains raw reason and RCB provenance.
-- **Original production RCB workflow preserved** — the RCB button opens the existing RCB Export Filter. The unfinished IED Browser and experimental replacement exporter are deferred and isolated.
-- **Exact published packages** — [v1.6.41 release](https://github.com/masarray/arsas/releases/tag/v1.6.41) includes Windows installer, portable EXE, SHA-256, SPDX SBOM and source provenance.
-
-## Previous stable milestone: v1.6.40
+## What changed in v1.6.40
 
 - **Efficient Smart Discovery is the production path** — release builds fail closed if they drift back to the legacy discovery route. Discovery is association-scoped and single-flight, reuses authoritative model evidence, and keeps network work bounded.
 - **Physical reporting proof** — the pinned engine/consumer combination was qualified against a real IED with actual `InformationReport` traffic and all 58 selected runtime points report-backed.
@@ -73,7 +66,7 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
 | [![SCL Edition 2 and Edition 1 export](Assets/screenshot/arsas-scl-edition-export-v1.6.40.webp)](Assets/screenshot/arsas-scl-edition-export-v1.6.40.webp) | [![COMTRADE phasor analysis](Assets/screenshot/arsas-comtrade-phasor-v1.6.40.webp)](Assets/screenshot/arsas-comtrade-phasor-v1.6.40.webp) |
 | Save Edition 2 IID or Edition 1 ICD with companion JSON and Markdown evidence. | Inspect native voltage and current phasors at one exact record position. |
 
-The above screenshots are labeled v1.6.40 historical UI references, not captures of v1.6.41. They remain lossless WebP assets.
+All screenshots are lossless WebP: pixel-exact UI text with substantially smaller transfer sizes than the source PNG files.
 
 ## Earlier milestone: v1.6.37
 

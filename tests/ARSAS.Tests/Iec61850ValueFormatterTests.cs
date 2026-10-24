@@ -160,6 +160,45 @@ public sealed class Iec61850ValueFormatterTests
                 value, "Structure", string.Empty, "Measurement", "IEDLD/GGIO1.Raw"));
     }
 
+    [Theory]
+    [InlineData("0", "0")]
+    [InlineData("1", "1")]
+    [InlineData(0, "0")]
+    [InlineData(1, "1")]
+    [InlineData(-3, "-3")]
+    [InlineData(63, "63")]
+    [InlineData("-64", "-64")]
+    public void BscValWithTrans_PosValPreservesActualSignedInteger_NotBoolean(
+        object raw, string expected)
+    {
+        // Even an erroneous older Boolean/SPC discovery hint cannot override
+        // the exact IEC 61850 ValWithTrans.posVal semantic status leaf.
+        Assert.Equal(expected, Iec61850ValueFormatter.FormatReportProcessValue(
+            raw, "Boolean", "", "Status",
+            "ZIVAVRLD1/ATCC1.TapChg.valWTr.posVal"));
+    }
+
+    [Theory]
+    [InlineData(true, "true (BSC INT8 type mismatch)")]
+    [InlineData(false, "false (BSC INT8 type mismatch)")]
+    [InlineData("64", "64")]
+    public void BscStepDisplay_NeverConvertsBooleanEvidenceToInventedPosition(
+        object raw, string expected)
+    {
+        Assert.Equal(expected, Iec61850ValueFormatter.FormatReportProcessValue(
+            raw, "BSC", "", "Status",
+            "ZIVAVRLD1/ATCC1.TapChg.valWTr.posVal"));
+    }
+
+    [Fact]
+    public void NumericNonBscScalar_DoesNotChangeExistingBooleanContract()
+    {
+        Assert.Equal("True [1]", Iec61850ValueFormatter.FormatReportProcessValue(
+            "1", "Boolean", "", "Status", "IED/GGIO1.Ind1.stVal"));
+        Assert.False(Iec61850ValueFormatter.IsBscStepPosition(
+            "IED/CSWI1.Pos.stVal", "DPC"));
+    }
+
     [Fact]
     public void Format_Does_Not_Collapse_NonStVal_Structures()
     {

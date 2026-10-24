@@ -4,6 +4,10 @@ on:
   push:
     branches: [ main ]
   pull_request:
+    # A trial-manifest-only PR already runs FAST CI-P1; don't duplicate a
+    # full Windows application build, native bridge build or package upload.
+    paths-ignore:
+      - "engines/ARIEC61850.trial.json"
   workflow_dispatch:
 
 concurrency:
@@ -187,8 +191,12 @@ jobs:
               $main -notmatch '<Viewbox Width="50" Height="50" Stretch="Uniform"' -or
               $main -notmatch 'x:Name="MonitorStateBadge"' -or
               $main -match '<Control\.Effect><DropShadowEffect BlurRadius="5" ShadowDepth="1" Opacity="0\.22" Color="#26313B"/></Control\.Effect>' -or
-              $main -notmatch 'LucideSquare.*Stroke="\{StaticResource Warning\}"' -or
-              $main -notmatch 'LucideX.*Stroke="\{StaticResource Danger\}"' -or
+              # Material migration changes glyph identity, never action tone.
+              # Keep both the stop and remove semantic color invariants.
+              $main -notmatch 'Click="IedStopAction_Click"' -or
+              $main -notmatch 'MaterialStopIcon.*Fill="\{StaticResource Warning\}"' -or
+              $main -notmatch 'Click="IedRemove_Click"' -or
+              $main -notmatch 'MaterialCloseIcon.*Fill="\{StaticResource Danger\}"' -or
               $app -notmatch 'x:Key="CommandOpenGradient"' -or
               $app -notmatch 'x:Key="CommandCloseGradient"' -or
               $app -notmatch 'x:Key="CommandActionButtonBase"' -or
@@ -672,11 +680,13 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Upload portable single EXE
+      # GitHub Actions upload-artifact v7: a SINGLE file plus archive:false
+      # makes the artifact itself download as a real .exe in the browser.
+      # Keep the canonical sealed Windows package (previous upload) unchanged:
+      # it carries portable-build-identity.json, manifests and release evidence.
+      - name: Upload directly downloadable portable EXE (no ZIP)
         uses: actions/upload-artifact@v7
         with:
-          name: ARSAS-win-x64-portable-single-exe
-          path: |
-            ArIED61850Tester\dist\ARSAS-*-win-x64-portable.exe
-            ArIED61850Tester\dist\ARSAS-*-win-x64-portable-build-identity.json
+          path: ArIED61850Tester\dist\ARSAS-*-win-x64-portable.exe
+          archive: false
           if-no-files-found: error

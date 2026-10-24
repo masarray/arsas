@@ -469,8 +469,74 @@ public sealed class CanonicalLiveSclExportRegressionTests
             typedBscTrial.GetProperty("baseEngineCommit").GetString());
         Assert.Equal("036e2c00d83a0815b6160147b14ea05975057965",
             typedBscTrial.GetProperty("exactCommit").GetString());
+        var typedStatusTrial = root.GetProperty("m217KTypedStatusReportTrial");
         Assert.Equal(typedBscTrial.GetProperty("exactCommit").GetString(),
+            typedStatusTrial.GetProperty("previousConsumerPin").GetString());
+        Assert.Equal("51c2eefd61d6bcbe1116fda6b781b74bb9cf06da",
+            typedStatusTrial.GetProperty("exactCommit").GetString());
+        var identityTrial = root.GetProperty("p0AIdentityTrial");
+        Assert.Equal(typedStatusTrial.GetProperty("exactCommit").GetString(),
+            identityTrial.GetProperty("baseEngineCommit").GetString());
+        var rcbTrial = root.GetProperty("p0BRcbPlannerTrial");
+        Assert.Equal(identityTrial.GetProperty("exactCommit").GetString(),
+            rcbTrial.GetProperty("baseEngineCommit").GetString());
+        var typedReadTrial = root.GetProperty("p0CTypedReadTrial");
+        Assert.Equal(rcbTrial.GetProperty("exactCommit").GetString(),
+            typedReadTrial.GetProperty("baseEngineCommit").GetString());
+        var controlTrial = root.GetProperty("controlReportIsolationTrial");
+        Assert.Equal(typedReadTrial.GetProperty("exactCommit").GetString(),
+            controlTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal("c85d4e20db722bd0c2729f2533b323b13d3ef735",
+            controlTrial.GetProperty("exactCommit").GetString());
+        // The current code-only stage observation trial must be descended
+        // EXACTLY from historical #183. Physical acceptance does not transfer.
+        var stageTrial = root.GetProperty("p0CStageObservationTrial");
+        Assert.Equal(controlTrial.GetProperty("exactCommit").GetString(),
+            stageTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal("9c7cb40364023a7b217e5ec31ab3105ba90142eb",
+            stageTrial.GetProperty("exactCommit").GetString());
+        var typedTrial = root.GetProperty("globalTypedControlStageTrial");
+        Assert.Equal(stageTrial.GetProperty("exactCommit").GetString(),
+            typedTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal("f75e323e9f8443aa20e0a3818a1d5d77255b2c0f",
+            typedTrial.GetProperty("exactCommit").GetString());
+        Assert.Equal(typedTrial.GetProperty("exactCommit").GetString(),
             root.GetProperty("commit").GetString());
+        Assert.Equal(192, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(192, typedTrial.GetProperty("enginePullRequest").GetInt32());
+        Assert.Equal(39909260816L, typedTrial.GetProperty("engineCiRun").GetInt64());
+        Assert.Equal("engine-ci-success-consumer-trial-not-physical",
+            typedTrial.GetProperty("status").GetString());
+        foreach (var flag in new[] {
+            "typedStatusReadRequired", "sameDataObjectFeedbackRequired",
+            "ctlModelAndOperShapeRequired", "sbowEnhancedSafetyRequired",
+            "noAutomaticOperate", "physicalQualificationRequired",
+            "mainlinePromotionForbidden" })
+            Assert.True(typedTrial.GetProperty(flag).GetBoolean());
+        Assert.Equal(184, stageTrial.GetProperty("enginePullRequest").GetInt32());
+        Assert.Equal(185, stageTrial.GetProperty("engineCiOnlyPullRequest").GetInt32());
+        Assert.Equal(1182, stageTrial.GetProperty("engineTestsPassed").GetInt32());
+        Assert.True(stageTrial.GetProperty("sbo400msSafetyGatePreserved").GetBoolean());
+        Assert.True(stageTrial.GetProperty("negativeAndDelayedLastApplErrorRegression").GetBoolean());
+        Assert.True(stageTrial.GetProperty("noUnqualifiedImmediateOperate").GetBoolean());
+        Assert.True(stageTrial.GetProperty("physicalLatencyQualificationRequired").GetBoolean());
+        Assert.True(stageTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
+        Assert.True(controlTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(controlTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
+        Assert.True(controlTrial.GetProperty("controlChecksUnchanged").GetBoolean());
+        Assert.True(controlTrial.GetProperty("controlTimeoutsUnchanged").GetBoolean());
+        Assert.True(typedReadTrial.GetProperty("strictInvokeId").GetBoolean());
+        Assert.True(typedReadTrial.GetProperty("strictAccessOrdinal").GetBoolean());
+        Assert.True(typedReadTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(typedReadTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
+        Assert.True(rcbTrial.GetProperty("writeFreeReconciliation").GetBoolean());
+        Assert.True(rcbTrial.GetProperty("boundedContinuationRequired").GetBoolean());
+        Assert.True(rcbTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(rcbTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
+        Assert.Equal(618, typedStatusTrial.GetProperty("consumerPullRequest").GetInt32());
+        Assert.True(typedStatusTrial.GetProperty("strictFcAndTupleEvidenceRequired").GetBoolean());
+        Assert.True(typedStatusTrial.GetProperty("physicalQualificationRequired").GetBoolean());
+        Assert.True(typedStatusTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
         Assert.Equal("engine-ci-success-consumer-ci-pending-not-physical",
             typedBscTrial.GetProperty("status").GetString());
         Assert.Equal(38328335496L, typedBscTrial.GetProperty("engineCiRun").GetInt64());
@@ -508,7 +574,10 @@ public sealed class CanonicalLiveSclExportRegressionTests
         Assert.True(zivTrial.GetProperty("mainlinePromotionForbidden").GetBoolean());
         Assert.True(zivTrial.GetProperty("fullDiscoveryFallbackForbidden").GetBoolean());
         Assert.True(zivTrial.GetProperty("cyclicMmsProcessPollingForbidden").GetBoolean());
-        Assert.Equal(169, root.GetProperty("sourcePullRequest").GetInt32());
+        // Historical C264 remains PR #173; current P0-A identity trial is #177.
+        Assert.Equal(173, typedStatusTrial.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(177, root.GetProperty("p0AIdentityTrial").GetProperty("enginePullRequest").GetInt32());
+        Assert.Equal(169, typedBscTrial.GetProperty("enginePullRequest").GetInt32());
         Assert.True(genericTrial.GetProperty("typedSemanticGateRequired").GetBoolean());
         Assert.True(genericTrial.GetProperty("associationScopedInventoryRequired").GetBoolean());
         Assert.True(genericTrial.GetProperty("vendorDispatchForbidden").GetBoolean());

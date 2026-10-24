@@ -9,6 +9,7 @@ import unittest
 import urllib.request
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent
 
@@ -27,6 +28,8 @@ SOURCE = "a" * 40
 ENGINE = "b" * 40
 HEAD = "c" * 40
 BRANCH = "ci/p2a-canonical-regression-reuse"
+PR_TITLE = "RC0 same-head exact-tree integration"
+OTHER_PR_TITLE = "Promote same-head trial to main"
 RUN = 1234
 
 TRX = b"""<?xml version="1.0" encoding="UTF-8"?>
@@ -96,7 +99,8 @@ class FakeApi:
         self.listing = [
             {"id": RUN, "run_attempt": 1, "name": "Build ARSAS",
              "head_sha": head_sha, "head_branch": branch, "event": event_name,
-             "status": self.status, "conclusion": self.result}
+             "status": self.status, "conclusion": self.result,
+              "display_title": PR_TITLE}
         ]
 
     def get(self, url: str, binary: bool = False):
@@ -124,6 +128,7 @@ def run_once(
     head_sha: str = HEAD,
     source_sha: str = SOURCE,
     required_test_substrings: list[str] | None = None,
+    pr_title: str | None = None,
 ):
     return consumer.verify_canonical(
         api,
@@ -137,10 +142,63 @@ def run_once(
         allow_in_progress_artifact=allow_in_progress_artifact,
         event_name=event_name,
         required_test_substrings=required_test_substrings,
+        pr_title=pr_title,
     )
 
 
 class CanonicalReuseTests(unittest.TestCase):
+    def test_same_head_two_prs_selects_matching_pr_title_and_exact_merge(self):
+        # PR #727 and PR #729 share the same head, branch and pinned engine.
+        # The newer build of the other PR uses a DIFFERENT synthetic merge.
+        # The correct older run must remain eligible, never falsely stale.
+        api = FakeApi()
+        api.listing.insert(0, {
+            "id": RUN + 1, "run_attempt": 1, "name": "Build ARSAS",
+            "head_sha": HEAD, "head_branch": BRANCH, "event": "pull_request",
+            "status": "completed", "conclusion": "success",
+            "display_title": OTHER_PR_TITLE,
+        })
+        chosen = consumer.candidate_runs(
+            {"workflow_runs": api.listing}, HEAD, BRANCH,
+            pr_title=PR_TITLE,
+        )
+        self.assertEqual([run["id"] for run in chosen], [RUN])
+        proof = run_once(api, pr_title=PR_TITLE)
+        self.assertEqual(proof["canonicalRunId"], RUN)
+        self.assertEqual(proof["mergeSha"], SOURCE)
+        self.assertEqual(proof["engineSha"], ENGINE)
+
+    def test_other_pr_red_does_not_override_exact_pr_green(self):
+        api = FakeApi()
+        api.listing.insert(0, {
+            "id": RUN + 1, "run_attempt": 1, "name": "Build ARSAS",
+            "head_sha": HEAD, "head_branch": BRANCH, "event": "pull_request",
+            "status": "completed", "conclusion": "failure",
+            "display_title": OTHER_PR_TITLE,
+        })
+        self.assertEqual(run_once(api, pr_title=PR_TITLE)["canonicalRunId"], RUN)
+
+    def test_newer_failure_in_same_pr_still_blocks_older_green(self):
+        api = FakeApi()
+        api.listing.insert(0, {
+            "id": RUN + 1, "run_attempt": 1, "name": "Build ARSAS",
+            "head_sha": HEAD, "head_branch": BRANCH, "event": "pull_request",
+            "status": "completed", "conclusion": "failure",
+            "display_title": PR_TITLE,
+        })
+        with self.assertRaisesRegex(consumer.ProofError, "Latest canonical.*failed"):
+            run_once(api, pr_title=PR_TITLE)
+
+    def test_only_wrong_pr_build_does_not_satisfy_canonical_reuse(self):
+        api = FakeApi()
+        api.listing[0]["display_title"] = OTHER_PR_TITLE
+        with self.assertRaisesRegex(consumer.ProofError, "Timed out"):
+            run_once(api, pr_title=PR_TITLE)
+
+    def test_invalid_pr_title_is_rejected(self):
+        with self.assertRaisesRegex(consumer.ProofError, "Invalid canonical PR"):
+            run_once(FakeApi(), pr_title="")
+
     def test_producer_and_consumer_accept_verified_exact_evidence(self):
         proof = run_once(FakeApi())
         self.assertEqual(proof["passed"], 1320)
@@ -279,6 +337,36 @@ class CanonicalReuseTests(unittest.TestCase):
                 allow_in_progress_artifact=True,
             )
 
+    def test_artifact_ready_mode_rechecks_transient_red_but_never_uses_red_proof(self):
+        class CorrectedCanonicalStatus(FakeApi):
+            def __init__(self):
+                super().__init__()
+                self.queries = 0
+                self.artifacts_during_red = 0
+
+            def get(self, url: str, binary: bool = False):
+                if "/workflows/build.yml/runs?" in url:
+                    self.queries += 1
+                    if self.queries == 1:
+                        transient = dict(self.listing[0])
+                        transient.update(status="completed", conclusion="failure")
+                        return {"workflow_runs": [transient]}
+                if "/artifacts" in url and self.queries == 1:
+                    self.artifacts_during_red += 1
+                return super().get(url, binary=binary)
+
+        api = CorrectedCanonicalStatus()
+        with patch.object(consumer.time, "sleep", return_value=None):
+            proof = consumer.verify_canonical(
+                api, repository="masarray/arsas", branch=BRANCH,
+                head_sha=HEAD, merge_sha=SOURCE, engine_sha=ENGINE,
+                wait_seconds=2, poll_seconds=1, allow_in_progress_artifact=True
+            )
+        self.assertGreaterEqual(api.queries, 2)
+        self.assertEqual(api.artifacts_during_red, 0)
+        self.assertEqual(proof["canonicalRunConclusion"], "success")
+        self.assertEqual(proof["proofStage"], "completed-workflow")
+
     def test_artifact_ready_mode_waits_when_expected_artifact_is_not_uploaded(self):
         with self.assertRaisesRegex(consumer.ProofError, "artifact-ready canonical"):
             run_once(
@@ -352,6 +440,45 @@ class CanonicalReuseTests(unittest.TestCase):
         api.listing[0]["head_sha"] = "d" * 40
         with self.assertRaisesRegex(consumer.ProofError, "Timed out"):
             run_once(api)
+
+    def test_latest_rerun_artifact_is_selected_without_deleting_failed_attempt_evidence(self):
+        first = {
+            "id": 101, "name": "ARSAS-test-evidence", "expired": False,
+            "workflow_run": {"id": RUN},
+            "created_at": "2026-10-23T00:50:45Z",
+            "archive_download_url": "https://example.invalid/old.zip",
+        }
+        second = {
+            "id": 102, "name": "ARSAS-test-evidence", "expired": False,
+            "workflow_run": {"id": RUN},
+            "created_at": "2026-10-23T00:57:03Z",
+            "archive_download_url": "https://example.invalid/current.zip",
+        }
+        self.assertEqual(
+            consumer.choose_artifact({"artifacts": [first, second]}, RUN)["id"], 102)
+        self.assertEqual(
+            consumer.choose_artifact({"artifacts": [second, first]}, RUN)["id"], 102)
+
+    def test_ambiguous_rerun_artifacts_fail_closed(self):
+        artifacts = [
+            {"id": 101, "name": "ARSAS-test-evidence", "expired": False,
+             "workflow_run": {"id": RUN}, "created_at": "2026-10-23T00:57:03Z"},
+            {"id": 102, "name": "ARSAS-test-evidence", "expired": False,
+             "workflow_run": {"id": RUN}, "created_at": "2026-10-23T00:57:03Z"},
+        ]
+        with self.assertRaisesRegex(consumer.ProofError, "ambiguous"):
+            consumer.choose_artifact({"artifacts": artifacts}, RUN)
+        artifacts[0].pop("created_at")
+        with self.assertRaisesRegex(consumer.ProofError, "timestamps"):
+            consumer.choose_artifact({"artifacts": artifacts}, RUN)
+
+    def test_stale_attempt_cannot_be_misrepresented_as_success(self):
+        older = zip_archive(fixture())  # Proven run_attempt=1.
+        with self.assertRaisesRegex(consumer.ProofError, "run attempt"):
+            consumer.validate_artifact_archive(
+                older, merge_sha=SOURCE, engine_sha=ENGINE,
+                workflow_run_id=RUN, run_attempt=2,
+            )
 
     def test_wrong_artifact_type_is_not_accepted(self):
         api = FakeApi()

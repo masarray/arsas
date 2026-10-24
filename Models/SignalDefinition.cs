@@ -4,6 +4,12 @@ namespace ArIED61850Tester.Models;
 
 public sealed record ControlCommandClaim(long Sequence, string RequestedValue, string ActionLabel);
 
+// Presentation-only lifecycle, never IEC quality or a persisted process value.
+public enum CanonicalSignalObservationState
+{
+    Unobserved, Awaiting, LiveReport, LiveRead, Paused, Offline
+}
+
 public class SignalDefinition : ObservableObject
 {
     private bool _isSelected;
@@ -12,6 +18,9 @@ public class SignalDefinition : ObservableObject
     private string _quality = "Unknown";
     private string _deviceTimestamp = "-";
     private string _probeStatus = "Not probed";
+    private CanonicalSignalObservationState _observationState =
+        CanonicalSignalObservationState.Unobserved;
+    private long _observationAssociation;
     private string _reportCoverage = "Polling fallback";
     private string _displayReference = string.Empty;
     private DateTime _timestamp = DateTime.MinValue;
@@ -78,7 +87,23 @@ public class SignalDefinition : ObservableObject
     public string FunctionalConstraint { get; set; } = "";
     public string DataType { get; set; } = "";
     public string Category { get; set; } = "";
-    public string Unit { get; set; } = "";
+    // Monotonic generation for model metadata projection invalidation. This
+    // preserves the old plain Unit setter's UI notification behavior (none),
+    // without subscribing handlers to tens of thousands of SG7 signals.
+    private static long _unitMetadataRevision;
+    private string _unit = "";
+    public static long UnitMetadataRevision => Interlocked.Read(ref _unitMetadataRevision);
+    public string Unit
+    {
+        get => _unit;
+        set
+        {
+            var next = value ?? "";
+            if (string.Equals(_unit, next, StringComparison.Ordinal)) return;
+            _unit = next;
+            Interlocked.Increment(ref _unitMetadataRevision);
+        }
+    }
     public string Confidence { get; set; } = "Medium";
     public string DataSetReference { get; set; } = "";
     public string ReportControlReference { get; set; } = "";
@@ -93,6 +118,12 @@ public class SignalDefinition : ObservableObject
     public string TimestampReference { get; set; } = "";
     public string Source { get; set; } = "Online";
     public bool IsControlSignal { get; set; }
+    /// <summary>
+    /// Exact MMS CO service / CF ctlModel inventory evidence, never inferred from LN
+    /// names or ST feedback. Read-only candidate evidence is NOT operate authority.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool HasControlServiceEvidence { get; set; }
     public bool IsValidControlObject => IsControlSignal && IsControlObjectReference(ObjectReference);
     /// <summary>Association-scoped CDC proved by a typed live control descriptor.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
@@ -114,6 +145,8 @@ public class SignalDefinition : ObservableObject
                 !candidate.Equals(_verifiedLiveControlCdc, StringComparison.OrdinalIgnoreCase))
                 return;
             if (!Set(ref _controlCdc, candidate)) return;
+            Raise(nameof(ControlDockRole));
+            RefreshControlProcessValue();
             RaiseControlActionProperties();
         }
     }
@@ -126,15 +159,25 @@ public class SignalDefinition : ObservableObject
         var validated = cdc.Trim().ToUpperInvariant();
         // This method must only be called after the engine's typed live semantic
         // resolver succeeded; it is not an SCL authority override.
-        _verifiedLiveControlCdc = validated;
-        Raise(nameof(VerifiedLiveControlCdc));
+        // A repeated read of the same typed CDC is not an authority change.
+        // Suppress redundant WPF notifications on refresh/report traffic.
+        if (!string.Equals(_verifiedLiveControlCdc, validated, StringComparison.Ordinal))
+        {
+            _verifiedLiveControlCdc = validated;
+            Raise(nameof(VerifiedLiveControlCdc));
+            Raise(nameof(ControlDockRole));
+        }
         ControlCdc = validated;
     }
 
     public bool ApplyDataSetAdvisoryControlMetadata(string cdc, string? statusReference)
     {
-        _dataSetAdvisoryCdc = cdc?.Trim().ToUpperInvariant() ?? string.Empty;
-        Raise(nameof(DataSetAdvisoryCdc));
+        var advisory = cdc?.Trim().ToUpperInvariant() ?? string.Empty;
+        if (!string.Equals(_dataSetAdvisoryCdc, advisory, StringComparison.Ordinal))
+        {
+            _dataSetAdvisoryCdc = advisory;
+            Raise(nameof(DataSetAdvisoryCdc));
+        }
         if (_verifiedLiveControlCdc.Length > 0)
         {
             // Reporting membership is independent of the control plane. Do not
@@ -151,10 +194,16 @@ public class SignalDefinition : ObservableObject
     public void ClearLiveControlAuthority()
     {
         // Called only at MMS association teardown/new association boundary.
-        _verifiedLiveControlCdc = string.Empty;
-        _dataSetAdvisoryCdc = string.Empty;
-        Raise(nameof(VerifiedLiveControlCdc));
-        Raise(nameof(DataSetAdvisoryCdc));
+        if (_verifiedLiveControlCdc.Length > 0)
+        {
+            _verifiedLiveControlCdc = string.Empty;
+            Raise(nameof(VerifiedLiveControlCdc));
+        }
+        if (_dataSetAdvisoryCdc.Length > 0)
+        {
+            _dataSetAdvisoryCdc = string.Empty;
+            Raise(nameof(DataSetAdvisoryCdc));
+        }
         ControlSemanticVerified = false;
     }
     // Preserve exact read-only MMS proof independently of ControlLastResult,
@@ -165,7 +214,15 @@ public class SignalDefinition : ObservableObject
         set => Set(ref _controlInspectionEvidence, value?.Trim() ?? string.Empty);
     }
     public string ControlModelReference { get => _controlModelReference; set => Set(ref _controlModelReference, value?.Trim() ?? string.Empty); }
-    public string ControlStatusReference { get => _controlStatusReference; set => Set(ref _controlStatusReference, value?.Trim() ?? string.Empty); }
+    public string ControlStatusReference
+    {
+        get => _controlStatusReference;
+        set
+        {
+            if (Set(ref _controlStatusReference, value?.Trim() ?? string.Empty))
+                RefreshControlProcessValue();
+        }
+    }
     public string ControlModelText
     {
         get => _controlModelText;
@@ -230,20 +287,27 @@ public class SignalDefinition : ObservableObject
     {
         var position = IsPositionSemanticControl ||
             string.Equals(ControlCdc, "DPC", StringComparison.OrdinalIgnoreCase);
-        var type = position ? "Dbpos" :
+        var step = string.Equals(ControlCdc, "BSC",
+                StringComparison.OrdinalIgnoreCase) &&
+            ArIED61850Tester.Services.Iec61850ValueFormatter.IsBscStepPosition(
+                ControlStatusReference, ControlCdc);
+        var type = position ? "Dbpos" : step ? "Int8" :
             !string.IsNullOrWhiteSpace(ControlValueType) ? ControlValueType : ControlCdc;
         var boolType = type.Equals("SPS", StringComparison.OrdinalIgnoreCase) ||
                        type.Equals("SPC", StringComparison.OrdinalIgnoreCase) ||
                        type.Equals("Boolean", StringComparison.OrdinalIgnoreCase);
-        var display = position || boolType
-            ? ArIED61850Tester.Services.Iec61850ValueFormatter.FormatReportProcessValue(
-                ControlCurrentValue, type, "", position ? "Position" : "Status", ObjectReference)
-            : ControlCurrentValue;
+        var display = step
+            ? ArIED61850Tester.Services.Iec61850ValueFormatter.FormatBscStepPosition(
+                ControlCurrentValue)
+            : position || boolType
+                ? ArIED61850Tester.Services.Iec61850ValueFormatter.FormatReportProcessValue(
+                    ControlCurrentValue, type, "", position ? "Position" : "Status", ObjectReference)
+                : ControlCurrentValue;
         return new Iec61850ProcessValueBadge(
             display, type,
             Iec61850ValueStatePresentation.TypeToken(type),
             Iec61850ValueStatePresentation.ClassifyVisualKind(
-                display, type, reference: ObjectReference));
+                display, type, reference: step ? ControlStatusReference : ObjectReference));
     }
 
     private void RefreshControlProcessValue()
@@ -293,7 +357,9 @@ public class SignalDefinition : ObservableObject
         set
         {
             var normalized = value?.Trim() ?? string.Empty;
-            UpdateControlModelFromEvidence(normalized, updateDisplay: true);
+            // Human-facing diagnostics are NEVER a typed ctlModel proof.
+            // Only the live descriptor/probe and explicit model lifecycle
+            // may publish ControlModelKind or command permissions.
             normalized = NormalizeControlResultText(normalized);
             Set(ref _controlLastResult, normalized);
         }
@@ -307,6 +373,7 @@ public class SignalDefinition : ObservableObject
                 return;
             Raise(nameof(ControlIsBusy));
             Raise(nameof(ControlCanInspectPosition));
+            Raise(nameof(ControlCanConfirm));
         }
     }
 
@@ -336,7 +403,7 @@ public class SignalDefinition : ObservableObject
     public string ControlPendingAction => _controlPendingAction;
     public string ControlPendingConfirmationLabel =>
         string.IsNullOrWhiteSpace(_controlPendingAction) ? "Confirm command" : $"Confirm {_controlPendingAction}";
-    public bool ControlCanConfirm => _controlConfirmationPending && ControlSupportsOperate && !ControlCommandBusy;
+    public bool ControlCanConfirm => _controlConfirmationPending && ControlSupportsOperate && !ControlCommandBusy && !ControlInspectionBusy;
 
     public bool TryStageControlConfirmation(string requestedValue, string actionLabel, out string rejectionReason)
     {
@@ -352,6 +419,11 @@ public class SignalDefinition : ObservableObject
             if (_controlCommandBusy)
             {
                 rejectionReason = "another command already owns this control object";
+                return false;
+            }
+            if (_controlInspectionBusy)
+            {
+                rejectionReason = "the control model is being verified; no command is admitted until inspection completes";
                 return false;
             }
             if (string.IsNullOrWhiteSpace(normalizedValue) || string.IsNullOrWhiteSpace(normalizedAction))
@@ -396,6 +468,12 @@ public class SignalDefinition : ObservableObject
                 rejectionReason = "another command already owns this control object";
                 return false;
             }
+            if (_controlInspectionBusy)
+            {
+                claim = null;
+                rejectionReason = "the control model is being verified; no command is admitted until inspection completes";
+                return false;
+            }
             if (string.IsNullOrWhiteSpace(_controlPendingValue))
             {
                 claim = null;
@@ -437,6 +515,12 @@ public class SignalDefinition : ObservableObject
             {
                 claim = null;
                 rejectionReason = "another command already owns this control object";
+                return false;
+            }
+            if (_controlInspectionBusy)
+            {
+                claim = null;
+                rejectionReason = "the control model is being verified; no command is admitted until inspection completes";
                 return false;
             }
             if (string.IsNullOrWhiteSpace(normalizedValue))
@@ -517,19 +601,11 @@ public class SignalDefinition : ObservableObject
     // ControlSupportsOperate still independently gates every staged/direct write.
     private bool CanExposeControlActions => IsValidControlObject;
 
-    private bool IsPositionSemanticControl
-    {
-        get
-        {
-            var reference = (ObjectReference ?? string.Empty).Replace('$', '.').TrimEnd('.');
-            var leaf = reference[(reference.LastIndexOf('.') + 1)..];
-            return leaf.Equals("Pos", StringComparison.OrdinalIgnoreCase) ||
-                   ((LogicalNodeClass.Equals("CSWI", StringComparison.OrdinalIgnoreCase) ||
-                     LogicalNodeClass.Equals("XCBR", StringComparison.OrdinalIgnoreCase) ||
-                     LogicalNodeClass.Equals("XSWI", StringComparison.OrdinalIgnoreCase)) &&
-                    reference.Contains(".Pos", StringComparison.OrdinalIgnoreCase));
-        }
-    }
+    // Action widgets are derived from the declared/live CDC, not the LN or
+    // data-object name. An arbitrary vendor-named DPC is still a DPC; a
+    // coincidentally named Pos object without DPC evidence is not Open/Close.
+    private bool IsPositionSemanticControl =>
+        string.Equals(ControlCdc, "DPC", StringComparison.OrdinalIgnoreCase);
 
     public bool IsPositionControl => CanExposeControlActions && IsPositionSemanticControl;
     public bool IsRaiseOnlyControl => CanExposeControlActions && (ContainsControlToken("TapOpR") || ContainsControlToken("Raise"));
@@ -793,6 +869,13 @@ public class SignalDefinition : ObservableObject
         ? 45
         : CalculateSortPriority(LogicalNodeClass, ObjectReference, Category, Confidence, IsScadaCoreSignal);
 
+    // Non-authoritative UI role, derived from IEC object identity and typed
+    // CDC. Control readiness is still guarded solely by live MMS evidence.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string ControlDockRole =>
+        ArIED61850Tester.Services.Iec61850ControlIdentity.CommandDockRole(this);
+
+
     public string ReportCoverage
     {
         get => _reportCoverage;
@@ -814,6 +897,39 @@ public class SignalDefinition : ObservableObject
                     : "MMS polling";
 
     public string SignalPropertiesSummary => BuildSignalPropertiesSummary();
+
+    // Never serialize runtime freshness alongside engineering model values.
+    // Last-known Value/q/t remain untouched on disconnect and can be inspected,
+    // but this independent state prevents a cached value being labeled live.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public CanonicalSignalObservationState ObservationState => _observationState;
+    [System.Text.Json.Serialization.JsonIgnore]
+    public long ObservationAssociation => _observationAssociation;
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsLiveObservation => _observationState is
+        CanonicalSignalObservationState.LiveReport or CanonicalSignalObservationState.LiveRead;
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string ObservationLabel => _observationState switch
+    {
+        CanonicalSignalObservationState.LiveReport => "Live · Report",
+        CanonicalSignalObservationState.LiveRead => "Live · MMS Read",
+        CanonicalSignalObservationState.Awaiting => "Awaiting current association",
+        CanonicalSignalObservationState.Paused => "Paused · last known",
+        CanonicalSignalObservationState.Offline => "Offline · last known",
+        _ => "Not observed"
+    };
+
+    public void MarkCanonicalObservation(
+        CanonicalSignalObservationState state, long association)
+    {
+        if (_observationState == state && _observationAssociation == association)
+            return;
+        _observationAssociation = association;
+        Set(ref _observationState, state, nameof(ObservationState));
+        Raise(nameof(ObservationLabel));
+        Raise(nameof(IsLiveObservation));
+        Raise(nameof(SignalPropertiesSummary));
+    }
 
     public string Value { get => _value; set => Set(ref _value, value); }
     public string Quality { get => _quality; set => Set(ref _quality, value); }
@@ -851,6 +967,7 @@ public class SignalDefinition : ObservableObject
                $"DataSet: {ds}\n" +
                $"Report Control Block: {rcb}\n" +
                $"Runtime Source: {ReportPlan}\n" +
+               $"Observed Value State: {ObservationLabel}\n" +
                $"Reason: {reason}";
     }
 

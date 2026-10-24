@@ -31,10 +31,15 @@ public static class Iec61850DeviceIdentityResolver
             .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
             .ToArray();
         var host = liveModel?.Host ?? string.Empty;
+        // The live-model IedName is itself an unverified naming hint
+        // derived from MMS. Passing it as an explicit override suppresses
+        // the full-domain-set resolver and can freeze a truncated label
+        // (e.g. SIE instead of SIEBCU). Never elevate it to wire proof.
+        // Authenticated SCL endpoint/domain matching remains the separate
+        // trusted identity authority in Iec61850MonitorRuntime.
         var engineIdentity = Iec61850IdentityResolver.ResolveFromDomains(
             normalizedDomains,
-            host,
-            liveModel?.IedName);
+            host);
 
         return new Iec61850DeviceIdentity
         {

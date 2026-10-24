@@ -3,6 +3,8 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
+using System.Windows.Media;
 using AR.Iec61850.Scl.Export;
 using ArIED61850Tester.Models;
 using Microsoft.Win32;
@@ -26,6 +28,14 @@ public sealed class RcbMultiExportWindow : Window
     private readonly TextBlock _summary;
     private readonly Button _checkButton;
     private readonly Button _exportButton;
+    private readonly Iec61850MonitorDevice? _device;
+    private readonly ColumnDefinition _inspectorColumn;
+    private readonly Border _inspectorPanel;
+    private readonly TextBlock _inspectorTitle;
+    private readonly TextBlock _inspectorSource;
+    private readonly DataGrid _inspectorProperties;
+    private readonly DataGridColumn _referenceColumn;
+    private RcbExportRow? _inspectedRow;
     private CancellationTokenSource? _operation;
 
     public RcbMultiExportWindow(
@@ -33,12 +43,15 @@ public sealed class RcbMultiExportWindow : Window
         string endpoint,
         IReadOnlyList<RcbExportRow> rows,
         Func<CancellationToken, Task<IReadOnlyList<RcbExportRow>>>? refreshAvailability,
-        Func<IReadOnlyList<RcbExportRow>, SclSchemaProfile, string, CancellationToken, Task<RcbExportCompletion>> export)
+        Func<IReadOnlyList<RcbExportRow>, SclSchemaProfile, string, CancellationToken, Task<RcbExportCompletion>> export,
+        Iec61850MonitorDevice? device = null)
     {
         _iedName = string.IsNullOrWhiteSpace(iedName) ? "IED" : iedName.Trim();
         _endpoint = string.IsNullOrWhiteSpace(endpoint) ? "Offline SCL model" : endpoint.Trim();
         _refreshAvailability = refreshAvailability;
         _export = export ?? throw new ArgumentNullException(nameof(export));
+        _device = device;
+        if (_device != null) _device.PropertyChanged += Device_PropertyChanged;
 
         Title = "RCB Export — Generic IEC 61850 SCL";
         Width = 1080;
@@ -110,13 +123,105 @@ public sealed class RcbMultiExportWindow : Window
             }
         });
         _grid.Columns.Add(TextColumn("REPORT CONTROL BLOCK", nameof(RcbExportRow.Name), 180));
-        _grid.Columns.Add(TextColumn("TYPE", nameof(RcbExportRow.Type), 105));
+        _grid.Columns.Add(TextColumn("TYPE", nameof(RcbExportRow.Type), 95));
+        _grid.Columns.Add(CreateReportIdColumn());
         _grid.Columns.Add(TextColumn("DATASET", nameof(RcbExportRow.DataSetName), 170));
         _grid.Columns.Add(TextColumn("MEMBERS", nameof(RcbExportRow.MemberCountText), 90));
         _grid.Columns.Add(TextColumn("STATUS", nameof(RcbExportRow.StatusText), 120));
-        _grid.Columns.Add(TextColumn("REFERENCE", nameof(RcbExportRow.Reference), new DataGridLength(1, DataGridLengthUnitType.Star)));
-        Grid.SetRow(_grid, 2);
-        root.Children.Add(_grid);
+        _referenceColumn = TextColumn("REFERENCE", nameof(RcbExportRow.Reference), new DataGridLength(1, DataGridLengthUnitType.Star));
+        _grid.Columns.Add(_referenceColumn);
+        _grid.SelectionChanged += (_, _) =>
+        {
+            if (_inspectedRow != null && _grid.SelectedItem is RcbExportRow row)
+                ShowInspector(row);
+        };
+
+        // Inspector is an integral right-side pane, not a separate dialog.
+        // Column resizing never changes the independent RcbExportRow.IsSelected authority.
+        var body = new Grid();
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        _inspectorColumn = new ColumnDefinition { Width = new GridLength(0) };
+        body.ColumnDefinitions.Add(_inspectorColumn);
+        Grid.SetColumn(_grid, 0);
+        body.Children.Add(_grid);
+
+        var inspectorRoot = new Grid { Margin = new Thickness(12, 0, 0, 0) };
+        inspectorRoot.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        inspectorRoot.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        inspectorRoot.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        inspectorRoot.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        inspectorRoot.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        inspectorRoot.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var inspectorHeader = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        inspectorHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        inspectorHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        _inspectorTitle = new TextBlock { FontSize = 13, FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(32, 48, 74)), TextTrimming = TextTrimming.CharacterEllipsis };
+        inspectorHeader.Children.Add(_inspectorTitle);
+        var closeInspector = new Button { Content = "×", Width = 27, Height = 26,
+            Padding = new Thickness(0), ToolTip = "Close properties (Esc)" };
+        closeInspector.Click += (_, _) => CloseInspector();
+        Grid.SetColumn(closeInspector, 1);
+        inspectorHeader.Children.Add(closeInspector);
+        inspectorRoot.Children.Add(inspectorHeader);
+
+        _inspectorSource = new TextBlock { FontSize = 10.5, TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(104, 120, 142)),
+            Margin = new Thickness(0, 0, 0, 12) };
+        Grid.SetRow(_inspectorSource, 1);
+        inspectorRoot.Children.Add(_inspectorSource);
+
+        var section = new TextBlock { Text = "Control Block attributes", FontSize = 11.5,
+            FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 7) };
+        Grid.SetRow(section, 2);
+        inspectorRoot.Children.Add(section);
+
+        _inspectorProperties = new DataGrid
+        {
+            AutoGenerateColumns = false, IsReadOnly = true, CanUserAddRows = false,
+            CanUserDeleteRows = false, CanUserSortColumns = false, HeadersVisibility = DataGridHeadersVisibility.Column,
+            GridLinesVisibility = DataGridGridLinesVisibility.Horizontal, RowHeight = 28, RowHeaderWidth = 0,
+            FontSize = 11, BorderThickness = new Thickness(0),
+            Background = Brushes.White
+        };
+        _inspectorProperties.Columns.Add(TextColumn("Property", nameof(RcbInspectionProperty.Property), 142));
+        var provenanceStyle = new Style(typeof(TextBlock));
+        provenanceStyle.Setters.Add(new Setter(FrameworkElement.ToolTipProperty,
+            new Binding(nameof(RcbInspectionProperty.Source))));
+        var valueColumn = TextColumn("Value", nameof(RcbInspectionProperty.Value),
+            new DataGridLength(1, DataGridLengthUnitType.Star));
+        valueColumn.ElementStyle = provenanceStyle;
+        _inspectorProperties.Columns.Add(valueColumn);
+        Grid.SetRow(_inspectorProperties, 3);
+        inspectorRoot.Children.Add(_inspectorProperties);
+
+        var reportHeader = new TextBlock { Text = "Information received in last Report",
+            FontWeight = FontWeights.SemiBold, FontSize = 11.5, Margin = new Thickness(0, 15, 0, 6) };
+        Grid.SetRow(reportHeader, 4);
+        inspectorRoot.Children.Add(reportHeader);
+        var noReport = new TextBlock { Text = "No last-report payload is captured by this RCB availability view.\nData (Name | Value): unavailable.",
+            FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4),
+            Foreground = new SolidColorBrush(Color.FromRgb(104, 120, 142)) };
+        Grid.SetRow(noReport, 5);
+        inspectorRoot.Children.Add(noReport);
+
+        _inspectorPanel = new Border { Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(214, 225, 239)),
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(9),
+            Padding = new Thickness(12), Visibility = Visibility.Collapsed, Child = inspectorRoot };
+        Grid.SetColumn(_inspectorPanel, 1);
+        body.Children.Add(_inspectorPanel);
+        Grid.SetRow(body, 2);
+        root.Children.Add(body);
+        PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape && _inspectedRow != null)
+            {
+                CloseInspector();
+                e.Handled = true;
+            }
+        };
 
         var footer = new Grid();
         footer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -173,7 +278,73 @@ public sealed class RcbMultiExportWindow : Window
         _operation?.Dispose();
         foreach (var row in _rows)
             row.PropertyChanged -= Row_PropertyChanged;
+        if (_device != null) _device.PropertyChanged -= Device_PropertyChanged;
         base.OnClosed(e);
+    }
+
+    private DataGridTemplateColumn CreateReportIdColumn()
+    {
+        var button = new FrameworkElementFactory(typeof(Button));
+        button.SetBinding(System.Windows.Controls.ContentControl.ContentProperty,
+            new Binding(nameof(RcbExportRow.ReportIdDisplay)));
+        button.SetValue(Control.ForegroundProperty, new SolidColorBrush(Color.FromRgb(37, 88, 160)));
+        button.SetValue(Control.BackgroundProperty, Brushes.Transparent);
+        button.SetValue(Control.BorderThicknessProperty, new Thickness(0));
+        button.SetValue(Control.PaddingProperty, new Thickness(4, 3, 4, 3));
+        button.SetValue(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Left);
+        button.SetValue(Control.FontSizeProperty, 11d);
+        button.SetValue(FrameworkElement.ToolTipProperty, "Inspect Report ID and RCB properties (read-only)");
+        // A genuine Button is intentionally excluded by the existing grid selection
+        // class handler: inspecting must never toggle RCB inclusion for export.
+        button.AddHandler(Button.ClickEvent, new RoutedEventHandler(ReportIdInspect_Click));
+        return new DataGridTemplateColumn
+        {
+            Header = "REPORT ID",
+            Width = 148,
+            CellTemplate = new DataTemplate { VisualTree = button }
+        };
+    }
+
+    private void ReportIdInspect_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: RcbExportRow row })
+        {
+            ShowInspector(row);
+            e.Handled = true;
+        }
+    }
+
+    private void ShowInspector(RcbExportRow row)
+    {
+        _inspectedRow = row;
+        _inspectorTitle.Text = row.Name + "  ·  " + (row.Buffered ? "BRCB" : "URCB");
+        var connected = _device?.IsConnected ?? false;
+        _inspectorSource.Text = row.Inspection.Summary(connected);
+        _inspectorProperties.ItemsSource = row.Inspection.Properties(row, connected);
+        _inspectorColumn.Width = new GridLength(382);
+        _inspectorPanel.Visibility = Visibility.Visible;
+        _referenceColumn.Visibility = Visibility.Collapsed;
+    }
+
+    private void CloseInspector()
+    {
+        _inspectedRow = null;
+        _inspectorProperties.ItemsSource = null;
+        _inspectorPanel.Visibility = Visibility.Collapsed;
+        _inspectorColumn.Width = new GridLength(0);
+        _referenceColumn.Visibility = Visibility.Visible;
+    }
+
+    private void Device_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(Iec61850MonitorDevice.IsConnected)) return;
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(() => Device_PropertyChanged(sender, e)));
+            return;
+        }
+        if (_inspectedRow != null && IsLoaded)
+            ShowInspector(_inspectedRow); // offline state masks old live RptEna/Owner evidence
     }
 
     private static DataGridTextColumn TextColumn(string header, string path, DataGridLength width)
@@ -187,6 +358,7 @@ public sealed class RcbMultiExportWindow : Window
 
     private void ReplaceRows(IReadOnlyList<RcbExportRow> rows, bool preserveSelection)
     {
+        var inspectedIdentity = _inspectedRow?.SelectionIdentity;
         var selected = preserveSelection
             ? _rows.Where(row => row.IsSelected)
                 .Select(row => row.SelectionIdentity)
@@ -208,6 +380,13 @@ public sealed class RcbMultiExportWindow : Window
         }
 
         RefreshSelectionSummary();
+        if (inspectedIdentity != null)
+        {
+            var row = _rows.FirstOrDefault(item => item.SelectionIdentity.Equals(
+                inspectedIdentity, StringComparison.OrdinalIgnoreCase));
+            if (row is null) CloseInspector();
+            else ShowInspector(row);
+        }
     }
 
     private void Row_PropertyChanged(object? sender, PropertyChangedEventArgs e)

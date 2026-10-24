@@ -23,6 +23,9 @@ internal static class P2IndustrialWorkstationUx
     private static readonly ConditionalWeakTable<MainWindow, MainSearchState> MainStates = new();
     private static readonly ConditionalWeakTable<IoListTestingWindow, FatSearchState> FatStates = new();
 
+    // Resolve control templates before any visible window is constructed.
+    public static void PreloadResources() => EnsureResources();
+
     public static void Apply(Window window)
     {
         EnsureResources();
@@ -62,13 +65,14 @@ internal static class P2IndustrialWorkstationUx
         {
             navShell.CornerRadius = new CornerRadius(6);
             navShell.BorderThickness = new Thickness(1);
-            navShell.Height = 52;
+            // NavigationLayoutFix is the sole authority for shell height.
+            // An activation/Loaded adapter must not fight that layout owner.
         }
 
         if (window.FindName("WorkflowPill") is Border pill)
         {
             pill.CornerRadius = new CornerRadius(5);
-            pill.Height = 34;
+            // Selection pill height is owned by NavigationLayoutFix.
         }
 
         InstallMainIedSearch(window);
@@ -261,11 +265,33 @@ internal static class P2IndustrialWorkstationUx
 
     private static void DecorateMainNavigation(MainWindow window)
     {
-        ApplyTemplate(window.FindName("NavExplorerButton") as Button, window, "IconExplorerNavContent");
-        ApplyTemplate(window.FindName("NavLiveButton") as Button, window, "IconMonitorNavContent");
-        ApplyTemplate(window.FindName("NavEventsButton") as Button, window, "IconEventsNavContent");
-        ApplyTemplate(window.FindName("NavGooseButton") as Button, window, "IconGooseNavContent");
-        ApplyTemplate(window.FindName("NavDiagnosticsButton") as Button, window, "IconDiagnosticsNavContent");
+        ApplyNavigationTemplate(window.FindName("NavExplorerButton") as Button, window, "IconExplorerNavContent");
+        ApplyNavigationTemplate(window.FindName("NavSmvButton") as Button, window, "IconMonitorNavContent");
+        ApplyNavigationTemplate(window.FindName("NavEventsButton") as Button, window, "IconEventsNavContent");
+        ApplyNavigationTemplate(window.FindName("NavGooseButton") as Button, window, "IconGooseNavContent");
+        ApplyNavigationTemplate(window.FindName("NavDiagnosticsButton") as Button, window, "IconDiagnosticsNavContent");
+    }
+
+    private static void ApplyNavigationTemplate(Button? button, FrameworkElement owner, string legacyKey)
+    {
+        if (button == null) return;
+
+        // M2.14's operator-supplied SVG is the sole glyph owner when XAML
+        // already supplies a Path inside the navigation content.
+        // P2.1's older DataTemplate wraps Content in a second icon, producing
+        // two Events glyphs at runtime despite each source being valid alone.
+        // Clear any formerly installed P2 template on repeat Loaded/layout.
+        if (button.Content is StackPanel panel &&
+            panel.Children.OfType<Viewbox>().Any(view =>
+                view.Child is System.Windows.Shapes.Path))
+        {
+            button.ClearValue(ContentControl.ContentTemplateProperty);
+            return;
+        }
+
+        // Keep the industrial glyph on legacy text-only destinations and on
+        // Diagnostics (its StackPanel has text + alert badge, no prebuilt Path).
+        ApplyTemplate(button, owner, legacyKey);
     }
 
     private static void DecorateFatActionBar(IoListTestingWindow window)
@@ -306,7 +332,30 @@ internal static class P2IndustrialWorkstationUx
         if (text.Length == 0)
             return;
 
-        if (text.Equals("Print Preview", StringComparison.OrdinalIgnoreCase))
+        // MainWindow's formerly text-only tools now share the same Material
+        // icon ownership as the eight destinations. Content stays a string:
+        // no mutation of CommandParameter, Click/IsEnabled or selected page.
+        if (text.Equals("Refresh view", StringComparison.OrdinalIgnoreCase))
+            ApplyTemplate(button, owner, "MaterialRefreshAction");
+        else if (text is "Read" or "Read All" or "Check live RCB")
+            ApplyTemplate(button, owner, "MaterialReadAction");
+        else if (text is "Cancel Read" or "Cancel")
+            ApplyTemplate(button, owner, "MaterialCancelAction");
+        else if (text is "Browse Files" or "Open Project")
+            ApplyTemplate(button, owner, "MaterialFolderAction");
+        else if (text is "Export CSV" or "Export RCB…" or "Export RCB..." or "Download")
+            ApplyTemplate(button, owner, "MaterialDownloadAction");
+        else if (text is "Copy Diagnostic" or "Copy")
+            ApplyTemplate(button, owner, "MaterialCopyAction");
+        else if (text is "Clear" or "Clear Log")
+            ApplyTemplate(button, owner, "MaterialClearAction");
+        else if (text is "← Back" or "Back")
+            ApplyTemplate(button, owner, "MaterialBackAction");
+        else if (text is "ACK" or "ACK IED")
+            ApplyTemplate(button, owner, "MaterialAcknowledgeAction");
+        else if (text is "Model")
+            ApplyTemplate(button, owner, "MaterialSettingsAction");
+        else if (text.Equals("Print Preview", StringComparison.OrdinalIgnoreCase))
             ApplyTemplate(button, owner, "IconPrintContent");
         else if (text.StartsWith("Time Sync", StringComparison.OrdinalIgnoreCase))
             ApplyTemplate(button, owner, "IconClockContent");

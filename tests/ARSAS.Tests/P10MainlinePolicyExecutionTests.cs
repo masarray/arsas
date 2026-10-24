@@ -11,11 +11,6 @@ public sealed class P10MainlinePolicyExecutionTests
 {
     [Theory]
     [InlineData("p10-stacked-valid", true)]
-    [InlineData("release-operator-approved-on-main", true)]
-    [InlineData("release-operator-engine-tampered-denied", false)]
-    [InlineData("release-operator-version-tampered-denied", false)]
-    [InlineData("release-operator-physical-overclaim-denied", false)]
-    [InlineData("release-operator-browser-included-denied", false)]
     [InlineData("core-trial-wrong-exact-sha-denied", false)]
     [InlineData("core-trial-wrong-base-denied", false)]
     [InlineData("core-trial-wrong-ci-denied", false)]
@@ -78,6 +73,11 @@ public sealed class P10MainlinePolicyExecutionTests
     [InlineData("p10-cyclic-fallback-denied", false)]
     [InlineData("p10-history-tampered-denied", false)]
     [InlineData("p10-dataset-lineage-tampered-denied", false)]
+    [InlineData("m217k-exact-sha-denied", false)]
+    [InlineData("m217k-engine-ci-denied", false)]
+    [InlineData("m217k-previous-pin-denied", false)]
+    [InlineData("m217k-physical-promote-denied", false)]
+    [InlineData("m217k-lineage-tampered-denied", false)]
     [InlineData("accepted-physical-baseline", true)]
     public void Exact_CI_Gate_Fails_Closed_Without_False_Physical_Promotion(
         string scenario, bool shouldPass)
@@ -112,48 +112,45 @@ public sealed class P10MainlinePolicyExecutionTests
             Directory.CreateDirectory(Path.Combine(folder, "scripts"));
             File.Copy(Path.Combine(root, "scripts", "test-p10-9f-core-routing-trial.ps1"),
                 Path.Combine(folder, "scripts", "test-p10-9f-core-routing-trial.ps1"));
-            File.Copy(Path.Combine(root, "scripts", "test-exact-operator-release-acceptance.ps1"),
-                Path.Combine(folder, "scripts", "test-exact-operator-release-acceptance.ps1"));
+            // The actual workflow dot-sources both helpers. Sandbox tests
+            // must execute the same immutable-trial gate, not a missing script.
+            File.Copy(Path.Combine(root, "scripts", "test-m217k-typed-status-trial.ps1"),
+                Path.Combine(folder, "scripts", "test-m217k-typed-status-trial.ps1"));
+            File.Copy(Path.Combine(root, "scripts", "test-p0-a-identity-trial.ps1"),
+                Path.Combine(folder, "scripts", "test-p0-a-identity-trial.ps1"));
+            File.Copy(Path.Combine(root, "scripts", "test-p0-b-rcb-trial.ps1"),
+                Path.Combine(folder, "scripts", "test-p0-b-rcb-trial.ps1"));
+            File.Copy(Path.Combine(root, "scripts", "test-p0-c-typed-read-trial.ps1"),
+                Path.Combine(folder, "scripts", "test-p0-c-typed-read-trial.ps1"));
             var lockDoc = JsonNode.Parse(File.ReadAllText(Path.Combine(root,
                 "engines", "ARIEC61850.lock.json")))!.AsObject();
 
+            // Historical R10 gate tests its own already-qualified M2.17-K
+            // baseline. The P0-A child is a distinct non-physical trial, not
+            // retroactive evidence that R10's historical pin changed.
+            if (scenario == "p10-stacked-valid" ||
+                scenario.StartsWith("m217k-", StringComparison.Ordinal))
+            {
+                lockDoc["commit"] = "51c2eefd61d6bcbe1116fda6b781b74bb9cf06da";
+                lockDoc["sourcePullRequest"] = 173;
+                lockDoc["purpose"] = "M2.17-K isolated C264 acceptance trial";
+            }
+
             string baseRef = "fix/512-goose-event-header-alignment";
             string sourceRef = "512/merge";
-            var operatorReleaseScenario = scenario.StartsWith("release-operator-", StringComparison.Ordinal);
-            if (operatorReleaseScenario)
-            {
-                File.Copy(Path.Combine(root, "evidence", "v1.6.41-operator-release-acceptance.json"),
-                    Path.Combine(folder, "evidence", "v1.6.41-operator-release-acceptance.json"));
-                File.Copy(Path.Combine(root, "VERSION"), Path.Combine(folder, "VERSION"));
-                baseRef = "main";
-                sourceRef = "main";
-                var approval = JsonNode.Parse(File.ReadAllText(Path.Combine(folder,
-                    "evidence", "v1.6.41-operator-release-acceptance.json")))!.AsObject();
-                switch (scenario)
-                {
-                    case "release-operator-engine-tampered-denied":
-                        approval["installedBuild"]!["engineCommit"] = new string('0', 40); break;
-                    case "release-operator-version-tampered-denied":
-                        approval["releaseTag"] = "v1.6.42"; break;
-                    case "release-operator-physical-overclaim-denied":
-                        approval["qualification"]!["hardwarePhysicallyAttested"] = true; break;
-                    case "release-operator-browser-included-denied":
-                        approval["scope"]!["iedBrowserExcluded"] = false; break;
-                }
-                File.WriteAllText(Path.Combine(folder, "evidence",
-                    "v1.6.41-operator-release-acceptance.json"), approval.ToJsonString());
-            }
             switch (scenario)
             {
-                case "p10-stacked-valid":
-                    lockDoc["commit"] = "00ad2819b99ffe6b3f885e59aa24a6afb2b4d8e1";
-                    lockDoc["sourcePullRequest"] = 161;
-                    break;
-                case "release-operator-approved-on-main":
-                    break;
-                case "p10-pr-main-denied":
-                    lockDoc["commit"] = "00ad2819b99ffe6b3f885e59aa24a6afb2b4d8e1";
-                    lockDoc["sourcePullRequest"] = 161; baseRef = "main"; break;
+                case "p10-pr-main-denied": baseRef = "main"; break;
+                case "m217k-exact-sha-denied":
+                    lockDoc["m217KTypedStatusReportTrial"]!["exactCommit"] = new string('0', 40); break;
+                case "m217k-engine-ci-denied":
+                    lockDoc["m217KTypedStatusReportTrial"]!["engineCiRun"] = 0; break;
+                case "m217k-previous-pin-denied":
+                    lockDoc["m217KTypedStatusReportTrial"]!["previousConsumerPin"] = new string('0', 40); break;
+                case "m217k-physical-promote-denied":
+                    lockDoc["m217KTypedStatusReportTrial"]!["mainlinePromotionForbidden"] = false; break;
+                case "m217k-lineage-tampered-denied":
+                    lockDoc["p109VLiveBscAuthorityTrial"]!["baseEngineCommit"] = new string('0', 40); break;
                 case "core-trial-wrong-exact-sha-denied":
                     lockDoc["coreReportRoutingTrial"]!["exactCommit"] = new string('0', 40); break;
                 case "core-trial-wrong-base-denied":
@@ -260,10 +257,7 @@ public sealed class P10MainlinePolicyExecutionTests
                     lockDoc["p109UPositionStatusNameListRecoveryTrial"]!["operateRequiresExplicitConfirmation"] = false; break;
                 case "position-status-polling-denied":
                     lockDoc["p109UPositionStatusNameListRecoveryTrial"]!["cyclicMmsProcessPollingForbidden"] = false; break;
-                case "p10-source-main-denied":
-                    lockDoc["commit"] = "00ad2819b99ffe6b3f885e59aa24a6afb2b4d8e1";
-                    lockDoc["sourcePullRequest"] = 161;
-                    sourceRef = "main"; break;
+                case "p10-source-main-denied": sourceRef = "main"; break;
                 case "p10-wrong-sha-denied":
                     lockDoc["p10IdentityTrial"]!["exactCommit"] = new string('0', 40); break;
                 case "p10-wrong-parent-denied":
@@ -304,8 +298,15 @@ public sealed class P10MainlinePolicyExecutionTests
             foreach (var arg in new[] { "-NoProfile", "-NonInteractive",
                 "-ExecutionPolicy", "Bypass", "-File", scriptPath })
                 info.ArgumentList.Add(arg);
+            // An isolated fixture must not inherit the hosting PR's GitHub
+            // base/ref (for example a main-target promotion PR). Otherwise
+            // "p10-stacked-valid" is rejected merely because this test runs
+            // on a PR targeting main, while the tested fixture does not.
+            // Negative mainline scenarios still pass "main" explicitly.
             info.Environment["PR_BASE_REF"] = baseRef;
             info.Environment["SOURCE_REF_NAME"] = sourceRef;
+            info.Environment["GITHUB_BASE_REF"] = baseRef;
+            info.Environment["GITHUB_REF_NAME"] = sourceRef;
             info.Environment["GITHUB_ENV"] = environment;
 
             using var process = Process.Start(info)!;

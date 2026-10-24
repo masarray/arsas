@@ -1,9 +1,10 @@
 <Window x:Class="ArIED61850Tester.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:ArIED61850Tester.Views"
         Title="ARSAS - Smart IEC 61850 Communication Tester"
         Height="900" Width="1480" MinHeight="760" MinWidth="1180"
-        WindowStartupLocation="CenterScreen" Background="{StaticResource AppBackgroundGradient}"
+        WindowStartupLocation="CenterScreen" WindowState="Maximized" Background="{StaticResource AppBackgroundGradient}"
         FontFamily="{StaticResource AppFontFamily}"
         UseLayoutRounding="True" SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Ideal"
@@ -11,6 +12,23 @@
         TextOptions.TextHintingMode="Fixed"
         Icon="Assets/app-icon.ico" Closing="Window_Closing" PreviewKeyDown="MainWindow_PreviewKeyDown">
     <Window.Resources>
+        <!-- IEC validity attention is display-only; use a single vector and avoid font-dependent emojis. -->
+        <GeometryGroup x:Key="InvalidQualityWarningGeometry" FillRule="EvenOdd">
+            <PathGeometry Figures="M 40,-120 L 480,-880 920,-120 Z"/>
+            <PathGeometry Figures="M 178,-200 L 782,-200 480,-720 Z"/>
+            <RectangleGeometry Rect="440,-560,80,200"/>
+            <EllipseGeometry Center="480,-280" RadiusX="40" RadiusY="40"/>
+        </GeometryGroup>
+        <Style x:Key="InvalidQualityWarningIconStyle" TargetType="{x:Type Path}">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsInvalidQuality}" Value="True">
+                    <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <!-- Exact operator-supplied circular unlocked-padlock vector; no font glyph. -->
+        <Geometry x:Key="BrowserRcbEnabledIconGeometry">M380-320h200q25 0 42.5-17.5T640-380v-120q0-25-17.5-42.5T580-560v-60q0-42-29-71t-71-29q-42 0-71 29t-29 71h60q0-17 11.5-28.5T480-660q17 0 28.5 11.5T520-620v60H380q-25 0-42.5 17.5T320-500v120q0 25 17.5 42.5T380-320ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T197-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z</Geometry>
         <!-- Preserve compact columns; hover reveals the complete list of
              distinct active RCB names when more than one reports a signal. -->
         <Style x:Key="RcbAcquisitionTextStyle" TargetType="{x:Type TextBlock}">
@@ -94,8 +112,9 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Border x:Name="WorkflowPill" Grid.ColumnSpan="7" Width="112" Height="34"
+                    <Border x:Name="WorkflowPill" Grid.ColumnSpan="8" Width="112" Height="34"
                             HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="17"
                             Background="{StaticResource Accent}" RenderTransformOrigin="0.5,0.5">
                         <Border.RenderTransform>
@@ -108,13 +127,51 @@
                             <DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.18" Color="#2563EB"/>
                         </Border.Effect>
                     </Border>
-                    <Button x:Name="NavExplorerButton" Grid.Column="0" Content="IEC 61850 Explorer" Tag="0" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
-                    <Button x:Name="NavLiveButton" Grid.Column="1" Content="Live Monitor" Tag="1" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
-                    <Button x:Name="NavEventsButton" Grid.Column="2" Content="Event Log" Tag="2" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
-                    <Button x:Name="NavAlarmButton" Grid.Column="3" Content="Alarm" Tag="3" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
-                    <Button x:Name="NavGooseButton" Grid.Column="4" Content="GOOSE Subscriber" Tag="4" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
-                    <Button x:Name="NavDiagnosticsButton" Grid.Column="5" Tag="5" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="NavExplorerButton" Grid.Column="1" Tag="1" TabIndex="1" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="Device Explorer">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                <Path Data="{StaticResource OperatorIecTopologyIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                            </Viewbox>
+                            <TextBlock Text="Device Explorer" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="NavSmvButton" Grid.Column="5" Tag="5" TabIndex="5" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="SMV · Sampled Values">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                <Path Data="{StaticResource MaterialLiveIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                            </Viewbox>
+                            <TextBlock Text="SMV" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="NavEventsButton" Grid.Column="2" Tag="2" TabIndex="2" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="Event Logs">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                <Path Data="{StaticResource OperatorEventLogIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                            </Viewbox>
+                            <TextBlock Text="Event Logs" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="NavAlarmButton" Grid.Column="3" Tag="3" TabIndex="3" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="Annunciator">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                <Path Data="{StaticResource OperatorAlarmIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                            </Viewbox>
+                            <TextBlock Text="Annunciator" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="NavGooseButton" Grid.Column="4" Tag="4" TabIndex="4" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="GOOSE Sniff">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                <Path Data="{StaticResource OperatorIecWirelessIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                            </Viewbox>
+                            <TextBlock Text="GOOSE Sniff" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="NavDiagnosticsButton" Grid.Column="7" Tag="7" TabIndex="7" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                <Path Data="{StaticResource OperatorDiagnosticsIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                            </Viewbox>
                             <TextBlock Text="Diagnostics" VerticalAlignment="Center"/>
                             <Border Visibility="{Binding DiagnosticsAlertVisibility}"
                                     Width="17" Height="17" CornerRadius="8.5" Margin="7,0,0,0"
@@ -124,7 +181,22 @@
                             </Border>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="NavNativeFatButton" Grid.Column="6" Content="FAT" Tag="6" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}"/>
+                    <Button x:Name="NavNativeFatButton" Grid.Column="6" Tag="6" TabIndex="6" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="Signal Testing">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                <Path Data="{StaticResource OperatorFatIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                            </Viewbox>
+                            <TextBlock Text="Signal Testing" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="NavIedBrowserButton" Grid.Column="0" Tag="0" TabIndex="0" Click="NavButton_Click" Style="{StaticResource SegmentedNavButton}" ToolTip="IED Browser">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                <Path Data="{StaticResource OperatorIedBrowserIcon}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Stretch="Uniform"/>
+                            </Viewbox>
+                            <TextBlock Text="IED Browser" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </Grid>
             </Border>
 
@@ -137,7 +209,7 @@
                     Style="{StaticResource HiddenTabControl}"
                     SelectionChanged="MainTabs_SelectionChanged">
             <!-- IEC 61850 EXPLORER -->
-            <TabItem Header="IEC 61850 Explorer">
+            <TabItem Header="Device Explorer">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="258"/>
@@ -159,12 +231,12 @@
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                                     <Button Style="{StaticResource IedIconButton}" Click="OpenProject_Click" ToolTip="Open ARSAS project" Margin="0,0,6,0">
                                         <Viewbox Width="16" Height="16">
-                                            <Path Data="{StaticResource LucideFolderOpen}" Style="{StaticResource LucideIcon}"/>
+                                            <Path Data="{StaticResource MaterialFolderOpenIcon}" Style="{StaticResource MaterialIconGlyph}"/>
                                         </Viewbox>
                                     </Button>
                                     <Button Style="{StaticResource IedIconButton}" Click="SaveProject_Click" ToolTip="Save ARSAS project">
                                         <Viewbox Width="16" Height="16">
-                                            <Path Data="{StaticResource LucideSave}" Style="{StaticResource LucideIcon}"/>
+                                            <Path Data="{StaticResource MaterialSaveIcon}" Style="{StaticResource MaterialIconGlyph}"/>
                                         </Viewbox>
                                     </Button>
                                 </StackPanel>
@@ -192,7 +264,7 @@
                                             ToolTip="Fast-connect every saved or SCL-imported IED and start live monitoring for saved selections">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <Viewbox Width="13" Height="13" Margin="0,0,5,0">
-                                                <Path Data="{StaticResource LucidePlay}" Style="{StaticResource LucideIcon}" Stroke="#16A34A"/>
+                                                <Path Data="{StaticResource MaterialPlayIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="#16A34A"/>
                                             </Viewbox>
                                             <TextBlock Text="Connect All" FontWeight="SemiBold"/>
                                         </StackPanel>
@@ -203,7 +275,7 @@
                                             ToolTip="Import one or more IED endpoints from SCD, CID, ICD, IID, SSD, or XML SCL files">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <Viewbox Width="13" Height="13" Margin="0,0,5,0">
-                                                <Path Data="{StaticResource LucideFileInput}" Style="{StaticResource LucideIcon}"/>
+                                                <Path Data="{StaticResource MaterialUploadFileIcon}" Style="{StaticResource MaterialIconGlyph}"/>
                                             </Viewbox>
                                             <TextBlock Text="Open SCL" FontWeight="SemiBold"/>
                                         </StackPanel>
@@ -214,7 +286,7 @@
                                             ToolTip="Add an IEC 61850 IED by IP address">
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <Viewbox Width="13" Height="13" Margin="0,0,5,0">
-                                                <Path Data="{StaticResource LucidePlus}" Style="{StaticResource LucideIcon}" Stroke="White"/>
+                                                <Path Data="{StaticResource OperatorAddIedIcon}" Fill="White" Stretch="Uniform"/>
                                             </Viewbox>
                                             <TextBlock Text="Add IED" FontWeight="SemiBold"/>
                                         </StackPanel>
@@ -277,6 +349,27 @@
                                 </ListBox.ItemContainerStyle>
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
+                                        <DataTemplate.Resources>
+                                            <!-- Selection authority is SelectedDevice.IsActive. WPF style
+                                                 triggers, not local FontWeight values, emphasize BOTH
+                                                 identity fields without rebuilding the IED card. -->
+                                            <Style x:Key="IedCardSelectedNameTypography" TargetType="TextBlock">
+                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                        <Setter Property="FontWeight" Value="Bold"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                            <Style x:Key="IedCardSelectedEndpointTypography" TargetType="TextBlock">
+                                                <Setter Property="FontWeight" Value="Normal"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                        <Setter Property="FontWeight" Value="Bold"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </DataTemplate.Resources>
                                         <Grid MinHeight="74">
                                             <Grid x:Name="CardContent">
                                                 <Grid.RowDefinitions>
@@ -311,10 +404,10 @@
                                                 </StackPanel>
 
 <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Stretch" Margin="4,0,12,0">
-                                                    <TextBlock Text="{Binding Name}" FontSize="12.8" FontWeight="SemiBold"
+                                                    <TextBlock Text="{Binding Name}" FontSize="12.8" Style="{StaticResource IedCardSelectedNameTypography}"
                                                                Foreground="{StaticResource Ink}" TextOptions.TextFormattingMode="Ideal" TextTrimming="CharacterEllipsis"
                                                                TextAlignment="Center" HorizontalAlignment="Stretch"/>
-                                                    <TextBlock Text="{Binding EndpointText}" FontSize="11.1"
+                                                    <TextBlock Text="{Binding EndpointText}" FontSize="11.1" Style="{StaticResource IedCardSelectedEndpointTypography}"
                                                                Foreground="{StaticResource Muted}" TextOptions.TextFormattingMode="Ideal" Margin="0,2,0,0"
                                                                TextTrimming="CharacterEllipsis" TextAlignment="Center" HorizontalAlignment="Stretch"
                                                                ToolTip="{Binding SclEndpointHint}"
@@ -323,29 +416,41 @@
                                                             <ContextMenu/>
                                                         </TextBlock.ContextMenu>
                                                     </TextBlock>
+                                                    <!-- Single permanent 7px slot for explicit discovery/fast-connect
+                                                         and Browser Read. Neither activity covers the IED identity
+                                                         nor changes card geometry or button positions. -->
+                                                    <Grid Height="7" Margin="0,3,0,0"
+                                                          VerticalAlignment="Center" ClipToBounds="True">
+                                                        <ProgressBar x:Name="BrowserReadProgressLine" Height="3"
+                                                                     Minimum="0" Maximum="100"
+                                                                     Value="{Binding IedCardProgressPercent, Mode=OneWay}"
+                                                                     Style="{StaticResource DiscoveryProgressBar}"
+                                                                     Opacity="0" VerticalAlignment="Center"
+                                                                     ToolTip="{Binding BusyStage}"/>
+                                                    </Grid>
                                                 </StackPanel>
                                       <!-- Adaptive five-slot action bar. It spans the card and reserves the relay-icon area so Play/Stop never clip. -->
                                       <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="62,4,1,0" Panel.ZIndex="10">
                                           <UniformGrid Rows="1" Columns="5" HorizontalAlignment="Stretch">
                                               <Button Style="{StaticResource IedIconButton}" Width="27" Height="27" Margin="0" Tag="{Binding}" Click="IedPlayAction_Click"
                                                       IsEnabled="{Binding CanPlayAction}" ToolTip="{Binding PlayToolTip}">
-                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource LucidePlay}" Style="{StaticResource LucideIcon}" Stroke="#16A34A"/></Viewbox>
+                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource MaterialPlayIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="#16A34A"/></Viewbox>
                                               </Button>
                                               <Button Style="{StaticResource IedIconButton}" Width="27" Height="27" Margin="0" Tag="{Binding}" Click="IedStopAction_Click"
                                                       IsEnabled="{Binding CanStopAction}" ToolTip="{Binding StopToolTip}">
-                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource LucideSquare}" Style="{StaticResource LucideIcon}" Stroke="{StaticResource Warning}"/></Viewbox>
+                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource MaterialStopIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="{StaticResource Warning}"/></Viewbox>
                                               </Button>
                                               <Button Style="{StaticResource IedIconButton}" Width="27" Height="27" Margin="0" Tag="{Binding}" Click="IedConfigureSignals_Click"
                                                       IsEnabled="{Binding CanEditSignals}" ToolTip="{Binding ConfigureToolTip}">
-                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource LucidePencilLine}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource MaterialEditIcon}" Style="{StaticResource MaterialIconGlyph}"/></Viewbox>
                                               </Button>
                                               <Button Style="{StaticResource IedIconButton}" Width="27" Height="27" Margin="0" Tag="{Binding}" Click="IedEditRcb_Click"
                                                       IsEnabled="{Binding IsActionEnabled}" ToolTip="RCB Export Filter — keep one RCB for legacy SAS CID import">
-                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource LucideSlidersHorizontal}" Style="{StaticResource LucideIcon}" Stroke="#315DBF"/></Viewbox>
+                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource MaterialTuneIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="#315DBF"/></Viewbox>
                                               </Button>
                                               <Button Style="{StaticResource IedIconButton}" Width="27" Height="27" Margin="0" Tag="{Binding}" Click="IedSaveScl_Click"
                                                       IsEnabled="{Binding CanSaveScl}" ToolTip="{Binding SaveSclToolTip}">
-                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource LucideSave}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                                  <Viewbox Width="14" Height="14"><Path Data="{StaticResource MaterialSaveIcon}" Style="{StaticResource MaterialIconGlyph}"/></Viewbox>
                                               </Button>
                                           </UniformGrid>
                                       </Grid>
@@ -355,62 +460,11 @@
                                                     IsEnabled="{Binding IsActionEnabled}" ToolTip="{Binding RemoveToolTip}"
                                                     Width="25" Height="25" Margin="0,-4,-4,0"
                                                     HorizontalAlignment="Right" VerticalAlignment="Top" Panel.ZIndex="12">
-                                                <Viewbox Width="14" Height="14"><Path Data="{StaticResource LucideX}" Style="{StaticResource LucideIcon}" Stroke="{StaticResource Danger}"/></Viewbox>
+                                                <Viewbox Width="14" Height="14"><Path Data="{StaticResource MaterialCloseIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="{StaticResource Danger}"/></Viewbox>
                                             </Button>
 
-                                            <Border x:Name="BusyOverlay" Visibility="Collapsed" Background="#F7FAFEF7" CornerRadius="12"
-                                                    BorderBrush="#B8CEF3" BorderThickness="1" Padding="8,6" Panel.ZIndex="20">
-                                                <Grid Height="56">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="32"/>
-                                                        <ColumnDefinition Width="8"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <Grid Width="28" Height="28" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
-                                                        <Grid.RenderTransform><RotateTransform x:Name="CardSpinnerRotate"/></Grid.RenderTransform>
-                                                        <Canvas Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.88"><Path.RenderTransform><RotateTransform Angle="45" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
-                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.76"><Path.RenderTransform><RotateTransform Angle="90" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
-                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.64"><Path.RenderTransform><RotateTransform Angle="135" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
-                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.52"><Path.RenderTransform><RotateTransform Angle="180" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
-                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.40"><Path.RenderTransform><RotateTransform Angle="225" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
-                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.28"><Path.RenderTransform><RotateTransform Angle="270" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
-                                                            <Path Data="M12,1.5 L12,5" Stroke="{StaticResource Accent}" StrokeThickness="2.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0.18"><Path.RenderTransform><RotateTransform Angle="315" CenterX="12" CenterY="12"/></Path.RenderTransform></Path>
-                                                        </Canvas>
-                                                        <Grid.Triggers>
-                                                            <EventTrigger RoutedEvent="FrameworkElement.Loaded">
-                                                                <BeginStoryboard>
-                                                                    <Storyboard RepeatBehavior="Forever">
-                                                                        <DoubleAnimation Storyboard.TargetName="CardSpinnerRotate" Storyboard.TargetProperty="Angle" From="0" To="360" Duration="0:0:0.9"/>
-                                                                    </Storyboard>
-                                                                </BeginStoryboard>
-                                                            </EventTrigger>
-                                                        </Grid.Triggers>
-                                                    </Grid>
-                                                    <Grid Grid.Column="2" VerticalAlignment="Center">
-                                                        <Grid.RowDefinitions>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                        </Grid.RowDefinitions>
-                                                        <TextBlock Text="{Binding BusyTitle}" FontSize="11.8" FontWeight="SemiBold" Foreground="{StaticResource Ink}"
-                                                                   TextTrimming="CharacterEllipsis"/>
-                                                        <TextBlock Grid.Row="1" Text="{Binding BusyStage}" FontSize="10.2" Foreground="{StaticResource Muted}"
-                                                                   TextTrimming="CharacterEllipsis" Margin="0,1,0,0"/>
-                                                        <Grid Grid.Row="2" Margin="0,5,0,0">
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="*"/>
-                                                                <ColumnDefinition Width="Auto"/>
-                                                            </Grid.ColumnDefinitions>
-                                                            <ProgressBar Value="{Binding DiscoveryProgressPercent, Mode=OneWay}" Minimum="0" Maximum="100"
-                                                                         Style="{StaticResource DiscoveryProgressBar}" Height="5" VerticalAlignment="Center"/>
-                                                            <TextBlock Grid.Column="1" Text="{Binding DiscoveryProgressPercentText}" FontSize="9.6" FontWeight="SemiBold"
-                                                                       Foreground="{StaticResource Accent}" Margin="7,0,0,0" VerticalAlignment="Center"/>
-                                                        </Grid>
-                                                    </Grid>
-                                                </Grid>
-                                            </Border>
+                                            <!-- Discovery reuses the IP progress slot; no masking busy card,
+                                                 circular spinner, empty animated card or second progress bar. -->
                                         </Grid>
                                         <DataTemplate.Triggers>
                                             <DataTrigger Binding="{Binding IsMonitoring}" Value="True">
@@ -421,10 +475,18 @@
                                                 <Setter TargetName="MonitorStateText" Property="Text" Value="LIVE"/>
                                                 <Setter TargetName="MonitorStateText" Property="Foreground" Value="{StaticResource Success}"/>
                                             </DataTrigger>
-                                            <DataTrigger Binding="{Binding IsBusy}" Value="True">
-                                                <Setter TargetName="CardContent" Property="Opacity" Value="0.10"/>
-                                                <Setter TargetName="CardContent" Property="IsHitTestVisible" Value="False"/>
-                                                <Setter TargetName="BusyOverlay" Property="Visibility" Value="Visible"/>
+                                            <!-- Each action retains its own CanPlay/CanStop/IsActionEnabled gate.
+                                                 Stop must remain clickable during an in-flight discovery. -->
+                                            <DataTrigger Binding="{Binding IsDiscoveryProgressActive}" Value="True">
+                                                <Setter TargetName="BrowserReadProgressLine" Property="Opacity" Value="1"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsBrowserReading}" Value="True">
+                                                <!-- Opacity does not affect measure/arrange: zero card jiggle. -->
+                                                <Setter TargetName="BrowserReadProgressLine" Property="Opacity" Value="1"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsReportingProgressActive}" Value="True">
+                                                <Setter TargetName="BrowserReadProgressLine" Property="Opacity" Value="1"/>
+                                                <Setter TargetName="BrowserReadProgressLine" Property="Foreground" Value="#16A34A"/>
                                             </DataTrigger>
                                         </DataTemplate.Triggers>
                                     </DataTemplate>
@@ -448,7 +510,7 @@
                                         <WrapPanel>
                                             <Button Style="{StaticResource SoftButton}" Click="OpenProject_Click" Margin="0,0,10,0">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <Viewbox Width="15" Height="15" Margin="0,0,7,0"><Path Data="{StaticResource LucideFolderOpen}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                                    <Viewbox Width="15" Height="15" Margin="0,0,7,0"><Path Data="{StaticResource MaterialFolderOpenIcon}" Style="{StaticResource MaterialIconGlyph}"/></Viewbox>
                                                     <TextBlock Text="Open Project"/>
                                                 </StackPanel>
                                             </Button>
@@ -463,7 +525,7 @@
                         <Grid Visibility="{Binding SelectedExplorerVisibility}">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
-                                <RowDefinition Height="Auto"/>
+                                <RowDefinition x:Name="ExplorerCommandDockRow" Height="Auto" MinHeight="0"/>
                             </Grid.RowDefinitions>
 
                             <Border Grid.Row="0" Style="{StaticResource WorkspaceCard}" Padding="10">
@@ -494,7 +556,7 @@
                                                     <ColumnDefinition Width="30"/>
                                                 </Grid.ColumnDefinitions>
                                                 <Viewbox Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                    <Path Data="{StaticResource LucideSearch}" Style="{StaticResource LucideIcon}" Stroke="#738398"/>
+                                                    <Path Data="{StaticResource MaterialSearchIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="#738398"/>
                                                 </Viewbox>
                                                 <TextBox x:Name="ExplorerLiveSearchBox" Grid.Column="1"
                                                          BorderThickness="0" Background="Transparent" Foreground="#263445"
@@ -528,7 +590,7 @@
                                                                     <ControlTemplate TargetType="Button">
                                                                         <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="7">
                                                                             <Viewbox Width="13" Height="13" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                                                <Path Data="{StaticResource LucideX}" Style="{StaticResource LucideIcon}" Stroke="#607086"/>
+                                                                                <Path Data="{StaticResource MaterialCloseIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="#607086"/>
                                                                             </Viewbox>
                                                                         </Border>
                                                                         <ControlTemplate.Triggers>
@@ -550,12 +612,15 @@
                                         </Border>
                                     </Grid>
 
-                                    <DataGrid Grid.Row="2" ItemsSource="{Binding SelectedDevice.Points}" IsReadOnly="True"
+                                    <DataGrid x:Name="ExplorerLiveValuesGrid" Grid.Row="2" ItemsSource="{Binding SelectedDevice.Points}" IsReadOnly="True"
                                               Loaded="ExplorerLiveGrid_Loaded"
                                               Style="{StaticResource ModernDataGrid}" FrozenColumnCount="2"
+                                              MinHeight="0" VerticalAlignment="Stretch"
                                               EnableRowVirtualization="True" EnableColumnVirtualization="True"
                                               VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
-                                              ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                                              ScrollViewer.CanContentScroll="True"
+                                              ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                              ScrollViewer.HorizontalScrollBarVisibility="Auto">
                                         <DataGrid.RowStyle>
                                             <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
                                                 <Style.Triggers>
@@ -598,7 +663,21 @@
                                                     </DataTemplate>
                                                 </DataGridTemplateColumn.CellTemplate>
                                             </DataGridTemplateColumn>
-                                            <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="0.72*" MinWidth="105"/>
+                                            <DataGridTemplateColumn Header="Quality" Width="0.72*" MinWidth="105">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Quality}" ToolTip="{Binding Quality}"
+                                                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                            <Path Data="{StaticResource InvalidQualityWarningGeometry}" Width="12" Height="12"
+                                              Stretch="Uniform" Fill="#B97800" Margin="5,0,0,0"
+                                              VerticalAlignment="Center"
+                                              Style="{StaticResource InvalidQualityWarningIconStyle}"
+                                              ToolTip="IED-reported quality validity: Invalid"/>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
                                             <DataGridTextColumn Header="IED Timestamp" Binding="{Binding DeviceTimestamp}" Width="1.05*" MinWidth="155"/>
                                             <DataGridTextColumn Header="Acquisition" Binding="{Binding AcquisitionShort}" IsReadOnly="True" ElementStyle="{StaticResource RcbAcquisitionTextStyle}" Width="1.05*" MinWidth="150"/>
                                         </DataGrid.Columns>
@@ -619,35 +698,50 @@
                                 </Grid>
                             </Border>
 
-                            <Expander x:Name="CommandPanelExpander" Grid.Row="1" Margin="0,10,0,0" IsExpanded="False" Expanded="CommandPanel_Expanded">
+                            <Expander x:Name="CommandPanelExpander" Grid.Row="1" Margin="0,10,0,0" IsExpanded="False"
+                                      Style="{StaticResource CommandDockTransparentHeaderExpander}"
+                                      VerticalAlignment="Stretch" Expanded="CommandPanel_Expanded" Collapsed="CommandPanel_Collapsed">
                                 <Expander.Header>
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <Border Width="28" Height="28" CornerRadius="9" Background="#E7F0FF" BorderBrush="#C9DBF7" BorderThickness="1" Margin="0,0,9,0">
-                                            <Viewbox Width="15" Height="15" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                <Path Data="{StaticResource LucideSlidersHorizontal}" Style="{StaticResource LucideIcon}"/>
-                                            </Viewbox>
-                                        </Border>
-                                        <TextBlock Text="IED Command Panel" FontSize="13.6" FontWeight="SemiBold" Foreground="{StaticResource Ink}" VerticalAlignment="Center"/>
+                                        <!-- Power is header iconography, not a second control or a raised card.
+                                             The entire transparent header remains the one keyboard/mouse toggle. -->
+                                        <Viewbox Width="19" Height="19" Margin="0,0,7,0"
+                                                 HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <Path Data="{StaticResource OperatorCommandDockPowerIcon}"
+                                                  Fill="White" Stretch="Uniform"/>
+                                        </Viewbox>
+                                        <TextBlock Text="IED Command Panel" FontSize="13.6" FontWeight="SemiBold"
+                                                   Foreground="White" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Expander.Header>
                                 <Border Style="{StaticResource WorkspaceCard}" Background="{StaticResource CommandPanelSurface}" Padding="6" BorderBrush="#BFD0E5">
                                     <Grid>
                                         <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
 
-                                        <Grid Grid.Row="0">
-                                            <DataGrid ItemsSource="{Binding SelectedDevice.CommandSignals}" Loaded="CommandGrid_Loaded" IsReadOnly="False" CanUserAddRows="False" CanUserDeleteRows="False"
+                                        <Grid Grid.Row="0" MinHeight="0" ClipToBounds="True">
+                                            <DataGrid x:Name="EquipmentCommandGrid" ItemsSource="{Binding SelectedDevice.CommandSignals}" Loaded="CommandGrid_Loaded" IsReadOnly="False" CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False"
                                                       Style="{StaticResource CommandDataGrid}" RowStyle="{StaticResource CommandDataGridRow}"
                                                       CellStyle="{StaticResource CommandDataGridCell}" ColumnHeaderStyle="{StaticResource CommandDataGridHeader}"
-                                                      AutoGenerateColumns="False" MaxHeight="260" MinHeight="56" RowHeight="43" MinRowHeight="42" ColumnHeaderHeight="35" FrozenColumnCount="1"
+                                                      AutoGenerateColumns="False" MinHeight="56" RowHeight="43" MinRowHeight="42" ColumnHeaderHeight="35" FrozenColumnCount="1"
                                                       EnableRowVirtualization="True" EnableColumnVirtualization="True"
                                                       VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
-                                                      ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                      ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Visible" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                      ScrollViewer.IsDeferredScrollingEnabled="False" ScrollViewer.PanningMode="VerticalOnly"
+                                                      VirtualizingPanel.ScrollUnit="Pixel"
                                                       CanUserResizeColumns="False" ClipToBounds="True">
                                                 <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="IEC Telegram" Binding="{Binding DisplayReference}" Width="1.9*" MinWidth="145" IsReadOnly="True"/>
+                                                    <DataGridTextColumn Header="IEC Telegram" Binding="{Binding DisplayReference}" Width="1.5*" MinWidth="165" IsReadOnly="True"/>
+                                                    <DataGridTextColumn Header="Control role" Binding="{Binding ControlDockRole}" Width="1.05*" MinWidth="143" IsReadOnly="True">
+                                                        <DataGridTextColumn.ElementStyle>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                                                <Setter Property="ToolTip" Value="Presentation class only. Live typed MMS model decides Operate eligibility; CSWI/CILO/XCBR physical relationships are never guessed."/>
+                                                            </Style>
+                                                        </DataGridTextColumn.ElementStyle>
+                                                    </DataGridTextColumn>
                                                     <DataGridTemplateColumn Header="Value" Width="0.93*" MinWidth="137">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
@@ -687,7 +781,7 @@
                                                             </DataTemplate>
                                                         </DataGridTemplateColumn.CellTemplate>
                                                     </DataGridTemplateColumn>
-                                                    <DataGridTemplateColumn Header="Control" Width="1.55*" MinWidth="245">
+                                                    <DataGridTemplateColumn Header="Control" Width="1.55*" MinWidth="260">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
                                                                 <StackPanel Margin="0,0">
@@ -696,9 +790,9 @@
                                                                             <ColumnDefinition Width="*"/>
                                                                             <ColumnDefinition Width="Auto"/>
                                                                         </Grid.ColumnDefinitions>
-                                                                        <StackPanel Orientation="Horizontal">
-                                                                            <StackPanel.Style>
-                                                                                <Style TargetType="StackPanel">
+                                                                        <Grid>
+                                                                            <Grid.Style>
+                                                                                <Style TargetType="Grid">
                                                                                     <Setter Property="Visibility" Value="Collapsed"/>
                                                                                     <Style.Triggers>
                                                                                         <MultiDataTrigger>
@@ -710,14 +804,15 @@
                                                                                         </MultiDataTrigger>
                                                                                     </Style.Triggers>
                                                                                 </Style>
-                                                                            </StackPanel.Style>
-                                                                            <Button Content="Open" Tag="{Binding}" CommandParameter="Open [01]" Click="ControlStageAction_Click"
-                                                                                    Style="{StaticResource CommandOpenButton}" Margin="0,0,7,0"
-                                                                                    IsEnabled="{Binding ControlCanInspectPosition}" Height="29" MinHeight="29" Padding="10,3"/>
-                                                                            <Button Content="Close" Tag="{Binding}" CommandParameter="Closed [10]" Click="ControlStageAction_Click"
-                                                                                    Style="{StaticResource CommandCloseButton}" Margin="0,0,7,0"
-                                                                                    IsEnabled="{Binding ControlCanInspectPosition}" Height="29" MinHeight="29" Padding="10,3"/>
-                                                                        </StackPanel>
+                                                                            </Grid.Style>
+                                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="72"/><ColumnDefinition Width="7"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
+                                                                            <Button Grid.Column="0" Content="Open" Tag="{Binding}" CommandParameter="Open [01]" Click="ControlStageAction_Click"
+                                                                                    Style="{StaticResource CommandOpenButton}" Margin="0"
+                                                                                    HorizontalAlignment="Stretch" IsEnabled="{Binding ControlCanInspectPosition}" Height="29" MinHeight="29" MinWidth="72" Padding="6,3"/>
+                                                                            <Button Grid.Column="2" Content="Close" Tag="{Binding}" CommandParameter="Closed [10]" Click="ControlStageAction_Click"
+                                                                                    Style="{StaticResource CommandCloseButton}" Margin="0"
+                                                                                    HorizontalAlignment="Stretch" IsEnabled="{Binding ControlCanInspectPosition}" Height="29" MinHeight="29" MinWidth="72" Padding="6,3"/>
+                                                                        </Grid>
 
                                                                         <StackPanel Orientation="Horizontal">
                                                                             <StackPanel.Style>
@@ -735,7 +830,7 @@
                                                                             </StackPanel.Style>
                                                                             <Button Content="{Binding ControlPendingConfirmationLabel}" Tag="{Binding}" Click="ControlConfirmAction_Click"
                                                                                     Style="{StaticResource CommandConfirmButton}"
-                                                                                    IsEnabled="{Binding ControlCanConfirm}" Margin="0,0,7,0" Height="29" MinHeight="29" Padding="10,3"/>
+                                                                                    Width="108" MinWidth="108" HorizontalAlignment="Left" IsEnabled="{Binding ControlCanConfirm}" Margin="0,0,7,0" Height="29" MinHeight="29" Padding="10,3"/>
                                                                             <Button Content="Cancel" Tag="{Binding}" Click="ControlCancelAction_Click"
                                                                                     Style="{StaticResource CommandDockSoftButton}" Height="29" MinHeight="29" Padding="10,3"/>
                                                                         </StackPanel>
@@ -760,29 +855,31 @@
                                                                                     IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
                                                                         </StackPanel>
 
-                                                                        <StackPanel Orientation="Horizontal">
-                                                                            <StackPanel.Style>
-                                                                                <Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/>
+                                                                        <Grid>
+                                                                            <Grid.Style>
+                                                                                <Style TargetType="Grid"><Setter Property="Visibility" Value="Collapsed"/>
                                                                                     <Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsRaiseLowerControl}" Value="True"/><Condition Binding="{Binding ControlConfirmationPending}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers>
                                                                                 </Style>
-                                                                            </StackPanel.Style>
-                                                                            <Button Content="Raise" Tag="{Binding}" CommandParameter="Raise" Click="ControlStageAction_Click" Style="{StaticResource CommandRaiseButton}" Margin="0,0,7,0"
-                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
-                                                                            <Button Content="Lower" Tag="{Binding}" CommandParameter="Lower" Click="ControlStageAction_Click" Style="{StaticResource CommandLowerButton}"
-                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
-                                                                        </StackPanel>
+                                                                            </Grid.Style>
+                                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="72"/><ColumnDefinition Width="7"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
+                                                                            <Button Grid.Column="0" Content="Raise" Tag="{Binding}" CommandParameter="Raise" Click="ControlStageAction_Click" Style="{StaticResource CommandRaiseButton}" Margin="0"
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" MinWidth="72" Padding="6,3"/>
+                                                                            <Button Grid.Column="2" Content="Lower" Tag="{Binding}" CommandParameter="Lower" Click="ControlStageAction_Click" Style="{StaticResource CommandLowerButton}"
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" MinWidth="72" Padding="6,3"/>
+                                                                        </Grid>
 
-                                                                        <StackPanel Orientation="Horizontal">
-                                                                            <StackPanel.Style>
-                                                                                <Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/>
+                                                                        <Grid>
+                                                                            <Grid.Style>
+                                                                                <Style TargetType="Grid"><Setter Property="Visibility" Value="Collapsed"/>
                                                                                     <Style.Triggers><DataTrigger Binding="{Binding IsBooleanControl}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
                                                                                 </Style>
-                                                                            </StackPanel.Style>
-                                                                            <Button Content="True" Tag="{Binding}" CommandParameter="True" Click="ControlQuickAction_Click" Style="{StaticResource CommandCloseButton}" Margin="0,0,7,0"
-                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
-                                                                            <Button Content="False" Tag="{Binding}" CommandParameter="False" Click="ControlQuickAction_Click" Style="{StaticResource CommandOpenButton}"
-                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
-                                                                        </StackPanel>
+                                                                            </Grid.Style>
+                                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="72"/><ColumnDefinition Width="7"/><ColumnDefinition Width="72"/></Grid.ColumnDefinitions>
+                                                                            <Button Grid.Column="0" Content="True" Tag="{Binding}" CommandParameter="True" Click="ControlQuickAction_Click" Style="{StaticResource CommandCloseButton}" Margin="0"
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" MinWidth="72" Padding="6,3"/>
+                                                                            <Button Grid.Column="2" Content="False" Tag="{Binding}" CommandParameter="False" Click="ControlQuickAction_Click" Style="{StaticResource CommandOpenButton}"
+                                                                                    IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" MinWidth="72" Padding="6,3"/>
+                                                                        </Grid>
 
                                                                         <StackPanel Orientation="Horizontal">
                                                                             <StackPanel.Style>
@@ -794,11 +891,10 @@
                                                                             <Button Content="Set" Tag="{Binding}" Click="ControlQuickAction_Click" Style="{StaticResource CommandDockPrimaryButton}"
                                                                                     IsEnabled="{Binding ControlSupportsOperate}" Height="29" MinHeight="29" Padding="10,3"/>
                                                                         </StackPanel>
-                                                                        <Button Grid.Column="1" Content="Model" Tag="{Binding}" Click="ControlDetails_Click"
+                                                                        <Button Grid.Column="1" Content="ctlModel" Tag="{Binding}" Click="ControlDetails_Click"
                                                                                 IsEnabled="{Binding DataContext.SelectedDevice.IsConnected, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
-                                                                                Style="{StaticResource CommandDockSoftButton}" Margin="6,0,1,0"
-                                                                                MinWidth="48"
-                                                                                Height="29" MinHeight="29" Padding="10,3"/>
+                                                                                Style="{StaticResource CommandDockCtlModelButton}" Margin="6,0,1,0"
+                                                                                Height="29" MinHeight="29"/>
                                                                         <!-- Unknown/unsupported CDC never produces an empty action cell. -->
                                                                         <TextBlock Text="No typed action" FontSize="11" Foreground="{StaticResource Muted}" VerticalAlignment="Center">
                                                                             <TextBlock.Style>
@@ -825,7 +921,7 @@
                                                     <Style TargetType="Border">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
                                                         <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding SelectedDevice.CommandSignals.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SelectedDevice.OperableCommandSignals.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
                                                 </Border.Style>
@@ -873,7 +969,7 @@
             </TabItem>
 
             <!-- GLOBAL MULTI-IED LIVE MONITOR -->
-            <TabItem Header="Live Monitor">
+            <TabItem Header="Internal Live Monitor" Visibility="Collapsed" IsEnabled="False">
                 <Border Style="{StaticResource WorkspaceCard}" Padding="12">
                     <DockPanel>
                         <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
@@ -899,7 +995,7 @@
                                             <ColumnDefinition Width="34"/>
                                         </Grid.ColumnDefinitions>
                                         <Viewbox Width="15" Height="15" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                            <Path Data="{StaticResource LucideSearch}" Style="{StaticResource LucideIcon}" Stroke="#607086"/>
+                                            <Path Data="{StaticResource MaterialSearchIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="#607086"/>
                                         </Viewbox>
                                         <Grid Grid.Column="1">
                                             <TextBox x:Name="GlobalLiveSearchBox"
@@ -936,7 +1032,7 @@
                                                     </Style.Triggers>
                                                 </Style>
                                             </Button.Style>
-                                            <Viewbox Width="13" Height="13"><Path Data="{StaticResource LucideX}" Style="{StaticResource LucideIcon}" Stroke="#607086"/></Viewbox>
+                                            <Viewbox Width="13" Height="13"><Path Data="{StaticResource MaterialCloseIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="#607086"/></Viewbox>
                                         </Button>
                                     </Grid>
                                 </Border>
@@ -945,7 +1041,7 @@
                                         Padding="10,6" MinHeight="36" ToolTip="Show or hide per-column filters">
                                     <StackPanel Orientation="Horizontal">
                                         <Viewbox Width="14" Height="14" Margin="0,0,6,0">
-                                            <Path Data="{StaticResource LucideSlidersHorizontal}" Style="{StaticResource LucideIcon}"/>
+                                            <Path Data="{StaticResource MaterialTuneIcon}" Style="{StaticResource MaterialIconGlyph}"/>
                                         </Viewbox>
                                         <TextBlock x:Name="GlobalLiveFiltersLabel" Text="Filters" FontWeight="SemiBold"/>
                                     </StackPanel>
@@ -987,7 +1083,21 @@
                                 <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="195"/>
                                 <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="320"/>
                                 <DataGridTemplateColumn Header="Value" Width="125" CellTemplate="{StaticResource ProcessValueBadgeTemplate}"/>
-                                <DataGridTextColumn Header="Quality" Binding="{Binding Quality}" Width="155"/>
+                                <DataGridTemplateColumn Header="Quality" Width="155">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Quality}" ToolTip="{Binding Quality}"
+                                                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                            <Path Data="{StaticResource InvalidQualityWarningGeometry}" Width="12" Height="12"
+                                              Stretch="Uniform" Fill="#B97800" Margin="5,0,0,0"
+                                              VerticalAlignment="Center"
+                                              Style="{StaticResource InvalidQualityWarningIconStyle}"
+                                              ToolTip="IED-reported quality validity: Invalid"/>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
                                 <DataGridTextColumn Header="IED Timestamp" Binding="{Binding DeviceTimestamp}" Width="185"/>
                                 <DataGridTextColumn Header="Acquisition" Binding="{Binding AcquisitionShort}" IsReadOnly="True" ElementStyle="{StaticResource RcbAcquisitionTextStyle}" Width="190"/>
                             </DataGrid.Columns>
@@ -1416,21 +1526,21 @@
                                 <Button Grid.Column="1" Style="{StaticResource CommandOpenButton}" Click="StartGooseSubscriber_Click"
                                         Visibility="{Binding GooseStartVisibility}" IsEnabled="{Binding CanStartGooseSubscriber}" Padding="13,6" MinHeight="34">
                                     <StackPanel Orientation="Horizontal">
-                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource LucidePlay}" Style="{StaticResource LucideIcon}" Stroke="White"/></Viewbox>
+                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource MaterialPlayIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="White"/></Viewbox>
                                         <TextBlock Text="Start" Foreground="White"/>
                                     </StackPanel>
                                 </Button>
                                 <Button Grid.Column="3" Style="{StaticResource SoftButton}" Click="StopGooseSubscriber_Click"
                                         Visibility="{Binding GooseStopVisibility}" IsEnabled="{Binding CanStopGooseSubscriber}" Padding="11,6" MinHeight="34">
                                     <StackPanel Orientation="Horizontal">
-                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource LucideSquare}" Style="{StaticResource LucideIcon}" Stroke="{StaticResource Warning}"/></Viewbox>
+                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource MaterialStopIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="{StaticResource Warning}"/></Viewbox>
                                         <TextBlock Text="Stop"/>
                                     </StackPanel>
                                 </Button>
                                 <Button Grid.Column="5" Style="{StaticResource SoftButton}" Click="ClearGooseSubscriber_Click"
                                         Visibility="{Binding GooseClearVisibility}" Padding="11,6" MinHeight="34" ToolTip="Clear captured streams">
                                     <StackPanel Orientation="Horizontal">
-                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource LucideX}" Style="{StaticResource LucideIcon}" Stroke="{StaticResource Danger}"/></Viewbox>
+                                        <Viewbox Width="13" Height="13" Margin="0,0,6,0"><Path Data="{StaticResource MaterialCloseIcon}" Style="{StaticResource MaterialIconGlyph}" Fill="{StaticResource Danger}"/></Viewbox>
                                         <TextBlock Text="Clear"/>
                                     </StackPanel>
                                 </Button>
@@ -1456,7 +1566,7 @@
                                 </ComboBox>
                                 <Button Grid.Column="2" Style="{StaticResource IedIconButton}" Click="RefreshGooseAdapters_Click"
                                         IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="Refresh adapters">
-                                    <Viewbox Width="15" Height="15"><Path Data="{StaticResource LucideRefreshCw}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                    <Viewbox Width="15" Height="15"><Path Data="{StaticResource MaterialRefreshIcon}" Style="{StaticResource MaterialIconGlyph}"/></Viewbox>
                                 </Button>
 
                                 <Border Grid.Column="4" CornerRadius="9" Padding="8,3" BorderThickness="1">
@@ -1506,7 +1616,7 @@
                                              IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="GOOSE BPF capture filter"/>
                                     <Button Grid.Column="3" Style="{StaticResource IedIconButton}" Click="RefreshGooseModels_Click"
                                             IsEnabled="{Binding CanRefreshGooseConfiguration}" ToolTip="Refresh SCL/live model bindings">
-                                        <Viewbox Width="15" Height="15"><Path Data="{StaticResource LucideSlidersHorizontal}" Style="{StaticResource LucideIcon}"/></Viewbox>
+                                        <Viewbox Width="15" Height="15"><Path Data="{StaticResource MaterialTuneIcon}" Style="{StaticResource MaterialIconGlyph}"/></Viewbox>
                                     </Button>
                                     <TextBlock Grid.Column="5" Text="{Binding GooseBindingText}" Style="{StaticResource Caption}"
                                                VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding GooseBindingText}"/>
@@ -1713,16 +1823,729 @@
             <TabItem x:Name="NativeFatTab" Header="FAT">
                 <Grid/>
             </TabItem>
+            <!-- Read-only engineering workspace: one virtual tree and one detail viewport. -->
+            <TabItem x:Name="IedBrowserTab" Header="IED Browser">
+                <TabItem.Resources>
+                    <DataTemplate x:Key="BrowserSectionRow">
+                        <Border Background="#E8EDF4" BorderBrush="#D4DCE6" BorderThickness="0,1,0,1" Padding="7,3">
+                            <DockPanel LastChildFill="True">
+                                <Button DockPanel.Dock="Left" Tag="{Binding}"
+                                        Content="{Binding ToggleGlyph}" Visibility="{Binding ChevronVisibility}"
+                                        Click="IedBrowserDetailToggle_Click"
+                                        Background="Transparent" BorderThickness="0"
+                                        Width="18" Height="18" Padding="0" Margin="0,0,3,0"
+                                        Focusable="False" FontSize="11.5"
+                                        ToolTip="Collapse or expand this section"/>
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="11.5"
+                                           Foreground="#2D4056" VerticalAlignment="Center"/>
+                            </DockPanel>
+                        </Border>
+                    </DataTemplate>
+                    <DataTemplate x:Key="BrowserPropertyRow">
+                        <Grid MinHeight="25">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="158"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Background="#F2F5F8" BorderBrush="#E3E8EF" BorderThickness="0,0,1,1" Padding="7,3">
+                                <TextBlock Text="{Binding Name}" FontSize="11.2"
+                                           Foreground="#48586B" TextTrimming="CharacterEllipsis"/>
+                            </Border>
+                            <Border Grid.Column="1" BorderBrush="#E3E8EF" BorderThickness="0,0,0,1" Padding="7,3">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Value}" FontSize="11.2"
+                                               Foreground="#24364B" TextTrimming="CharacterEllipsis"/>
+                                    <Path Data="{StaticResource InvalidQualityWarningGeometry}" Width="12" Height="12"
+                                              Stretch="Uniform" Fill="#B97800" Margin="5,0,0,0"
+                                              VerticalAlignment="Center"
+                                              Style="{StaticResource InvalidQualityWarningIconStyle}"
+                                              ToolTip="IED-reported quality validity: Invalid"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </DataTemplate>
+                    <DataTemplate x:Key="BrowserDataHeaderRow">
+                        <Grid MinHeight="24" Background="#EFF3F8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="340" MinWidth="240" MaxWidth="420"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding Name}" Margin="8,3" FontSize="11" FontWeight="SemiBold" Foreground="#3B526B"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Value}" Margin="8,3" FontSize="11"
+                                       FontWeight="SemiBold" Foreground="#3B526B"/>
+                        </Grid>
+                    </DataTemplate>
+                    <DataTemplate x:Key="BrowserDataRow">
+                        <Grid MinHeight="24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="340" MinWidth="240" MaxWidth="420"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border BorderBrush="#E4EAF2" BorderThickness="0,0,1,1" Padding="5,2">
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Width="{Binding IndentWidth}"/>
+                                    <Button Tag="{Binding}" Content="{Binding ToggleGlyph}"
+                                            Visibility="{Binding ChevronVisibility}"
+                                            Click="IedBrowserDetailToggle_Click"
+                                            Background="Transparent" BorderThickness="0"
+                                            Width="17" Height="19" Padding="0"
+                                            Focusable="False" FontSize="11.5" ToolTip="Expand / collapse"/>
+                                    <TextBlock Text="{Binding Glyph}" FontSize="9.5"
+                                               Foreground="#2875B9" Margin="1,0,6,0"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Name}" FontSize="11.2"
+                                               TextTrimming="CharacterEllipsis" Foreground="#283F58"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="1" BorderBrush="#E4EAF2" BorderThickness="0,0,0,1" Padding="8,2">
+                                <Grid ClipToBounds="True">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="0"/><ColumnDefinition Width="176"/></Grid.ColumnDefinitions>
+                                    <!-- Channel label is shown only for a real Report/Read
+                                         observation; engineering schema alone cannot color
+                                         an unevaluated signal as measured/healthy. -->
+                                    <TextBlock Grid.Column="1" Text="{Binding ObservationSource}" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"
+                                               FontSize="9.8"
+                                               Foreground="#4B6B94" Margin="10,0,0,0"
+                                               VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="{x:Type TextBlock}">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ObservationSource}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Value}" ToolTip="{Binding Value}"
+                                                   FontSize="11.2" Foreground="#344860"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <Path Data="{StaticResource InvalidQualityWarningGeometry}" Width="12" Height="12"
+                                              Stretch="Uniform" Fill="#B97800" Margin="5,0,0,0"
+                                              VerticalAlignment="Center"
+                                              Style="{StaticResource InvalidQualityWarningIconStyle}"
+                                              ToolTip="IED-reported quality validity: Invalid"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </DataTemplate>
+                    <DataTemplate x:Key="BrowserMessageRow">
+                        <Border Padding="8,7" BorderBrush="#E3E8EF" BorderThickness="0,0,0,1">
+                            <TextBlock Text="{Binding Name}" Foreground="#697C90" FontSize="11.2"
+                                       TextWrapping="Wrap"/>
+                        </Border>
+                    </DataTemplate>
+                    <DataTemplate x:Key="BrowserFlagGroupRow">
+                        <Border Padding="7,5" BorderBrush="#DCE4EF" BorderThickness="0,0,0,1">
+                            <ItemsControl ItemsSource="{Binding Flags}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <CheckBox Content="{Binding Label}"
+                                                  IsChecked="{Binding IsEnabled, Mode=OneWay}" IsThreeState="True"
+                                                  IsHitTestVisible="False" Focusable="False"
+                                                  ToolTip="{Binding Status}" Margin="2,2,19,4"
+                                                  FontSize="11.2" Foreground="#344860"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                    </DataTemplate>
+                    <DataTemplate x:Key="BrowserObjectRow">
+                        <Border MinHeight="23" BorderBrush="#E0E7EF" BorderThickness="0,0,0,1"
+                                Background="Transparent">
+                            <Grid Margin="7,1,7,1">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="32"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Background="{Binding GlyphBrush}" CornerRadius="2"
+                                        Height="16" Width="23" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Glyph}" FontSize="9" Foreground="White"
+                                               FontWeight="SemiBold" TextAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Name}"
+                                               FontSize="11.2" Foreground="#273C55"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding SecondaryText}" FontSize="10"
+                                               Foreground="#718398" TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding SecondaryText}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Text="{Binding Value}" ToolTip="{Binding Value}"
+                                           FontSize="10.5" Foreground="#63768A" Margin="10,0,0,0"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                    <!-- Only RCB rows have a compact fixed name/icon slot. -->
+                    <DataTemplate x:Key="BrowserRcbObjectRow">
+                        <Border MinHeight="23" BorderBrush="#E0E7EF" BorderThickness="0,0,0,1"
+                                Background="Transparent">
+                            <Grid Margin="7,1,7,1">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="32"/>
+                                    <ColumnDefinition Width="200"/>
+                                    <ColumnDefinition Width="24"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Background="{Binding GlyphBrush}"
+                                        CornerRadius="2" Height="16" Width="23"
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Glyph}" FontSize="9"
+                                               Foreground="White" FontWeight="SemiBold"
+                                               TextAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <TextBlock Grid.Column="1" Text="{Binding Name}"
+                                           ToolTip="{Binding Name}" FontSize="11.2"
+                                           Foreground="#273C55" TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center"/>
+                                <Path Grid.Column="2" Data="{StaticResource BrowserRcbEnabledIconGeometry}"
+                                      Width="16" Height="16" Stretch="Uniform"
+                                      Fill="#277455" VerticalAlignment="Center"
+                                      HorizontalAlignment="Center"
+                                      Visibility="{Binding RcbEnabledVisibility}"
+                                      ToolTip="{Binding RcbEnabledTooltip}"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                    <Style x:Key="BrowserDetailContentStyle" TargetType="ContentControl">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="ContentTemplate" Value="{StaticResource BrowserPropertyRow}"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Kind}" Value="Section">
+                                <Setter Property="ContentTemplate" Value="{StaticResource BrowserSectionRow}"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Kind}" Value="DataHeader">
+                                <Setter Property="ContentTemplate" Value="{StaticResource BrowserDataHeaderRow}"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Kind}" Value="Data">
+                                <Setter Property="ContentTemplate" Value="{StaticResource BrowserDataRow}"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Kind}" Value="Message">
+                                <Setter Property="ContentTemplate" Value="{StaticResource BrowserMessageRow}"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Kind}" Value="Object">
+                                <Setter Property="ContentTemplate" Value="{StaticResource BrowserObjectRow}"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding NavigateTo.Kind}" Value="RCB">
+                                <Setter Property="ContentTemplate" Value="{StaticResource BrowserRcbObjectRow}"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Kind}" Value="FlagGroup">
+                                <Setter Property="ContentTemplate" Value="{StaticResource BrowserFlagGroupRow}"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TabItem.Resources>
+                <Border Style="{StaticResource WorkspaceCard}" Padding="7">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="7"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="4,0,0,0">
+                                <TextBlock Text="IED Browser" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+                                <TextBlock x:Name="IedBrowserSubtitle" Text="Select an IED to inspect cached model information."
+                                           FontSize="10.5" Foreground="{StaticResource Muted}" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="Refresh view" Style="{StaticResource SoftButton}" Margin="0,0,6,0"
+                                        Click="IedBrowserRefresh_Click"
+                                        ToolTip="Rebuild view from cached SCL/discovery only; does not contact the IED"/>
+                                <Button x:Name="IedBrowserControlButton" Content="Control…"
+                                        Style="{StaticResource SoftButton}" Margin="0,0,6,0"
+                                        IsEnabled="False" Click="IedBrowserControl_Click"
+                                        ToolTip="Only enabled when this online DO has an existing live-verified native IEC Control descriptor."/>
+                                <Button x:Name="IedBrowserWriteButton" Style="{StaticResource SoftButton}"
+                                        Margin="0,0,6,0" MinWidth="81"
+                                        IsEnabled="False" Click="IedBrowserWrite_Click"
+                                        ToolTip="Write the selected Data Attribute or focused Data Object using the exact live MMS type.">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Viewbox Width="15" Height="15" Margin="0,0,5,0" IsHitTestVisible="False">
+                                            <Path Width="960" Height="960" Fill="#345A83"
+                                                  Data="M167,840 Q146,845 130.5,829.5 T120,793 L160,602 358,800 167,840 Z M358,800 L160,602 618,144 Q641,121 675,121 T732,144 L816,228 Q839,251 839,285 T816,342 L358,800 Z M675,200 L261,614 346,699 760,285 675,200 Z"/>
+                                        </Viewbox>
+                                        <TextBlock Text="Write" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="IedBrowserWriteDoButton" Style="{StaticResource SoftButton}"
+                                        Content="Write DO" IsEnabled="False" Click="IedBrowserWriteDo_Click"
+                                        Margin="0,0,6,0" MinWidth="84"
+                                        ToolTip="Edit one or several live configuration Data Attributes of the focused DO. CO operations use Control."/>
+                                <Button x:Name="IedBrowserReadPageButton" Content="Read" Tag="Page"
+                                        Style="{StaticResource SoftButton}" Margin="0,0,6,0"
+                                        Click="IedBrowserReadValues_Click"
+                                        ToolTip="Read values for the current Browser object over MMS. Live monitoring uses the report stream."/>
+                                <Button x:Name="IedBrowserConfigWriteButton" Content="Config Write…" IsEnabled="False"
+                                        Style="{StaticResource SoftButton}" Margin="0,0,6,0"
+                                        Click="IedBrowserWriteValues_Click"
+                                        ToolTip="Open explicit native MMS configuration Write for the selected live DO/DA; never sends Operate"/>
+                                <Button x:Name="IedBrowserReadLnButton" Content="Read LN" Tag="LN"
+                                        Visibility="Collapsed" Style="{StaticResource SoftButton}" Margin="0,0,6,0"
+                                        Click="IedBrowserReadValues_Click"
+                                        ToolTip="Read all model-proven attributes in this LN, not just the focused Data Object."/>
+                                <Button x:Name="IedBrowserReadAllButton" Content="Read All" Tag="All"
+                                        Style="{StaticResource SoftButton}" Margin="0,0,6,0"
+                                        Click="IedBrowserReadValues_Click"
+                                        ToolTip="Read model-proven IEC data attributes sequentially; progress appears on the IED card."/>
+                                <ComboBox x:Name="IedBrowserGooseAdapterCombo"
+                                          Width="195" Height="30" Margin="0,0,5,0"
+                                          ItemsSource="{Binding GooseAdapters}"
+                                          SelectedItem="{Binding SelectedGooseAdapter, Mode=TwoWay}"
+                                          DisplayMemberPath="DisplayText" Visibility="Collapsed"
+                                          ToolTip="Station Ethernet capture adapter. Choosing an adapter never starts capture automatically."/>
+                                <Button x:Name="IedBrowserGooseStopButton" Content="Stop GOOSE"
+                                        Style="{StaticResource SoftButton}" Margin="0,0,5,0"
+                                        Visibility="Collapsed" Click="IedBrowserGooseStop_Click"
+                                        ToolTip="Stop the existing passive GOOSE subscriber; no MMS writes."/>
+                                <Button x:Name="IedBrowserGooseSubscribeButton" Content="Subscribe GOOSE"
+                                        Style="{StaticResource SoftButton}" Margin="0,0,6,0"
+                                        Visibility="Collapsed" Click="IedBrowserGooseSubscribe_Click"
+                                        ToolTip="Start or inspect the existing read-only subscriber here in IED Browser, without switching workspace or writing MMS."/>
+                                <Button x:Name="IedBrowserCancelReadButton" Content="Cancel Read"
+                                        Style="{StaticResource SoftButton}" Margin="0,0,6,0"
+                                        IsEnabled="False" Click="IedBrowserCancelRead_Click"
+                                        ToolTip="Cancel the active read-only MMS sweep"/>
+                                <Button Content="Browse Files" Click="IedBrowserBrowseFiles_Click"
+                                        Style="{StaticResource SoftButton}" Margin="0,0,6,0"
+                                        ToolTip="Refresh remote COMTRADE fault-record files through IEC 61850 FileDirectory"/>
+                                <Button x:Name="IedBrowserReadRcbButton" Content="Check live RCB" Style="{StaticResource SoftButton}"
+                                        Margin="0,0,6,0" Click="IedBrowserReadRcb_Click"
+                                        ToolTip="Explicit read-only availability check; does not enable reporting"/>
+                                <Button x:Name="IedBrowserExportReadEvidenceButton" Content="Read evidence…" Style="{StaticResource SoftButton}"
+                                        Margin="0,0,6,0" Click="IedBrowserExportReadEvidence_Click"
+                                        ToolTip="Save exact IEC reference/FC, canonical observations, failures and deferred coverage as CSV; no MMS operation"/>
+                                <Button x:Name="IedBrowserExportRcbButton" Content="Export RCB…" Style="{StaticResource SoftButton}"
+                                        Click="IedBrowserExportRcb_Click" ToolTip="Open the existing RCB export workflow"/>
+                            </StackPanel>
+                        </Grid>
+                        <Grid Grid.Row="2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="285" MinWidth="240"/>
+                                <!-- Eight-pixel native resize hitbox, visually only one pixel idle. -->
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*" MinWidth="400"/>
+                            </Grid.ColumnDefinitions>
+                            <!-- A flat, row-virtualized DataGrid behaves as a hierarchical TreeGrid. -->
+                            <Grid Grid.Column="0">
+                                <!-- Selection belongs exclusively to the outer IED Explorer. -->
+                                <DataGrid x:Name="IedBrowserTreeGrid"
+                                          AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
+                                          BorderBrush="#D5DEE9" BorderThickness="1" RowHeaderWidth="0"
+                                          FontSize="11.2" RowHeight="24" ColumnHeaderHeight="24"
+                                          Background="#F9FBFE" AlternatingRowBackground="#F0F4F9"
+                                          CanUserSortColumns="False" CanUserResizeColumns="False"
+                                          EnableRowVirtualization="True" EnableColumnVirtualization="True"
+                                          VirtualizingPanel.IsVirtualizing="True"
+                                          VirtualizingPanel.VirtualizationMode="Recycling"
+                                          ScrollViewer.CanContentScroll="True"
+                                          SelectionChanged="IedBrowserTree_SelectionChanged">
+                                    <DataGrid.RowStyle>
+                                        <Style TargetType="{x:Type DataGridRow}">
+                                            <EventSetter Event="PreviewMouseLeftButtonUp"
+                                                         Handler="IedBrowserTreeRow_MouseUp"/>
+                                            <Setter Property="Cursor" Value="Hand"/>
+                                            <!-- Keep the browsing location visible even when
+                                                 keyboard focus moves into the detail panel. -->
+                                            <Setter Property="BorderBrush" Value="Transparent"/>
+                                            <Setter Property="BorderThickness" Value="3,0,0,0"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter Property="Background" Value="#C7E1FF"/>
+                                                    <Setter Property="BorderBrush" Value="#2563EB"/>
+                                                    <Setter Property="Foreground" Value="#17365B"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGrid.RowStyle>
+                                    <DataGrid.CellStyle>
+                                        <Style TargetType="{x:Type DataGridCell}">
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Setter Property="BorderThickness" Value="0"/>
+                                            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type DataGridRow}}}" Value="True">
+                                                    <Setter Property="Background" Value="#C7E1FF"/>
+                                                    <Setter Property="Foreground" Value="#17365B"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGrid.CellStyle>
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="Objects" Width="*">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <Grid VerticalAlignment="Center">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="17"/>
+                                                            <ColumnDefinition Width="34"/>
+                                                            <ColumnDefinition Width="150"/>
+                                                            <ColumnDefinition Width="18"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Border Width="{Binding IndentWidth}"/>
+                                                        <Button Grid.Column="1" Tag="{Binding}" Content="{Binding ToggleGlyph}"
+                                                                Visibility="{Binding ChevronVisibility}"
+                                                                Click="IedBrowserTreeToggle_Click"
+                                                                Background="Transparent" BorderThickness="0"
+                                                                Width="17" Height="21" FontSize="12" Padding="0"
+                                                                Focusable="False" ToolTip="Expand or collapse"/>
+                                                        <Border Grid.Column="2" Background="{Binding GlyphBrush}"
+                                                                CornerRadius="2" Padding="2,0" Height="16"
+                                                                VerticalAlignment="Center" Margin="3,0,5,0">
+                                                            <TextBlock Text="{Binding Glyph}" Foreground="White"
+                                                                       FontSize="9" FontWeight="SemiBold"
+                                                                       TextAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <TextBlock Grid.Column="3" Text="{Binding Title}" ToolTip="{Binding Title}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   Foreground="#243B54" VerticalAlignment="Center"/>
+                                                        <Path Grid.Column="4" Data="{StaticResource BrowserRcbEnabledIconGeometry}"
+                                                              Width="15" Height="15" Stretch="Uniform"
+                                                              Fill="#277455" VerticalAlignment="Center"
+                                                              HorizontalAlignment="Center"
+                                                              Visibility="{Binding RcbEnabledVisibility}"
+                                                              ToolTip="{Binding RcbEnabledTooltip}"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                            <!-- Keep GridSplitter as a DIRECT child of the resized Grid.
+                                 The non-hit-test overlay draws its grip without narrowing
+                                 the native drag target or changing panel resize semantics. -->
+                            <GridSplitter Grid.Column="1" x:Name="IedBrowserPaneSplitter" Width="8"
+                                          HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                          Background="Transparent" ShowsPreview="True"
+                                          ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
+                                          ToolTip="Drag to resize Browser panels"/>
+                            <Border Grid.Column="1" IsHitTestVisible="False"
+                                    HorizontalAlignment="Center" VerticalAlignment="Stretch">
+                                <Border.Style>
+                                    <Style TargetType="{x:Type Border}">
+                                        <Setter Property="Background" Value="#C5CFD9"/>
+                                        <Setter Property="Width" Value="1"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsMouseOver, ElementName=IedBrowserPaneSplitter}" Value="True">
+                                                <Setter Property="Background" Value="#17212F"/>
+                                                <Setter Property="Width" Value="3"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+                            <Grid Grid.Column="2">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <Border Grid.Row="0" Background="#E8EFF7" BorderBrush="#CBD7E4"
+                                        BorderThickness="1,1,1,0" Padding="6,5">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button x:Name="IedBrowserBackButton" Grid.Column="0" Content="← Back"
+                                                IsEnabled="False" Click="IedBrowserBack_Click"
+                                                Style="{StaticResource SoftButton}" Margin="0,0,8,0"
+                                                Padding="6,2" FontSize="11"
+                                                ToolTip="Return to the previous Browser folder"/>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock x:Name="IedBrowserObjectPath" Text="Select an object in the left tree"
+                                                       FontSize="11.2" FontWeight="SemiBold" Foreground="#2B405A"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock x:Name="IedBrowserDetailStatus" Text="Cached engineering model · read-only navigation"
+                                                       FontSize="10" Foreground="#62758A"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                                <Grid Grid.Row="1">
+                                <ListView x:Name="IedBrowserDetailList"
+                                          SelectionChanged="IedBrowserDetailList_SelectionChanged"
+                                          SelectionMode="Single"
+                                          ClipToBounds="True"
+                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                          ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                          AlternationCount="2"
+                                          BorderBrush="#CBD7E4" BorderThickness="1"
+                                          Background="White" HorizontalContentAlignment="Stretch"
+                                          ScrollViewer.CanContentScroll="True"
+                                          VirtualizingPanel.IsVirtualizing="True"
+                                          VirtualizingPanel.VirtualizationMode="Recycling">
+                                    <ListView.ItemContainerStyle>
+                                        <Style TargetType="ListViewItem">
+                                            <EventSetter Event="MouseDoubleClick" Handler="IedBrowserDetailItem_DoubleClick"/>
+                                            <EventSetter Event="PreviewMouseLeftButtonUp"
+                                                         Handler="IedBrowserDetailRow_MouseUp"/>
+                                            <Setter Property="Padding" Value="0"/>
+                                            <Setter Property="Margin" Value="0"/>
+                                            <Setter Property="BorderThickness" Value="0"/>
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                            <Setter Property="Focusable" Value="True"/>
+                                            <Setter Property="Background" Value="#FFFFFF"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ListViewItem">
+                                                        <Border x:Name="SelectionChrome"
+                                                                Background="{TemplateBinding Background}"
+                                                                SnapsToDevicePixels="True">
+                                                            <ContentPresenter HorizontalAlignment="Stretch"
+                                                                              VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="SelectionChrome" Property="Background"
+                                                                        Value="#E5F0FB"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsSelected" Value="True">
+                                                                <Setter TargetName="SelectionChrome" Property="Background"
+                                                                        Value="#C7E1FB"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsSelected" Value="True">
+                                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                            <Style.Triggers>
+                                                <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                                                    <Setter Property="Background" Value="#F0F4F9"/>
+                                                </Trigger>
+                                                <DataTrigger Binding="{Binding Kind}" Value="Object">
+                                                    <Setter Property="Cursor" Value="Hand"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ListView.ItemContainerStyle>
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate>
+                                            <ContentControl Content="{Binding}"
+                                                            Style="{StaticResource BrowserDetailContentStyle}"/>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                                <!-- Files are a separate dense 3-column virtualized native grid;
+                                     normal Browser detail rows remain untouched. -->
+                                <Grid x:Name="IedBrowserFilesPanel" Grid.Row="1" Visibility="Collapsed">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <Border Grid.Row="0" Background="#EDF4FC" BorderBrush="#D6E2F0"
+                                            BorderThickness="1,1,1,0" Padding="10,6">
+                                        <DockPanel LastChildFill="True">
+                                            <Button x:Name="IedBrowserFilesDownloadSelectedButton"
+                                                    DockPanel.Dock="Right" Content="Download selected"
+                                                    Click="IedBrowserDownloadSelected_Click"
+                                                    Style="{StaticResource SoftButton}" IsEnabled="False"
+                                                    Padding="10,4" Margin="8,0,0,0" FontSize="11"
+                                                    ToolTip="Download the selected complete COMTRADE record and open its local folder"/>
+                                            <TextBlock x:Name="IedBrowserFileSelectionText"
+                                                       Text="Select a file · Double-click to open · Right-click for Download"
+                                                       VerticalAlignment="Center" FontSize="11.4"
+                                                       Foreground="#475F7A" TextTrimming="CharacterEllipsis"/>
+                                        </DockPanel>
+                                    </Border>
+                                <DataGrid x:Name="IedBrowserFilesGrid" Grid.Row="1"
+                                          AutoGenerateColumns="False"
+                                          IsReadOnly="True" CanUserAddRows="False"
+                                          CanUserDeleteRows="False"
+                                          SelectionMode="Single" SelectionUnit="FullRow"
+                                          SelectionChanged="IedBrowserFiles_SelectionChanged"
+                                          HeadersVisibility="Column" AlternationCount="2"
+                                          EnableRowVirtualization="True"
+                                          VirtualizingPanel.IsVirtualizing="True"
+                                          VirtualizingPanel.VirtualizationMode="Recycling"
+                                          BorderBrush="#CBD7E4" BorderThickness="1"
+                                          Background="White" RowHeight="27" FontSize="11.6"
+                                          AlternatingRowBackground="#F0F4F9"
+                                          GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EDF1F6"
+                                          LoadingRow="IedBrowserFile_LoadingRow">
+                                    <DataGrid.ColumnHeaderStyle>
+                                        <Style TargetType="{x:Type DataGridColumnHeader}">
+                                            <Setter Property="Background" Value="#DDEBF9"/>
+                                            <Setter Property="Foreground" Value="#274766"/>
+                                            <Setter Property="BorderBrush" Value="#CCDDEE"/>
+                                            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                                            <Setter Property="VerticalContentAlignment" Value="Center"/>
+                                            <Setter Property="Padding" Value="7,3"/>
+                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                        </Style>
+                                    </DataGrid.ColumnHeaderStyle>
+                                    <DataGrid.RowStyle>
+                                        <Style TargetType="{x:Type DataGridRow}">
+                                            <Setter Property="Background" Value="#FFFFFF"/>
+                                            <EventSetter Event="MouseDoubleClick" Handler="IedBrowserFile_DoubleClick"/>
+                                            <EventSetter Event="PreviewMouseRightButtonDown" Handler="IedBrowserFile_RightClick"/>
+                                            <Setter Property="ToolTip" Value="{Binding RemotePath}"/>
+                                            <Setter Property="Cursor" Value="Hand"/>
+                                            <Setter Property="VerticalContentAlignment" Value="Center"/>
+                                            <Setter Property="BorderThickness" Value="3,0,0,0"/>
+                                            <Setter Property="BorderBrush" Value="Transparent"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                                                    <Setter Property="Background" Value="#EDF4FC"/>
+                                                </Trigger>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="#EAF3FF"/>
+                                                </Trigger>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter Property="Background" Value="#CFE5FF"/>
+                                                    <Setter Property="BorderBrush" Value="#2563EB"/>
+                                                    <Setter Property="Foreground" Value="#17365B"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGrid.RowStyle>
+                                    <DataGrid.CellStyle>
+                                        <Style TargetType="{x:Type DataGridCell}">
+                                            <Setter Property="BorderThickness" Value="0"/>
+                                            <Setter Property="Padding" Value="7,0"/>
+                                            <Setter Property="VerticalContentAlignment" Value="Center"/>
+                                            <Setter Property="Foreground" Value="#243C57"/>
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type DataGridRow}}}" Value="True">
+                                                    <Setter Property="Background" Value="#CFE5FF"/>
+                                                    <Setter Property="Foreground" Value="#17365B"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGrid.CellStyle>
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="Filename" Width="*" MinWidth="185">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                                                Margin="10,0,5,0">
+                                                        <!-- Vector geometry supplied for the File List:
+                                                             no font icon and no raster dependency. -->
+                                                        <!-- Stretch an SVG-space geometry into a real 18px
+                                                             WPF Path. The original -960 coordinate system
+                                                             must not render outside a 17px Viewbox viewport. -->
+                                                        <Path Width="18" Height="18" Margin="0,0,7,0"
+                                                              Fill="#2367AD" Stretch="Uniform"
+                                                              Data="M824-120 636-308q-41 32-90.5 50T440-240q-90 0-162.5-44T163-400h98q34 37 79.5 58.5T440-320q100 0 170-70t70-170q0-100-70-170t-170-70q-94 0-162.5 63.5T201-580h-80q8-127 99.5-213.5T440-880q134 0 227 93t93 227q0 56-18 105.5T692-364l188 188-56 56ZM397-400l-63-208-52 148H80v-60h160l66-190h60l60 120h30v60h-67l-47-94-50 154h-59Z"/>
+                                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="Time" Binding="{Binding ModifiedText}"
+                                                            Width="175" MinWidth="140">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="{x:Type TextBlock}">
+                                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                        </DataGridTextColumn>
+                                        <DataGridTextColumn Header="Size" Binding="{Binding SizeText}"
+                                                            Width="110" MinWidth="95">
+                                            <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="{x:Type TextBlock}">
+                                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                                </Style>
+                                            </DataGridTextColumn.ElementStyle>
+                                        </DataGridTextColumn>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                                </Grid>
+                                <!-- Overlay is scoped to Files only, never to monitoring or
+                                     the Explorer. Cancellation reaches the dedicated transfer. -->
+                                <Border x:Name="IedBrowserFileTransferOverlay" Visibility="Collapsed"
+                                        Background="#D9FFFFFF" Panel.ZIndex="3">
+                                    <Border Width="350" MaxWidth="410" VerticalAlignment="Center"
+                                            HorizontalAlignment="Center" Background="White"
+                                            BorderBrush="#CCD8E5" BorderThickness="1"
+                                            CornerRadius="10" Padding="17">
+                                        <StackPanel>
+                                            <TextBlock Text="COMTRADE transfer" FontWeight="SemiBold"
+                                                       FontSize="13" Foreground="#223D5E"/>
+                                            <TextBlock x:Name="IedBrowserFileTransferText"
+                                                       Margin="0,8,0,9" TextWrapping="Wrap"
+                                                       FontSize="11" Foreground="#516780"
+                                                       Text="Preparing record…"/>
+                                            <ProgressBar x:Name="IedBrowserFileTransferProgress"
+                                                         Height="5" Minimum="0" Maximum="100"
+                                                         IsIndeterminate="True"/>
+                                            <Button Content="Cancel" Click="IedBrowserCancelFileTransfer_Click"
+                                                    Style="{StaticResource SoftButton}" Margin="0,12,0,0"
+                                                    Padding="12,4" HorizontalAlignment="Right"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Border>
+                                </Grid>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </TabItem>
+
+            <!-- Embedded, wire-first viewer. No selected IED or SCL required. -->
+            <TabItem x:Name="SmvWorkspaceTab" Header="SMV">
+                <views:SmvInlineViewer x:Name="MainSmvViewer"/>
+            </TabItem>
         </TabControl>
 
-        <Border Grid.Row="2" Margin="0,10,0,0" Background="#EAF1FF" BorderBrush="#CFE0FF" BorderThickness="1" CornerRadius="14" Padding="11,7">
-            <Grid>
-                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal">
-                    <Ellipse Width="8" Height="8" Fill="{StaticResource Accent}" Margin="0,0,9,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding LastStatusText}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"/>
-                </StackPanel>
-                <TextBlock Grid.Column="1" Text="{Binding RuntimeSummaryText}" FontSize="11.8" Foreground="{StaticResource Muted}" Margin="12,0,0,0"/>
+        <!-- The status strip must NEVER grow when diagnostics contain newlines or stack traces. -->
+        <Border Grid.Row="2" Height="34" MinHeight="34" MaxHeight="34"
+                Margin="0,7,0,0" Background="#EAF1FF" BorderBrush="#CFE0FF"
+                BorderThickness="1" CornerRadius="8" Padding="10,0" ClipToBounds="True">
+            <Grid Height="32" VerticalAlignment="Center" ClipToBounds="True">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Grid Grid.Column="0" MinWidth="0" ClipToBounds="True">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Ellipse Width="7" Height="7" Fill="{StaticResource Accent}"
+                             Margin="0,0,8,0" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Text="{Binding LastStatusText}"
+                               VerticalAlignment="Center" FontSize="11" FontWeight="Medium"
+                               Foreground="{StaticResource Ink}" TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis" MaxHeight="19"/>
+                </Grid>
+                <TextBlock Grid.Column="1" Text="{Binding RuntimeSummaryText}"
+                           VerticalAlignment="Center" FontSize="10.5"
+                           Foreground="{StaticResource Muted}" Margin="12,0,0,0"
+                           TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                           MaxHeight="19"/>
             </Grid>
         </Border>
 

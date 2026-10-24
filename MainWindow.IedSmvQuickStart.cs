@@ -92,6 +92,29 @@ public partial class MainWindow
         if (sender is not Button { CommandParameter: Iec61850MonitorDevice device })
             return;
 
+        ActivateSelectedSmvWorkspace();
+    }
+
+    /// <summary>
+    /// Present an inert tab landing state. A selection change must not create
+    /// a viewer, enumerate Npcap adapters or begin a passive wire capture.
+    /// </summary>
+    // SMV is an Ethernet-scoped native tab. IED/SCL identity is optional
+    // enrichment, never a prerequisite for sniffing or selecting the NIC.
+    private void PrepareSelectedSmvWorkspace()
+    {
+        // The embedded view owns its own adapter discovery and continuity state.
+        // Tab navigation must not reset an already selected stream.
+    }
+
+    private void ActivateSelectedSmvWorkspace()
+        => MainTabs.SelectedIndex = EngineeringNavigationRoute.SmvWorkspaceIndex;
+
+    private void OpenSmvCapture_Click(object sender, RoutedEventArgs e)
+        => ActivateSelectedSmvWorkspace();
+
+    private void OpenSmvWorkspaceForDevice(Iec61850MonitorDevice device)
+    {
         SelectedDevice = device;
 
         if (_activeSmvViewerWindow is { IsLoaded: true } existing)

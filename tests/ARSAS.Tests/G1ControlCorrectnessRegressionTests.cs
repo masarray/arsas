@@ -20,7 +20,8 @@ public sealed class G1ControlCorrectnessRegressionTests
         Assert.DoesNotContain("FindPointForControlFeedback", runtimeSource, StringComparison.Ordinal);
         Assert.Contains("A real IED report is therefore never suppressed", runtimeSource, StringComparison.Ordinal);
         Assert.DoesNotContain("CurrentValue = result.FeedbackValue", commandWindowSource, StringComparison.Ordinal);
-        Assert.Contains("Waiting for independent IED process feedback", commandWindowSource, StringComparison.Ordinal);
+        Assert.Contains("Iec61850ControlOutcomePresentation.From(result, TestMode)", commandWindowSource, StringComparison.Ordinal);
+        Assert.Contains("result.FeedbackConfirmed", File.ReadAllText(Path.Combine(root, "Models", "Iec61850ControlOutcomePresentation.cs")), StringComparison.Ordinal);
         Assert.Contains("not process-image authority", runtimeSource, StringComparison.Ordinal);
     }
 
@@ -129,7 +130,9 @@ public sealed class G1ControlCorrectnessRegressionTests
         var runtime = File.ReadAllText(Path.Combine(RepoRoot(), "Services", "Iec61850MonitorRuntime.cs"));
 
         Assert.Contains("OriginCategory { get; init; } = \"StationControl\"", model, StringComparison.Ordinal);
-        Assert.Contains("OriginCategory = \"StationControl\"", dialog, StringComparison.Ordinal);
+        Assert.Contains("_selectedOriginCategory = \"StationControl\"", dialog, StringComparison.Ordinal);
+        Assert.Contains("OriginCategory = SelectedOriginCategory", dialog, StringComparison.Ordinal);
+        Assert.Contains("Originator = OriginatorId.Trim()", dialog, StringComparison.Ordinal);
         Assert.Contains("OriginCategory = \"StationControl\"", main, StringComparison.Ordinal);
         Assert.DoesNotContain("OriginCategory = \"Maintenance\"", dialog, StringComparison.Ordinal);
         Assert.DoesNotContain("OriginCategory = \"Maintenance\"", main, StringComparison.Ordinal);

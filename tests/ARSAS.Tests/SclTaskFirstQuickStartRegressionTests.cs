@@ -14,7 +14,8 @@ public sealed class SclTaskFirstQuickStartRegressionTests
         Assert.Contains("Select Signals", xaml, StringComparison.Ordinal);
         Assert.Contains("RCB Engineering", xaml, StringComparison.Ordinal);
         Assert.Contains("Download COMTRADE", xaml, StringComparison.Ordinal);
-        Assert.Contains("Browse Offline", xaml, StringComparison.Ordinal);
+        Assert.Contains("Browse IED", xaml, StringComparison.Ordinal);
+        Assert.Contains("Click=\"BrowseIed_Click\"", xaml, StringComparison.Ordinal);
         Assert.Contains("MonitorStaticDataSet_Click", code, StringComparison.Ordinal);
         Assert.Contains("MonitorManual_Click", code, StringComparison.Ordinal);
         Assert.Contains("OpenSelectedSclRcbEngineering", code, StringComparison.Ordinal);
@@ -61,7 +62,7 @@ public sealed class SclTaskFirstQuickStartRegressionTests
         var actions = File.ReadAllText(FindRepoFile("MainWindow.SclQuickActions.cs"));
         var chooser = File.ReadAllText(FindRepoFile("SclSignalSelectionModeWindow.xaml.cs"));
 
-        Assert.Contains("IED Actions — Static DataSet, Select Signals, RCB Engineering, COMTRADE, Browse Offline", behavior, StringComparison.Ordinal);
+        Assert.Contains("IED Actions — Static DataSet, Browse IED, Select Signals, RCB Engineering, COMTRADE", behavior, StringComparison.Ordinal);
         Assert.Contains("args.Handled = true;", behavior, StringComparison.Ordinal);
         Assert.Contains("OpenIedWorkspaceActionsFromCardAsync(button)", behavior, StringComparison.Ordinal);
         Assert.Contains("new SclSignalSelectionModeWindow(1, device)", actions, StringComparison.Ordinal);

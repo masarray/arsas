@@ -38,3 +38,14 @@ Two unreferenced legacy PNG outputs were removed after repository-wide reference
 The separately pinned ARIEC61850 engine and ArdIrec native bridge are dependencies whose source revision and license require their own release evidence. The Inter typeface must retain its OFL notice. Black-box interoperability measurements and immutable historical commits are engineering provenance; do not rewrite their attribution or release SHA merely to eliminate an external name.
 
 A passing source-clean gate or a clean inventory is **not** an independent copyright or trade-dress opinion. Preserve v1.6.40 tag, published assets and original field acceptance records unchanged. Re-run the inventory against the exact candidate Git tree before a future release and document any additions and resolved manual-review items.
+
+## Google Material vector-resource update (2026-10-15)
+
+The classic filled 24dp icons added to `App.xaml` for ARSAS operator
+navigation, onboarding and workbench buttons come from the official
+`google/material-design-icons` GitHub source tree (`src/<category>/<name>/materialicons/24px.svg`).
+Their original path contours are embedded as WPF `Geometry` resources, with no
+bundled Material font or network dependency. License: Apache-2.0; see
+`Assets/Icons/MaterialIcons-LICENSE.txt` and `THIRD_PARTY_NOTICES.md`.
+The pre-existing operator-supplied Material Symbols contours are preserved.
+This source/licensing record does not replace visual review for unrelated UI art.

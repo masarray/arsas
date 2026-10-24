@@ -189,6 +189,11 @@ $arguments = @(
     $installerDefinition
 )
 
+# Preview builds are isolated from stable ARSAS; the normal installer
+# retains its existing AppId and standard upgrade behavior.
+if ($normalizedVersion -match '-smvpreview\.[0-9a-f]{12}$') {
+    $arguments = @("/DSmvPreviewBuild=1") + $arguments
+}
 & $InnoCompiler @arguments
 if ($LASTEXITCODE -ne 0) {
     throw "Inno Setup compilation failed with exit code $LASTEXITCODE."

@@ -99,7 +99,7 @@ public partial class MainWindow
     public long GooseFrames { get => _gooseFrames; private set { if (Set(ref _gooseFrames, value)) Raise(nameof(GooseCounterText)); } }
     public long GooseOtherFrames { get => _gooseOtherFrames; private set { if (Set(ref _gooseOtherFrames, value)) Raise(nameof(GooseCounterText)); } }
 
-    public bool CanStartGooseSubscriber => !IsGooseCapturing && !GooseActionBusy && SelectedGooseAdapter is not null;
+    public bool CanStartGooseSubscriber => !IsGooseCapturing && !GooseActionBusy;
     public bool CanStopGooseSubscriber => IsGooseCapturing && !GooseActionBusy;
     public bool CanRefreshGooseConfiguration => !IsGooseCapturing && !GooseActionBusy;
     public string GooseCaptureStateText => IsGooseCapturing ? "LIVE CAPTURE" : "STOPPED";
@@ -176,8 +176,17 @@ public partial class MainWindow
     private async void StartGooseSubscriber_Click(object sender, RoutedEventArgs e)
     {
         _pendingIedGooseAutoStart = null;
-        if (SelectedGooseAdapter is null || GooseActionBusy || IsGooseCapturing)
+        if (GooseActionBusy || IsGooseCapturing)
             return;
+        if (SelectedGooseAdapter is null)
+        {
+            if (GooseAdapters.Count == 0)
+                RefreshGooseAdapters();
+            GooseStatusText = GooseAdapters.Count == 0
+                ? "No capture adapter found. Install Npcap and refresh."
+                : "Select the Ethernet adapter in the dropdown, then press Start. SCL is not required.";
+            return;
+        }
 
         GooseActionBusy = true;
         try
@@ -240,6 +249,11 @@ public partial class MainWindow
         Raise(nameof(GooseClearVisibility));
         Raise(nameof(GooseCounterText));
         Raise(nameof(GooseSelectedStreamText));
+        if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
+        {
+            _iedBrowserLastLiveVersion = -1;
+            RefreshIedBrowserVisibleValues();
+        }
     }
 
     private async Task StopGooseSubscriberAsync()
@@ -254,6 +268,11 @@ public partial class MainWindow
             IsGooseCapturing = false;
             GooseStatusText = "GOOSE subscriber stopped.";
             SetStatus("GOOSE Subscriber stopped.");
+            if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
+            {
+                _iedBrowserLastLiveVersion = -1;
+                RefreshIedBrowserVisibleValues();
+            }
         }
         catch (Exception ex)
         {
@@ -407,10 +426,17 @@ public partial class MainWindow
         Dispatcher.BeginInvoke(new Action(() =>
         {
             IsGooseCapturing = status.IsRunning;
+            if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
+                RefreshIedBrowserReadButtons();
             GooseCapturedFrames = status.CapturedFrames;
             GooseFrames = status.GooseFrames;
             GooseOtherFrames = status.OtherFrames;
             GooseStatusText = status.Message;
+            if (!status.IsRunning && MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
+            {
+                _iedBrowserLastLiveVersion = -1;
+                RefreshIedBrowserVisibleValues(); // stale frame cannot remain current
+            }
             if (status.Level.Equals("ERROR", StringComparison.OrdinalIgnoreCase))
             {
                 AddLog("ERROR", "GOOSE", status.Message);
@@ -426,7 +452,10 @@ public partial class MainWindow
 
         var processed = 0;
         var scopeIdentityChanged = false;
-        foreach (var pair in _pendingGooseFrames.ToArray())
+        // ConcurrentDictionary iteration is safe while ingress continues.
+        // Stop after 64 entries rather than copying the entire pending GOOSE
+        // dictionary into a new array on each WPF Dispatcher tick.
+        foreach (var pair in _pendingGooseFrames)
         {
             if (processed >= 64)
                 break;
@@ -474,6 +503,7 @@ public partial class MainWindow
         Raise(nameof(GooseDataSetInspectorVisibility));
         Raise(nameof(GooseClearVisibility));
         Raise(nameof(GooseSelectedStreamText));
+        UpdateIedBrowserGooseDetails(); // coalesced update, no second subscriber
     }
 
     private GooseBindingCatalog BuildGooseBindingCatalog()

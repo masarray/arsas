@@ -197,7 +197,7 @@ public partial class MainWindow
             TextWrapping = TextWrapping.Wrap,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            FontFamily = new FontFamily("Consolas"),
+            FontFamily = new FontFamily(new Uri("pack://application:,,,/"), "./Assets/Fonts/#Inter"),
             FontSize = 12.2,
             Padding = new Thickness(16),
             BorderThickness = new Thickness(0),

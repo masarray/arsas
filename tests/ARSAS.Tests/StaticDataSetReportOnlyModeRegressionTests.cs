@@ -61,7 +61,11 @@ public sealed class StaticDataSetReportOnlyModeRegressionTests
         Assert.Contains("AddReportBackedDataSets(configurationModel, result)", authority, StringComparison.Ordinal);
         Assert.DoesNotContain("AddReportBackedDataSets(device.SclWorkspace?.DesignModel, result)", authority, StringComparison.Ordinal);
         Assert.DoesNotContain("AddReportBackedDataSets(device.LiveDiscoveryModel, result)", authority, StringComparison.Ordinal);
-        Assert.Contains("LiteralEquals(signal.DataSetReference, membership.DataSetReference)", authority, StringComparison.Ordinal);
+        // Exact DataSet membership is now enforced once by a case-insensitive,
+        // Trim-normalized lookup, not one full-catalog LINQ filter per member.
+        Assert.Contains("device.Signals.ToLookup(", authority, StringComparison.Ordinal);
+        Assert.Contains("signal => NormalizeLiteral(signal.DataSetReference)", authority, StringComparison.Ordinal);
+        Assert.Contains("signalsByDataSet[NormalizeLiteral(membership.DataSetReference)]", authority, StringComparison.Ordinal);
         Assert.Contains("LiteralEquals(signal.DisplayReference, memberReference)", authority, StringComparison.Ordinal);
         Assert.DoesNotContain("StartsWith(memberReference", authority, StringComparison.Ordinal);
         Assert.DoesNotContain("Contains(memberReference", authority, StringComparison.Ordinal);
@@ -184,6 +188,10 @@ public sealed class StaticDataSetReportOnlyModeRegressionTests
         var source = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.AutoConnect.cs"));
 
         Assert.Contains("ObserveSharedStaticReportEvidenceAsync", source, StringComparison.Ordinal);
+        Assert.Contains("proofWindow - (DateTime.UtcNow - startedUtc)", source, StringComparison.Ordinal);
+        Assert.Contains("Task.Delay(remaining, _applicationCancellation.Token)", source, StringComparison.Ordinal);
+        Assert.Contains("device.LiveValues.Association != association", source, StringComparison.Ordinal);
+        Assert.Contains("LogStaticRcbImageTriage(device);", source, StringComparison.Ordinal);
         Assert.Contains("waiting for actual InformationReport traffic", source, StringComparison.Ordinal);
         Assert.Contains("actual InformationReport traffic observed", source, StringComparison.Ordinal);
         Assert.Contains("no InformationReport traffic was observed", source, StringComparison.Ordinal);

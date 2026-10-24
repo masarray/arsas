@@ -19,6 +19,12 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     private bool _isBusy;
     private bool _isStopping;
     private bool _isMonitoring;
+    private bool _isBrowserReading;
+    private bool _discoveryProgressActive;
+    private bool _reportingProgressActive;
+    private bool _reportingProgressCanceled;
+    private double _reportingProgressPercent;
+    private double _browserReadProgressPercent;
     private bool _isActive;
     private bool _hasReportStream;
     private bool _isDemo;
@@ -50,6 +56,37 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     public BulkObservableCollection<SignalDefinition> Signals { get; } = new();
     public BulkObservableCollection<Iec61850MonitorPoint> Points { get; } = new();
     public BulkObservableCollection<SignalDefinition> CommandSignals { get; } = new();
+    /// <summary>
+    /// Live, verified-operable presentation only. The engineering catalog above
+    /// deliberately keeps StatusOnly/Unknown objects for model inspection.
+    /// Command Dock binds ONLY to this collection.
+    /// </summary>
+    public BulkObservableCollection<SignalDefinition> OperableCommandSignals { get; } = new();
+    // Shared per-IED live model for the Browser, Explorer and all read-only
+    // engineering consumers. Runtime report ingress and manual MMS reads use
+    // identical reference/FC keys; not persisted across associations.
+    [JsonIgnore]
+    public IedBrowserLiveValues LiveValues { get; } = new();
+
+    // Error-only evidence from the bounded initial MMS hydration. Value
+    // authority remains LiveValues; an unsuccessful Read is never a value.
+    [JsonIgnore]
+    public IedBrowserReadFailureEvidence? InitialHydrationFailures { get; internal set; }
+
+    // Collection-change notifications (including same-count ReplaceAll/Reset)
+    // and schema replacement invalidate captured reference/FC projection indexes.
+    // One monotonic revision avoids scans or per-row event subscriptions on ingress.
+    private long _browserProjectionEpoch;
+    internal long BrowserProjectionEpoch =>
+        System.Threading.Interlocked.Read(ref _browserProjectionEpoch);
+
+    public Iec61850MonitorDevice()
+    {
+        Signals.CollectionChanged += (_, _) =>
+            System.Threading.Interlocked.Increment(ref _browserProjectionEpoch);
+        Points.CollectionChanged += (_, _) =>
+            System.Threading.Interlocked.Increment(ref _browserProjectionEpoch);
+    }
     public Iec61850DeviceDiagnosticSnapshot LastDiagnosticSnapshot { get; set; } = new();
 
     [JsonIgnore]
@@ -77,6 +114,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         {
             if (ReferenceEquals(_sclWorkspace, value)) return;
             _sclWorkspace = value;
+            System.Threading.Interlocked.Increment(ref _browserProjectionEpoch);
             RefreshAuthoritativeSclComparison();
             RefreshComputed();
         }
@@ -89,6 +127,7 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         {
             if (ReferenceEquals(_liveDiscoveryModel, value)) return;
             _liveDiscoveryModel = value;
+            System.Threading.Interlocked.Increment(ref _browserProjectionEpoch);
             RefreshAuthoritativeSclComparison();
             RefreshComputed();
         }
@@ -325,7 +364,17 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         set
         {
             if (Set(ref _isConnected, value))
+            {
+                // Retain prior values as stale/offline evidence; a new MMS
+                // association always starts an isolated revision/identity.
+                InitialHydrationFailures = null;
+                if (value) LiveValues.BeginAssociation();
+                else LiveValues.MarkOffline();
+                MarkSignalObservationLifecycle(value
+                    ? CanonicalSignalObservationState.Awaiting
+                    : CanonicalSignalObservationState.Offline);
                 RefreshComputed();
+            }
         }
     }
 
@@ -334,8 +383,16 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         get => _isBusy;
         set
         {
+            // Only ResetDiscoveryProgress arms the under-IP discovery line.
+            // Other busy operations (e.g. Stop) must not replay a stale 100% bar.
+            if (!value)
+                _discoveryProgressActive = false;
             if (Set(ref _isBusy, value))
+            {
                 RefreshComputed();
+                Raise(nameof(IsDiscoveryProgressActive));
+                Raise(nameof(IedCardProgressPercent));
+            }
         }
     }
 
@@ -350,13 +407,123 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         }
     }
 
+    // Independent read-only association may run while static reporting stays live.
+    public bool IsBrowserReading
+    {
+        get => _isBrowserReading;
+        set
+        {
+            // Every explicit or bounded focused sweep starts at zero, without
+            // resetting discovery telemetry or reallocating a UI overlay.
+            if (value && !_isBrowserReading)
+                BrowserReadProgressPercent = 0d;
+            Set(ref _isBrowserReading, value);
+        }
+    }
+
+    // Presentation-only Browser Read progress, isolated from discovery.
+    // The IED card reserves its thin progress slot even while hidden.
+    public double BrowserReadProgressPercent
+    {
+        get => _browserReadProgressPercent;
+        private set
+        {
+            if (Set(ref _browserReadProgressPercent, Math.Clamp(value, 0d, 100d)))
+                Raise(nameof(IedCardProgressPercent));
+        }
+    }
+
+    // The permanent IED-card progress line is reused for discovery, report
+    // arming, and Browser Read, without a second visual indicator or ledger.
+    [JsonIgnore]
+    public bool IsDiscoveryProgressActive => _discoveryProgressActive && IsBusy;
+
+    [JsonIgnore]
+    public bool IsReportingProgressActive => _reportingProgressActive;
+
+    [JsonIgnore]
+    public bool IsReportingProgressCanceled => _reportingProgressCanceled;
+
+    [JsonIgnore]
+    public double IedCardProgressPercent => IsDiscoveryProgressActive
+        ? DiscoveryProgressPercent
+        : IsReportingProgressActive
+            ? _reportingProgressPercent
+            : BrowserReadProgressPercent;
+
+    // Work-flow completion, NOT percentage of InformationReport traffic.
+    // Green 100% means arming finished, never proves buffered SOE continuity.
+    public void BeginReportingProgress(string stage)
+    {
+        _reportingProgressCanceled = false;
+        _reportingProgressActive = true;
+        _reportingProgressPercent = 0;
+        BusyStage = stage;
+        Raise(nameof(IsReportingProgressActive));
+        Raise(nameof(IedCardProgressPercent));
+        RefreshComputed();
+    }
+
+    public void UpdateReportingProgress(double percent, string stage)
+    {
+        if (!_reportingProgressActive) return;
+        BusyStage = stage;
+        var next = Math.Clamp(percent, 0d, 99d);
+        if (next <= _reportingProgressPercent) return;
+        _reportingProgressPercent = next;
+        Raise(nameof(IedCardProgressPercent));
+    }
+
+    public void CompleteReportingProgress()
+    {
+        if (!_reportingProgressActive) return;
+        _reportingProgressPercent = 100d;
+        Raise(nameof(IedCardProgressPercent));
+        _reportingProgressActive = false;
+        Raise(nameof(IsReportingProgressActive));
+        RefreshComputed();
+    }
+
+    // Stop preempts the selection/arming workflow without a second competing
+    // MMS request. The caller checks this before moving to the next stage.
+    public void CancelReportingProgress()
+    {
+        if (!_reportingProgressActive) return;
+        _reportingProgressCanceled = true;
+        _reportingProgressActive = false;
+        Raise(nameof(IsReportingProgressActive));
+        Raise(nameof(IedCardProgressPercent));
+        RefreshComputed();
+    }
+
     public bool IsMonitoring
     {
         get => _isMonitoring;
         set
         {
-            if (Set(ref _isMonitoring, value))
-                RefreshComputed();
+            if (!Set(ref _isMonitoring, value)) return;
+            if (IsConnected)
+                MarkSignalObservationLifecycle(value
+                    ? CanonicalSignalObservationState.Awaiting
+                    : CanonicalSignalObservationState.Paused,
+                    preserveCurrentLive: value);
+            RefreshComputed();
+        }
+    }
+
+    // One O(signal count) pass only on lifecycle transitions. No per-Report
+    // scan; the canonical projection index handles Report ingress in O(1).
+    private void MarkSignalObservationLifecycle(
+        CanonicalSignalObservationState state, bool preserveCurrentLive = false)
+    {
+        var association = LiveValues.Association;
+        foreach (var signal in Signals)
+        {
+            if (signal.IsControlSignal) continue;
+            if (preserveCurrentLive && signal.IsLiveObservation &&
+                signal.ObservationAssociation == association)
+                continue;
+            signal.MarkCanonicalObservation(state, association);
         }
     }
 
@@ -401,7 +568,11 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     public double DiscoveryProgressPercent
     {
         get => _discoveryProgressPercent;
-        private set => Set(ref _discoveryProgressPercent, Math.Clamp(value, 0d, 100d));
+        private set
+        {
+            if (Set(ref _discoveryProgressPercent, Math.Clamp(value, 0d, 100d)))
+                Raise(nameof(IedCardProgressPercent));
+        }
     }
 
     public string DiscoveryProgressStepText
@@ -416,10 +587,27 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         private set => Set(ref _discoveryProgressPercentText, value ?? string.Empty);
     }
 
+    public void ApplyBrowserReadProgress(int completed, int total)
+    {
+        if (total <= 0 || !IsBrowserReading) return;
+        var processed = Math.Clamp(completed, 0, total);
+        var percent = Math.Round(100d * processed / total, 0,
+            MidpointRounding.AwayFromZero);
+        // Thousands of leaf Read results must not trigger thousands of WPF
+        // property notifications. One update per integer percent plus final.
+        if (BrowserReadProgressPercent == percent && processed != total) return;
+        BrowserReadProgressPercent = percent;
+        BusyStage = $"Read-only MMS values · {processed:N0} / {total:N0}";
+        DiscoveryProgressStepText = $"Value {processed:N0} of {total:N0}";
+    }
+
     public void ResetDiscoveryProgress(
         string message = "Preparing IEC 61850 session…",
         string title = "Discovering IED")
     {
+        _discoveryProgressActive = true;
+        Raise(nameof(IsDiscoveryProgressActive));
+        Raise(nameof(IedCardProgressPercent));
         BusyTitle = title;
         BusyStage = message;
         _discoveryProgressTargetPercent = 0d;
@@ -488,16 +676,16 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     public int SelectedControlSignalCount => _selectedControlSignalCount;
     public bool IsBulkSignalSelectionUpdate => _isBulkSignalSelectionUpdate;
     public int PointCount => Points.Count;
-    public bool IsActionEnabled => !IsBusy;
-    public bool CanEditSignals => SignalCount > 0 && !IsBusy && !IsMonitoring && !IsDemo;
-    public bool CanStartMonitor => IsConnected && SelectedLiveSignalCount > 0 && !IsBusy;
-    public bool CanStartOrStopMonitor => !IsBusy && (IsMonitoring || SelectedLiveSignalCount > 0);
-    public bool CanPlayAction => !IsStopping && !IsBusy && (!IsConnected || (!IsMonitoring && SelectedLiveSignalCount > 0));
+    public bool IsActionEnabled => !IsBusy && !IsReportingProgressActive;
+    public bool CanEditSignals => SignalCount > 0 && !IsBusy && !IsReportingProgressActive && !IsMonitoring && !IsDemo;
+    public bool CanStartMonitor => IsConnected && SelectedLiveSignalCount > 0 && !IsBusy && !IsReportingProgressActive;
+    public bool CanStartOrStopMonitor => !IsBusy && !IsReportingProgressActive && (IsMonitoring || SelectedLiveSignalCount > 0);
+    public bool CanPlayAction => !IsStopping && !IsBusy && !IsReportingProgressActive && (!IsConnected || (!IsMonitoring && SelectedLiveSignalCount > 0));
     // Stop is intentionally pre-emptive: a hung Connect/Start must not
     // disable the only safe operator exit from an in-flight MMS operation.
-    public bool CanStopAction => !IsStopping && (IsBusy || IsConnected || IsMonitoring);
-    public bool CanRescan => !IsBusy && !IsMonitoring && !IsDemo;
-    public bool CanSaveScl => !IsBusy && !IsDemo && (SclWorkspace != null || LiveDiscoveryModel != null);
+    public bool CanStopAction => !IsStopping && (IsBusy || IsConnected || IsMonitoring || IsReportingProgressActive);
+    public bool CanRescan => !IsBusy && !IsReportingProgressActive && !IsMonitoring && !IsDemo;
+    public bool CanSaveScl => !IsBusy && !IsReportingProgressActive && !IsDemo && (SclWorkspace != null || LiveDiscoveryModel != null);
     public string SaveSclToolTip => SclWorkspace != null
         ? $"Save {Name} from the opened SCL design model"
         : LiveDiscoveryModel != null
@@ -611,18 +799,134 @@ public sealed class Iec61850MonitorDevice : ObservableObject
 
     private void RefreshCommandSignals()
     {
-        // Show every selected valid control DataObject. Operate authorization remains
-        // independently gated by ControlSupportsOperate on each command action.
+        // Inventory membership is NOT operating authority. Show exact selected
+        // CO DataObjects including ZIV ctlModel=0 so commissioning can explicitly
+        // read/configure them; every physical action is still gated by typed
+        // live ctlModel + CDC proof in SignalDefinition/runtime.
+        // Cross-DataSet CSWI targets require exact live typed ctlModel/CO verification;
+        // never promote status-only XCBR/XSWI or mutate DataSet membership.
         var selected = Iec61850ControlIdentity.DistinctSelected(Signals)
-            .OrderBy(signal => signal.SortPriority)
+            .Concat(IsConnected && LiveDiscoveryModel is not null
+                ? Iec61850ControlIdentity.DiscoveredIndependentCswiControls(Signals)
+                : [])
+            .GroupBy(signal => Iec61850ControlIdentity.Normalize(signal.ObjectReference),
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.OrderByDescending(signal => signal.IsSelected)
+                .ThenByDescending(signal => signal.ControlSupportsOperate).First())
+            .OrderBy(Iec61850ControlIdentity.CommandDockDisplayPriority)
             .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(signal => signal.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(signal => signal.ObjectReference, StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        CommandSignals.ReplaceAll(selected);
+
+        // Live ctlModel verification may change display priority once; no
+        // detached/rebuilt row objects, full collection Reset, or MMS write.
+        // Common case: verification/report/navigation changed data, not the
+        // selected DataObject membership or its order. O(N) identity check,
+        // zero WPF collection events, zero row recycling and checkbox flicker.
+        if (CommandSignals.Count == selected.Length)
+        {
+            var same = true;
+            for (var index = 0; index < selected.Length; index++)
+            {
+                if (ReferenceEquals(CommandSignals[index], selected[index])) continue;
+                same = false;
+                break;
+            }
+            if (same)
+            {
+                RefreshOperableCommandSignals();
+                return;
+            }
+        }
+
+        // Reconcile real membership changes by *reference identity* and keep
+        // the original SignalDefinition instances. The set replaces a repeated
+        // O(N^2) selected.Any membership scan; the rare ordering correction
+        // below still emits granular Move/Insert rather than Reset.
+        var membership = new HashSet<SignalDefinition>(selected,
+            ReferenceEqualityComparer.Instance);
+        for (var index = CommandSignals.Count - 1; index >= 0; index--)
+        {
+            if (!membership.Contains(CommandSignals[index]))
+                CommandSignals.RemoveAt(index);
+        }
+
+        for (var index = 0; index < selected.Length; index++)
+        {
+            if (index < CommandSignals.Count && ReferenceEquals(CommandSignals[index], selected[index]))
+                continue;
+
+            var existingIndex = -1;
+            for (var search = index + 1; search < CommandSignals.Count; search++)
+            {
+                if (!ReferenceEquals(CommandSignals[search], selected[index]))
+                    continue;
+                existingIndex = search;
+                break;
+            }
+
+            if (existingIndex >= 0)
+                CommandSignals.Move(existingIndex, index);
+            else
+                CommandSignals.Insert(index, selected[index]);
+        }
+
+        RefreshOperableCommandSignals();
     }
+
+    // Reconcile only actual verified command DOs. Identity-preserving, no
+    // List Reset/Replace or bound-grid row recycling on unchanged reporting.
+    private void RefreshOperableCommandSignals()
+    {
+        var targets = Iec61850ControlIdentity.VerifiedCommandTargets(
+                Signals, admitDiscovered: IsConnected && LiveDiscoveryModel is not null)
+            .OrderBy(Iec61850ControlIdentity.CommandDockDisplayPriority)
+            .ThenBy(signal => signal.LogicalNode, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(signal => signal.ObjectReference, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (OperableCommandSignals.Count == targets.Length &&
+            OperableCommandSignals.SequenceEqual(targets, ReferenceEqualityComparer.Instance))
+            return;
+
+        var membership = new HashSet<SignalDefinition>(
+            targets, ReferenceEqualityComparer.Instance);
+        for (var i = OperableCommandSignals.Count - 1; i >= 0; i--)
+            if (!membership.Contains(OperableCommandSignals[i]))
+                OperableCommandSignals.RemoveAt(i);
+
+        for (var i = 0; i < targets.Length; i++)
+        {
+            if (i < OperableCommandSignals.Count &&
+                ReferenceEquals(OperableCommandSignals[i], targets[i]))
+                continue;
+            var existing = -1;
+            for (var j = i + 1; j < OperableCommandSignals.Count; j++)
+            {
+                if (ReferenceEquals(OperableCommandSignals[j], targets[i]))
+                {
+                    existing = j;
+                    break;
+                }
+            }
+            if (existing >= 0)
+                OperableCommandSignals.Move(existing, i);
+            else
+                OperableCommandSignals.Insert(i, targets[i]);
+        }
+    }
+
+    // Conservative GoCB evidence: current live association outranks saved SCL.
+    // Offline IEDs may expose a GoCB declared in their explicitly loaded SCL;
+    // a connected IED requires a GoCB in current live discovery, not an
+    // unrelated station capture capability or an advisory SCL entry.
+    [JsonIgnore]
+    public bool HasGooseControlBlock => IsConnected
+        ? LiveDiscoveryModel?.GooseControlBlocks.Count > 0
+        : SclWorkspace?.GooseStreams.Count > 0;
 
     public void RefreshComputed()
     {
+        Raise(nameof(HasGooseControlBlock));
         Raise(nameof(EndpointText));
         Raise(nameof(SclEndpointHint));
         Raise(nameof(SignalCount));
@@ -703,6 +1007,11 @@ public sealed class Iec61850MonitorPoint : ObservableObject
             var signal = SignalName ?? string.Empty;
             var reference = IecReference ?? string.Empty;
             var slash = reference.IndexOf('/');
+            // IEC 61850 vector member identity is part of the operator-facing
+            // name, not only the wire reference. Keep PhsA/PhsBC visible even
+            // when the generic signal title is simply "A" or "PPV".
+            signal = ArIED61850Tester.Models.IoTesting.IoSignalDisplayName.Format(
+                signal, reference);
             if (slash < 0)
                 return signal;
 
@@ -755,7 +1064,17 @@ public sealed class Iec61850MonitorPoint : ObservableObject
         IecDataType,
         Category,
         IecReference);
-    public string Quality { get => _quality; set => Set(ref _quality, string.IsNullOrWhiteSpace(value) ? "Unknown" : value); }
+    public string Quality
+    {
+        get => _quality;
+        set
+        {
+            if (Set(ref _quality, string.IsNullOrWhiteSpace(value) ? "Unknown" : value))
+                Raise(nameof(IsInvalidQuality));
+        }
+    }
+    /// <summary>Warning glyph is a UI projection, not protocol or command authority.</summary>
+    public bool IsInvalidQuality => QualityInvalidAttention.IsInvalid(Quality);
     public string DeviceTimestamp { get => _deviceTimestamp; set => Set(ref _deviceTimestamp, string.IsNullOrWhiteSpace(value) ? "-" : value); }
     public string SourceMode
     {
@@ -790,6 +1109,11 @@ public sealed class Iec61850MonitorPoint : ObservableObject
     // Runtime ordering metadata is not rendered. Avoid an unnecessary WPF property-change
     // notification for every poll/report sample; the value still guards stale snapshots.
     public long Sequence { get => _sequence; set => _sequence = value; }
+    // UI-only monotonic apply guard; no PropertyChanged, persistence, or SOE.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public long LastSnapshotRevision { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public long LastSnapshotAssociation { get; set; }
     // Presentation state only: cached/last-seen values cannot be mistaken
     // for fresh IED data when the MMS association has been stopped.
     public bool IsOffline
@@ -874,7 +1198,10 @@ public sealed class Iec61850MonitorPoint : ObservableObject
         return string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
     }
 
-    private static string NormalizeReference(string? reference)
+    // Legacy presentation/planner PointKey normalization. This is NOT a
+    // canonical IEC identity: case and FC are intentionally not encoded.
+    // Startup collision validation protects runtime dictionaries from aliasing.
+    internal static string NormalizeReference(string? reference)
         => (reference ?? string.Empty).Trim().Replace('$', '.').Replace("..", ".").ToLowerInvariant();
 
     internal static string StripIedNamePrefix(string? reference, string? iedName)
@@ -910,6 +1237,12 @@ public sealed class Iec61850PointSnapshot
     /// </summary>
     public bool IsValueEdge { get; init; }
     public bool IsReportTraffic { get; init; }
+    // Association identity is stamped at runtime ingress, NOT reconstructed
+    // by the UI when a queued snapshot is eventually processed.
+    public long ObservationAssociation { get; init; }
+    // Per-point monotonic publication order, including metadata-only frames.
+    // Separate from Sequence, which is reserved for semantic process edges/SOE.
+    public long SnapshotRevision { get; init; }
     // Association-local aggregate sourced only from real decoded report ingress.
     // Immutable copy when published: safe across the runtime / WPF dispatcher.
     public IReadOnlyList<string> RoutedReportControlReferences { get; init; } = Array.Empty<string>();

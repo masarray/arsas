@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Globalization;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Services;
 
@@ -72,8 +74,64 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     public event Action<Iec61850PointSnapshot>? PointUpdated;
     public event Action<Iec61850EventEntry>? EventRaised;
 
+    public IReadOnlySet<string> GetActiveBrowserRcbReferences(string deviceId)
+        => _inner.GetActiveBrowserRcbReferences(deviceId);
+
     public int ConnectedDeviceCount => _inner.ConnectedDeviceCount;
     public int MonitoringDeviceCount => _inner.MonitoringDeviceCount;
+
+    // Explicit operator Browser configuration lane; the facade owns the same
+    // bounded per-device flight and never runs the native sync prefix on WPF.
+    // Inner runtime validates LIVE model, association, typed FC and quarantine.
+    public Task<AR.Iec61850.Mms.MmsReadResult> ReadBrowserConfigurationAsync(
+        string deviceId, AR.Iec61850.Discovery.LiveIedModelDiscoveryDocument model,
+        long association, IedBrowserWriteRow target, CancellationToken cancellationToken)
+        => RunDeviceOperationAsync(deviceId, cancellationToken,
+            token => _inner.ReadBrowserConfigurationAsync(
+                deviceId, model, association, target, token));
+
+    public Task<BrowserMmsWriteOutcome> WriteBrowserConfigurationAsync(
+        string deviceId, AR.Iec61850.Discovery.LiveIedModelDiscoveryDocument model,
+        long association, IedBrowserWriteRow target,
+        AR.Iec61850.Mms.MmsDataValue desired, CancellationToken cancellationToken)
+        => RunDeviceOperationAsync(deviceId, cancellationToken,
+            token => _inner.WriteBrowserConfigurationAsync(
+                deviceId, model, association, target, desired, token));
+
+    public Task<IedBrowserNativeWritePreview> PreviewBrowserDataAttributeWriteAsync(
+        Iec61850MonitorDevice device,
+        AR.Iec61850.Mms.MmsObjectReference reference,
+        CancellationToken cancellationToken)
+        => RunDeviceOperationAsync(
+            device.DeviceId, cancellationToken,
+            token => _inner.PreviewBrowserDataAttributeWriteAsync(device, reference, token),
+            rejectIfBusy: true);
+
+    /// <summary>
+    /// Strict non-queued operator Write lane, sharing the existing IED
+    /// lifecycle gate with Read and IEC Control. No independent MMS socket.
+    /// </summary>
+    public Task<IedBrowserTypedWriteBatchResult> WriteBrowserDataAttributesAsync(
+        Iec61850MonitorDevice device,
+        IReadOnlyList<IedBrowserTypedWriteStep> confirmedPlan,
+        bool explicitOperatorConfirmation,
+        CancellationToken cancellationToken)
+        => RunDeviceOperationAsync(
+            device.DeviceId, cancellationToken,
+            token => _inner.WriteBrowserDataAttributesAsync(
+                device, confirmedPlan, explicitOperatorConfirmation, token),
+            rejectIfBusy: true);
+
+    public Task<int> ReadBrowserValuesAsync(
+        Iec61850MonitorDevice device,
+        IReadOnlyList<IedBrowserReadTarget> targets,
+        IProgress<IedBrowserReadResult> values,
+        IProgress<IedBrowserReadProgress> progress,
+        CancellationToken cancellationToken,
+        IReadOnlyList<IedBrowserReadTarget>? verifiedRootScope = null)
+        => RunDeviceOperationAsync(device.DeviceId, cancellationToken,
+            token => _inner.ReadBrowserValuesAsync(device, targets, values, progress,
+                token, verifiedRootScope));
 
     public Task<int> EnrichSelectedStaticDataSetUnitsAsync(
         Iec61850MonitorDevice device,
@@ -119,6 +177,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             cancellationToken,
             token => _inner.StartMonitoringAsync(device, selectedSignals, pollingIntervalMs, token));
 
+    public Task<AR.Iec61850.Control.Iec61850ControlModelProbe> ProbeControlModelAsync(
+        string deviceId, SignalDefinition signal, CancellationToken cancellationToken)
+        => RunDeviceOperationAsync(
+            deviceId,
+            cancellationToken,
+            token => _inner.ProbeControlModelAsync(deviceId, signal, token));
+
     public Task<Iec61850ControlCapabilities> InspectControlAsync(
         string deviceId,
         SignalDefinition signal,
@@ -144,6 +209,9 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         string deviceId,
         Iec61850ControlCommandRequest request,
         CancellationToken cancellationToken)
+        // An IEC command cannot silently queue behind a bulk discovery,
+        // browser Read All or lifecycle operation. If the single association
+        // is busy, fail locally before a wire write; NEVER bypass its IO gate.
         => RunDeviceOperationAsync(
             deviceId,
             cancellationToken,
@@ -161,7 +229,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 {
                     ClearActiveCommandExpectations(expectationKeys);
                 }
-            });
+            }, rejectIfBusy: true, traceCommandAdmission: true);
 
     public HybridReportPhysicalValidationSnapshot CaptureHybridReportPhysicalValidation(string deviceId)
         => _inner.CaptureHybridReportPhysicalValidation(deviceId);
@@ -523,27 +591,104 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
         }
     }
 
+    // Command-only latency accounting, deliberately outside the native MMS service.
+    // This records the UI facade's local gate/lifecycle/inner wall time; it MUST NOT
+    // be reported as wire RTT or as proof that an Operate reached the IED.
+    private void RecordCommandAdmission(string? deviceId, string phase,
+        long beganAt, long operationGateAt, long stopGateAt, long innerStartedAt,
+        long innerEndedAt, long finishedAt)
+    {
+        static string Ms(long start, long end)
+            => (start > 0 && end >= start
+                ? Stopwatch.GetElapsedTime(start, end).TotalMilliseconds : 0d)
+                .ToString("F2", CultureInfo.InvariantCulture);
+        try
+        {
+            Diagnostic?.Invoke(new DiagnosticEntry
+            {
+                Time = DateTime.Now,
+                Level = "INFO",
+                Source = NormalizeDeviceKey(deviceId),
+                Message = "P0_COMMAND_ADMISSION " +
+                    $"phase={phase} operationGateMs={Ms(beganAt, operationGateAt)} " +
+                    $"stopGateMs={Ms(operationGateAt, stopGateAt)} " +
+                    $"innerMs={Ms(innerStartedAt, innerEndedAt)} " +
+                    $"facadeTotalMs={Ms(beganAt, finishedAt)}"
+            });
+        }
+        catch
+        {
+            // Diagnostics are observational only. A consumer exception must
+            // never change a control's sent/unknown outcome or hold the gate.
+        }
+    }
+
     private async Task<T> RunDeviceOperationAsync<T>(
         string? deviceId,
         CancellationToken cancellationToken,
-        Func<CancellationToken, Task<T>> operation)
+        Func<CancellationToken, Task<T>> operation,
+        bool rejectIfBusy = false,
+        bool traceCommandAdmission = false)
     {
         ThrowIfDisposing();
         ArgumentNullException.ThrowIfNull(operation);
 
+        var beganAt = traceCommandAdmission ? Stopwatch.GetTimestamp() : 0L;
+        long operationGateAt = 0, stopGateAt = 0, innerStartedAt = 0, innerEndedAt = 0;
+        var phase = "not-dispatched";
         var slot = GetSlot(deviceId);
-        await slot.OperationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        if (rejectIfBusy)
+        {
+            // Never FIFO-queue operator controls behind background Read/Discovery.
+            if (!await slot.OperationGate.WaitAsync(0, cancellationToken)
+                    .ConfigureAwait(false))
+            {
+                if (traceCommandAdmission)
+                    RecordCommandAdmission(deviceId, "busy-operation-NOT-SENT",
+                        beganAt, 0, 0, 0, 0, Stopwatch.GetTimestamp());
+                throw new InvalidOperationException(
+                    "IED MMS association busy: command NOT SENT. Finish/cancel the current operation and retry.");
+            }
+        }
+        else
+            await slot.OperationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        if (traceCommandAdmission)
+            operationGateAt = Stopwatch.GetTimestamp();
 
         CancellationTokenSource? linkedCancellation = null;
         long generation = 0;
         try
         {
-            await slot.StopGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            // Stop retains priority. A command is never allowed to await this
+            // gate; even a short lifecycle transition must yield NOT SENT.
+            if (rejectIfBusy)
+            {
+                if (!await slot.StopGate.WaitAsync(0, cancellationToken)
+                        .ConfigureAwait(false))
+                {
+                    phase = "busy-stop-gate-NOT-SENT";
+                    throw new InvalidOperationException(
+                        "IED stopping or reconnecting: command NOT SENT (lifecycle gate busy).");
+                }
+            }
+            else
+                await slot.StopGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            if (traceCommandAdmission)
+                stopGateAt = Stopwatch.GetTimestamp();
             try
             {
-                linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 lock (slot.SyncRoot)
                 {
+                    // Stop publishes ActiveStopTask before taking StopGate.
+                    // Checking only the semaphore leaves a race where a new
+                    // command could otherwise overtake the preemptive stop.
+                    if (rejectIfBusy && slot.ActiveStopTask is { IsCompleted: false })
+                    {
+                        phase = "stop-in-progress-NOT-SENT";
+                        throw new InvalidOperationException(
+                            "IED stop is in progress: command NOT SENT.");
+                    }
+                    linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     slot.ActiveOperationCancellation = linkedCancellation;
                     generation = ++slot.Generation;
                 }
@@ -553,10 +698,28 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 slot.StopGate.Release();
             }
 
-            var result = await Task.Run(
-                    async () => await operation(linkedCancellation.Token).ConfigureAwait(false),
-                    CancellationToken.None)
-                .ConfigureAwait(false);
+            // Stop may have cancelled this operation between ownership and
+            // dispatch. Check again ON THE WORKER before entering inner runtime.
+            linkedCancellation.Token.ThrowIfCancellationRequested();
+            if (traceCommandAdmission)
+                innerStartedAt = Stopwatch.GetTimestamp();
+            phase = "inner-threw-or-cancelled";
+            T result;
+            try
+            {
+                result = await Task.Run(
+                        async () =>
+                        {
+                            linkedCancellation.Token.ThrowIfCancellationRequested();
+                            return await operation(linkedCancellation.Token).ConfigureAwait(false);
+                        }, CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
+            finally
+            {
+                if (traceCommandAdmission)
+                    innerEndedAt = Stopwatch.GetTimestamp();
+            }
 
             linkedCancellation.Token.ThrowIfCancellationRequested();
             lock (slot.SyncRoot)
@@ -564,6 +727,7 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 if (slot.Generation != generation)
                     throw new OperationCanceledException("IEC 61850 lifecycle operation was superseded.");
             }
+            phase = "inner-returned";
             return result;
         }
         finally
@@ -577,7 +741,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 }
                 linkedCancellation.Dispose();
             }
+            // Release before emitting diagnostic; logs must never extend
+            // association occupancy or slow the following operator action.
             slot.OperationGate.Release();
+            if (traceCommandAdmission)
+                RecordCommandAdmission(deviceId, phase, beganAt,
+                    operationGateAt, stopGateAt, innerStartedAt, innerEndedAt,
+                    Stopwatch.GetTimestamp());
         }
     }
 
