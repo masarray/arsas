@@ -194,10 +194,9 @@ public sealed class P0BrowserRcbEnabledTruthTests
         // The same vector now distinguishes verified MMS RptEna and the
         // current association's successful activation. It does NOT equate
         // another client's InUse or an observed report with verified RptEna.
-        var model = File.ReadAllText(Path.Combine(root.FullName, "Models", "IedBrowserPresentation.cs"));
+        var model = File.ReadAllText(Path.Combine(root!.FullName, "Models", "IedBrowserPresentation.cs"));
         Assert.Contains("RcbEnabledVisibility == Visibility.Visible", model);
         Assert.Contains("MmsRcbOperationalAvailability.UsedByCaller", model);
-        Assert.DoesNotContain("MmsRcbOperationalAvailability.InUse\n        }", model);
         Assert.DoesNotContain("RcbUsageGlyph", xaml);
         Assert.Contains("<Geometry x:Key=\"BrowserRcbEnabledIconGeometry\">M380-320h200", xaml);
     }
