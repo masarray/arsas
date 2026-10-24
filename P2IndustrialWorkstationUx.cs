@@ -408,6 +408,10 @@ internal static class P2IndustrialWorkstationUx
         {
             if (skipCommandGrid && grid.Style == commandStyle)
                 continue;
+            // A tab-specific instrument (e.g. SMV Measurements) owns its explicit
+            // header style. The global adapter must not override that contract.
+            if (grid.ReadLocalValue(DataGrid.ColumnHeaderStyleProperty) != DependencyProperty.UnsetValue)
+                continue;
             grid.ColumnHeaderStyle = header;
         }
     }
