@@ -140,10 +140,29 @@ public sealed class PhasorDiagramControl : FrameworkElement
         if (width < 130 || height < 130)
             return;
 
-        // Reserve side rails for collision-free labels, rather than letting text
-        // overlap the arrows or escape beyond the narrow analyzer workspace.
-        var center = new Point(width / 2.0, height / 2.0 - 2);
-        var radius = Math.Max(0, Math.Min(width / 2.0 - 69, height / 2.0 - 35));
+        // P1: fit the polar plot to the ACTUAL annotated text, not a fixed
+        // 69-DIP side rail. This prevents value labels from crossing the ring
+        // at narrower window widths or at different Windows text scaling.
+        // At most six FormattedText objects are measured once per repaint.
+        var labelCache = _visualItems.Where(IsRenderable)
+            .ToDictionary(item => item, item =>
+                CreateText(FormatPhasorLabel(item), 11.3, PhaseBrush(PhaseIndex(item.Name)), LabelTypeface));
+        var leftRail = 4.0;
+        var rightRail = 4.0;
+        foreach (var pair in labelCache)
+        {
+            var rad = pair.Key.AngleDegrees!.Value * Math.PI / 180.0;
+            if (Math.Cos(rad) < -1e-8)
+                leftRail = Math.Max(leftRail, pair.Value.Width + 10.0);
+            else
+                rightRail = Math.Max(rightRail, pair.Value.Width + 10.0);
+        }
+        // Leave a safety corridor between ring and horizontal callout text;
+        // scale the ring, never reduce font size or clip individual labels.
+        var center = new Point((leftRail + width - rightRail) / 2.0, height / 2.0 - 2);
+        var radius = Math.Max(0, Math.Min(
+            Math.Min(center.X - leftRail, width - rightRail - center.X) - 6,
+            height / 2.0 - 35));
         if (radius < 12)
             return;
 
@@ -197,8 +216,7 @@ public sealed class PhasorDiagramControl : FrameworkElement
             dc.DrawLine(pen, center, tip);
             DrawArrow(dc, center, tip, arrowPen, item.Family == PhasorFamily.Voltage ? 9.5 : 8.0);
             dc.Pop();
-            vectors.Add(new RenderedVector(item, tip, brush,
-                CreateText(FormatPhasorLabel(item), 11.3, brush, LabelTypeface)));
+            vectors.Add(new RenderedVector(item, tip, brush, labelCache[item]));
         }
 
         dc.DrawEllipse(OriginInnerBrush, null, center, 4.2, 4.2);
@@ -287,19 +305,34 @@ public sealed class PhasorDiagramControl : FrameworkElement
 
     public static string FormatPhasorLabel(PhasorDisplayItem item)
     {
-        if (item.Magnitude is not double magnitude || !double.IsFinite(magnitude) ||
-            item.AngleDegrees is not double angle || !double.IsFinite(angle))
-            return ToPhaseLabel(item.Name);
+        if (item.AngleDegrees is not double angle || !double.IsFinite(angle))
+            return item.Name;
 
-        // Magnitude is fundamental RMS (not peak nor unverified true RMS).
-        // Keep compact phase identity so longer engineering readouts still fit
-        // the reserved side rails around the vector diagram.
-        var value = SmvDisplayMeasurement.FormatMagnitude(magnitude, item.Unit);
+        // RAW has no proven U/I mapping or engineering scale. The grid below
+        // already shows exact counts: repeating eight-digit counts on the
+        // diagram consumes side rails and produces collisions. Keep identity
+        // + angle on the polar diagram; retain all data in Measurements.
+        var degrees = SmvAnglePresentation.Normalize360(angle);
+        var angleText = "∠" + degrees.ToString("0.#", CultureInfo.InvariantCulture) + "°";
         if (item.Unit == "counts")
-            value = Math.Abs(magnitude) >= 1000
-                ? (magnitude / 1000.0).ToString("0.###", CultureInfo.InvariantCulture) + " kcounts"
-                : magnitude.ToString("0.###", CultureInfo.InvariantCulture) + " counts";
-        return item.Name + " " + value + " " + SmvAnglePresentation.Format(angle);
+            return item.Name + " " + angleText;
+
+        if (item.Magnitude is not double magnitude || !double.IsFinite(magnitude))
+            return item.Name + " " + angleText;
+
+        // Engineering callouts are compact approximate readouts only. Full
+        // precision remains in the Measurements table; magnitude here is
+        // fundamental RMS, not a silently invented waveform peak.
+        var value = CompactMagnitude(magnitude, item.Unit);
+        return item.Name + " " + value + " " + angleText;
+    }
+
+    private static string CompactMagnitude(double magnitude, string unit)
+    {
+        if ((unit == "V" || unit == "A") && Math.Abs(magnitude) >= 1000)
+            return (magnitude / 1000.0).ToString("0.##", CultureInfo.InvariantCulture) +
+                (unit == "V" ? "kV" : "kA");
+        return magnitude.ToString(unit == "A" ? "0.###" : "0.##", CultureInfo.InvariantCulture) + unit;
     }
 
     private static string ToPhaseLabel(string name) => name switch
