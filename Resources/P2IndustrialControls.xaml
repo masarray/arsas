@@ -114,14 +114,14 @@
     </Style>
 
     <Style x:Key="IndustrialGridHeader" TargetType="DataGridColumnHeader">
-        <Setter Property="Background" Value="#D1D9DB"/>
-        <Setter Property="Foreground" Value="#34454F"/>
+        <Setter Property="Background" Value="{DynamicResource GridHeaderSurface}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Padding" Value="9,0"/>
         <Setter Property="Height" Value="37"/>
         <Setter Property="HorizontalContentAlignment" Value="Left"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
-        <Setter Property="BorderBrush" Value="#A1ADB2"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource CoolDivider}"/>
         <Setter Property="BorderThickness" Value="0,0,0,1"/>
     </Style>
 
