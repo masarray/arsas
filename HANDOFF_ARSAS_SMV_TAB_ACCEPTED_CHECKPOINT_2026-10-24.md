@@ -6,7 +6,9 @@ Decision: merge accepted SMV-only stacked work onto an isolated integration chec
 
 ## Canonical provenance (single source of truth)
 
-- Approved final code HEAD: `4b2b62f882a81988a39a2f82d1ac8ff67592be02` ([PR #722](https://github.com/masarray/arsas/pull/722)).
+- Approved final code HEAD: `4b2b62f882a81988a39a2f82d1ac8ff67592be02` ([source PR #722](https://github.com/masarray/arsas/pull/722)).
+- **Consolidated merge**: [PR #725](https://github.com/masarray/arsas/pull/725), merge commit `bcf0ceb92a4dc6081d725ce0bd0c8f60bc102cc4` on isolated integration checkpoint; merge comparison to accepted source changed **only this handoff file**.
+- Integration PR exact-source-SHA CI: [Windows build #40052239441](https://github.com/masarray/arsas/actions/runs/40052239441), [SV validation #40052239421](https://github.com/masarray/arsas/actions/runs/40052239421), [P1 advisory #40052239471](https://github.com/masarray/arsas/actions/runs/40052239471), all SUCCESS.
 - FAT candidate workflow: [Windows Build ARSAS 40050735060](https://github.com/masarray/arsas/actions/runs/40050735060): ARSAS managed regressions **2784/2784**, engine **24/24**, native/managed bridge **6/6**, portable EXE smoke success.
 - [SV validation 40050735053](https://github.com/masarray/arsas/actions/runs/40050735053) passed; [CI P1 advisory 40050735051](https://github.com/masarray/arsas/actions/runs/40050735051) passed.
 - Operator-tested FAT EXE: [artifact 12543442068](https://github.com/masarray/arsas/actions/runs/40050735060/artifacts/12543442068), `ARSAS-1.6.40-win-x64-portable.exe`.
@@ -35,7 +37,7 @@ Decision: merge accepted SMV-only stacked work onto an isolated integration chec
 
 ## Reproduction / recovery
 
-1. Fetch branch `checkpoint/smv-tab-v1640-fat-accepted-20261024` and use the GitHub PR #722 merge record to identify the exact consolidated integration commit.
+1. Fetch branch `checkpoint/smv-tab-v1640-fat-accepted-20261024`; canonical GitHub consolidated [PR #725](https://github.com/masarray/arsas/pull/725) merged at `bcf0ceb92a4dc6081d725ce0bd0c8f60bc102cc4`. This documentation-only follow-up does not change compiled code.
 2. The reviewed FAT source tree is `4b2b62f882a81988a39a2f82d1ac8ff67592be02` and the above Windows artifact is the independently identified build; never relabel an older #719 or #717 artifact as this checkpoint.
 3. Restore using the integration merge commit as a starting SHA, not a force-push to shared workstreams; revert through normal PR if regressions appear.
-4. Closing SMV component PRs as **superseded by integrated #722** does not imply their individual unreviewed branches were merged to `main`. Older divergent SMV branches require independent ancestry/diff audit before closure.
+4. Component PRs #708/#711/#714/#715/#717/#719/#722 are **closed as consolidated into integration PR #725** (not individually merged into `main`). Historic divergent SMV PRs #667/#671/#675/#680 are **closed as superseded proposals**; their unique historic commits were NOT implicitly cherry-picked and source branches are retained. Any independently useful old change needs a fresh reviewed proposal.
