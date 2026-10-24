@@ -44,8 +44,8 @@ public sealed class SmvP3FatUxRegressionTests
         var wave = Read("Ports/DigSubAnalyzer/Controls/WaveformPanelControl.cs");
         var mapped = wave.IndexOf("if (nineTwoLe)", StringComparison.Ordinal);
         Assert.True(mapped >= 0);
-        var voltage = wave.IndexOf("visibleLanes.Add(new LaneDefinition(\"VOLTAGE · Ch5–8\"", mapped, StringComparison.Ordinal);
-        var current = wave.IndexOf("visibleLanes.Add(new LaneDefinition(\"CURRENT · Ch1–4\"", mapped, StringComparison.Ordinal);
+        var voltage = wave.IndexOf("visibleLanes.Add(new LaneDefinition(\"VOLTAGE\"", mapped, StringComparison.Ordinal);
+        var current = wave.IndexOf("visibleLanes.Add(new LaneDefinition(\"CURRENT\"", mapped, StringComparison.Ordinal);
         Assert.True(voltage > mapped && current > voltage);
         var raw = wave.IndexOf("visibleLanes.Add(new LaneDefinition(\"RAW Ch1–4\"", current, StringComparison.Ordinal);
         Assert.True(raw > current);
