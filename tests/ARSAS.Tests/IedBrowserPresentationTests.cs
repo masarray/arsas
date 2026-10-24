@@ -327,7 +327,7 @@ public sealed class IedBrowserPresentationTests
         var method = source.IndexOf("private void ReplaceIedBrowserDetails(", StringComparison.Ordinal);
         Assert.True(method >= 0);
         var detach = source.IndexOf("IedBrowserDetailList.ItemsSource = null;", method, StringComparison.Ordinal);
-        var reset = source.IndexOf("_iedBrowserDetails.Reset(rows);", method, StringComparison.Ordinal);
+        var reset = source.IndexOf("_iedBrowserDetails.Reset(rows, restored);", method, StringComparison.Ordinal);
         var attach = source.IndexOf("IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;", method, StringComparison.Ordinal);
         Assert.True(detach > method && reset > detach && attach > reset);
     }

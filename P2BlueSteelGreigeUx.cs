@@ -7,11 +7,10 @@ using System.Windows.Media.Effects;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// Small visual adapter for the P2 Blue Steel + Light Greige theme.
+/// Visual adapter for the P0 Blue Steel + Cool Blue workstation system.
 ///
-/// Most ARSAS surfaces already consume application resource keys. A few legacy
-/// windows still own local white grid/card styles or hard-coded navigation chrome;
-/// this adapter replaces only those visual contracts at runtime. It deliberately
+/// Most ARSAS surfaces consume application resource keys. Handle legacy chrome
+/// without overwriting scope-specific grid colors, SMV visuals or user window bounds. It deliberately
 /// does not alter IEC 61850 workflows, bindings, command handlers, or session state.
 /// </summary>
 internal static class P2BlueSteelGreigeUx
@@ -56,10 +55,6 @@ internal static class P2BlueSteelGreigeUx
 
     private static void ApplyMainWindow(MainWindow window)
     {
-        // ARSAS is an engineering workstation: use the available display by default.
-        if (window.WindowState == WindowState.Normal)
-            window.WindowState = WindowState.Maximized;
-
         if (window.FindName("WorkflowNavShell") is Border navShell)
         {
             navShell.Background = Brush(window, "BlueSteelNavSurface");
@@ -78,15 +73,10 @@ internal static class P2BlueSteelGreigeUx
         if (deviceList != null && Resource(window, "P2MainIedListItemStyle") is Style itemStyle)
             deviceList.ItemContainerStyle = itemStyle;
 
-        foreach (var grid in Descendants<DataGrid>(window))
-            ApplyEngineeringGrid(window, grid);
     }
 
     private static void ApplyIoFatWindow(IoListTestingWindow window)
     {
-        if (window.WindowState != WindowState.Maximized)
-            window.WindowState = WindowState.Maximized;
-
         var fatIedList = Descendants<ListBox>(window)
             .FirstOrDefault(list => ReferenceEquals(list.ItemsSource, window.Project.Ieds));
         if (fatIedList != null && Resource(window, "P2FatIedListItemStyle") is Style itemStyle)
@@ -98,13 +88,13 @@ internal static class P2BlueSteelGreigeUx
 
         foreach (var grid in Descendants<DataGrid>(window))
         {
-            grid.Background = Brush(window, "GreigeSurface");
-            grid.BorderBrush = Brush(window, "SteelDividerStrong");
+            grid.Background = Brush(window, "PanelSurface");
+            grid.BorderBrush = Brush(window, "CoolDivider");
             grid.BorderThickness = new Thickness(1);
-            grid.HorizontalGridLinesBrush = new SolidColorBrush(Color.FromRgb(0xD4, 0xD0, 0xC9));
+            grid.HorizontalGridLinesBrush = Brush(window, "CoolDivider");
             grid.GridLinesVisibility = DataGridGridLinesVisibility.Horizontal;
-            grid.RowBackground = Brush(window, "GreigeRowA");
-            grid.AlternatingRowBackground = Brush(window, "GreigeRowB");
+            grid.RowBackground = Brush(window, "GridRowPrimary");
+            grid.AlternatingRowBackground = Brush(window, "GridRowAlternate");
             grid.AlternationCount = 2;
 
             if (rowStyle != null)
@@ -114,19 +104,6 @@ internal static class P2BlueSteelGreigeUx
             if (headerStyle != null)
                 grid.ColumnHeaderStyle = headerStyle;
         }
-    }
-
-    private static void ApplyEngineeringGrid(FrameworkElement owner, DataGrid grid)
-    {
-        // Preserve explicit command-grid styles. The regular explorer/live tables
-        // already use ModernDataGrid; setting these semantic surfaces locally keeps
-        // zebra rows stable even when a legacy window has an old local brush.
-        if (grid.Style == Resource(owner, "CommandDataGrid"))
-            return;
-
-        grid.RowBackground = Brush(owner, "GreigeRowA");
-        grid.AlternatingRowBackground = Brush(owner, "GreigeRowB");
-        grid.AlternationCount = 2;
     }
 
     private static object? Resource(FrameworkElement owner, object key)

@@ -37,9 +37,9 @@ public partial class App : Application
             return;
         }
 
-        // P2 installs one calm industrial visual system before StartupUri materializes.
+        // P0 installs one cool-blue/white workstation system before StartupUri materializes.
         // Existing XAML keeps its semantic resource keys while the overlay replaces
-        // glare-heavy white/blue surfaces with Blue Steel + Light Greige equivalents.
+        // warm legacy surfaces with shared blue-white semantic resources.
         InstallP2BlueSteelGreigeTheme();
 
         // Keep every IED card on one reusable template key while replacing the
@@ -92,6 +92,8 @@ public partial class App : Application
         if (_styledWindows.TryGetValue(window, out _))
             return;
 
+        // Initial placement is applied ONCE before first paint; never on activation or resize.
+        WorkstationWindowStartupBounds.Apply(window);
         P2BlueSteelGreigeUx.ApplyToOpenWindows(this);
         _styledWindows.Add(window, new object());
 

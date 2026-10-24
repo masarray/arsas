@@ -21,6 +21,43 @@ public partial class MainWindow
     private readonly IedBrowserTreeProjection _iedBrowserTree = new();
     private readonly IedBrowserDetailProjection _iedBrowserDetails = new();
     private readonly IedBrowserNavigationTrail _iedBrowserNavigation = new();
+    // Presentation preferences only. Never cache IEC values or MMS evidence.
+    // Exact DeviceId + stable page key, bounded to avoid accumulating transient IEDs.
+    private readonly Dictionary<string, (string? SelectedKey, HashSet<string> ExpandedKeys)>
+        _iedBrowserTreePreferences = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, HashSet<string>> _iedBrowserSectionPreferences =
+        new(StringComparer.Ordinal);
+    private string? _iedBrowserRenderedSectionsKey;
+
+    private void RememberIedBrowserTreePreferences()
+    {
+        if (_iedBrowserCachedDevice is null || _iedBrowserTree.Rows.Count == 0)
+            return;
+        var id = _iedBrowserCachedDevice.DeviceId;
+        if (_iedBrowserTreePreferences.Count >= 64 &&
+            !_iedBrowserTreePreferences.ContainsKey(id))
+            _iedBrowserTreePreferences.Remove(_iedBrowserTreePreferences.Keys.First());
+        _iedBrowserTreePreferences[id] = (
+            (IedBrowserTreeGrid.SelectedItem as IedBrowserTreeRow)?.Key,
+            _iedBrowserTree.ExpandedKeys());
+    }
+
+    private static string? BrowserSectionKey(Iec61850MonitorDevice? device, IedBrowserTreeRow? page)
+        => device is null || page is null ? null : device.DeviceId + "|" + page.Key;
+
+    private void RememberIedBrowserSectionPreferences()
+    {
+        if (_iedBrowserRenderedSectionsKey is null ||
+            !_iedBrowserDetails.Rows.Any(row => row.Kind == "Section" && row.HasChildren))
+            return;
+        if (_iedBrowserSectionPreferences.Count >= 256 &&
+            !_iedBrowserSectionPreferences.ContainsKey(_iedBrowserRenderedSectionsKey))
+            _iedBrowserSectionPreferences.Remove(_iedBrowserSectionPreferences.Keys.First());
+        _iedBrowserSectionPreferences[_iedBrowserRenderedSectionsKey] =
+            _iedBrowserDetails.Rows.Where(row => row.Kind == "Section" &&
+                    row.HasChildren && row.IsExpanded)
+                .Select(row => row.Name).ToHashSet(StringComparer.Ordinal);
+    }
     private bool _iedBrowserSyncingSelection;
     private string? _iedBrowserSelectedDoReference;
     private int _iedBrowserNavigationRenderTicket;
@@ -2061,6 +2098,12 @@ public partial class MainWindow
         catch (IOException) { /* An unavailable source file cannot poison in-memory browsing. */ }
         catch (UnauthorizedAccessException) { /* Still show the cached/discovered model. */ }
 
+        // Checkpoint only on an actual IED/model replacement. On the ordinary
+        // reporting refresh path there is no need to scan the visible tree
+        // every 200 ms just to remember unchanged expansion preferences.
+        if (!ReferenceEquals(device, _iedBrowserCachedDevice) ||
+            !ReferenceEquals(model, _iedBrowserCachedModel))
+            RememberIedBrowserTreePreferences();
         // Heavy schema indexing must never block the WPF selection dispatcher.
         if (!TryActivateIedBrowserSchema(device, model))
             return;
@@ -2078,12 +2121,13 @@ public partial class MainWindow
             var sameDevice = ReferenceEquals(device, _iedBrowserCachedDevice) &&
                              device.LiveValues.Association == _iedBrowserCachedAssociation &&
                              ReferenceEquals(model, _iedBrowserCachedModel);
+            _iedBrowserTreePreferences.TryGetValue(device.DeviceId, out var recalled);
             var priorKey = sameDevice
                 ? (IedBrowserTreeGrid.SelectedItem as IedBrowserTreeRow)?.Key
-                : null;
+                : recalled.SelectedKey;
             var expandedKeys = sameDevice
                 ? _iedBrowserTree.ExpandedKeys()
-                : new HashSet<string>(StringComparer.Ordinal);
+                : recalled.ExpandedKeys ?? new HashSet<string>(StringComparer.Ordinal);
 
             // Source inspection parses SCL XML; never perform it inside a click handler.
             if (!TryResolveIedBrowserSclInventory(
@@ -2111,9 +2155,8 @@ public partial class MainWindow
                 _iedBrowserRemoteFiles, EffectiveSclIedName(device),
                 device.SclWorkspace?.DesignModel);
             _iedBrowserTree.Reset(roots, expandedKeys);
-            // Fresh IED/association/model epoch: all six Objects categories
-            // remain collapsed. Selecting Reports fills the right pane
-            // without materializing left LD/LN/RCB descendants.
+            // Restore only previously operator-expanded stable keys; no new
+            // branches are expanded automatically and no MMS reads are issued.
 
             IedBrowserTreeGrid.ItemsSource = _iedBrowserTree.Rows;
             var selected = priorKey == null ? null : _iedBrowserTree.FindVisible(priorKey);
@@ -2326,7 +2369,14 @@ public partial class MainWindow
         // Reset. A bound reset during routed selection can corrupt ItemInfo.
         IedBrowserDetailList.SelectedItem = null;
         IedBrowserDetailList.ItemsSource = null;
-        _iedBrowserDetails.Reset(rows);
+        RememberIedBrowserSectionPreferences();
+        var nextKey = rows.Count == 0 ? null
+            : BrowserSectionKey(SelectedDevice, _iedBrowserRenderedPage);
+        var restored = nextKey is not null &&
+            _iedBrowserSectionPreferences.TryGetValue(nextKey, out var expanded)
+                ? expanded : null;
+        _iedBrowserDetails.Reset(rows, restored);
+        _iedBrowserRenderedSectionsKey = nextKey;
         RebuildIedBrowserViewportIndex();
         IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
     }
@@ -2342,6 +2392,7 @@ public partial class MainWindow
             IedBrowserDetailList.SelectedItem = null;
             IedBrowserDetailList.ItemsSource = null;
             _iedBrowserDetails.Toggle(row);
+            RememberIedBrowserSectionPreferences();
             RebuildIedBrowserViewportIndex();
             IedBrowserDetailList.ItemsSource = _iedBrowserDetails.Rows;
             _iedBrowserLastLiveVersion = -1;
