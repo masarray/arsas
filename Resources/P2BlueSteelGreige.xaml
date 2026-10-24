@@ -3,11 +3,11 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!--
-      ARSAS P2 visual system — Blue Steel + Light Greige.
+      ARSAS P0 visual system — Blue Steel + Cool Blue (SMV reference).
 
       Design intent:
       * blue-steel shell gives the workstation an industrial control-room identity;
-      * warm greige reading surfaces avoid the glare of large pure-white regions;
+      * shared cool-blue/white reading surfaces match the SMV measurement screen;
       * dense engineering grids use low-contrast zebra rows for scan comfort;
       * blue is reserved for focus/action, while green/amber/red remain semantic.
 
@@ -16,6 +16,16 @@
       untouched by theme work.
     -->
 
+    <!-- Canonical shared visual tokens; compatibility keys below use these Color resources. -->
+    <Color x:Key="CoolCanvasColor">#F5F8FD</Color>
+    <Color x:Key="CoolPanelColor">#F8FBFF</Color>
+    <Color x:Key="CoolRaisedColor">#FFFFFF</Color>
+    <Color x:Key="CoolAlternateColor">#EDF5FF</Color>
+    <Color x:Key="CoolHeaderColor">#E8F2FF</Color>
+    <Color x:Key="CoolBorderColor">#D7E5F6</Color>
+    <Color x:Key="CoolHoverColor">#E4F0FF</Color>
+    <Color x:Key="CoolSelectedColor">#DCEAFF</Color>
+
     <!-- Core palette -->
     <Color x:Key="InkColor">#28343D</Color>
     <Color x:Key="MutedColor">#65727B</Color>
@@ -23,11 +33,11 @@
     <Color x:Key="AccentDeepColor">#185FB8</Color>
     <Color x:Key="SoftBlueColor">#DDE8F2</Color>
     <Color x:Key="BgColor">#263F52</Color>
-    <Color x:Key="LineColor">#C8CDD0</Color>
-    <Color x:Key="SurfaceColor">#EEEAE3</Color>
-    <Color x:Key="SurfaceElevatedColor">#F3F0EA</Color>
-    <Color x:Key="BorderSubtleColor">#C6CCCF</Color>
-    <Color x:Key="BorderStrongColor">#9DA9B0</Color>
+    <Color x:Key="LineColor">#D7E5F6</Color>
+    <Color x:Key="SurfaceColor">#F8FBFF</Color>
+    <Color x:Key="SurfaceElevatedColor">#FFFFFF</Color>
+    <Color x:Key="BorderSubtleColor">#D7E5F6</Color>
+    <Color x:Key="BorderStrongColor">#B5CAE5</Color>
     <Color x:Key="SuccessColor">#3E8E5B</Color>
     <Color x:Key="DangerColor">#C84C4C</Color>
     <Color x:Key="WarningColor">#C28A2C</Color>
@@ -46,26 +56,37 @@
     <SolidColorBrush x:Key="Success" Color="{StaticResource SuccessColor}"/>
     <SolidColorBrush x:Key="Danger" Color="{StaticResource DangerColor}"/>
     <SolidColorBrush x:Key="Warning" Color="{StaticResource WarningColor}"/>
-    <SolidColorBrush x:Key="Panel" Color="#F3F0EA"/>
+    <SolidColorBrush x:Key="Panel" Color="{StaticResource CoolPanelColor}"/>
 
     <!-- Named P2 surfaces are also consumed by the tiny runtime chrome adapter. -->
     <SolidColorBrush x:Key="BlueSteelNavSurface" Color="#2A465B"/>
     <SolidColorBrush x:Key="BlueSteelNavBorder" Color="#48657A"/>
     <SolidColorBrush x:Key="BlueSteelFooterSurface" Color="#203A4F"/>
-    <SolidColorBrush x:Key="GreigeWorkspace" Color="#E9E5DE"/>
-    <SolidColorBrush x:Key="GreigeSurface" Color="#F2EFE9"/>
-    <SolidColorBrush x:Key="GreigeSurfaceRaised" Color="#F5F2EC"/>
-    <SolidColorBrush x:Key="GreigeRowA" Color="#F3F0EA"/>
-    <SolidColorBrush x:Key="GreigeRowB" Color="#ECE8E1"/>
-    <SolidColorBrush x:Key="GreigeHeader" Color="#E1DDD5"/>
-    <SolidColorBrush x:Key="GreigeHover" Color="#E4E9EA"/>
-    <SolidColorBrush x:Key="GreigeSelected" Color="#DCE7EF"/>
-    <SolidColorBrush x:Key="SteelDivider" Color="#BFC6C9"/>
-    <SolidColorBrush x:Key="SteelDividerStrong" Color="#9EAAB0"/>
+    <!-- Semantic brushes: single color authority across all tabs. -->
+    <SolidColorBrush x:Key="WorkstationCanvas" Color="{StaticResource CoolCanvasColor}"/>
+    <SolidColorBrush x:Key="PanelSurface" Color="{StaticResource CoolPanelColor}"/>
+    <SolidColorBrush x:Key="PanelRaised" Color="{StaticResource CoolRaisedColor}"/>
+    <SolidColorBrush x:Key="GridRowPrimary" Color="{StaticResource CoolPanelColor}"/>
+    <SolidColorBrush x:Key="GridRowAlternate" Color="{StaticResource CoolAlternateColor}"/>
+    <SolidColorBrush x:Key="GridHeaderSurface" Color="{StaticResource CoolHeaderColor}"/>
+    <SolidColorBrush x:Key="GridHoverSurface" Color="{StaticResource CoolHoverColor}"/>
+    <SolidColorBrush x:Key="GridSelectedSurface" Color="{StaticResource CoolSelectedColor}"/>
+    <SolidColorBrush x:Key="CoolDivider" Color="{StaticResource CoolBorderColor}"/>
+    <!-- Legacy key compatibility: no warm greige values are retained. -->
+    <SolidColorBrush x:Key="GreigeWorkspace" Color="{StaticResource CoolCanvasColor}"/>
+    <SolidColorBrush x:Key="GreigeSurface" Color="{StaticResource CoolPanelColor}"/>
+    <SolidColorBrush x:Key="GreigeSurfaceRaised" Color="{StaticResource CoolRaisedColor}"/>
+    <SolidColorBrush x:Key="GreigeRowA" Color="{StaticResource CoolPanelColor}"/>
+    <SolidColorBrush x:Key="GreigeRowB" Color="{StaticResource CoolAlternateColor}"/>
+    <SolidColorBrush x:Key="GreigeHeader" Color="{StaticResource CoolHeaderColor}"/>
+    <SolidColorBrush x:Key="GreigeHover" Color="{StaticResource CoolHoverColor}"/>
+    <SolidColorBrush x:Key="GreigeSelected" Color="{StaticResource CoolSelectedColor}"/>
+    <SolidColorBrush x:Key="SteelDivider" Color="{StaticResource CoolBorderColor}"/>
+    <SolidColorBrush x:Key="SteelDividerStrong" Color="#B5CAE5"/>
 
-    <SolidColorBrush x:Key="RowHover" Color="#E6EBEC"/>
-    <SolidColorBrush x:Key="RowSelected" Color="#DCE7EF"/>
-    <SolidColorBrush x:Key="RowSelectedBorder" Color="#8FAABD"/>
+    <SolidColorBrush x:Key="RowHover" Color="{StaticResource CoolHoverColor}"/>
+    <SolidColorBrush x:Key="RowSelected" Color="{StaticResource CoolSelectedColor}"/>
+    <SolidColorBrush x:Key="RowSelectedBorder" Color="#7BA8DE"/>
 
     <!-- Shell / surface hierarchy -->
     <LinearGradientBrush x:Key="AppBackgroundGradient" StartPoint="0,0" EndPoint="1,1">
@@ -75,18 +96,18 @@
     </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="PremiumSurface" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#F5F2EC" Offset="0"/>
-        <GradientStop Color="#EEEAE3" Offset="1"/>
+        <GradientStop Color="#FFFFFF" Offset="0"/>
+        <GradientStop Color="#F8FBFF" Offset="1"/>
     </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="PremiumSurfaceHover" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#F6F3ED" Offset="0"/>
-        <GradientStop Color="#E5EAEB" Offset="1"/>
+        <GradientStop Color="#FFFFFF" Offset="0"/>
+        <GradientStop Color="#E8F2FF" Offset="1"/>
     </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="PremiumSurfaceSelected" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#F2F0EA" Offset="0"/>
-        <GradientStop Color="#DCE7EF" Offset="1"/>
+        <GradientStop Color="#F8FBFF" Offset="0"/>
+        <GradientStop Color="#DCEAFF" Offset="1"/>
     </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="AccentGradient" StartPoint="0,0" EndPoint="1,1">
@@ -95,39 +116,39 @@
     </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="SoftButtonGradient" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#F4F1EB" Offset="0"/>
-        <GradientStop Color="#E5E2DC" Offset="1"/>
+        <GradientStop Color="#F8FBFF" Offset="0"/>
+        <GradientStop Color="#E8F2FF" Offset="1"/>
     </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="IedCardSurface" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#F5F2EC" Offset="0"/>
-        <GradientStop Color="#ECE8E1" Offset="1"/>
+        <GradientStop Color="#FFFFFF" Offset="0"/>
+        <GradientStop Color="#EDF5FF" Offset="1"/>
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="IedCardHover" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#F6F3ED" Offset="0"/>
-        <GradientStop Color="#E2E8E9" Offset="1"/>
+        <GradientStop Color="#FFFFFF" Offset="0"/>
+        <GradientStop Color="#E8F2FF" Offset="1"/>
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="IedCardSelected" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#F3F1EB" Offset="0"/>
+        <GradientStop Color="#F8FBFF" Offset="0"/>
         <GradientStop Color="#D8E6F1" Offset="1"/>
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="IedCardConnected" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#F4F2EB" Offset="0"/>
+        <GradientStop Color="#FFFFFF" Offset="0"/>
         <GradientStop Color="#E1EEE3" Offset="1"/>
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="IedCardConnectedSelected" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#F2F0EA" Offset="0"/>
+        <GradientStop Color="#F8FBFF" Offset="0"/>
         <GradientStop Color="#DCEADF" Offset="0.52"/>
         <GradientStop Color="#D6E5F0" Offset="1"/>
     </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="CommandPanelSurface" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#F2EFE8" Offset="0"/>
-        <GradientStop Color="#E4E1DB" Offset="1"/>
+        <GradientStop Color="#F8FBFF" Offset="0"/>
+        <GradientStop Color="#EDF5FF" Offset="1"/>
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="CommandHeaderSurface" StartPoint="0,0" EndPoint="1,0">
-        <GradientStop Color="#D9E1E5" Offset="0"/>
-        <GradientStop Color="#EAE8E2" Offset="1"/>
+        <GradientStop Color="#E8F2FF" Offset="0"/>
+        <GradientStop Color="#E8F2FF" Offset="1"/>
     </LinearGradientBrush>
 
     <!-- Shadows are deliberately restrained: industrial depth without floating-card noise. -->
@@ -163,8 +184,8 @@
     <!-- Panels -->
     <Style x:Key="Card" TargetType="Border">
         <Setter Property="Background" Value="{StaticResource PremiumSurface}"/>
-        <Setter Property="CornerRadius" Value="12"/>
-        <Setter Property="Padding" Value="13"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Padding" Value="11"/>
         <Setter Property="BorderBrush" Value="{StaticResource SteelDividerStrong}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Effect" Value="{StaticResource CardShadow}"/>
@@ -247,11 +268,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Chrome" Property="Background" Value="#DFE5E6"/>
-                            <Setter TargetName="Chrome" Property="BorderBrush" Value="#96A5AD"/>
+                            <Setter TargetName="Chrome" Property="Background" Value="#E4F0FF"/>
+                            <Setter TargetName="Chrome" Property="BorderBrush" Value="#AAC8EA"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Chrome" Property="Background" Value="#D5DBDC"/>
+                            <Setter TargetName="Chrome" Property="Background" Value="#D6E8FC"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="Chrome" Property="Opacity" Value="0.44"/>
@@ -267,7 +288,7 @@
         <Setter Property="Padding" Value="11,5"/>
         <Setter Property="MinHeight" Value="29"/>
         <Setter Property="FontSize" Value="11.9"/>
-        <Setter Property="Background" Value="#E9E7E1"/>
+        <Setter Property="Background" Value="#EEF5FF"/>
     </Style>
 
     <Style x:Key="IedIconButton" TargetType="Button">
@@ -290,11 +311,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Chrome" Property="Background" Value="#DCE3E5"/>
-                            <Setter TargetName="Chrome" Property="BorderBrush" Value="#A8B4BA"/>
+                            <Setter TargetName="Chrome" Property="Background" Value="#E4F0FF"/>
+                            <Setter TargetName="Chrome" Property="BorderBrush" Value="#A6C4E5"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Chrome" Property="Background" Value="#CED7DA"/>
+                            <Setter TargetName="Chrome" Property="Background" Value="#D7E5F6"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="Chrome" Property="Opacity" Value="0.30"/>
@@ -341,15 +362,15 @@
 
     <Style x:Key="RuntimeSegmentButton" TargetType="Button" BasedOn="{StaticResource SegmentedNavButton}"/>
 
-    <!-- Data grids: warm greige reading field, controlled zebra rows, stronger value scan. -->
+    <!-- Engineering grids use SMV-aligned blue-white row/header semantic brushes. -->
     <Style x:Key="ModernDataGrid" TargetType="DataGrid">
         <Setter Property="AutoGenerateColumns" Value="False"/>
         <Setter Property="HeadersVisibility" Value="Column"/>
         <Setter Property="GridLinesVisibility" Value="Horizontal"/>
-        <Setter Property="HorizontalGridLinesBrush" Value="#D4D0C9"/>
+        <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource CoolDivider}"/>
         <Setter Property="VerticalGridLinesBrush" Value="Transparent"/>
         <Setter Property="RowHeaderWidth" Value="0"/>
-        <Setter Property="Background" Value="{StaticResource GreigeSurface}"/>
+        <Setter Property="Background" Value="{StaticResource PanelSurface}"/>
         <Setter Property="BorderBrush" Value="{StaticResource SteelDividerStrong}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="SelectionMode" Value="Single"/>
@@ -361,21 +382,21 @@
         <Setter Property="CanUserDeleteRows" Value="False"/>
         <Setter Property="RowHeight" Value="34"/>
         <Setter Property="ColumnHeaderHeight" Value="35"/>
-        <Setter Property="RowBackground" Value="{StaticResource GreigeRowA}"/>
-        <Setter Property="AlternatingRowBackground" Value="{StaticResource GreigeRowB}"/>
+        <Setter Property="RowBackground" Value="{StaticResource GridRowPrimary}"/>
+        <Setter Property="AlternatingRowBackground" Value="{StaticResource GridRowAlternate}"/>
         <Setter Property="AlternationCount" Value="2"/>
         <Setter Property="FontSize" Value="12.3"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
     </Style>
 
     <Style TargetType="DataGridColumnHeader">
-        <Setter Property="Background" Value="{StaticResource GreigeHeader}"/>
+        <Setter Property="Background" Value="{StaticResource GridHeaderSurface}"/>
         <Setter Property="Foreground" Value="#45545E"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Padding" Value="10,0"/>
         <Setter Property="HorizontalContentAlignment" Value="Left"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
-        <Setter Property="BorderBrush" Value="#B9C0C3"/>
+        <Setter Property="BorderBrush" Value="{StaticResource CoolDivider}"/>
         <Setter Property="BorderThickness" Value="0,0,0,1"/>
     </Style>
 
@@ -425,10 +446,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="RowBorder" Property="Background" Value="{StaticResource GreigeHover}"/>
+                            <Setter TargetName="RowBorder" Property="Background" Value="{StaticResource GridHoverSurface}"/>
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="RowBorder" Property="Background" Value="{StaticResource GreigeSelected}"/>
+                            <Setter TargetName="RowBorder" Property="Background" Value="{StaticResource GridSelectedSurface}"/>
                             <Setter TargetName="RowBorder" Property="BorderBrush" Value="#8FAABD"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -446,19 +467,19 @@
     </Style>
 
     <Style x:Key="CommandDataGridHeader" TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
-        <Setter Property="Background" Value="#D8E0E3"/>
+        <Setter Property="Background" Value="#E8F2FF"/>
         <Setter Property="Foreground" Value="#42525D"/>
-        <Setter Property="BorderBrush" Value="#AEB9BE"/>
+        <Setter Property="BorderBrush" Value="{StaticResource CoolDivider}"/>
     </Style>
 
     <Style x:Key="CommandDataGridCell" TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
         <Setter Property="Padding" Value="10,4"/>
-        <Setter Property="BorderBrush" Value="#D2CEC7"/>
+        <Setter Property="BorderBrush" Value="{StaticResource CoolDivider}"/>
         <Setter Property="BorderThickness" Value="0,0,0,1"/>
     </Style>
 
     <Style x:Key="CommandDataGridRow" TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
-        <Setter Property="BorderBrush" Value="#D2CEC7"/>
+        <Setter Property="BorderBrush" Value="{StaticResource CoolDivider}"/>
         <Setter Property="BorderThickness" Value="0,0,0,1"/>
     </Style>
 
@@ -466,7 +487,7 @@
     <Style x:Key="P2FatDataGridCell" TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
         <Setter Property="Padding" Value="8,6"/>
         <Setter Property="BorderThickness" Value="0,0,0,1"/>
-        <Setter Property="BorderBrush" Value="#D2CEC7"/>
+        <Setter Property="BorderBrush" Value="{StaticResource CoolDivider}"/>
     </Style>
     <Style x:Key="P2FatDataGridHeader" TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
         <Setter Property="Height" Value="38"/>
@@ -485,10 +506,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="RowBorder" Property="Background" Value="{StaticResource GreigeHover}"/>
+                            <Setter TargetName="RowBorder" Property="Background" Value="{StaticResource GridHoverSurface}"/>
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="RowBorder" Property="Background" Value="{StaticResource GreigeSelected}"/>
+                            <Setter TargetName="RowBorder" Property="Background" Value="{StaticResource GridSelectedSurface}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -512,7 +533,7 @@
                              left card edge, never in a detached 5px gutter. -->
                         <Border x:Name="Card"
                                 Background="{StaticResource IedCardSurface}"
-                                BorderBrush="#B8C1C5" BorderThickness="1"
+                                BorderBrush="#D7E5F6" BorderThickness="1"
                                 CornerRadius="10" Padding="9">
                             <ContentPresenter/>
                         </Border>
@@ -567,7 +588,7 @@
                              left card edge, never in a detached 5px gutter. -->
                         <Border x:Name="IedCard"
                                 Background="{StaticResource IedCardSurface}"
-                                BorderBrush="#B8C1C5" BorderThickness="1"
+                                BorderBrush="#D7E5F6" BorderThickness="1"
                                 CornerRadius="10" Padding="10">
                             <ContentPresenter/>
                         </Border>
@@ -597,24 +618,166 @@
         </Setter>
     </Style>
 
-    <!-- Inputs also leave pure white behind so dialogs remain visually consistent. -->
-    <Style TargetType="TextBox">
-        <Setter Property="BorderBrush" Value="#B8C1C5"/>
-        <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Padding" Value="11,7"/>
-        <Setter Property="Background" Value="#F1EEE8"/>
+    <!-- P1: one compact input surface; retain PART_ContentHost, validation and keyboard focus. -->
+    <Style x:Key="WorkstationTextBox" TargetType="TextBox">
         <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+        <Setter Property="Background" Value="{StaticResource PanelSurface}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource CoolDivider}"/>
+        <Setter Property="CaretBrush" Value="{StaticResource Accent}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="10,6"/>
+        <Setter Property="MinHeight" Value="34"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
-        <Setter Property="MinHeight" Value="36"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="InputChrome" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="8" SnapsToDevicePixels="True">
+                        <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="InputChrome" Property="BorderBrush" Value="#8FB9E8"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter TargetName="InputChrome" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                            <Setter TargetName="InputChrome" Property="BorderThickness" Value="1.5"/>
+                        </Trigger>
+                        <Trigger Property="IsReadOnly" Value="True">
+                            <Setter TargetName="InputChrome" Property="Background" Value="{StaticResource GridRowAlternate}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="InputChrome" Property="Opacity" Value="0.5"/>
+                        </Trigger>
+                        <Trigger Property="Validation.HasError" Value="True">
+                            <Setter TargetName="InputChrome" Property="BorderBrush" Value="{StaticResource Danger}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style TargetType="TextBox" BasedOn="{StaticResource WorkstationTextBox}"/>
+
+    <!-- P1: shared dropdown used by all non-editable engineering controls. -->
+        <Style x:Key="WorkstationComboBox" TargetType="ComboBox">
+            <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource CoolDivider}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="Background" Value="{StaticResource PanelSurface}"/>
+            <Setter Property="MinHeight" Value="34"/>
+            <Setter Property="IsTextSearchEnabled" Value="True"/>
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ComboBoxItem">
+                        <Setter Property="Padding" Value="10,7"/>
+                        <Setter Property="Margin" Value="2"/>
+                        <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ComboBoxItem">
+                                    <Border x:Name="ItemChrome" Background="Transparent" CornerRadius="7" Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsHighlighted" Value="True">
+                                            <Setter TargetName="ItemChrome" Property="Background" Value="{StaticResource GridHoverSurface}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="ItemChrome" Property="Background" Value="{StaticResource GridSelectedSurface}"/>
+                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                            <Setter Property="Foreground" Value="{StaticResource AccentDeep}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid SnapsToDevicePixels="True">
+                            <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="7">
+                                <Grid>
+                                    <ContentPresenter Margin="10,0,32,0"
+                                                      VerticalAlignment="Center" HorizontalAlignment="Left"
+                                                      Content="{TemplateBinding SelectionBoxItem}"
+                                                      ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                      TextElement.Foreground="{TemplateBinding Foreground}"/>
+                                    <Border Width="28" HorizontalAlignment="Right" Background="Transparent" IsHitTestVisible="False">
+                                        <Path Data="M 2 4 L 6 8 L 10 4" Stroke="#566F8F" StrokeThickness="1.7"
+                                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" Stretch="None"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                </Grid>
+                            </Border>
+                            <ToggleButton Background="Transparent" BorderThickness="0" Focusable="False" Cursor="Hand"
+                                          IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Background="Transparent"/>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom"
+                                   AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
+                                <Border x:Name="PopupChrome" MinWidth="{Binding ActualWidth, ElementName=Chrome}" MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                        Background="#FFFFFF" BorderBrush="{StaticResource CoolDivider}" BorderThickness="1" CornerRadius="9" Padding="4" Margin="0,5,0,0">
+                                    <Border.Effect><DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.12" Color="#24364F"/></Border.Effect>
+                                    <ScrollViewer CanContentScroll="True" VerticalScrollBarVisibility="Auto">
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="#8FB9E8"/></Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                                <Setter TargetName="Chrome" Property="BorderThickness" Value="1.5"/>
+                            </Trigger>
+                            <Trigger Property="IsDropDownOpen" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource PanelSurface}"/>
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#7FA5E4"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.48"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    <Style x:Key="ModernComboBox" TargetType="ComboBox" BasedOn="{StaticResource WorkstationComboBox}"/>
+    <Style TargetType="ComboBox" BasedOn="{StaticResource WorkstationComboBox}"/>
+
+    <!-- Command value may be free text: retain native editable ComboBox PART_EditableTextBox. -->
+    <Style x:Key="WorkstationEditableComboBox" TargetType="ComboBox">
+        <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+        <Setter Property="Background" Value="{StaticResource PanelSurface}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource CoolDivider}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="10,5"/>
+        <Setter Property="MinHeight" Value="34"/>
     </Style>
 
-    <Style TargetType="ComboBox">
-        <Setter Property="BorderBrush" Value="#B8C1C5"/>
+    <!-- Empty states are calm reusable surfaces, independent of view-model visibility. -->
+    <Style x:Key="WorkstationEmptyState" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource PanelSurface}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource CoolDivider}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Padding" Value="10,7"/>
-        <Setter Property="Background" Value="#F1EEE8"/>
-        <Setter Property="Foreground" Value="{StaticResource Ink}"/>
-        <Setter Property="MinHeight" Value="36"/>
+        <Setter Property="CornerRadius" Value="9"/>
+        <Setter Property="Padding" Value="14"/>
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
 
     <Style x:Key="VerticalScrollBarThumb" TargetType="Thumb">
@@ -623,14 +786,14 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
                     <Border x:Name="ThumbBorder" Width="4" MinHeight="46" HorizontalAlignment="Center"
-                            Background="#98A5AB" CornerRadius="3" Opacity="0.78"/>
+                            Background="#9BB8DB" CornerRadius="3" Opacity="0.78"/>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="ThumbBorder" Property="Width" Value="5"/>
-                            <Setter TargetName="ThumbBorder" Property="Background" Value="#71838C"/>
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#668FBD"/>
                         </Trigger>
                         <Trigger Property="IsDragging" Value="True">
-                            <Setter TargetName="ThumbBorder" Property="Background" Value="#4F6570"/>
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#346DAF"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -648,10 +811,10 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="ThumbBorder" Property="Height" Value="5"/>
-                            <Setter TargetName="ThumbBorder" Property="Background" Value="#71838C"/>
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#668FBD"/>
                         </Trigger>
                         <Trigger Property="IsDragging" Value="True">
-                            <Setter TargetName="ThumbBorder" Property="Background" Value="#4F6570"/>
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#346DAF"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

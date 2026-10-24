@@ -2,16 +2,16 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <!-- Locally scoped, high-contrast task-dialog tokens. The main workspace,
          reporting UI and protocol flows keep their original global styles. -->
-    <SolidColorBrush x:Key="TaskDialogCanvas" Color="#F2F6FC"/>
-    <SolidColorBrush x:Key="TaskDialogCard" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="TaskDialogInk" Color="#14263D"/>
-    <SolidColorBrush x:Key="TaskDialogMuted" Color="#52657B"/>
-    <SolidColorBrush x:Key="TaskDialogBorder" Color="#D6E2F0"/>
-    <SolidColorBrush x:Key="TaskDialogHintSurface" Color="#EDF5FF"/>
-    <SolidColorBrush x:Key="TaskDialogHintBorder" Color="#CADFFD"/>
+    <SolidColorBrush x:Key="TaskDialogCanvas" Color="{DynamicResource CoolCanvasColor}"/>
+    <SolidColorBrush x:Key="TaskDialogCard" Color="{DynamicResource CoolRaisedColor}"/>
+    <SolidColorBrush x:Key="TaskDialogInk" Color="{DynamicResource InkColor}"/>
+    <SolidColorBrush x:Key="TaskDialogMuted" Color="{DynamicResource MutedColor}"/>
+    <SolidColorBrush x:Key="TaskDialogBorder" Color="{DynamicResource CoolBorderColor}"/>
+    <SolidColorBrush x:Key="TaskDialogHintSurface" Color="{DynamicResource CoolAlternateColor}"/>
+    <SolidColorBrush x:Key="TaskDialogHintBorder" Color="{DynamicResource CoolBorderColor}"/>
 
     <Style x:Key="TaskDialogHeading" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="22"/>
+        <Setter Property="FontSize" Value="17"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="{StaticResource TaskDialogInk}"/>
         <Setter Property="TextWrapping" Value="Wrap"/>
@@ -36,15 +36,15 @@
         <Setter Property="Background" Value="{StaticResource TaskDialogCard}"/>
         <Setter Property="BorderBrush" Value="{StaticResource TaskDialogBorder}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="14"/>
-        <Setter Property="Padding" Value="16"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Padding" Value="12"/>
     </Style>
     <!-- A standalone merged dictionary must not resolve BasedOn to App.xaml
          while it is being constructed: the global PrimaryButton/SoftButton
          styles are outside this dictionary's StaticResource parse scope. -->
     <Style x:Key="TaskDialogButtonBase" TargetType="{x:Type Button}">
         <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="FontSize" Value="12.5"/>
+        <Setter Property="FontSize" Value="12"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -59,7 +59,7 @@
                     <Border x:Name="Chrome" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="10" SnapsToDevicePixels="True">
+                            CornerRadius="8" SnapsToDevicePixels="True">
                         <ContentPresenter ContentSource="Content"
                                           HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                           VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
@@ -82,16 +82,16 @@
     </Style>
     <Style x:Key="TaskDialogPrimaryAction" TargetType="{x:Type Button}"
            BasedOn="{StaticResource TaskDialogButtonBase}">
-        <Setter Property="Background" Value="#2563EB"/>
+        <Setter Property="Background" Value="{DynamicResource Accent}"/>
         <Setter Property="Foreground" Value="White"/>
-        <Setter Property="BorderBrush" Value="#2563EB"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
         <Setter Property="MinHeight" Value="64"/>
         <Setter Property="Padding" Value="15,12"/>
     </Style>
     <Style x:Key="TaskDialogSecondaryAction" TargetType="{x:Type Button}"
            BasedOn="{StaticResource TaskDialogButtonBase}">
-        <Setter Property="Background" Value="#F8FAFF"/>
-        <Setter Property="BorderBrush" Value="#C9D9EE"/>
+        <Setter Property="Background" Value="{DynamicResource PanelSurface}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource CoolDivider}"/>
         <Setter Property="MinHeight" Value="64"/>
         <Setter Property="Padding" Value="15,12"/>
     </Style>
