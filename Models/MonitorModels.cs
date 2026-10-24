@@ -439,7 +439,6 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     public bool IsDiscoveryProgressActive => _discoveryProgressActive && IsBusy;
 
     [JsonIgnore]
-    [JsonIgnore]
     public bool IsReportingProgressActive => _reportingProgressActive;
 
     [JsonIgnore]

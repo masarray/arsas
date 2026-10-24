@@ -83,12 +83,15 @@ public partial class MainWindow
         device.UpdateReportingProgress(30, "Selecting verified DataSet member rows…");
         await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
 
+        // Snapshot object identities before yielding: even a pre-emptive Stop
+        // cannot invalidate a live WPF collection enumerator mid-operation.
+        var signalRows = device.Signals.ToArray();
         device.BeginBulkSignalSelection();
         try
         {
             var index = 0;
-            var total = device.Signals.Count;
-            foreach (var signal in device.Signals)
+            var total = signalRows.Length;
+            foreach (var signal in signalRows)
             {
                 signal.IsSelected = authoritativeSignals.Contains(signal);
                 index++;
@@ -111,7 +114,7 @@ public partial class MainWindow
         if (_ioFatSelectionBridgeProject is not null)
         {
             var index = 0;
-            foreach (var signal in device.Signals)
+            foreach (var signal in signalRows)
             {
                 SynchronizeEngineeringSelectionToFat(signal, device);
                 if ((++index & 127) == 0)
