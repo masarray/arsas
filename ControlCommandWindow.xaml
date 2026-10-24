@@ -80,7 +80,7 @@
                       HorizontalScrollBarVisibility="Disabled" MinHeight="0">
             <StackPanel Margin="1,0,6,1">
                 <TextBlock Text="Command value" Style="{StaticResource ControlFieldLabel}"/>
-                <ComboBox x:Name="CommandValueBox" Height="34"
+                <ComboBox x:Name="CommandValueBox" Style="{StaticResource WorkstationEditableComboBox}" Height="34"
                           ItemsSource="{Binding ValueOptions}"
                           Text="{Binding SelectedValue, UpdateSourceTrigger=PropertyChanged}"
                           IsEditable="{Binding AllowCustomValue}" IsEnabled="{Binding CanEdit}"

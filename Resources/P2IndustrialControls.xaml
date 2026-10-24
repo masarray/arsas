@@ -25,9 +25,9 @@
         <Setter Property="Height" Value="34"/>
         <Setter Property="MinHeight" Value="34"/>
         <Setter Property="Padding" Value="0"/>
-        <Setter Property="Foreground" Value="#2B3740"/>
-        <Setter Property="Background" Value="#ECEAE4"/>
-        <Setter Property="BorderBrush" Value="#8999A2"/>
+        <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+        <Setter Property="Background" Value="{DynamicResource PanelSurface}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource CoolDivider}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="FontSize" Value="11.8"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -57,13 +57,13 @@
                             <Setter TargetName="Watermark" Property="Visibility" Value="Visible"/>
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Chrome" Property="BorderBrush" Value="#6F8794"/>
-                            <Setter TargetName="Chrome" Property="Background" Value="#F0EEE8"/>
+                            <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource GridHoverSurface}"/>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="Chrome" Property="BorderBrush" Value="#2474D8"/>
                             <Setter TargetName="Chrome" Property="BorderThickness" Value="1.5"/>
-                            <Setter TargetName="Chrome" Property="Background" Value="#F3F0EA"/>
+                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource PanelRaised}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -75,9 +75,9 @@
         <Setter Property="Height" Value="34"/>
         <Setter Property="MinHeight" Value="34"/>
         <Setter Property="Padding" Value="10,0"/>
-        <Setter Property="Foreground" Value="#2C3942"/>
-        <Setter Property="Background" Value="#E7E5DF"/>
-        <Setter Property="BorderBrush" Value="#87969E"/>
+        <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+        <Setter Property="Background" Value="{DynamicResource GridRowAlternate}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource CoolDivider}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="FontSize" Value="11.6"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
@@ -92,11 +92,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Chrome" Property="Background" Value="#DDE2E2"/>
-                            <Setter TargetName="Chrome" Property="BorderBrush" Value="#667C87"/>
+                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource GridHoverSurface}"/>
+                            <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource Accent}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Chrome" Property="Background" Value="#D2D9DA"/>
+                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource GridSelectedSurface}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="Chrome" Property="Opacity" Value="0.38"/>
@@ -107,21 +107,23 @@
         </Setter>
     </Style>
 
-    <Style x:Key="IndustrialPrimaryButton" TargetType="Button" BasedOn="{StaticResource IndustrialUtilityButton}">
-        <Setter Property="Foreground" Value="White"/>
-        <Setter Property="Background" Value="#246FC7"/>
-        <Setter Property="BorderBrush" Value="#4A8DCE"/>
+    <!-- Use the same primary template/hover contrast as every SMV action. -->
+    <Style x:Key="IndustrialPrimaryButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+        <Setter Property="Height" Value="34"/>
+        <Setter Property="MinHeight" Value="34"/>
+        <Setter Property="Padding" Value="10,0"/>
+        <Setter Property="FontSize" Value="11.6"/>
     </Style>
 
     <Style x:Key="IndustrialGridHeader" TargetType="DataGridColumnHeader">
-        <Setter Property="Background" Value="#D1D9DB"/>
-        <Setter Property="Foreground" Value="#34454F"/>
+        <Setter Property="Background" Value="{DynamicResource GridHeaderSurface}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Padding" Value="9,0"/>
         <Setter Property="Height" Value="37"/>
         <Setter Property="HorizontalContentAlignment" Value="Left"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
-        <Setter Property="BorderBrush" Value="#A1ADB2"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource CoolDivider}"/>
         <Setter Property="BorderThickness" Value="0,0,0,1"/>
     </Style>
 

@@ -272,9 +272,8 @@
                             </ListBox.ItemTemplate>
                         </ListBox>
 
-                        <Border Visibility="{Binding GooseNoStreamsVisibility}" Background="#FAFCFF"
-                                BorderBrush="#DCE6F3" BorderThickness="1" CornerRadius="12"
-                                Padding="14" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Border Visibility="{Binding GooseNoStreamsVisibility}"
+                                Style="{StaticResource WorkstationEmptyState}">
                             <StackPanel>
                                 <TextBlock Text="No publishers" FontSize="12.8" FontWeight="SemiBold"
                                            Foreground="{StaticResource Ink}" HorizontalAlignment="Center"/>
@@ -381,9 +380,8 @@
                             </DataGrid.Columns>
                         </DataGrid>
 
-                        <Border Visibility="{Binding GooseNoEventsVisibility}" Background="#FAFCFF"
-                                BorderBrush="#DCE6F3" BorderThickness="1" CornerRadius="12"
-                                Padding="16" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="330">
+                        <Border Visibility="{Binding GooseNoEventsVisibility}"
+                                Style="{StaticResource WorkstationEmptyState}" MaxWidth="330">
                             <StackPanel>
                                 <TextBlock Text="Waiting for a meaningful event" FontSize="12.8"
                                            FontWeight="SemiBold" Foreground="{StaticResource Ink}"
@@ -637,11 +635,9 @@
                             </StackPanel>
                         </ScrollViewer>
 
-                        <Border Background="#FAFCFF" BorderBrush="#DCE6F3" BorderThickness="1"
-                                CornerRadius="12" Padding="16" HorizontalAlignment="Center"
-                                VerticalAlignment="Center" MaxWidth="270">
+                        <Border MaxWidth="270">
                             <Border.Style>
-                                <Style TargetType="Border">
+                                <Style TargetType="Border" BasedOn="{StaticResource WorkstationEmptyState}">
                                     <Setter Property="Visibility" Value="Collapsed"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding SelectedGooseStream}" Value="{x:Null}">
