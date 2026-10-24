@@ -230,7 +230,7 @@ public partial class MainWindow
         RefreshIedBrowserWriteButton();
     }
 
-    private void QueueIedBrowserPostWriteRead(
+    private async void QueueIedBrowserPostWriteRead(
         Iec61850MonitorDevice device, LiveIedModelDiscoveryDocument model,
         long association, IReadOnlyCollection<(string Reference, string Fc)> attempted,
         string status)
@@ -249,6 +249,24 @@ public partial class MainWindow
         IedBrowserDetailStatus.Text = string.IsNullOrWhiteSpace(status)
             ? "Reading written DA from IED into Data Model…"
             : status;
+        // A prior automatic Browser Read may still be draining when the
+        // modal closes. Do not silently discard the post-Write refresh or
+        // cancel that reader. Wait briefly for its bounded flight to finish.
+        for (var checks = 0;
+             (_iedBrowserReadOperation is not null || device.IsBusy) && checks < 200;
+             checks++)
+        {
+            await Task.Delay(100);
+            if (!request.Matches(device) || !ReferenceEquals(SelectedDevice, device))
+                return; // reconnect or navigation changed: no stale publication
+        }
+        if (!request.Matches(device) || !ReferenceEquals(SelectedDevice, device) ||
+            _iedBrowserReadOperation is not null || device.IsBusy)
+        {
+            IedBrowserDetailStatus.Text =
+                "Post-Write Read not started; previous Browser Read still active.";
+            return;
+        }
         IedBrowserReadValues_Click(new Button { Tag = request }, new RoutedEventArgs());
     }
 
