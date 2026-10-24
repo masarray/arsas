@@ -550,8 +550,13 @@ public partial class MainWindow
         // connection and reject a previously planned schema.
         IedBrowserReadBindingIndex? bindingIndex = null;
         var cts = CancellationTokenSource.CreateLinkedTokenSource(_applicationCancellation.Token);
-        if (automatic) cts.CancelAfter(postWriteRequest is null
-            ? TimeSpan.FromSeconds(15) : TimeSpan.FromSeconds(30));
+        if (automatic)
+        {
+            if (postWriteRequest is null)
+                cts.CancelAfter(TimeSpan.FromSeconds(15));
+            else
+                cts.CancelAfter(TimeSpan.FromSeconds(30));
+        }
         // Read All may include thousands of attributes. It is cancellable by the
         // operator, never a new continuous acquisition/polling process.
         _iedBrowserReadOperation = cts;
@@ -796,7 +801,7 @@ public partial class MainWindow
                     var writeOutcome = string.IsNullOrWhiteSpace(postWriteRequest.WriteStatus)
                         ? "Write attempted" : postWriteRequest.WriteStatus;
                     var readOutcome = verified == postWriteRequest.Targets.Count
-                        ? $"Data Model refreshed · {verified}/{postWriteRequest.Targets.Count} DA MMS Read verified."
+                        ? $"Data Model refreshed from IED · {verified}/{postWriteRequest.Targets.Count} DA MMS Read verified."
                         : $"Data Model Read incomplete · {verified}/{postWriteRequest.Targets.Count} DA refreshed; " +
                           $"{failures} Read failed. Check the leaf before another Write.";
                     // A successful Read of the actual old value never upgrades
