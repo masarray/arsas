@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
-  "commit": "24aae4698026f3a5cf7a35225c5d8000018af3e4",
+  "commit": "725662b004b74c3743943f83f3bcf93b745f7823",
   "runMode": "fast-dev-nonpromotion",
   "scope": "command-read",
-  "purpose": "IEC 61850 Ed2 live typed DPC/BSC NameList recovery across prefixed and renamed LN identities. No executable release authority."
+  "purpose": "Nonproduction Windows FAT direct EXE preview: compact ARSAS Smart IP FAT merge c3555b639de0bbed14fdd06b55683479cf25bd31 with staging ARIEC61850 725662b004b74c3743943f83f3bcf93b745f7823. Production engine #184 lock and physical Operate authority unchanged."
 }
