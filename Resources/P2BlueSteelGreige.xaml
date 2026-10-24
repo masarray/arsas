@@ -184,8 +184,8 @@
     <!-- Panels -->
     <Style x:Key="Card" TargetType="Border">
         <Setter Property="Background" Value="{StaticResource PremiumSurface}"/>
-        <Setter Property="CornerRadius" Value="12"/>
-        <Setter Property="Padding" Value="13"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Padding" Value="11"/>
         <Setter Property="BorderBrush" Value="{StaticResource SteelDividerStrong}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Effect" Value="{StaticResource CardShadow}"/>
@@ -618,24 +618,166 @@
         </Setter>
     </Style>
 
-    <!-- Inputs also leave pure white behind so dialogs remain visually consistent. -->
-    <Style TargetType="TextBox">
-        <Setter Property="BorderBrush" Value="#D7E5F6"/>
-        <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Padding" Value="11,7"/>
-        <Setter Property="Background" Value="#EDF5FF"/>
+    <!-- P1: one compact input surface; retain PART_ContentHost, validation and keyboard focus. -->
+    <Style x:Key="WorkstationTextBox" TargetType="TextBox">
         <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+        <Setter Property="Background" Value="{StaticResource PanelSurface}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource CoolDivider}"/>
+        <Setter Property="CaretBrush" Value="{StaticResource Accent}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="10,6"/>
+        <Setter Property="MinHeight" Value="34"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
-        <Setter Property="MinHeight" Value="36"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="InputChrome" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="8" SnapsToDevicePixels="True">
+                        <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="InputChrome" Property="BorderBrush" Value="#8FB9E8"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter TargetName="InputChrome" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                            <Setter TargetName="InputChrome" Property="BorderThickness" Value="1.5"/>
+                        </Trigger>
+                        <Trigger Property="IsReadOnly" Value="True">
+                            <Setter TargetName="InputChrome" Property="Background" Value="{StaticResource GridRowAlternate}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="InputChrome" Property="Opacity" Value="0.5"/>
+                        </Trigger>
+                        <Trigger Property="Validation.HasError" Value="True">
+                            <Setter TargetName="InputChrome" Property="BorderBrush" Value="{StaticResource Danger}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style TargetType="TextBox" BasedOn="{StaticResource WorkstationTextBox}"/>
+
+    <!-- P1: shared dropdown used by all non-editable engineering controls. -->
+        <Style x:Key="WorkstationComboBox" TargetType="ComboBox">
+            <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource CoolDivider}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="Background" Value="{StaticResource PanelSurface}"/>
+            <Setter Property="MinHeight" Value="34"/>
+            <Setter Property="IsTextSearchEnabled" Value="True"/>
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ComboBoxItem">
+                        <Setter Property="Padding" Value="10,7"/>
+                        <Setter Property="Margin" Value="2"/>
+                        <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ComboBoxItem">
+                                    <Border x:Name="ItemChrome" Background="Transparent" CornerRadius="7" Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsHighlighted" Value="True">
+                                            <Setter TargetName="ItemChrome" Property="Background" Value="{StaticResource GridHoverSurface}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="ItemChrome" Property="Background" Value="{StaticResource GridSelectedSurface}"/>
+                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                            <Setter Property="Foreground" Value="{StaticResource AccentDeep}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid SnapsToDevicePixels="True">
+                            <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="7">
+                                <Grid>
+                                    <ContentPresenter Margin="10,0,32,0"
+                                                      VerticalAlignment="Center" HorizontalAlignment="Left"
+                                                      Content="{TemplateBinding SelectionBoxItem}"
+                                                      ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                      TextElement.Foreground="{TemplateBinding Foreground}"/>
+                                    <Border Width="28" HorizontalAlignment="Right" Background="Transparent" IsHitTestVisible="False">
+                                        <Path Data="M 2 4 L 6 8 L 10 4" Stroke="#566F8F" StrokeThickness="1.7"
+                                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" Stretch="None"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                </Grid>
+                            </Border>
+                            <ToggleButton Background="Transparent" BorderThickness="0" Focusable="False" Cursor="Hand"
+                                          IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Background="Transparent"/>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom"
+                                   AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
+                                <Border x:Name="PopupChrome" MinWidth="{Binding ActualWidth, ElementName=Chrome}" MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                        Background="#FFFFFF" BorderBrush="{StaticResource CoolDivider}" BorderThickness="1" CornerRadius="9" Padding="4" Margin="0,5,0,0">
+                                    <Border.Effect><DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.12" Color="#24364F"/></Border.Effect>
+                                    <ScrollViewer CanContentScroll="True" VerticalScrollBarVisibility="Auto">
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="#8FB9E8"/></Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                                <Setter TargetName="Chrome" Property="BorderThickness" Value="1.5"/>
+                            </Trigger>
+                            <Trigger Property="IsDropDownOpen" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource PanelSurface}"/>
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#7FA5E4"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.48"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    <Style x:Key="ModernComboBox" TargetType="ComboBox" BasedOn="{StaticResource WorkstationComboBox}"/>
+    <Style TargetType="ComboBox" BasedOn="{StaticResource WorkstationComboBox}"/>
+
+    <!-- Command value may be free text: retain native editable ComboBox PART_EditableTextBox. -->
+    <Style x:Key="WorkstationEditableComboBox" TargetType="ComboBox">
+        <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+        <Setter Property="Background" Value="{StaticResource PanelSurface}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource CoolDivider}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="10,5"/>
+        <Setter Property="MinHeight" Value="34"/>
     </Style>
 
-    <Style TargetType="ComboBox">
-        <Setter Property="BorderBrush" Value="#D7E5F6"/>
+    <!-- Empty states are calm reusable surfaces, independent of view-model visibility. -->
+    <Style x:Key="WorkstationEmptyState" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource PanelSurface}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource CoolDivider}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Padding" Value="10,7"/>
-        <Setter Property="Background" Value="#EDF5FF"/>
-        <Setter Property="Foreground" Value="{StaticResource Ink}"/>
-        <Setter Property="MinHeight" Value="36"/>
+        <Setter Property="CornerRadius" Value="9"/>
+        <Setter Property="Padding" Value="14"/>
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
 
     <Style x:Key="VerticalScrollBarThumb" TargetType="Thumb">
@@ -644,14 +786,14 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
                     <Border x:Name="ThumbBorder" Width="4" MinHeight="46" HorizontalAlignment="Center"
-                            Background="#98A5AB" CornerRadius="3" Opacity="0.78"/>
+                            Background="#9BB8DB" CornerRadius="3" Opacity="0.78"/>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="ThumbBorder" Property="Width" Value="5"/>
-                            <Setter TargetName="ThumbBorder" Property="Background" Value="#71838C"/>
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#668FBD"/>
                         </Trigger>
                         <Trigger Property="IsDragging" Value="True">
-                            <Setter TargetName="ThumbBorder" Property="Background" Value="#4F6570"/>
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#346DAF"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -669,10 +811,10 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="ThumbBorder" Property="Height" Value="5"/>
-                            <Setter TargetName="ThumbBorder" Property="Background" Value="#71838C"/>
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#668FBD"/>
                         </Trigger>
                         <Trigger Property="IsDragging" Value="True">
-                            <Setter TargetName="ThumbBorder" Property="Background" Value="#4F6570"/>
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#346DAF"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
