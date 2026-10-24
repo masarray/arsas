@@ -2098,9 +2098,12 @@ public partial class MainWindow
         catch (IOException) { /* An unavailable source file cannot poison in-memory browsing. */ }
         catch (UnauthorizedAccessException) { /* Still show the cached/discovered model. */ }
 
-        // Save the previous IED's operator view before an asynchronous schema
-        // reset can erase its tree. Never snapshot an empty preparation placeholder.
-        RememberIedBrowserTreePreferences();
+        // Checkpoint only on an actual IED/model replacement. On the ordinary
+        // reporting refresh path there is no need to scan the visible tree
+        // every 200 ms just to remember unchanged expansion preferences.
+        if (!ReferenceEquals(device, _iedBrowserCachedDevice) ||
+            !ReferenceEquals(model, _iedBrowserCachedModel))
+            RememberIedBrowserTreePreferences();
         // Heavy schema indexing must never block the WPF selection dispatcher.
         if (!TryActivateIedBrowserSchema(device, model))
             return;
