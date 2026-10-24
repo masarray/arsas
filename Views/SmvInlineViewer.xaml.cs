@@ -84,7 +84,8 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
             $"{phase.Name}: P {phase.PText}  Q₁ {phase.QText}  S {phase.SText}  PF {phase.PfText}"));
     public string SyncLabel => SmvSyncPresentation.Label(_visibleSnapshot);
     public string SyncDetail => _awaitingPublisherSwitch && _visibleSnapshot is not null
-        ? $"HOLD: sync evidence belongs to last displayed publisher ({_lastDisplayedPublisherKey}), not the newly selected publisher. " + SmvSyncPresentation.Detail(_visibleSnapshot)
+        ? "HOLD · Previous publisher sync shown.\nNew publisher sync not yet known.\n" +
+          SmvSyncPresentation.Detail(_visibleSnapshot)
         : SmvSyncPresentation.Detail(_visibleSnapshot);
     public Brush SyncBackground => SmvSyncPresentation.Background(_visibleSnapshot);
     public Brush SyncForeground => SmvSyncPresentation.Foreground(_visibleSnapshot);
@@ -94,10 +95,12 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
     public ICollectionView VoltageMeasurements { get; }
     public ICollectionView CurrentMeasurements { get; }
 
+    // The data grid's column header already supplies RMS and Angle;
+    // mapping and scale remain accessible by hovering either title.
     public string VoltageGroupHeading => ActiveUnits == SmvDisplayUnits.NineTwoLe
-        ? "Voltage · Ch5–8 (V)" : "RAW Group A · Ch1–4 (counts)";
+        ? "Voltage (V)" : "RAW · Ch1–4";
     public string CurrentGroupHeading => ActiveUnits == SmvDisplayUnits.NineTwoLe
-        ? "Current · Ch1–4 (A)" : "RAW Group B · Ch5–8 (counts)";
+        ? "Current (A)" : "RAW · Ch5–8";
 
     // The original DigSub WPF controls repaint immutable models, not packet work.
     public WaveformSnapshot? CurrentWaveform { get; private set; }
@@ -117,18 +120,18 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
         get
         {
             if (CurrentWaveform is not { } wave || wave.SampleRateHz <= 0)
-                return "2 cycles · timebase pending";
+                return "Timebase —";
             var count = Math.Min(2 * Math.Max(1, wave.SamplesPerCycle),
                 SmvWaveformTimeAxis.AvailableSamples(wave));
             return ActiveUnits == SmvDisplayUnits.NineTwoLe &&
                 SmvWaveformTimeAxis.ReferenceSample(wave, count) > 0.01
-                ? "2 cycles · Ua↑ = 0 ms"
-                : "2 cycles · first sample = 0 ms";
+                ? "Ua = 0 ms"
+                : "Start = 0 ms";
         }
     }
 
     public string PhaseReferenceText => ActiveUnits == SmvDisplayUnits.NineTwoLe
-        ? "Ua (Ch5) · ∠0° reference" : "Ch1 · ∠0° reference";
+        ? "Ref: Ua" : "Ref: Ch1";
 
     public string UnitStatus => RequestedUnits switch
     {
@@ -142,6 +145,8 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
     public string CaptureStatus { get => _captureStatus; private set => Change(ref _captureStatus, value, nameof(CaptureStatus)); }
     public string WaveformStatus { get => _waveformStatus; private set => Change(ref _waveformStatus, value, nameof(WaveformStatus)); }
     public string StreamDetail { get => _streamDetail; private set => Change(ref _streamDetail, value, nameof(StreamDetail)); }
+    private string _streamTechnicalDetail = "Choose an SV stream to inspect its publisher metadata.";
+    public string StreamTechnicalDetail { get => _streamTechnicalDetail; private set => Change(ref _streamTechnicalDetail, value, nameof(StreamTechnicalDetail)); }
 
     public SmvInlineViewer()
     {
@@ -534,10 +539,13 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
     private void UpdateStreamDetail(SmvLiveStreamSummary? summary)
     {
         StreamDetail = summary is null
-            ? "Passive discovery • no selected publisher. No MMS connection needed."
-            : $"{summary.SvId} • APPID 0x{summary.AppId:X4}\n" +
+            ? "Select an SV publisher"
+            : $"APPID 0x{summary.AppId:X4} · VLAN {summary.Vlan}";
+        StreamTechnicalDetail = summary is null
+            ? "Passive discovery; no MMS connection required."
+            : $"{summary.SvId} · APPID 0x{summary.AppId:X4}\n" +
               $"{summary.SourceMac} → {summary.DestinationMac}\n" +
-              $"VLAN {summary.Vlan} • gap {summary.Gaps} • restart {summary.Restarts}";
+              $"VLAN {summary.Vlan} · gap {summary.Gaps} · restart {summary.Restarts}";
     }
 
     private void ClearPresentation(string message)
