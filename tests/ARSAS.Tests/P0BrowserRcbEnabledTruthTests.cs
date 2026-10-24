@@ -189,7 +189,15 @@ public sealed class P0BrowserRcbEnabledTruthTests
         Assert.Contains("<ColumnDefinition Width=\"200\"/>", rcb);
         Assert.Contains("<ColumnDefinition Width=\"24\"/>", rcb);
         Assert.Contains("Grid.Column=\"2\" Data=\"{StaticResource BrowserRcbEnabledIconGeometry}\"", rcb);
-        Assert.Contains("Visibility=\"{Binding RcbEnabledVisibility}\"", rcb);
+        Assert.Contains("Visibility=\"{Binding RcbActivityIconVisibility}\"", rcb);
+        Assert.Contains("ToolTip=\"{Binding RcbActivityIconTooltip}\"", rcb);
+        // The same vector now distinguishes verified MMS RptEna and the
+        // current association's successful activation. It does NOT equate
+        // another client's InUse or an observed report with verified RptEna.
+        var model = File.ReadAllText(Path.Combine(root.FullName, "Models", "IedBrowserPresentation.cs"));
+        Assert.Contains("RcbEnabledVisibility == Visibility.Visible", model);
+        Assert.Contains("MmsRcbOperationalAvailability.UsedByCaller", model);
+        Assert.DoesNotContain("MmsRcbOperationalAvailability.InUse\n        }", model);
         Assert.DoesNotContain("RcbUsageGlyph", xaml);
         Assert.Contains("<Geometry x:Key=\"BrowserRcbEnabledIconGeometry\">M380-320h200", xaml);
     }
