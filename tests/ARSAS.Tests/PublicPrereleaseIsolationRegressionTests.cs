@@ -36,6 +36,33 @@ public sealed class PublicPrereleaseIsolationRegressionTests
         Assert.Contains("contents/.release/published.json", stable);
     }
 
+    [Fact]
+    public void ManualPortablePublish_UsesSameStepPathBeforeExportingToSubsequentSteps()
+    {
+        var workflow = Read(".github/workflows/release-windows.yml");
+        var start = workflow.IndexOf("- name: Publish real portable single EXE for manual fallback", StringComparison.Ordinal);
+        var end = workflow.IndexOf("- name: Stage unified release regression evidence", StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start);
+        var step = workflow[start..end];
+
+        // GitHub writes to GITHUB_ENV take effect only in the next Actions step.
+        // Looking up $env:RELEASE_PORTABLE_PATH before then made the manual
+        // release fail after a successful, expensive portable compilation.
+        var assign = step.IndexOf("$releasePortable = Join-Path $env:GITHUB_WORKSPACE", StringComparison.Ordinal);
+        var exists = step.IndexOf("Test-Path $releasePortable -PathType Leaf", StringComparison.Ordinal);
+        var hash = step.IndexOf("Get-FileHash $releasePortable -Algorithm SHA256", StringComparison.Ordinal);
+        var exportPath = step.IndexOf("\"RELEASE_PORTABLE_PATH=$releasePortable\" | Out-File $env:GITHUB_ENV", StringComparison.Ordinal);
+        var exportSha = step.IndexOf("\"RELEASE_CANONICAL_PORTABLE_SHA256=$manualPortableSha\" | Out-File $env:GITHUB_ENV", StringComparison.Ordinal);
+        Assert.True(assign >= 0 && exists > assign && hash > exists &&
+                    exportPath > hash && exportSha > exportPath);
+        Assert.DoesNotContain("Get-FileHash $env:RELEASE_PORTABLE_PATH", step);
+
+        var smoke = workflow.IndexOf("- name: Smoke-test exact release portable single EXE", StringComparison.Ordinal);
+        Assert.True(smoke > end);
+        Assert.Contains("$exe = $env:RELEASE_PORTABLE_PATH", workflow[smoke..]);
+        Assert.Contains("$actualSha -ne $env:RELEASE_CANONICAL_PORTABLE_SHA256", workflow[smoke..]);
+    }
+
     private static string Read(string file)
     {
         for (DirectoryInfo? dir = new(AppContext.BaseDirectory); dir != null; dir = dir.Parent)

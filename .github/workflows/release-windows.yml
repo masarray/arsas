@@ -478,8 +478,15 @@ jobs:
             -EngineProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850\AR.Iec61850.csproj" `
             -NpcapProject "$env:GITHUB_WORKSPACE\ARIEC61850\src\AR.Iec61850.Transports.Npcap\AR.Iec61850.Transports.Npcap.csproj" `
             -ArdIrecSource "$env:GITHUB_WORKSPACE\ArdIrec"
-          "RELEASE_PORTABLE_PATH=$env:GITHUB_WORKSPACE\ArIED61850Tester\dist\ARSAS-$env:RELEASE_VERSION-win-x64-portable.exe" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-          $manualPortableSha = (Get-FileHash $env:RELEASE_PORTABLE_PATH -Algorithm SHA256).Hash.ToLowerInvariant()
+          # GITHUB_ENV is applied only to SUBSEQUENT steps. The path must be
+          # computed, verified and hashed locally in this same step before
+          # exporting it for downstream release smoke/provenance checks.
+          $releasePortable = Join-Path $env:GITHUB_WORKSPACE "ArIED61850Tester\dist\ARSAS-$env:RELEASE_VERSION-win-x64-portable.exe"
+          if (-not (Test-Path $releasePortable -PathType Leaf)) {
+            throw "Manual release portable EXE is missing: $releasePortable"
+          }
+          $manualPortableSha = (Get-FileHash $releasePortable -Algorithm SHA256).Hash.ToLowerInvariant()
+          "RELEASE_PORTABLE_PATH=$releasePortable" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           "RELEASE_CANONICAL_PORTABLE_SHA256=$manualPortableSha" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Stage unified release regression evidence
