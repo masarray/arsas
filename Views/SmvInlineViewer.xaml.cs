@@ -142,7 +142,33 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
     };
 
     public string StreamCountText => $"{Streams.Count:N0} detected";
-    public string CaptureStatus { get => _captureStatus; private set => Change(ref _captureStatus, value, nameof(CaptureStatus)); }
+
+    // Instrument status stays concise; original diagnostics remain in tooltip
+    // and in the dedicated Diagnostics tab. Never conceal an actual HOLD/error.
+    public string CaptureBrief => _captureStatus switch
+    {
+        var status when status.StartsWith("HOLD", StringComparison.OrdinalIgnoreCase) =>
+            "HOLD · stream interrupted",
+        var status when status.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
+                        status.Contains("error", StringComparison.OrdinalIgnoreCase) =>
+            "SV capture error",
+        _ when _capturing && Streams.Count > 0 => $"LIVE · {Streams.Count} SV stream(s)",
+        _ when _capturing => "Searching for SV streams",
+        _ => "SMV idle"
+    };
+    private string? _lastCaptureBrief;
+    public string CaptureStatus
+    {
+        get => _captureStatus;
+        private set
+        {
+            if (_captureStatus == value) return;
+            Change(ref _captureStatus, value, nameof(CaptureStatus));
+            if (_lastCaptureBrief == CaptureBrief) return;
+            _lastCaptureBrief = CaptureBrief;
+            Notify(nameof(CaptureBrief));
+        }
+    }
     public string WaveformStatus { get => _waveformStatus; private set => Change(ref _waveformStatus, value, nameof(WaveformStatus)); }
     public string StreamDetail { get => _streamDetail; private set => Change(ref _streamDetail, value, nameof(StreamDetail)); }
     private string _streamTechnicalDetail = "Choose an SV stream to inspect its publisher metadata.";
