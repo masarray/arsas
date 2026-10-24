@@ -460,5 +460,7 @@ public partial class MainWindow
         Raise(nameof(GooseEventCountText));
         Raise(nameof(GooseSelectedLeafCountText));
         Raise(nameof(GooseNoEventsVisibility));
+        Raise(nameof(GooseEmptyTimelineTitle));
+        Raise(nameof(GooseEmptyTimelineDescription));
     }
 }
