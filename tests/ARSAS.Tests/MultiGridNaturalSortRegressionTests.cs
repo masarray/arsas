@@ -1,9 +1,14 @@
 using System.Xml.Linq;
+using System.Collections;
+using System.Windows.Controls;
+using System.Windows.Data;
+using AR.Iec61850.Discovery;
 using ArIED61850Tester.Models;
 using ArIED61850Tester.Services;
 
 namespace ARSAS.Tests;
 
+[Collection("WpfStaIsolation")]
 public sealed class MultiGridNaturalSortRegressionTests
 {
     [Fact]
@@ -40,6 +45,107 @@ public sealed class MultiGridNaturalSortRegressionTests
     }
 
     [Fact]
+    public void ActualWpfCommandGridViewMustDisplayVerifiedSg7BreakerAheadOfGgioBank()
+    {
+        // Reproduces field screenshot: two verified control classes from
+        // distinct logical devices. Data model sorting alone is insufficient,
+        // because ListCollectionView.CustomSort is WPF's actual UI authority.
+        RunInSta(() =>
+        {
+            static SignalDefinition Verified(string reference, string cdc = "DPC")
+            {
+                var signal = new SignalDefinition
+                {
+                    ObjectReference = reference,
+                    Name = reference,
+                    IsControlSignal = true,
+                    IsSelected = true,
+                    HasControlServiceEvidence = true,
+                    FunctionalConstraint = "CO",
+                    ControlCdc = cdc,
+                    ControlModelText = "Select Before Operate (SBO) • Enhanced security"
+                };
+                signal.AcceptVerifiedLiveControlCdc(cdc);
+                signal.ControlSemanticVerified = true;
+                return signal;
+            }
+
+            // Start with a generic IO block, like the actual 04:28 field
+            // trace where GGIO2.DPCSO01 is the first displayed command.
+            var ggios = Enumerable.Range(1, 64)
+                .Select(i => Verified($"SG7_BCUMaster/GGIO2.DPCSO{i:00}"))
+                .ToArray();
+            var breakers = Enumerable.Range(1, 4)
+                .Select(i => Verified($"SG7_BCUSystem/Bkr0XCBR{i}.Pos"))
+                .ToArray();
+            var cswi = Enumerable.Range(1, 4)
+                .Select(i => Verified($"SG7_BCUSystem/BkrCSWI{i}.Pos"))
+                .ToArray();
+            var switches = Enumerable.Range(1, 3)
+                .Select(i => Verified($"SG7_BCUSystem/Disc0XSWI{i}.Pos"))
+                .ToArray();
+            var device = new Iec61850MonitorDevice
+            {
+                IsConnected = true,
+                LiveDiscoveryModel = new LiveIedModelDiscoveryDocument()
+            };
+            device.Signals.ReplaceAll(ggios.Concat(cswi).Concat(switches).Concat(breakers));
+            device.RecountSelectedSignals();
+
+            // Mirror the production Dock: no WPF new-item placeholder in the view.
+            var grid = new DataGrid
+            {
+                CanUserAddRows = false,
+                CanUserDeleteRows = false,
+                ItemsSource = device.OperableCommandSignals
+            };
+            var view = Assert.IsType<ListCollectionView>(
+                CollectionViewSource.GetDefaultView(grid.ItemsSource));
+            view.SortDescriptions.Clear();
+            view.CustomSort = IecNaturalCommandSort.Instance;
+            SignalDefinition[] visual() => view.Cast<SignalDefinition>().ToArray();
+
+            var first = visual();
+            Assert.Equal(75, first.Length);
+            // CSWI is the explicitly requested operator-first IEC switch
+            // control tier; XCBR/XSWI remain discoverable below it.
+            Assert.Equal(cswi.Select(s => s.ObjectReference),
+                first.Take(4).Select(s => s.ObjectReference));
+            Assert.Equal(breakers.Select(s => s.ObjectReference),
+                first.Skip(4).Take(4).Select(s => s.ObjectReference));
+            Assert.Equal(switches.Select(s => s.ObjectReference),
+                first.Skip(8).Take(3).Select(s => s.ObjectReference));
+            Assert.Equal(ggios.Select(s => s.ObjectReference),
+                first.Skip(11).Select(s => s.ObjectReference));
+
+            // Report refresh and WPF re-sort cannot promote GGIO back to top.
+            var selected = breakers[0];
+            selected.ControlInterlockCheck = false;
+            for (var i = 0; i < 10; i++)
+            {
+                selected.ControlCurrentValue = i % 2 == 0 ? "Open" : "Closed";
+                device.RefreshCommandSignalProjection();
+                view.Refresh();
+                Assert.Same(cswi[0], visual()[0]);
+            }
+            Assert.False(selected.ControlInterlockCheck);
+        });
+    }
+
+    [Fact]
+    public void CommandComparatorDoesNotTreatUnverifiedNamesAsOperatePermission()
+    {
+        var gg = new SignalDefinition { ObjectReference = "SG7_BCUMaster/GGIO2.DPCSO01",
+            ControlCdc = "DPC", IsControlSignal = true };
+        var cb = new SignalDefinition { ObjectReference = "SG7_BCUSystem/Bkr0XCBR1.Pos",
+            ControlCdc = "DPC", IsControlSignal = true };
+        Assert.True(IecNaturalCommandSort.Instance.Compare(cb, gg) < 0);
+        Assert.False(cb.ControlSupportsOperate);
+        Assert.False(gg.ControlSupportsOperate);
+        Assert.Empty(Iec61850ControlIdentity.VerifiedCommandTargets([cb, gg], true));
+    }
+
+    [Fact]
     public void GlobalMonitorGroupsIEDThenNaturalInstance()
     {
         static Iec61850MonitorPoint Point(string device,string ln) =>
@@ -51,6 +157,21 @@ public sealed class MultiGridNaturalSortRegressionTests
         Assert.Equal(new[]{"ABB","ABB","GE","GE","GE"},sorted.Select(x=>x.DeviceName));
         Assert.Equal(new[]{"CSWI2","CSWI10"},sorted.Take(2).Select(x=>x.IecTelegram.Split('/').Last().Split('.')[0]));
         Assert.Equal(new[]{"CSWI1","CSWI2","CSWI10"},sorted.Skip(2).Select(x=>x.IecTelegram.Split('/').Last().Split('.')[0]));
+    }
+
+    private static void RunInSta(Action action)
+    {
+        Exception? thrown = null;
+        var thread = new Thread(() =>
+        {
+            try { action(); }
+            catch (Exception ex) { thrown = ex; }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(20)), "WPF command-view sort test timed out");
+        if (thrown is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(thrown).Throw();
     }
 
     private static string Read(string path)

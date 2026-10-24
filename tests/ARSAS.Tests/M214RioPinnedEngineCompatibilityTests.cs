@@ -22,7 +22,7 @@ public sealed class M214RioPinnedEngineCompatibilityTests
         };
         var original = Catalog(root);
         var originalRecord = Assert.Single(original.Records);
-        Assert.Equal(2, originalRecord.Files.Count); // pinned engine lacks RIO
+        Assert.Equal(3, originalRecord.Files.Count); // staged engine already owns exact root RIO
         var enriched = IedBrowserRioSidecarBridge.Attach(original, root);
         var index = new IedBrowserFileCatalog(enriched, root);
         var bundle = Assert.Single(index.DisplayRows, row => row.IsBundle);
@@ -38,7 +38,8 @@ public sealed class M214RioPinnedEngineCompatibilityTests
         var orphan = Assert.Single(index.DisplayRows, row => row.Name == "line_2.rio");
         Assert.False(orphan.IsBundle);
         Assert.False(index.TryGetRecord(orphan.RemotePath, out _, out _));
-        Assert.Equal(2, originalRecord.Files.Count); // no mutation of ARIEC source
+        Assert.Equal(3, originalRecord.Files.Count); // no mutation of ARIEC source
+        Assert.Same(original, enriched); // bridge must be idempotent with native RIO support
     }
 
     [Fact]
@@ -69,10 +70,12 @@ public sealed class M214RioPinnedEngineCompatibilityTests
         var supplemented = IedBrowserRioSidecarBridge.Attach(engine, root);
         var index = new IedBrowserFileCatalog(supplemented, root);
         var bundle = Assert.Single(index.DisplayRows, row => row.IsBundle);
-        Assert.Equal(1, bundle.BundleMemberCount);
+        Assert.Equal(2, bundle.BundleMemberCount); // engine exposes CFG+RIO, still no DAT
         Assert.False(index.TryGetRecord(bundle.RemotePath, out _, out _));
-        var orphan = Assert.Single(index.DisplayRows, row => row.Name == "partial.rio");
-        Assert.False(index.TryGetRecord(orphan.RemotePath, out _, out _));
+        Assert.Contains(index.Files, row => row.Name == "partial.rio");
+        Assert.False(index.TryGetRecord("partial.rio", out _, out _));
+        // One incomplete bundle, no duplicate RIO row / false download authority.
+        Assert.Single(index.DisplayRows);
     }
 
     [Fact]

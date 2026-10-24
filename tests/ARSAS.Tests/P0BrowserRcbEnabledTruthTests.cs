@@ -118,6 +118,26 @@ public sealed class P0BrowserRcbEnabledTruthTests
     }
 
     [Fact]
+    public void VerifiedRcbTargets_CacheIsModelScopedAndCannotBeMutatedByConsumer()
+    {
+        var one = Model(Root, Other);
+        var first = IedBrowserRcbEnabledPresentation.VerifiedTargets(one);
+        for (var tick = 0; tick < 100; tick++)
+            Assert.Same(first, IedBrowserRcbEnabledPresentation.VerifiedTargets(one));
+
+        var replacement = Model(Root, Other);
+        var second = IedBrowserRcbEnabledPresentation.VerifiedTargets(replacement);
+        Assert.NotSame(first, second);
+        Assert.Equal(first.Keys.Order(), second.Keys.Order());
+        Assert.Equal(2, first.Count);
+        Assert.False(first is Dictionary<string, IedBrowserReadTarget>);
+
+        // Duplicated vendor RCB references are still not granted enablement evidence.
+        var duplicates = Model(Root, Root);
+        Assert.Empty(IedBrowserRcbEnabledPresentation.VerifiedTargets(duplicates));
+    }
+
+    [Fact]
     public void VirtualTreeStartsWithExactlySixCollapsedCategories()
     {
         var rows = IedBrowserPresentation.Roots(null, [Rcb()]);

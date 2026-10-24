@@ -114,9 +114,10 @@ public sealed class P0CommandStopRaceAdmissionTests
         var dialog = File.ReadAllText(
             Path.Combine(current!.FullName, "ControlCommandWindow.xaml.cs"));
         var dialogLocal = dialog.IndexOf("CommandStage = \"Command not sent\"", StringComparison.Ordinal);
-        var dialogGeneric = dialog.IndexOf("CommandStage = \"Command failed\"", StringComparison.Ordinal);
-        Assert.True(dialogLocal >= 0 && dialogGeneric > dialogLocal,
-            "The control dialog must also separate local busy from possible wire failure.");
+        var dialogUnresolved = dialog.IndexOf("CommandStage = \"Outcome unresolved\"", StringComparison.Ordinal);
+        Assert.True(dialogLocal >= 0 && dialogUnresolved > dialogLocal,
+            "Local NOT SENT must be distinguished from an unresolved control result that may have reached the wire.");
+        Assert.Contains("Verify IED state before retry.", dialog, StringComparison.Ordinal);
     }
 
     private static object Slot(UiRuntime runtime, string deviceId)

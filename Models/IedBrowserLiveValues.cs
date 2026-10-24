@@ -13,7 +13,8 @@ public sealed record IedBrowserObservedValue(
     long Revision = 0, long Association = 0, bool IsStale = false,
     MmsQualityEvidence? QualityBits = null,
     Iec61850UtcTimeEvidence? TimeBits = null,
-    bool? TypedBoolean = null);
+    bool? TypedBoolean = null,
+    string ReadWireShapeEvidence = "");
 
 internal sealed record IedBrowserObservationChannels(
     IedBrowserObservedValue? Report = null,
@@ -32,9 +33,28 @@ public sealed class IedBrowserLiveValues
     private readonly Dictionary<string, IedBrowserObservationChannels> _values =
         new(StringComparer.Ordinal);
     private long _version;
+    // One bounded cursor-based change journal for every workspace. SSOT holds
+    // the actual immutable observations; the journal holds only dirty keys.
+    private readonly CanonicalValueChangeJournal _changeJournal = new();
+    public CanonicalValueChangeBatch ReadChanges(long afterRevision, int maxChanges = 256)
+    {
+        lock (_gate) return _changeJournal.Read(afterRevision, maxChanges);
+    }
+
+    private void RecordChange(string reference, string fc, CanonicalValueChangeKind kind)
+    {
+        // Called only while holding _gate, after _version advances exactly once.
+        _changeJournal.Append(new CanonicalValueChange(
+            _version, _association, CanonicalReference(reference),
+            (fc ?? "").Trim().ToUpperInvariant(), kind));
+    }
+    // Only CF changes invalidate engineering-unit projection; ordinary ST/MX
+    // report traffic must not rebuild its signal/unit directory.
+    private long _configurationVersion;
     private long _association;
     private bool _offline;
     public long Version { get { lock (_gate) return _version; } }
+    public long ConfigurationVersion { get { lock (_gate) return _configurationVersion; } }
     public long Association { get { lock (_gate) return _association; } }
     public bool IsOffline { get { lock (_gate) return _offline; } }
 
@@ -62,7 +82,9 @@ public sealed class IedBrowserLiveValues
             _association++;
             _offline = false;
             _values.Clear();
+            _configurationVersion++;
             _version++;
+            RecordChange("", "", CanonicalValueChangeKind.AssociationInvalidated);
             return _association;
         }
     }
@@ -74,7 +96,9 @@ public sealed class IedBrowserLiveValues
         {
             _offline = true;
             _association++; // invalidate in-flight callbacks even before reconnect
+            _configurationVersion++;
             _version++;
+            RecordChange("", "", CanonicalValueChangeKind.AssociationInvalidated);
         }
     }
 
@@ -85,7 +109,9 @@ public sealed class IedBrowserLiveValues
             _association++;
             _offline = true;
             _values.Clear();
+            _configurationVersion++;
             _version++;
+            RecordChange("", "", CanonicalValueChangeKind.AssociationInvalidated);
         }
     }
 
@@ -104,11 +130,13 @@ public sealed class IedBrowserLiveValues
         MmsQualityEvidence? qualityEvidence = null,
         bool? typedBoolean = null,
         AR.Iec61850.Mms.MmsDataKind? verifiedStringWireKind = null,
-        string? declaredDataType = null)
+        string? declaredDataType = null,
+        string? readWireShapeEvidence = null)
         => TryPublish(reference, fc, value, quality, timestamp, source, association,
             utcTimeEvidence, qualityEvidence, typedBoolean: typedBoolean,
             verifiedStringWireKind: verifiedStringWireKind,
-            declaredDataType: declaredDataType);
+            declaredDataType: declaredDataType,
+            readWireShapeEvidence: readWireShapeEvidence);
 
     /// <summary>
     /// Atomically attach a verified, exact-model-owned q or t Report companion
@@ -152,6 +180,7 @@ public sealed class IedBrowserLiveValues
             };
             _values[key] = channels with { Report = updated };
             _version++;
+            RecordChange(processReference, fc, CanonicalValueChangeKind.ReportCompanion);
             return true;
         }
     }
@@ -162,7 +191,8 @@ public sealed class IedBrowserLiveValues
         MmsQualityEvidence? qualityEvidence, bool onlyIfNoReport = false,
         bool? typedBoolean = null,
         AR.Iec61850.Mms.MmsDataKind? verifiedStringWireKind = null,
-        string? declaredDataType = null)
+        string? declaredDataType = null,
+        string? readWireShapeEvidence = null)
     {
         if (string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(fc) ||
             string.IsNullOrWhiteSpace(value) ||
@@ -219,11 +249,20 @@ public sealed class IedBrowserLiveValues
                           string.Equals(timestamp, previousReport?.DeviceTimestamp,
                               StringComparison.Ordinal)
                             ? previousReport?.TimeBits : null,
-                TypedBoolean: typedBoolean);
+                TypedBoolean: typedBoolean,
+                ReadWireShapeEvidence: source == "MMS Read" &&
+                    !string.IsNullOrWhiteSpace(readWireShapeEvidence)
+                        ? readWireShapeEvidence[..Math.Min(192, readWireShapeEvidence.Length)]
+                        : "");
             _values[key] = isReport
                 ? channels with { Report = observed }
                 : channels with { Read = observed };
+            if (string.Equals(fc, "CF", StringComparison.OrdinalIgnoreCase))
+                _configurationVersion++;
             _version++;
+            RecordChange(reference, fc, isReport
+                ? CanonicalValueChangeKind.Report
+                : CanonicalValueChangeKind.Read);
             return true;
         }
     }
@@ -274,6 +313,20 @@ public sealed class IedBrowserLiveValues
             MirrorReportIfMissing(point.TimestampReference, point.FunctionalConstraint,
                 point.DeviceTimestamp, "", point.DeviceTimestamp, "Report timestamp");
     }
+
+    /// <summary>
+    /// Last-resort canonical bridge for a real routed InformationReport where
+    /// the typed primary route did not publish. Runtime lane only; no WPF and
+    /// no fabricated q/t. Exact association check rejects reconnect races.
+    /// Typed primary evidence always wins via onlyIfNoReport.
+    /// </summary>
+    public bool MirrorRoutedReportIfMissingForAssociation(long association,
+        string reference, string fc, string? value, string? quality,
+        string? timestamp)
+        => association > 0 && TryPublish(reference, fc, value, quality,
+            timestamp, "Report compatibility", expectedAssociation: association,
+            utcTimeEvidence: null, qualityEvidence: null,
+            onlyIfNoReport: true);
 
     private void MirrorReportIfMissing(string reference, string fc,
         string? value, string? quality, string? timestamp, string source)
@@ -358,5 +411,6 @@ public sealed record IedBrowserReadResult(
     Iec61850UtcTimeEvidence? UtcTimeEvidence = null,
     MmsQualityEvidence? QualityEvidence = null,
     bool? TypedBoolean = null,
-    AR.Iec61850.Mms.MmsDataKind? VerifiedStringWireKind = null);
+    AR.Iec61850.Mms.MmsDataKind? VerifiedStringWireKind = null,
+    string WireShapeEvidence = "");
 public sealed record IedBrowserReadProgress(int Completed, int Total);

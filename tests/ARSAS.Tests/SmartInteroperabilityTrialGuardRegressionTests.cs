@@ -139,9 +139,24 @@ public sealed class SmartInteroperabilityTrialGuardRegressionTests
             stageTrial.GetProperty("baseEngineCommit").GetString());
         Assert.Equal("9c7cb40364023a7b217e5ec31ab3105ba90142eb",
             stageTrial.GetProperty("exactCommit").GetString());
+        var typedTrial = root.GetProperty("globalTypedControlStageTrial");
         Assert.Equal(stageTrial.GetProperty("exactCommit").GetString(),
+            typedTrial.GetProperty("baseEngineCommit").GetString());
+        Assert.Equal("f75e323e9f8443aa20e0a3818a1d5d77255b2c0f",
+            typedTrial.GetProperty("exactCommit").GetString());
+        Assert.Equal(typedTrial.GetProperty("exactCommit").GetString(),
             root.GetProperty("commit").GetString());
-        Assert.Equal(184, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(192, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(192, typedTrial.GetProperty("enginePullRequest").GetInt32());
+        Assert.Equal(39909260816L, typedTrial.GetProperty("engineCiRun").GetInt64());
+        Assert.Equal("engine-ci-success-consumer-trial-not-physical",
+            typedTrial.GetProperty("status").GetString());
+        foreach (var flag in new[] {
+            "typedStatusReadRequired", "sameDataObjectFeedbackRequired",
+            "ctlModelAndOperShapeRequired", "sbowEnhancedSafetyRequired",
+            "noAutomaticOperate", "physicalQualificationRequired",
+            "mainlinePromotionForbidden" })
+            Assert.True(typedTrial.GetProperty(flag).GetBoolean());
         Assert.Equal(184, stageTrial.GetProperty("enginePullRequest").GetInt32());
         Assert.Equal(185, stageTrial.GetProperty("engineCiOnlyPullRequest").GetInt32());
         Assert.Equal(1182, stageTrial.GetProperty("engineTestsPassed").GetInt32());

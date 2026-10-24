@@ -286,15 +286,7 @@ public static class NativeMmsDiscoveryMapper
             return;
         }
 
-        // stSeld and ctlNum are status-side evidence that the parent data object is
-        // controllable even when a vendor omits CO members from the first NameList page.
-        if (fc.Equals("ST", StringComparison.OrdinalIgnoreCase) &&
-            pathParts.Skip(1).Any(part =>
-                part.Equals("stSeld", StringComparison.OrdinalIgnoreCase) ||
-                part.Equals("ctlNum", StringComparison.OrdinalIgnoreCase)))
-        {
-            AddControlCandidate(signals, resolvedDomain, logicalNode, pathParts, now, "Native MMS control-state evidence");
-        }
+        // ST feedback, stSeld and ctlNum are never command-service proof.
 
         foreach (var path in ExpandLikelyLeafPaths(logicalNode, fc, pathParts))
         {
@@ -340,7 +332,9 @@ public static class NativeMmsDiscoveryMapper
                                   signal.ObjectReference.Equals(reference, StringComparison.OrdinalIgnoreCase)))
             return;
 
-        var controlCdc = InferControlCdc(dataObject);
+        // NameList proves the CO/CF candidate, not a vendor-independent CDC.
+        // The live typed resolver must supply actual command semantics.
+        var controlCdc = string.Empty;
         signals.Add(new SignalDefinition
         {
             Name = $"{logicalNode} {dataObject} Control",
@@ -351,6 +345,7 @@ public static class NativeMmsDiscoveryMapper
             Confidence = "Medium",
             IsSelected = false,
             IsControlSignal = true,
+            HasControlServiceEvidence = true,
             ControlCdc = controlCdc,
             ControlModelReference = $"{reference}.ctlModel",
             ControlStatusReference = BuildControlStatusReference(reference, controlCdc),

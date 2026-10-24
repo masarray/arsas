@@ -296,7 +296,10 @@ public partial class MainWindow
             do
             {
                 _controlModelPreloadPending = false;
-                foreach (var device in Devices.Where(device => device.IsConnected && device.SelectedControlSignalCount > 0))
+                foreach (var device in Devices.Where(device => device.IsConnected &&
+                    (device.SelectedControlSignalCount > 0 ||
+                     (device.LiveDiscoveryModel is not null && device.Signals.Any(
+                         signal => signal.HasControlServiceEvidence && signal.IsValidControlObject)))))
             {
                 foreach (var signal in device.Signals.Where(signal => signal.IsSelected && signal.IsValidControlObject))
                     EnsureDefaultControlSafetyChecks(signal);
@@ -306,12 +309,32 @@ public partial class MainWindow
                 if (device.CommandSignals.Any(signal => signal.ControlCommandBusy))
                     continue;
 
-                // Cache aliases of the same DataObject share one ctlModel probe.
-                var candidates = Iec61850ControlIdentity.InspectionRepresentatives(device.Signals);
+                // Fast read-only ctlModel scan across ALL DOs with actual CO/CF
+                // evidence. A prefixed GE switch, a TapChg or any vendor DO is
+                // admitted identically. Selected commissioning rows remain
+                // inspectable, but only verified operable controls enter Dock.
+                var selectedCandidates = Iec61850ControlIdentity
+                    .InspectionRepresentatives(device.Signals);
+                var independentControls = device.LiveDiscoveryModel is not null
+                    ? Iec61850ControlIdentity.DiscoveredControlInspectionCandidates(device.Signals)
+                    : [];
+                var candidates = selectedCandidates.Concat(independentControls)
+                    .Where(signal => !signal.ControlModelResolved)
+                    .DistinctBy(signal => Iec61850ControlIdentity.Normalize(signal.ObjectReference),
+                        StringComparer.OrdinalIgnoreCase)
+                    .OrderByDescending(signal => signal.IsSelected)
+                    .ThenBy(Iec61850ControlIdentity.ControlInspectionPriority)
+                    .ToArray();
 
                 if (candidates.Length == 0)
                     continue;
 
+                // Bound presentation work without waiting for every control in
+                // a large IED to finish its serialized, read-only inspection.
+                // Only a newly VERIFIED operable DO schedules a projection.
+                // Unchanged/status-only candidates never churn DataGrid rows.
+                var inspectedSinceProjection = 0;
+                var hasNewVerifiedControl = false;
                 foreach (var signal in candidates)
                 {
                     // A single MMS association already serializes all reads.
@@ -330,9 +353,32 @@ public partial class MainWindow
                     signal.ControlInspectionBusy = true;
                     try
                     {
+                        // One cheap CF Read before any expensive Oper/SBOw
+                        // descriptor acquisition. Never inspect status-only,
+                        // unsupported or unreadable models as an executable DO.
+                        var probe = await _runtime.ProbeControlModelAsync(
+                            device.DeviceId, signal, _applicationCancellation.Token);
+                        if (!probe.Decoded)
+                        {
+                            signal.ControlInspectionEvidence = probe.Detail;
+                            signal.ControlModelText = "Unknown";
+                            continue;
+                        }
+                        // Do not publish a partially validated positive ctlModel.
+                        // The full inspection publishes its typed evidence in one
+                        // step; otherwise buttons/rows briefly enable and then
+                        // disable whenever the user reopens the Command Dock.
+                        // StatusOnly is conclusive, safe read-only evidence.
+                        if (probe.ControlModel is AR.Iec61850.Control.Iec61850ControlModel.StatusOnly
+                            or AR.Iec61850.Control.Iec61850ControlModel.Unknown)
+                        {
+                            signal.ControlModelText = probe.ControlModel.ToString();
+                            signal.ControlInspectionEvidence = probe.Detail;
+                            continue;
+                        }
+
                         var capabilities = await _runtime.InspectControlAsync(
-                            device.DeviceId,
-                            signal,
+                            device.DeviceId, signal,
                             _applicationCancellation.Token);
 
                         if (!signal.ControlCommandBusy)
@@ -361,9 +407,27 @@ public partial class MainWindow
                     {
                         signal.ControlInspectionBusy = false;
                     }
+
+                    hasNewVerifiedControl |= signal.ControlSupportsOperate;
+                    if (++inspectedSinceProjection >= 16)
+                    {
+                        if (hasNewVerifiedControl && device.IsConnected)
+                            device.RefreshCommandSignalProjection();
+                        hasNewVerifiedControl = false;
+                        inspectedSinceProjection = 0;
+                    }
                 }
 
+                    // Final trailing group, or genuine revocation. The
+                    // identity-preserving projection emits no collection events
+                    // when neither membership nor order changed.
                     device.RefreshCommandSignalProjection();
+                    // On first live proof XCBR/CSWI rows may be inserted before
+                    // hundreds of GGIO rows while the DataGrid keeps its
+                    // previous scroll anchor. Show the actual equipment instead.
+                    if (ReferenceEquals(SelectedDevice, device) &&
+                        CommandPanelExpander?.IsExpanded == true)
+                        ScrollVerifiedEquipmentCommandsIntoView();
                     RebuildControlFeedbackIndex(device);
                 }
             }

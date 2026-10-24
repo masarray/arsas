@@ -1,53 +1,102 @@
 <Window x:Class="ArIED61850Tester.ControlModelWriteWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Write Data to IED" Width="510" Height="290" MinWidth="490"
-        ResizeMode="NoResize" WindowStartupLocation="CenterOwner"
-        Background="#F4F7FB" FontFamily="{StaticResource AppFontFamily}"
+        Title="Write Data to IED" Width="495" Height="284" MinWidth="455"
+        MinHeight="265" MaxHeight="450" ResizeMode="CanResize"
+        WindowStartupLocation="CenterOwner" Background="#F5F7FB"
+        FontFamily="{StaticResource AppFontFamily}" FontSize="11.5"
         Icon="Assets/app-icon.ico" Loaded="Window_Loaded" Closing="Window_Closing">
-    <Grid Margin="16">
+    <Grid Margin="14,12,14,12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
+            <RowDefinition Height="*" MinHeight="0"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        <TextBlock x:Name="ReferenceLabel" Grid.Row="0" FontSize="11.5"
-                   Foreground="{StaticResource Ink}" FontFamily="{StaticResource AppCodeFontFamily}"
-                   TextTrimming="CharacterEllipsis" Margin="0,0,0,12"/>
-        <Border Grid.Row="1" BorderThickness="1" BorderBrush="{StaticResource Line}"
-                CornerRadius="8" Background="#F8FAFC" Padding="10,12">
+
+        <!-- Exact IEC object identity; the only editable DA is ctlModel [CF]. -->
+        <TextBlock x:Name="ReferenceLabel" Grid.Row="0" FontSize="11"
+                   Foreground="{StaticResource Ink}" FontFamily="{StaticResource AppFontFamily}"
+                   TextTrimming="CharacterEllipsis"
+                   ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
+                   Margin="2,0,2,10"/>
+
+        <!-- One-row Name | Value editor, with verified enum choices only. -->
+        <Border Grid.Row="1" Background="White" BorderBrush="{StaticResource Line}"
+                BorderThickness="1" CornerRadius="7" Padding="10,8">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="105"/>
+                    <ColumnDefinition Width="117"/>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="83"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Text="ctlModel [CF]" VerticalAlignment="Center"
-                           Foreground="{StaticResource Ink}" FontSize="12"/>
-                <ComboBox x:Name="ModelPicker" Grid.Column="1" Height="31"
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="1"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="Name" Grid.Row="0" FontSize="10" Foreground="{StaticResource Muted}"
+                           Margin="2,0,0,6"/>
+                <TextBlock Text="Value" Grid.Row="0" Grid.Column="1" FontSize="10"
+                           Foreground="{StaticResource Muted}" Margin="3,0,0,6"/>
+                <Border Grid.Row="1" Grid.ColumnSpan="3" Background="#E6ECF2"/>
+                <TextBlock Text="ctlModel [CF]" Grid.Row="2" Foreground="{StaticResource Ink}"
+                           VerticalAlignment="Center" Margin="2,8,0,0"/>
+                <ComboBox x:Name="ModelPicker" Grid.Row="2" Grid.Column="1"
+                          Height="31" Margin="2,8,7,0" IsEnabled="False"
                           ItemsSource="{Binding Choices}" DisplayMemberPath="Label"
-                          SelectionChanged="ModelPicker_SelectionChanged" IsEnabled="False"/>
-                <Button x:Name="ReadButton" Grid.Column="2" Content="Read" Click="Read_Click"
-                        Style="{StaticResource SoftButton}" Height="29" MinHeight="29"
-                        Padding="10,3" Margin="8,0,0,0"/>
+                          SelectionChanged="ModelPicker_SelectionChanged"
+                          ToolTip="Verified current ctlModel is preselected after live Read"/>
+                <Button x:Name="ReadButton" Grid.Row="2" Grid.Column="2"
+                        Style="{StaticResource SoftButton}" Click="Read_Click"
+                        Height="30" MinHeight="30" Margin="0,8,0,0" Padding="6,3">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Viewbox Width="15" Height="15" Margin="0,0,5,0">
+                            <Path Data="{StaticResource MaterialRefreshIcon}" Fill="#415771"/>
+                        </Viewbox>
+                        <TextBlock Text="Read" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
             </Grid>
         </Border>
-        <StackPanel Grid.Row="2" Margin="2,10,0,5">
-            <TextBlock x:Name="StatusLabel" FontSize="11" TextWrapping="Wrap"
-                       Foreground="{StaticResource Muted}" Text="Reading ctlModel from IED…"/>
-            <TextBox x:Name="FailureDetails" Visibility="Collapsed" Margin="0,7,0,0"
-                     IsReadOnly="True" IsTabStop="False" TextWrapping="Wrap"
-                     VerticalScrollBarVisibility="Auto" MaxHeight="73" MinHeight="48"
-                     FontSize="11" Padding="8,6" BorderThickness="1" BorderBrush="#E7C4C4"
-                     Background="#FFF8F8" Foreground="#923C3C"/>
-        </StackPanel>
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="WriteButton" Content="Write" Click="Write_Click"
-                    Style="{StaticResource PrimaryButton}" Width="93" Height="31"
-                    MinHeight="31" Padding="10,4" IsEnabled="False" Margin="0,0,8,0"/>
-            <Button Content="Cancel" Click="Close_Click" Style="{StaticResource SoftButton}"
-                    Width="85" Height="31" MinHeight="31" Padding="10,4"/>
-        </StackPanel>
+
+        <!-- Inline readback notification, no second confirmation window. -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled" MinHeight="0"
+                      Margin="0,8,0,2">
+            <Border x:Name="ResultBanner" CornerRadius="6" Padding="9,7"
+                    Background="Transparent">
+                <TextBlock x:Name="StatusLabel" FontSize="11"
+                           TextWrapping="Wrap" Foreground="{StaticResource Ink}"
+                           Text="Reading current ctlModel from IED…"/>
+            </Border>
+        </ScrollViewer>
+
+        <Grid Grid.Row="3" Margin="0,9,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Button x:Name="WriteButton" Grid.Column="1" Click="Write_Click"
+                    Style="{StaticResource PrimaryButton}" Width="94" Height="32"
+                    MinHeight="32" Padding="9,4" IsEnabled="False" Margin="0,0,8,0">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Viewbox Width="16" Height="16" Margin="0,0,6,0">
+                        <Path Data="{StaticResource MaterialEditIcon}" Fill="White"/>
+                    </Viewbox>
+                    <TextBlock Text="Write" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            <Button Grid.Column="2" Click="Close_Click" Style="{StaticResource SoftButton}"
+                    Width="84" Height="32" MinHeight="32" Padding="8,4">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Viewbox Width="14" Height="14" Margin="0,0,5,0">
+                        <Path Data="{StaticResource MaterialCloseIcon}" Fill="#415771"/>
+                    </Viewbox>
+                    <TextBlock Text="Cancel" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+        </Grid>
     </Grid>
 </Window>

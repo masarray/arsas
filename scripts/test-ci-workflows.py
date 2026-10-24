@@ -265,5 +265,91 @@ jobs:
         )
 
 
+
+class SmartDiscoveryFastRoutingTests(unittest.TestCase):
+    """Keep broad UI changes out of unrelated physical Smart Discovery CI."""
+
+    WORKFLOWS = (
+        ".github/workflows/smart-discovery-capture-build.yml",
+        ".github/workflows/smart-discovery-golden-provenance.yml",
+        ".github/workflows/smart-discovery-golden-budget-lock.yml",
+        ".github/workflows/smart-discovery-repeat-run-stability.yml",
+        ".github/workflows/smart-discovery-mainline-readiness.yml",
+        ".github/workflows/smart-discovery-merge-execution-guard.yml",
+        ".github/workflows/smart-discovery-production-promotion.yml",
+    )
+
+    @staticmethod
+    def pr_paths(workflow):
+        """Read PR path filters without depending on YAML/regex escaping."""
+        content = workflow.read_text(encoding="utf-8").splitlines()
+        try:
+            trigger = content.index("  pull_request:")
+            start = content.index("    paths:", trigger + 1)
+        except ValueError as exc:
+            raise AssertionError(f"Missing scoped PR path filters: {workflow}") from exc
+        patterns = []
+        for line in content[start + 1:]:
+            if not line.startswith("      "):
+                break
+            trimmed = line.strip()
+            if trimmed.startswith('- "') and trimmed.endswith('"'):
+                patterns.append(trimmed[3:-1])
+        if not patterns:
+            raise AssertionError(f"No scoped PR paths: {workflow}")
+        return patterns
+
+    def test_smart_discovery_pr_triggers_exclude_unrelated_ui_and_smv(self):
+        root = Path(__file__).resolve().parent.parent
+        from fnmatch import fnmatchcase
+        irrelevant = (
+            "MainWindow.xaml",
+            "MainWindow.IedBrowser.cs",
+            "Models/QualityInvalidAttention.cs",
+            "Services/SmvLiveCaptureService.cs",
+            "tests/ARSAS.Tests/QualityInvalidAttentionTests.cs",
+            "docs/WINDOWS_RELEASES.md",
+        )
+        for name in self.WORKFLOWS:
+            paths = self.pr_paths(root / name)
+            self.assertTrue(paths, name)
+            self.assertIn(name, paths)
+            for unrelated in irrelevant:
+                self.assertFalse(
+                    any(fnmatchcase(unrelated, pattern) for pattern in paths),
+                    f"{name} wrongly triggered by {unrelated}",
+                )
+
+    def test_draft_runs_fast_and_ready_for_review_reruns_full_gates(self):
+        root = Path(__file__).resolve().parent.parent
+        for name in (*self.WORKFLOWS, ".github/workflows/installer-windows.yml"):
+            content = (root / name).read_text(encoding="utf-8")
+            self.assertIn("types: [opened, synchronize, reopened, ready_for_review]",
+                          content, name)
+            self.assertIn(
+                "github.event_name != 'pull_request' || !github.event.pull_request.draft",
+                content, name)
+            self.assertIn("  workflow_dispatch:", content, name)
+
+    def test_smart_discovery_critical_changes_still_trigger_and_manual_exists(self):
+        root = Path(__file__).resolve().parent.parent
+        from fnmatch import fnmatchcase
+        for name in self.WORKFLOWS:
+            content = (root / name).read_text(encoding="utf-8")
+            self.assertIn("  workflow_dispatch:", content)
+            paths = self.pr_paths(root / name)
+            self.assertTrue(any(fnmatchcase(name, pattern) for pattern in paths))
+        shared = (
+            ".github/workflows/smart-discovery-capture-build.yml",
+            ".github/workflows/smart-discovery-mainline-readiness.yml",
+            ".github/workflows/smart-discovery-merge-execution-guard.yml",
+            ".github/workflows/smart-discovery-production-promotion.yml",
+        )
+        for name in shared:
+            paths = self.pr_paths(root / name)
+            for critical in ("Models/MonitorModels.cs", "engines/ARIEC61850.lock.json"):
+                self.assertTrue(any(fnmatchcase(critical, pattern) for pattern in paths),
+                                f"{name} omitted {critical}")
+
 if __name__ == "__main__":
     unittest.main()

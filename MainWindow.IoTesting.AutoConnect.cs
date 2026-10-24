@@ -497,6 +497,11 @@ public partial class MainWindow
         TimeSpan proofWindow)
     {
         var startedUtc = DateTime.UtcNow;
+        // A single A01 frame is NOT proof that B01, D01 and I01 have also
+        // delivered their initial GI image. Keep one bounded observation
+        // window for all four RCBs before logging their individual truth.
+        // This is timer-only diagnostics: no MMS Read, Write, GI or retry.
+        var association = device.LiveValues.Association;
         try
         {
             var trafficObserved = await WaitForReportStreamAsync(
@@ -504,8 +509,20 @@ public partial class MainWindow
                 proofWindow,
                 _applicationCancellation.Token).ConfigureAwait(true);
 
-            if (!device.IsMonitoring || !IsSharedStaticDataSetAuthority(device))
+            var remaining = proofWindow - (DateTime.UtcNow - startedUtc);
+            if (remaining > TimeSpan.Zero)
+                await Task.Delay(remaining, _applicationCancellation.Token)
+                    .ConfigureAwait(true);
+
+            if (!device.IsMonitoring ||
+                device.LiveValues.Association != association ||
+                !IsSharedStaticDataSetAuthority(device))
                 return;
+
+            // One live RCB never proves the other three. Diagnose each exact
+            // DataSet/RCB against actual per-stream InformationReport ingress.
+            // This observer never drives MMS IO, GI or a cyclic fallback.
+            LogStaticRcbImageTriage(device);
 
             if (trafficObserved && device.HasReportStream)
             {
@@ -516,7 +533,7 @@ public partial class MainWindow
                 AddLog(
                     "INFO",
                     device.Name,
-                    $"Static DataSet report evidence: actual InformationReport traffic observed after {firstReportLatency.TotalMilliseconds:0} ms; report-backed runtime point(s)={reportPoints}. RCB/GI path is alive.");
+                    $"Static DataSet report evidence: actual InformationReport traffic observed after {firstReportLatency.TotalMilliseconds:0} ms; report-backed runtime point(s)={reportPoints}. At least one RCB delivered a frame; each other RCB remains independently unverified until its actual ingress is observed.");
                 return;
             }
 

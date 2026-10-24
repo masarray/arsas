@@ -20,8 +20,22 @@ public partial class ControlModelWriteWindow : Window
     private readonly SignalDefinition _signal;
     private readonly CancellationTokenSource _cancellation = new();
     private bool _busy;
+    public bool VerifiedWriteOccurred { get; private set; }
+    public bool WriteAttempted { get; private set; }
+    public string WriteStatus { get; private set; } = "";
+    public long WriteAssociation { get; private set; }
     private bool _liveModelReady;
     private Iec61850ControlModelKind _liveModel = Iec61850ControlModelKind.Unknown;
+    // Read/GVA evidence belongs to one live MMS association and one immutable
+    // model instance. A reconnect cannot keep a previously enabled Write valid.
+    private long _inspectedAssociation;
+    private object? _inspectedLiveModel;
+
+    private bool InspectionIsCurrent =>
+        _inspectedLiveModel is not null &&
+        ReferenceEquals(_device.LiveDiscoveryModel, _inspectedLiveModel) &&
+        _device.LiveValues.Association == _inspectedAssociation &&
+        _device.IsConnected && !_cancellation.IsCancellationRequested;
 
     public ObservableCollection<ModelChoice> Choices { get; } = new()
     {
@@ -52,7 +66,7 @@ public partial class ControlModelWriteWindow : Window
     private void UpdateWriteButton()
     {
         ReadButton.IsEnabled = !_busy;
-        WriteButton.IsEnabled = !_busy && _device.IsConnected && _liveModelReady &&
+        WriteButton.IsEnabled = !_busy && _liveModelReady && InspectionIsCurrent &&
             ModelPicker.SelectedItem is ModelChoice choice && choice.Model != _liveModel;
     }
 
@@ -60,15 +74,29 @@ public partial class ControlModelWriteWindow : Window
     {
         _busy = true;
         _liveModelReady = false;
+        _inspectedLiveModel = null;
         ModelPicker.IsEnabled = false;
         UpdateWriteButton();
         StatusLabel.Text = "Reading current ctlModel…";
-        FailureDetails.Visibility = Visibility.Collapsed;
-        FailureDetails.Text = string.Empty;
+        var association = _device.LiveValues.Association;
+        var model = _device.LiveDiscoveryModel;
+        ResultBanner.Background = System.Windows.Media.Brushes.Transparent;
         try
         {
+            if (!_device.IsConnected || model is null)
+                throw new InvalidOperationException("A connected IED with verified live model is required.");
             var capabilities = await _runtime.InspectControlAsync(
                 _device.DeviceId, _signal, _cancellation.Token);
+            if (_cancellation.IsCancellationRequested || !IsLoaded)
+                return;
+            if (!_device.IsConnected || _device.LiveValues.Association != association ||
+                !ReferenceEquals(_device.LiveDiscoveryModel, model))
+            {
+                StatusLabel.Text = "IED connection or live model changed. Read again before Write.";
+                return;
+            }
+            _inspectedAssociation = association;
+            _inspectedLiveModel = model;
             _liveModel = capabilities.ControlModel;
             _liveModelReady = _liveModel != Iec61850ControlModelKind.Unknown &&
                 capabilities.EngineControlServiceAvailable;
@@ -105,63 +133,77 @@ public partial class ControlModelWriteWindow : Window
 
     private async void Write_Click(object sender, RoutedEventArgs e)
     {
-        if (_busy || !_liveModelReady || !_device.IsConnected ||
+        if (_busy || !_liveModelReady || !InspectionIsCurrent ||
             ModelPicker.SelectedItem is not ModelChoice selected || selected.Model == _liveModel)
             return;
-        // Exact expected value is confirmed again by ARIEC immediately before
-        // the one permitted CF Write. No automatic mode trials.
+
+        // Clicking Write is the operator's explicit action. No second modal
+        // confirmation, no automatic retry and no IEC Control Operate.
+        // Revalidate the exact association/model/selection at dispatch time.
         var expected = _liveModel;
+        if (!InspectionIsCurrent || ModelPicker.SelectedItem is not ModelChoice current ||
+            current.Model != selected.Model || _liveModel != expected)
+        {
+            _liveModelReady = false;
+            UpdateWriteButton();
+            ShowWriteFailure("IED connection or selection changed. Read again.");
+            return;
+        }
+
         _busy = true;
         _liveModelReady = false;
         ModelPicker.IsEnabled = false;
         UpdateWriteButton();
-        StatusLabel.Text = "Writing ctlModel and checking readback…";
+        StatusLabel.Text = "Writing ctlModel…";
+        ResultBanner.Background = System.Windows.Media.Brushes.Transparent;
+        string? failure = null;
+        bool verified = false;
+        WriteAttempted = true;
+        WriteAssociation = _inspectedAssociation;
         try
         {
+            // The pinned native dispatcher checks expected-old value and
+            // executes exactly one CF Write followed by MMS readback.
             var result = await ConfigureExactModelAsync(expected, selected.Model, _cancellation.Token);
-            if (!result.WriteAccepted || !result.ReadbackVerified ||
-                (int)result.AfterModel != (int)selected.Model)
-            {
-                ShowWriteFailure(result.Detail, (int)selected.Model, (int)result.AfterModel, result.ReadbackVerified);
-                return;
-            }
-
-            // The engine has completed the exact CF write and authoritative MMS readback.
-            // Do not issue a second inspection or keep the commissioning dialog open.
-            if (!_cancellation.IsCancellationRequested && IsLoaded)
-                DialogResult = true;
+            if (_cancellation.IsCancellationRequested || !IsLoaded) return;
+            verified = result.WriteAccepted && result.ReadbackVerified &&
+                (int)result.AfterModel == (int)selected.Model;
+            if (verified)
+                VerifiedWriteOccurred = true;
+            else
+                failure = string.IsNullOrWhiteSpace(result.Detail)
+                    ? "IED rejected the value or readback did not match."
+                    : result.Detail;
         }
         catch (OperationCanceledException)
         {
-            ShowWriteFailure("Connection interrupted or operation cancelled. Read actual ctlModel before retrying.");
+            failure = "Connection interrupted; Write outcome is unknown.";
         }
         catch (Exception ex)
         {
-            ShowWriteFailure($"Write not verified: {ex.Message}. Read actual ctlModel.");
+            failure = ex.Message;
         }
         finally
         {
+            WriteStatus = verified
+                ? "ctlModel Write verified; refreshing Data Model…"
+                : "ctlModel Write ditolak / unknown: " +
+                  (string.IsNullOrWhiteSpace(failure) ? "IED did not verify Write." : failure);
             _busy = false;
-            UpdateWriteButton();
+            // Browser owns the post-Write MMS Read and SSOT publication.
+            // Close the editor immediately, including on rejected Writes.
+            if (IsLoaded) Close();
         }
     }
 
-    private void ShowWriteFailure(string? detail,
-        int? expected = null,
-        int? actual = null, bool readbackVerified = false)
+    private void ShowWriteFailure(string? detail)
     {
-        if (_cancellation.IsCancellationRequested || !IsLoaded)
-            return;
-
-        var reason = string.IsNullOrWhiteSpace(detail)
-            ? "IED did not provide a verified write result."
-            : detail.Trim();
-        if (readbackVerified && expected.HasValue && actual.HasValue && expected != actual)
-            reason = $"Readback mismatch • Expected {expected.Value}, actual {actual.Value}. {reason}";
-
-        FailureDetails.Text = reason;
-        FailureDetails.Visibility = Visibility.Visible;
-        StatusLabel.Text = "Write not verified • no further write will be sent automatically.";
+        if (_cancellation.IsCancellationRequested || !IsLoaded) return;
+        var reason = string.IsNullOrWhiteSpace(detail) ? "IED did not verify Write." : detail.Trim();
+        StatusLabel.Text = "Write ditolak / belum terverifikasi: " +
+            (reason.Length > 150 ? reason[..147] + "…" : reason);
+        ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
+            System.Windows.Media.Color.FromRgb(255, 242, 228));
     }
 
     // Compile-time transport bridge; no reflection or ad-hoc MMS Write.

@@ -52,7 +52,9 @@ public sealed class P109SRefreshControlDescriptorRegressionTests
         var opened=inspect.IndexOf("control = await GetOrOpenControlSessionAsync(",StringComparison.Ordinal);
         var invalidated=inspect.IndexOf("await InvalidateCachedControlSessionAsync(signal.ObjectReference)",StringComparison.Ordinal);
         Assert.True(invalidated>=0 && opened>invalidated);
-        Assert.Contains("ControlSemanticVerified = semantic.IsCommandSafe",inspect);
+        Assert.Contains("ControlSemanticVerified = fullyVerified",inspect);
+        Assert.Contains("HasExactDpcBooleanFeedback(descriptor, effectiveCdc)",inspect);
+        Assert.Contains("IsOperationallyReady = fullyVerified",inspect);
         Assert.Contains("ControlModelText = modelText",inspect);
         var main=File.ReadAllText(Path.Combine(root.FullName,"MainWindow.xaml.cs"));
         Assert.Contains("await RefreshControlValuesAsync(device, force: true);",main);

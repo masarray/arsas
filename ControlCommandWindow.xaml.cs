@@ -21,11 +21,21 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
     private string _sequenceText = "Detecting the required IEC 61850 control sequence…";
     private string _controlEvidenceText = string.Empty;
     private string _selectedValue = string.Empty;
+    private string _modelShortText = "Inspecting…";
+    private string _sequenceHint = "Inspecting control…";
+    private string _originatorId = "ARSAS";
+    private string _selectedOriginCategory = "StationControl";
+    private string _controlNumberText = "Auto";
+    private string _terminationText = "—";
+    private string _wireTimelineText = string.Empty;
+    private Iec61850ControlModelKind _liveControlModel = Iec61850ControlModelKind.Unknown;
     private bool _interlockCheck = true;
     private bool _synchroCheck;
     private bool _testMode;
     private bool _confirmLiveCommand;
     private bool _isBusy;
+    private bool _commandFlightActive;
+    private bool _commandAttempted;
     private bool _isReady;
     private string _commandStage = "Ready to inspect";
     private string _commandStatus = "ArIED will read the live control model and current status before enabling Send Command.";
@@ -33,6 +43,11 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public ObservableCollection<string> ValueOptions { get; } = new();
+    public IReadOnlyList<string> OriginCategories { get; } = new[]
+    {
+        "StationControl", "BayControl", "RemoteControl", "AutomaticBay",
+        "AutomaticStation", "AutomaticRemote", "Maintenance", "Process"
+    };
     public string DeviceSummary => $"{_device.Name} • {_device.EndpointText}";
     public string SignalName => _signal.Name;
     public string Telegram => Iec61850MonitorPoint.StripIedNamePrefix(_signal.ObjectReference, _device.Name);
@@ -41,8 +56,48 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
     public string CurrentValue { get => _currentValue; private set => Set(ref _currentValue, value); }
     public string EngineStatusText { get => _engineStatusText; private set => Set(ref _engineStatusText, value); }
     public string SequenceText { get => _sequenceText; private set => Set(ref _sequenceText, value); }
-    public string ControlEvidenceText { get => _controlEvidenceText; private set => Set(ref _controlEvidenceText, value); }
+    public string ControlEvidenceText
+    {
+        get => _controlEvidenceText;
+        private set
+        {
+            if (Set(ref _controlEvidenceText, value)) Raise(nameof(CanCopyEvidence));
+        }
+    }
     public string SelectedValue { get => _selectedValue; set { if (Set(ref _selectedValue, value)) Raise(nameof(CanSend)); } }
+    public string ModelShortText { get => _modelShortText; private set => Set(ref _modelShortText, value); }
+    public string SequenceHint { get => _sequenceHint; private set => Set(ref _sequenceHint, value); }
+    public string ControlNumberText { get => _controlNumberText; private set => Set(ref _controlNumberText, value); }
+    public string TerminationText { get => _terminationText; private set => Set(ref _terminationText, value); }
+    public string WireTimelineText { get => _wireTimelineText; private set => Set(ref _wireTimelineText, value); }
+    public string SelectedOriginCategory
+    {
+        get => _selectedOriginCategory;
+        set
+        {
+            if (Set(ref _selectedOriginCategory, value)) Raise(nameof(CanSend));
+        }
+    }
+    public string OriginatorId
+    {
+        get => _originatorId;
+        set
+        {
+            if (Set(ref _originatorId, value))
+            {
+                Raise(nameof(OriginValidationText));
+                Raise(nameof(CanSend));
+            }
+        }
+    }
+    public string OriginValidationText => IsValidOriginator(OriginatorId)
+        ? string.Empty : "Originator ID requires 1–64 printable ASCII characters.";
+    public static bool IsValidOriginator(string? id) =>
+        !string.IsNullOrWhiteSpace(id) && id.Length <= 64 &&
+        id.All(c => c is >= ' ' and <= '~');
+    public bool AllowCustomValue
+        => _controlCdcText is "APC" or "INC" or "ISC" or "INC/ISC";
+
     public bool InterlockCheck { get => _interlockCheck; set => Set(ref _interlockCheck, value); }
     public bool SynchroCheck { get => _synchroCheck; set => Set(ref _synchroCheck, value); }
     public bool TestMode
@@ -53,6 +108,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             if (!Set(ref _testMode, value)) return;
             UpdateLiveWarning();
             Raise(nameof(CanSend));
+            Raise(nameof(SendButtonText));
         }
     }
     public bool ConfirmLiveCommand
@@ -71,9 +127,18 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
         {
             if (!Set(ref _isBusy, value)) return;
             Raise(nameof(CanSend));
+            Raise(nameof(CanClose));
+            Raise(nameof(CanReinspect));
+            Raise(nameof(CanEdit));
+            Raise(nameof(CanCopyEvidence));
             Raise(nameof(SendButtonText));
         }
     }
+    public bool CanClose => !_commandFlightActive;
+    public bool CanCopyEvidence => !IsBusy && !_commandFlightActive &&
+        !string.IsNullOrWhiteSpace(ControlEvidenceText);
+    public bool CanReinspect => !_commandFlightActive && !IsBusy;
+    public bool CanEdit => IsReady && !IsBusy && !_commandAttempted;
     public bool IsReady
     {
         get => _isReady;
@@ -82,12 +147,18 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             if (!Set(ref _isReady, value)) return;
             UpdateLiveWarning();
             Raise(nameof(CanSend));
+            Raise(nameof(CanEdit));
         }
     }
     public string CommandStage { get => _commandStage; private set => Set(ref _commandStage, value); }
     public string CommandStatus { get => _commandStatus; private set => Set(ref _commandStatus, value); }
-    public string SendButtonText => IsBusy ? "Sending…" : TestMode ? "Send Test" : "Send Command";
-    public bool CanSend => IsReady && !IsBusy && !string.IsNullOrWhiteSpace(SelectedValue) && (TestMode || ConfirmLiveCommand);
+    public string SendButtonText => IsBusy ? "Working…" : TestMode ? "Send test" :
+        _liveControlModel is Iec61850ControlModelKind.SboNormal or
+            Iec61850ControlModelKind.SboEnhanced ? "Select → Operate" : "Operate";
+    public bool CanSend => IsReady && !IsBusy && !_commandAttempted &&
+        !string.IsNullOrWhiteSpace(SelectedValue) &&
+        IsValidOriginator(OriginatorId) && OriginCategories.Contains(SelectedOriginCategory) &&
+        ConfirmLiveCommand;
 
     public ControlCommandWindow(
         Iec61850MonitorRuntime runtime,
@@ -104,11 +175,26 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        // Honor the actual DPI-aware working area. All details scroll while
+        // the command confirmation footer stays on-screen at 1366x768/150%.
+        var work = SystemParameters.WorkArea;
+        Height = Math.Max(MinHeight, Math.Min(500, work.Height - 24));
+        Width = Math.Max(MinWidth, Math.Min(565, work.Width - 24));
         await InspectAsync();
     }
 
     private async Task InspectAsync()
     {
+        if (_commandFlightActive || IsBusy) return;
+        _commandAttempted = false;
+        ConfirmLiveCommand = false;
+        IsReady = false;
+        SelectedValue = string.Empty;
+        ControlNumberText = "Auto";
+        TerminationText = "—";
+        WireTimelineText = string.Empty;
+        ControlEvidenceText = string.Empty; // Do not export stale association evidence.
+        if (CopyEvidenceButton is not null) CopyEvidenceButton.Content = "Copy evidence";
         IsBusy = true;
         CommandStage = "Inspecting control";
         CommandStatus = "Reading ctlModel and current status from the IED…";
@@ -121,7 +207,22 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
                 _cancellation.Token);
 
             ControlModelText = capabilities.ControlModelText;
+            _liveControlModel = capabilities.ControlModel;
+            ModelShortText = capabilities.ControlModel switch
+            {
+                Iec61850ControlModelKind.DirectNormal => "Direct · normal",
+                Iec61850ControlModelKind.DirectEnhanced => "Direct · enhanced",
+                Iec61850ControlModelKind.SboNormal => "SBO · normal",
+                Iec61850ControlModelKind.SboEnhanced => "SBO · enhanced",
+                Iec61850ControlModelKind.StatusOnly => "Status only",
+                _ => "Unverified"
+            };
+            SequenceHint = !capabilities.SupportsOperate ? "Not operable" :
+                capabilities.UsesSelectBeforeOperate
+                ? "Native: Select → Operate" : "Native: Operate";
+            Raise(nameof(SendButtonText));
             ControlCdcText = string.IsNullOrWhiteSpace(capabilities.ControlCdc) ? "CONTROL" : capabilities.ControlCdc;
+            Raise(nameof(AllowCustomValue));
             CurrentValue = capabilities.CurrentValue;
             EngineStatusText = capabilities.EngineControlServiceStatus;
             SequenceText = capabilities.SequenceText;
@@ -138,7 +239,7 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
             {
                 CommandStage = capabilities.SupportsOperate ? "Ready" : "Control unavailable";
                 CommandStatus = capabilities.SupportsOperate
-                    ? $"{capabilities.ControlModelText}. {capabilities.SequenceText}. Select a command value and required check flags."
+                    ? "Choose a value and verify the checks before sending."
                     : capabilities.EngineControlServiceStatus;
                 SetResultTone(capabilities.SupportsOperate ? "Ready" : "Error");
             }
@@ -166,6 +267,24 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
         if (!CanSend)
             return;
 
+        // Keep explicit staged safety confirmation without cluttering the main popup.
+        // SBO selection is part of the native one-shot sequence, NOT an already-held lease.
+        var confirm = MessageBox.Show(this,
+            $"IED: {_device.Name}\nObject: {Telegram}\nValue: {SelectedValue}\n" +
+            $"Sequence: {ModelShortText}\nOrigin: {SelectedOriginCategory}/{OriginatorId.Trim()}\n\n" +
+            (TestMode ? "Send an IEC 61850 command with Test=true?" :
+                        "Send a LIVE IEC 61850 command to this IED?"),
+            "Confirm control", MessageBoxButton.YesNo,
+            MessageBoxImage.Warning, MessageBoxResult.No);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        // One explicit wire attempt consumes the preview. Subsequent commands
+        // need a fresh typed ctlModel / state inspection on this association.
+        _commandAttempted = true;
+        Raise(nameof(CanSend));
+        _commandFlightActive = true;
+        Raise(nameof(CanClose));
+        Raise(nameof(CanReinspect));
         IsBusy = true;
         CommandStage = TestMode ? "Sending test command" : "Sending live command";
         CommandStatus = "Executing the IEC 61850 control sequence selected from ctlModel…";
@@ -183,22 +302,27 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
                     TestMode = TestMode,
                     FeedbackTimeoutMs = _signal.IsPositionControl ? 12000 : 8000,
                     CommandTerminationTimeoutMs = 10000,
-                    OriginCategory = "StationControl"
+                    Originator = OriginatorId.Trim(),
+                    OriginCategory = SelectedOriginCategory
                 },
                 _cancellation.Token);
 
-            CommandStage = result.IsSuccess && !TestMode ? "Command accepted" : result.Stage;
-            CommandStatus = BuildCommandResultText(result);
-            if (result.IsSuccess && !TestMode)
-            {
-                CommandStatus += " Command accepted by the IEC 61850 control service. Waiting for independent IED process feedback; monitored stVal is not changed from the command path.";
-            }
-            SetResultTone(result.IsSuccess ? "Success" : "Error");
+            ControlNumberText = result.ControlNumber;
+            WireTimelineText = Iec61850ControlOutcomePresentation.WireTimeline(result);
+            TerminationText = result.CommandTerminationReceived
+                ? result.PositiveTermination ? "Positive" : "Negative" : "Not reported";
+            var outcome = Iec61850ControlOutcomePresentation.From(result, TestMode);
+            CommandStage = outcome.Stage;
+            CommandStatus = outcome.Summary;
+            // IEC 61850 service acceptance is not process-image authority.
+            // Wire steps, termination, LastApplError and timeout remain inspectable.
+            ControlEvidenceText += "\n\nRESULT\n" + BuildCommandResultText(result);
+            SetResultTone(outcome.Tone);
         }
         catch (OperationCanceledException)
         {
-            CommandStage = "Cancelled";
-            CommandStatus = "The command operation was cancelled.";
+            CommandStage = "Outcome uncertain";
+            CommandStatus = "Request may have reached the IED. Verify before another attempt.";
             SetResultTone("Neutral");
         }
         catch (InvalidOperationException ex) when (
@@ -212,14 +336,29 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
         }
         catch (Exception ex)
         {
-            CommandStage = "Command failed";
-            CommandStatus = $"{ex.GetType().Name}: {ex.Message}";
-            SetResultTone("Error");
+            // An unexpected failure after dispatch cannot prove the command was NOT sent.
+            CommandStage = "Outcome unresolved";
+            CommandStatus = $"{ex.GetType().Name}: {ex.Message}. Verify IED state before retry.";
+            SetResultTone("Warning");
         }
         finally
         {
+            _commandFlightActive = false;
+            Raise(nameof(CanClose));
+            Raise(nameof(CanReinspect));
             IsBusy = false;
+            Raise(nameof(CanCopyEvidence));
+            Raise(nameof(CanSend));
+            Raise(nameof(CanEdit));
         }
+    }
+
+    private async void Reinspect_Click(object sender, RoutedEventArgs e)
+    {
+        // Only a read-only live reinspection can re-arm the command action.
+        // Never retry a timed out or ambiguous native command automatically.
+        if (!CanReinspect) return;
+        await InspectAsync();
     }
 
     private void PopulateValueOptions(string cdc, string currentValue)
@@ -271,7 +410,9 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
                 break;
         }
 
-        SelectedValue = ValueOptions.FirstOrDefault() ?? string.Empty;
+        // Never pre-select Open, Close, Raise, or a numeric setpoint.
+        // The operator must deliberately choose an action after inspection.
+        SelectedValue = string.Empty;
     }
 
 
@@ -344,7 +485,9 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
     {
         if (LiveCommandWarning == null)
             return;
-        LiveCommandWarning.Visibility = IsReady && !TestMode ? Visibility.Visible : Visibility.Collapsed;
+        // Test=true is an MMS control flag, not an offline simulator.
+        // Some servers may still change equipment: authorization is mandatory.
+        LiveCommandWarning.Visibility = IsReady ? Visibility.Visible : Visibility.Collapsed;
         if (TestMode)
             ConfirmLiveCommand = false;
     }
@@ -371,11 +514,41 @@ public partial class ControlCommandWindow : Window, INotifyPropertyChanged
         return new SolidColorBrush(color);
     }
 
+    private void CopyEvidence_Click(object sender, RoutedEventArgs e)
+    {
+        if (!CanCopyEvidence) return;
+        // Pure local clipboard export: NO read, Select, Operate, Cancel, Write,
+        // reconnect or other MMS/network action is permitted in this handler.
+        var snapshot = new Iec61850ControlFatEvidence(
+            DateTimeOffset.UtcNow,
+            DeviceSummary, Telegram, ControlCdcText, ControlModelText,
+            CurrentValue, SelectedValue, SelectedOriginCategory, OriginatorId,
+            InterlockCheck, SynchroCheck, TestMode, CommandStage, CommandStatus,
+            ControlNumberText, TerminationText, WireTimelineText, ControlEvidenceText);
+        try
+        {
+            Clipboard.SetText(snapshot.ToClipboardText());
+            CopyEvidenceButton.Content = "Copied";
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            CopyEvidenceButton.Content = "Copy failed";
+        }
+    }
+
     private void Close_Click(object sender, RoutedEventArgs e)
         => Close();
 
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
+        // Never abandon a dispatched native control flight by simply closing
+        // its UI. Late responses need the owning session to resolve/quarantine.
+        if (_commandFlightActive)
+        {
+            e.Cancel = true;
+            CommandStatus = "IED operation still resolving. Close after the result is known.";
+            return;
+        }
         _cancellation.Cancel();
         _cancellation.Dispose();
     }

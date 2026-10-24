@@ -5,6 +5,23 @@ namespace ArIED61850Tester;
 public partial class MainWindow
 {
     /// <summary>
+    /// Bounded per-RCB evidence, run only after the initial report observation
+    /// window. Counts already displayed members separately from wire frames
+    /// and keeps RptEna/GI/write outcomes explicitly unverified when absent.
+    /// No process read, subscription change or Dispatcher-wide model walk.
+    /// </summary>
+    private void LogStaticRcbImageTriage(Iec61850MonitorDevice device)
+    {
+        var groups = ArIED61850Tester.Services.StaticDataSetRcbImageTriage.Evaluate(
+            device.Points, device.ReportContinuityEvidence, maxGroups: 16);
+        foreach (var group in groups)
+            AddLog(group.Pending > 0 || !group.HasActualReportFrames ? "WARN" : "INFO",
+                device.Name,
+                "Static DataSet RCB evidence: " + group.Summary +
+                " (display completeness and actual stream traffic are separate facts).");
+    }
+
+    /// <summary>
     /// Emits a protocol-feasibility inventory before monitoring starts. A configured
     /// DataSet is not automatically reportable: at least one configured BRCB/URCB must
     /// reference it. This diagnostic deliberately does not infer availability from

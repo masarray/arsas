@@ -31,8 +31,8 @@ public sealed class SmvSmartInstallerUpgradeTests
     [Fact]
     public void PreviewReleaseMustTestProtectedFolder_InPlaceDllRepairAndUninstall()
     {
-        var ci = Read(".github/workflows/smv-direct-inno-preview.yml");
-        Assert.Contains("Join-Path $env:ProgramFiles 'ARSAS-SMV-Preview-CI'", ci);
+        var ci = Read(".github/workflows/installer-windows.yml");
+        Assert.Contains("Join-Path $env:ProgramFiles 'ARSAS-FAT-ProtectedFolder-CI'", ci);
         Assert.DoesNotContain("'/CURRENTUSER'", ci);
         Assert.Contains("$dirArgument = '/DIR=\"' + $target + '\"'", ci);
         Assert.Contains("Silent install did not use requested Program Files directory", ci);

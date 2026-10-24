@@ -8,6 +8,7 @@ namespace ARSAS.Tests;
 /// backgrounds and a fixed-height connect wizard clipping its final panel.
 /// This suite does not simulate IEC 61850 sessions or alter action authority.
 /// </summary>
+[Collection("WpfStaIsolation")]
 public sealed class IedTaskDialogVisualRegressionTests
 {
     private static readonly XNamespace Presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -21,11 +22,20 @@ public sealed class IedTaskDialogVisualRegressionTests
             var document = XDocument.Load(Find(file));
             var root = Assert.IsType<XElement>(document.Root);
             Assert.Equal("Window", root.Name.LocalName);
-            Assert.Equal("Height", (string?)root.Attribute("SizeToContent"));
+            Assert.Equal(file == "IpConnectWizardWindow.xaml" ? "Manual" : "Height",
+                (string?)root.Attribute("SizeToContent"));
             Assert.Equal("TaskDialogCanvas", ResourceRef((string?)root.Attribute("Background"), "DynamicResource"));
-            Assert.True(double.TryParse((string?)root.Attribute("MaxHeight"),
-                NumberStyles.Float, CultureInfo.InvariantCulture, out var max) && max <= 700);
-            Assert.Null(root.Attribute("Height"));
+            if (file == "IpConnectWizardWindow.xaml")
+            {
+                Assert.Equal("350", (string?)root.Attribute("Height"));
+                Assert.Equal("CenterOwner", (string?)root.Attribute("WindowStartupLocation"));
+            }
+            else
+            {
+                Assert.True(double.TryParse((string?)root.Attribute("MaxHeight"),
+                    NumberStyles.Float, CultureInfo.InvariantCulture, out var max) && max <= 700);
+                Assert.Null(root.Attribute("Height"));
+            }
             Assert.Contains(root.Descendants(Presentation + "ResourceDictionary"),
                 element => element.Attribute("Source")?.Value == "Styles/IedTaskDialogStyles.xaml");
             Assert.Contains(root.Descendants(Presentation + "ScrollViewer"),
@@ -131,24 +141,33 @@ public sealed class IedTaskDialogVisualRegressionTests
     }
 
     [Fact]
-    public void AddIed_PreservesSavedIpBindingValidationFeedbackAndKeyboardActions()
+    public void AddIed_PreservesHistoryValidationFeedbackAndKeyboardActions()
     {
         var xml = File.ReadAllText(Find("IpConnectWizardWindow.xaml"));
         var source = File.ReadAllText(Find("IpConnectWizardWindow.xaml.cs"));
-        Assert.Contains("x:Name=\"RelayIpBox\"", xml, StringComparison.Ordinal);
-        Assert.Contains("RecentRelayIps", xml, StringComparison.Ordinal);
-        Assert.Contains("RelayIpAddress", xml, StringComparison.Ordinal);
-        Assert.Contains("MmsPortText", xml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"WizardStatusText\"", xml, StringComparison.Ordinal);
-        Assert.Contains("Style=\"{StaticResource TaskDialogError}\"", xml, StringComparison.Ordinal);
-        Assert.Contains("IsDefault=\"True\"", xml, StringComparison.Ordinal);
-        Assert.Contains("IsCancel=\"True\"", xml, StringComparison.Ordinal);
-        Assert.Contains("Click=\"Connect_Click\"", xml, StringComparison.Ordinal);
-        Assert.Contains("Click=\"Cancel_Click\"", xml, StringComparison.Ordinal);
+        foreach (var required in new[]
+        {
+            "x:Name=\"Octet1Box\"", "x:Name=\"Octet2Box\"",
+            "x:Name=\"Octet3Box\"", "x:Name=\"Octet4Box\"",
+            "x:Name=\"HistoryPopup\"", "x:Name=\"HistorySearchBox\"",
+            "x:Name=\"RawIpBox\"", "RelayIpAddress", "MmsPortText",
+            "x:Name=\"WizardStatusText\"", "Style=\"{StaticResource TaskDialogError}\"",
+            "IsDefault=\"True\"", "IsCancel=\"True\"",
+            "Click=\"Connect_Click\"", "Click=\"Cancel_Click\""
+        })
+            Assert.Contains(required, xml, StringComparison.Ordinal);
+
+        foreach (var required in new[]
+        {
+            "UserPreferenceStore.LoadRecentEndpointDetails()",
+            "TryNormalizeIpv4Octets(", "IPAddress.TryParse",
+            "port is <= 0 or > 65535", "Octet_Pasting",
+            "Octet_PreviewKeyDown", "HistorySearchBox_TextChanged",
+            "CommitHistorySelection()"
+        })
+            Assert.Contains(required, source, StringComparison.Ordinal);
+
         Assert.DoesNotContain("Flow: TCP/TPKT/COTP", xml, StringComparison.Ordinal);
-        Assert.Contains("UserPreferenceStore.LoadRecentEndpoints()", source, StringComparison.Ordinal);
-        Assert.Contains("System.Net.IPAddress.TryParse", source, StringComparison.Ordinal);
-        Assert.Contains("port is <= 0 or > 65535", source, StringComparison.Ordinal);
     }
 
     private static string? ResourceRef(string? value, string extension = "StaticResource")

@@ -119,7 +119,13 @@ public sealed class M217GDataSetSclSchemaFallbackTests
         Assert.NotNull(folder);
         var source = File.ReadAllText(Path.Combine(folder!.FullName,
             "MainWindow.IedBrowser.cs"));
-        Assert.Contains("QueueIedBrowserFocusedRead(row)", source);
+        // Focused reads are now scheduled only after the current asynchronous
+        // detail projection passes IED/model/association fencing.
+        var worker = File.ReadAllText(Path.Combine(folder.FullName,
+            "MainWindow.IedBrowser.AsyncDetails.cs"));
+        Assert.Contains("QueueIedBrowserFocusedRead(page)", worker);
+        Assert.Contains("owner?.LiveValues.Association != association", worker);
+        Assert.Contains("generation != _iedBrowserDetailBuildGeneration", worker);
         Assert.Contains("_iedBrowserAutoReadAdmission.TryStart(", source);
         Assert.Contains("QueueIedBrowserFocusedRead(lnPage, detail.ReadObjectReference)", source);
         Assert.Contains("IedBrowserReadPlan.BuildFocused(", source);

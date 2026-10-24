@@ -2,36 +2,23 @@ name: Smart Discovery Mainline Readiness
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
-      - "*.cs"
-      - "**/*.cs"
-      - "*.csproj"
-      - "**/*.csproj"
-      - "*.sln"
-      - "**/*.sln"
-      - "*.props"
-      - "**/*.props"
-      - "*.targets"
-      - "**/*.targets"
-      - "global.json"
-      - "*.xaml"
-      - "**/*.xaml"
-      - "app.manifest"
-      - "VERSION"
-      - ".release/**"
-      - ".github/workflows/**"
-      - "Assets/**"
-      - "Resources/**"
-      - "installer/**"
-      - "engine-patches/**"
-      - "landing/release-notes*.json"
-      - "landing/latest.json"
-      - "engines/**"
-      - "scripts/**"
-      - "tests/**"
-      - "evidence/**"
+      # Fast PR routing: only Smart Discovery authority/dependencies trigger this gate.
+      - "Services/NativeIec61850Client*.cs"
+      - "Services/*SmartDiscovery*.cs"
+      - "Services/Iec61850MonitorRuntime.cs"
+      - "Models/MonitorModels.cs"
+      - "ArIED61850Tester.csproj"
+      - "Directory.Build.*"
+      - "engines/ARIEC61850.lock.json"
+      - "scripts/enable-smart-discovery-capture.ps1"
+      - "scripts/*smart-discovery*"
+      - "evidence/interoperability-reference-target.json"
+      - "evidence/smart-discovery-*.json"
+      - "tests/ARSAS.Tests/*SmartDiscovery*.cs"
       - "docs/INTEROPERABILITY_REFERENCE_CONTRACT.md"
-      - ".github/workflows/smart-discovery-*.yml"
+      - ".github/workflows/smart-discovery-mainline-readiness.yml"
   workflow_dispatch:
 
 permissions:
@@ -44,6 +31,7 @@ concurrency:
 
 jobs:
   mainline-readiness:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Require R10 physical authority before mainline review
     runs-on: windows-latest
     steps:

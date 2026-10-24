@@ -68,6 +68,11 @@ public static class Iec61850ValueFormatter
         if (TryExtractStructuredScalar(normalizedValue, dataType, out var structuredScalar))
             normalizedValue = structuredScalar;
 
+        // IEC 61850 BSC ValWithTrans.posVal is SIGNED INT8 (-64..63).
+        // Even stale Boolean/SPC metadata must not reinterpret 0/1 as states.
+        if (IsBscStepPosition(reference, dataType))
+            return FormatBscStepPosition(normalizedValue, unit);
+
         if (IsPositionSemantic(dataType, category, reference) &&
             TryNormalizeDbpos(normalizedValue, out var dbpos))
         {
@@ -82,6 +87,44 @@ public static class Iec61850ValueFormatter
         }
 
         return FormatNormalizedValue(normalizedValue, dataType, unit);
+    }
+
+    public static bool IsBscStepPosition(string? reference, string? dataType)
+    {
+        var path = (reference ?? string.Empty).Trim().Replace('$', '.');
+        return path.EndsWith(".valWTr.posVal", StringComparison.OrdinalIgnoreCase) ||
+               (string.Equals(dataType?.Trim(), "BSC", StringComparison.OrdinalIgnoreCase) &&
+                path.EndsWith(".posVal", StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static string FormatBscStepPosition(object? value, string? unit = null)
+    {
+        string? number = value switch
+        {
+            sbyte x when x is >= -64 and <= 63 => x.ToString(CultureInfo.InvariantCulture),
+            byte x when x <= 63 => x.ToString(CultureInfo.InvariantCulture),
+            short x when x is >= -64 and <= 63 => x.ToString(CultureInfo.InvariantCulture),
+            ushort x when x <= 63 => x.ToString(CultureInfo.InvariantCulture),
+            int x when x is >= -64 and <= 63 => x.ToString(CultureInfo.InvariantCulture),
+            uint x when x <= 63 => x.ToString(CultureInfo.InvariantCulture),
+            long x when x is >= -64 and <= 63 => x.ToString(CultureInfo.InvariantCulture),
+            ulong x when x <= 63 => x.ToString(CultureInfo.InvariantCulture),
+            string text when sbyte.TryParse(text.Trim(), NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out var step) &&
+                step is >= -64 and <= 63 => step.ToString(CultureInfo.InvariantCulture),
+            _ => null
+        };
+        if (number != null)
+            return AppendUnit(number, unit ?? string.Empty);
+        // Never make up a step number from a raw Boolean shape mismatch.
+        return value switch
+        {
+            null => "-",
+            bool boolean => boolean
+                ? "true (BSC INT8 type mismatch)"
+                : "false (BSC INT8 type mismatch)",
+            _ => value.ToString() ?? "-"
+        };
     }
 
     private static bool IsPositionSemantic(string dataType, string category, string reference)

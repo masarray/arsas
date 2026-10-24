@@ -1,6 +1,6 @@
 namespace ARSAS.Tests;
 
-[Collection("Wpf donor lifecycle")]
+[Collection("WpfStaIsolation")]
 public sealed class ProductionFatM2PermanentHostRegressionTests
 {
     [Fact]
