@@ -76,6 +76,7 @@ public sealed class IedBrowserPostWriteSsotRegressionTests
         Assert.Contains("if (group.Length != 1) return null;", source);
         Assert.Contains("IedBrowserLiveValues.CanonicalReference", source);
         Assert.Contains("new IedBrowserReadTarget(attr.MmsReference", source);
+        Assert.Contains("or \"SG\" or \"SE\"", source);
         Assert.DoesNotContain("PublishForAssociation(", source);
         Assert.DoesNotContain("WriteBrowserDataAttributesAsync(", source);
 
