@@ -295,12 +295,12 @@
                             BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1"
                             CornerRadius="8">
                         <StackPanel>
-                            <TextBlock Text="SELECTED PUBLISHER" FontSize="9"
+                            <TextBlock Text="PUBLISHER" FontSize="9"
                                        FontWeight="SemiBold" Foreground="{StaticResource Muted}"
                                        Margin="0,0,0,4"/>
                             <TextBlock Text="{Binding StreamDetail}" FontSize="10"
                                        Foreground="{StaticResource Ink}" TextWrapping="Wrap"
-                                       ToolTip="{Binding StreamDetail}" MaxHeight="95"/>
+                                       ToolTip="{Binding StreamTechnicalDetail}" MaxHeight="95"/>
                         </StackPanel>
                     </Border>
                 </Grid>
@@ -323,10 +323,18 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Waveforms" Style="{StaticResource SvHeading}"/>
+                        <TextBlock Grid.Column="0" Text="Waveforms" Style="{StaticResource SvHeading}"
+                                   ToolTip="{Binding WaveformStatus}"/>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                             <Border Background="{Binding SyncBackground}" CornerRadius="8"
-                                    Padding="8,3" Margin="0,0,9,0" ToolTip="{Binding SyncDetail}">
+                                    Padding="8,3" Margin="0,0,9,0">
+                                <Border.ToolTip>
+                                    <ToolTip MaxWidth="330" Padding="9,7">
+                                        <TextBlock MaxWidth="310" TextWrapping="Wrap"
+                                            Text="{Binding PlacementTarget.DataContext.SyncDetail,
+                                                RelativeSource={RelativeSource AncestorType={x:Type ToolTip}}}"/>
+                                    </ToolTip>
+                                </Border.ToolTip>
                                 <TextBlock Text="{Binding SyncLabel}" Foreground="{Binding SyncForeground}"
                                            FontSize="10.5" FontWeight="SemiBold"/>
                             </Border>
@@ -366,9 +374,10 @@
                             IsStreamLive="{Binding IsLiveSnapshot}" TimebaseMode="2 cycles"
                             VoltageScale="Auto Peak Hold" CurrentScale="Auto Peak Hold"
                             ShowMode="Both" LayoutMode="Overlay" MarkersEnabled="True"/>
-                    <TextBlock Grid.Row="5" Text="{Binding WaveformStatus}" Style="{StaticResource SvCaption}"
-                               Margin="3,5,3,0" FontSize="9.8" TextTrimming="CharacterEllipsis"
-                               ToolTip="{Binding WaveformStatus}"/>
+                    <!-- Diagnostic evidence lives on the heading hover, not duplicated
+                         below the active waveform on every snapshot. -->
+                    <TextBlock Grid.Row="5" Text="{Binding WaveformStatus}"
+                               Visibility="Collapsed" ToolTip="{Binding WaveformStatus}"/>
                 </Grid>
             </Border>
 
@@ -423,9 +432,7 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Measurements" Style="{StaticResource SvHeading}"/>
-                            <TextBlock Grid.Column="2" Text="RMS · phase"
-                                       Style="{StaticResource SvCaption}" Margin="12,0,0,0"
-                                       VerticalAlignment="Center"/>
+                            <!-- RMS and angle already identify their columns. -->
                         </Grid>
                         <!-- The two views filter the same eight immutable measurement rows.
                              RAW group titles are presentation-only, not verified U/I metadata. -->
@@ -543,12 +550,11 @@
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="3φ POWER" FontSize="10.5"
-                                               FontWeight="SemiBold" Foreground="#234E80"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding PowerStatusShort}"
-                                               FontSize="9.4" Foreground="#617D9A"
-                                               HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"
-                                               Margin="10,0,0,0" ToolTip="{Binding PowerStatus}"/>
+                                    <TextBlock Grid.Column="0" Text="3φ Power" FontSize="10.5"
+                                               FontWeight="SemiBold" Foreground="#234E80"
+                                               ToolTip="{Binding PowerStatus}"/>
+                                    <!-- Computation methodology is available on hover.
+                                         Do not duplicate it beside the 3φ title. -->
                                 </Grid>
                                 <!-- Four equal-width instrument readouts, aligned
                                      on a common baseline; no nested horizontal
@@ -565,7 +571,7 @@
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
-                                        <TextBlock Text="ACTIVE · P" Foreground="#617D9A" FontSize="9.2"/>
+                                        <TextBlock Text="P" Foreground="#617D9A" FontSize="9.2"/>
                                         <TextBlock Grid.Row="1" Text="{Binding PowerP}" Foreground="#183A65"
                                                    FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                                     </Grid>
@@ -574,7 +580,7 @@
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
-                                        <TextBlock Text="REACTIVE · Q₁" Foreground="#617D9A" FontSize="9.2"/>
+                                        <TextBlock Text="Q₁" Foreground="#617D9A" FontSize="9.2"/>
                                         <TextBlock Grid.Row="1" Text="{Binding PowerQ}" Foreground="#183A65"
                                                    FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                                     </Grid>
@@ -583,7 +589,7 @@
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
-                                        <TextBlock Text="APPARENT · S" Foreground="#617D9A" FontSize="9.2"/>
+                                        <TextBlock Text="S" Foreground="#617D9A" FontSize="9.2"/>
                                         <TextBlock Grid.Row="1" Text="{Binding PowerS}" Foreground="#183A65"
                                                    FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                                     </Grid>
@@ -592,16 +598,16 @@
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
-                                        <TextBlock Text="POWER FACTOR" Foreground="#617D9A" FontSize="9.2"/>
+                                        <TextBlock Text="PF" Foreground="#617D9A" FontSize="9.2"/>
                                         <TextBlock Grid.Row="1" Text="{Binding PowerPf}" Foreground="#183A65"
                                                    FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                                     </Grid>
                                 </Grid>
                             </Grid>
                         </Border>
-                        <TextBlock Grid.Row="6" Text="{Binding UnitStatus}"
-                                   Style="{StaticResource SvCaption}" FontSize="9.5"
-                                   Margin="3,1,0,0" TextTrimming="CharacterEllipsis"
+                        <!-- Full profile/scale details remain available on
+                             both group-heading tooltips, not as permanent noise. -->
+                        <TextBlock Grid.Row="6" Text="{Binding UnitStatus}" Visibility="Collapsed"
                                    ToolTip="{Binding UnitStatus}"/>
                     </Grid>
                 </Border>
