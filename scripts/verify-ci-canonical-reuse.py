@@ -105,7 +105,8 @@ def validate_identity(repo: str, head_sha: str, merge_sha: str, engine_sha: str,
 
 
 def candidate_runs(
-    payload: dict, head_sha: str, branch: str, event_name: str = "pull_request"
+    payload: dict, head_sha: str, branch: str, event_name: str = "pull_request",
+    pr_title: str | None = None,
 ) -> list[dict]:
     runs = payload.get("workflow_runs", [])
     if not isinstance(runs, list):
@@ -116,6 +117,11 @@ def candidate_runs(
         and run.get("name") == "Build ARSAS"
         and run.get("head_sha") == head_sha
         and run.get("head_branch") == branch
+        # A shared head branch can feed two PRs, each with a DIFFERENT
+        # synthetic merge commit. GitHub Actions identifies those runs by
+        # the PR display title. This is only routing: the downloaded canonical
+        # manifest remains cryptographically bound to exact merge + engine.
+        and (pr_title is None or run.get("display_title") == pr_title)
         and isinstance(run.get("id"), int)
         and isinstance(run.get("run_attempt"), int)
     ]
@@ -299,7 +305,11 @@ def verify_canonical(
     allow_in_progress_artifact: bool = False,
     event_name: str = "pull_request",
     required_test_substrings: list[str] | None = None,
+    pr_title: str | None = None,
 ) -> dict:
+    if event_name == "pull_request" and pr_title is not None:
+        if not pr_title or len(pr_title) > 300 or "\n" in pr_title or "\r" in pr_title:
+            raise ProofError("Invalid canonical PR display title")
     validate_identity(
         repository, head_sha, merge_sha, engine_sha, branch, event_name
     )
@@ -315,7 +325,9 @@ def verify_canonical(
     previous = None
 
     while True:
-        runs = candidate_runs(api.get(url), head_sha, branch, event_name)
+        runs = candidate_runs(
+            api.get(url), head_sha, branch, event_name, pr_title=pr_title,
+        )
         if runs:
             run = runs[0]  # Never use an older successful attempt over a newer failure.
             run_id, attempt = run["id"], run["run_attempt"]
@@ -399,6 +411,12 @@ def main() -> int:
     parser.add_argument("--merge-sha", required=True)
     parser.add_argument("--engine-sha", required=True)
     parser.add_argument(
+        "--pr-title", default=None,
+        help=("Expected PR display title from the exact event payload; "
+              "filters Build ARSAS runs when two PRs share the same head SHA "
+              "but have distinct synthetic merge SHAs."),
+    )
+    parser.add_argument(
         "--event-name",
         choices=("pull_request", "push"),
         default="pull_request",
@@ -434,6 +452,7 @@ def main() -> int:
         allow_in_progress_artifact=args.allow_in_progress_artifact,
         event_name=args.event_name,
         required_test_substrings=args.require_test_substring,
+        pr_title=args.pr_title,
     )
     payload = json.dumps(result, sort_keys=True)
     print("Canonical full-regression reuse PASS: " + payload)
