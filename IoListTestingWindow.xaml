@@ -4,7 +4,7 @@
         xmlns:io="clr-namespace:ArIED61850Tester.Models.IoTesting"
         xmlns:local="clr-namespace:ArIED61850Tester"
         Title="ARSAS - IO List Testing"
-        Height="820" Width="1440" MinHeight="640" MinWidth="1100"
+        Height="920" Width="1680" MinHeight="640" MinWidth="1100"
         WindowStartupLocation="CenterOwner" WindowState="Normal"
         Background="{StaticResource AppBackgroundGradient}"
         FontFamily="{StaticResource AppFontFamily}"
