@@ -79,7 +79,7 @@ public partial class MainWindow
     internal async Task OpenIedWorkspaceActionsAsync(Iec61850MonitorDevice device)
     {
         ArgumentNullException.ThrowIfNull(device);
-        if (device.IsBusy)
+        if (device.IsBusy || device.IsReportingProgressActive)
         {
             SetStatus($"{device.Name}: wait for the current IED task to finish before opening IED Actions.");
             return;
@@ -118,40 +118,40 @@ public partial class MainWindow
                 if (device.IsMonitoring)
                     await StopDeviceMonitorAsync(device);
 
-            await ApplyStaticDataSetSelection(device);
-            if (device.SelectedLiveSignalCount == 0)
-            {
-                SetStatus($"{device.Name}: Static DataSet selected, but no report-authoritative process leaf is available to monitor.");
-                return;
-            }
+                if (device.IsReportingProgressCanceled) return;
+                await ApplyStaticDataSetSelection(device);
+                if (device.IsReportingProgressCanceled) return;
 
-            if (!device.IsConnected)
-            {
-                var connected = device.HasDiscoveryCache && device.Signals.Count > 0
-                    ? await ConnectUsingSavedModelAsync(device)
-                    : await ConnectAndConfigureDeviceAsync(device, openWizard: false);
-                if (!connected)
+                if (device.SelectedLiveSignalCount == 0)
+                {
+                    SetStatus($"{device.Name}: Static DataSet selected, but no report-authoritative process leaf is available to monitor.");
                     return;
-            }
+                }
 
-            // Unit metadata belongs to the same source-neutral Static DataSet workflow.
-            // Resolve only selected measurement owners on the active MMS session, before
-            // any RCB is armed, so discovery and opened-SCL paths expose the same verified
-            // engineering-unit behavior without disturbing active reporting.
-            SetStatus($"{device.Name}: verifying engineering units for selected Static DataSet measurements…");
-            await _runtime.EnrichSelectedStaticDataSetUnitsAsync(
-                device,
-                _applicationCancellation.Token);
-            device.RefreshComputed();
+                if (!device.IsConnected)
+                {
+                    var connected = device.HasDiscoveryCache && device.Signals.Count > 0
+                        ? await ConnectUsingSavedModelAsync(device)
+                        : await ConnectAndConfigureDeviceAsync(device, openWizard: false);
+                    if (!connected || device.IsReportingProgressCanceled)
+                        return;
+                }
 
-            if (!device.IsMonitoring)
-                await StartDeviceMonitorAsync(device);
-                return;
+                device.UpdateReportingProgress(80, "Verifying measurement engineering units…");
+                SetStatus($"{device.Name}: verifying engineering units for selected Static DataSet measurements…");
+                await _runtime.EnrichSelectedStaticDataSetUnitsAsync(
+                    device, _applicationCancellation.Token);
+                device.RefreshComputed();
+                if (device.IsReportingProgressCanceled) return;
+
+                if (!device.IsMonitoring)
+                    await StartDeviceMonitorAsync(device);
             }
             finally
             {
                 device.CompleteReportingProgress();
             }
+            return;
         }
 
         if (dialog.Selection != IedWorkspaceTaskChoice.ManualSignals)

@@ -346,37 +346,43 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 }
                 else if (selectionMode == SclSignalSelectionMode.StaticDataSet)
                 {
-                    foreach (var importedDevice in selectableDevices)
+                    var staged = new List<Iec61850MonitorDevice>();
+                    try
                     {
-                        importedDevice.BeginReportingProgress("Preparing Static DataSet reporting…");
-                        try
+                        foreach (var importedDevice in selectableDevices)
                         {
+                            importedDevice.BeginReportingProgress("Preparing Static DataSet reporting…");
+                            staged.Add(importedDevice);
                             await ApplyStaticDataSetSelection(importedDevice);
-                        }
-                        finally
-                        {
-                            // Non-primary imported IEDs are selected but do not
-                            // auto-start monitoring; do not leave their bar active.
+                            if (importedDevice.IsReportingProgressCanceled)
+                                return; // preempted by operator Stop
                             if (!ReferenceEquals(importedDevice, firstImported))
                                 importedDevice.CompleteReportingProgress();
                         }
-                    }
 
-                    AddLog("INFO", "SCL", $"Static DataSet selection is shared by Engineering and FAT for {selectableDevices.Length} IED workspace(s).");
-                    if (firstImported is { SelectedLiveSignalCount: > 0 })
-                    {
-                        var connected = firstImported.IsConnected ||
-                                        await ConnectUsingSavedModelAsync(firstImported);
-                        if (connected && !firstImported.IsMonitoring)
+                        AddLog("INFO", "SCL", $"Static DataSet selection is shared by Engineering and FAT for {selectableDevices.Length} IED workspace(s).");
+                        if (firstImported is { SelectedLiveSignalCount: > 0 } &&
+                            !firstImported.IsReportingProgressCanceled)
                         {
-                            await _runtime.EnrichSelectedStaticDataSetUnitsAsync(
-                                firstImported,
-                                _applicationCancellation.Token);
-                            firstImported.RefreshComputed();
-                            await StartDeviceMonitorAsync(firstImported);
+                            var connected = firstImported.IsConnected ||
+                                            await ConnectUsingSavedModelAsync(firstImported);
+                            if (connected && !firstImported.IsReportingProgressCanceled &&
+                                !firstImported.IsMonitoring)
+                            {
+                                firstImported.UpdateReportingProgress(80, "Verifying engineering units…");
+                                await _runtime.EnrichSelectedStaticDataSetUnitsAsync(
+                                    firstImported, _applicationCancellation.Token);
+                                firstImported.RefreshComputed();
+                                if (!firstImported.IsReportingProgressCanceled)
+                                    await StartDeviceMonitorAsync(firstImported);
+                            }
                         }
                     }
-                    firstImported?.CompleteReportingProgress();
+                    finally
+                    {
+                        foreach (var stagedDevice in staged)
+                            stagedDevice.CompleteReportingProgress();
+                    }
                 }
                 else if (selectionMode == SclSignalSelectionMode.BrowseIed)
                 {
@@ -1401,6 +1407,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // Stop is a preemptive safety lane even while Connect/Start is busy.
         if (!TryGetDeviceFromButton(sender, out var device) || device.IsStopping) return;
         SelectedDevice = device;
+        if (device.IsReportingProgressActive)
+            device.CancelReportingProgress(); // Stop preempts report setup.
         if (device.IsDemo)
         {
             StopDemoDevice(device);

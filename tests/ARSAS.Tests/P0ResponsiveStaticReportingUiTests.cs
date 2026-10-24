@@ -30,6 +30,26 @@ public sealed class P0ResponsiveStaticReportingUiTests
     }
 
     [Fact]
+    public void StopPreemptsReportingAndNextOperationGetsFreshProgressScope()
+    {
+        var device = new Iec61850MonitorDevice { IsConnected = true };
+        device.BeginReportingProgress("Preparing…");
+        Assert.False(device.CanPlayAction);
+        Assert.False(device.CanEditSignals);
+        Assert.True(device.CanStopAction); // operator exit is never disabled
+        device.CancelReportingProgress();
+        Assert.True(device.IsReportingProgressCanceled);
+        Assert.False(device.IsReportingProgressActive);
+        device.CompleteReportingProgress(); // late finally cannot reassert success
+        Assert.True(device.IsReportingProgressCanceled);
+
+        device.BeginReportingProgress("Fresh start…");
+        Assert.False(device.IsReportingProgressCanceled);
+        Assert.Equal(0d, device.IedCardProgressPercent);
+        device.CompleteReportingProgress();
+    }
+
+    [Fact]
     public void ExistingIedCardProgressLineIsReusedAndTurnsGreenDuringReporting()
     {
         var xaml = Read("MainWindow.xaml");
