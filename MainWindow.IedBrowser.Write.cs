@@ -33,6 +33,9 @@ public partial class MainWindow
             Owner = this
         };
         editor.ShowDialog();
+        if (editor.AttemptedLeaves.Count > 0)
+            QueueIedBrowserPostWriteRead(device, liveModel, editor.WriteAssociation,
+                editor.AttemptedLeaves, editor.WriteStatus);
         if (editor.PotentiallyChangedControlModels.Count > 0 &&
             device.IsConnected && ReferenceEquals(device.LiveDiscoveryModel, liveModel))
         {
@@ -52,7 +55,7 @@ public partial class MainWindow
             ResetControlPreloadAttempts(device);
             _ = PreloadControlModelsAsync();
         }
-        IedBrowserDetailStatus.Text =
-            "MMS configuration editor closed. Use explicit Read to refresh visible live values.";
+        if (editor.AttemptedLeaves.Count == 0)
+            IedBrowserDetailStatus.Text = "Configuration editor closed; no Write sent.";
     }
 }
