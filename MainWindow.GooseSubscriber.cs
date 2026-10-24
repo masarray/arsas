@@ -38,7 +38,7 @@ public partial class MainWindow
     private bool _gooseWorkspaceActivationScheduled;
     private bool _gooseBindingRefreshScheduled;
     // Native adapter discovery must never execute during a tab navigation.
-    private bool _gooseNavigationAdapterScanInFlight;
+    private Task? _gooseNavigationAdapterScanTask;
 
     public BulkObservableCollection<GooseAdapterOption> GooseAdapters { get; } = new();
     public BulkObservableCollection<GooseStreamRow> GooseStreams { get; } = new();
@@ -145,17 +145,23 @@ public partial class MainWindow
             if (MainTabs.SelectedIndex != GooseSubscriberTabIndex || IsGooseCapturing)
                 return;
             if (GooseAdapters.Count == 0)
-                _ = LoadGooseAdaptersForNavigationAsync();
+                _ = EnsureGooseAdaptersForNavigationAsync();
         }));
+    }
+
+    // Deduplicated worker shared by ordinary tab navigation and IED-card entry.
+    private Task EnsureGooseAdaptersForNavigationAsync()
+    {
+        if (_gooseNavigationAdapterScanTask is { IsCompleted: false } running)
+            return running;
+        if (IsGooseCapturing || Dispatcher.HasShutdownStarted || GooseAdapters.Count != 0)
+            return Task.CompletedTask;
+        _gooseNavigationAdapterScanTask = LoadGooseAdaptersForNavigationAsync();
+        return _gooseNavigationAdapterScanTask;
     }
 
     private async Task LoadGooseAdaptersForNavigationAsync()
     {
-        if (_gooseNavigationAdapterScanInFlight || IsGooseCapturing ||
-            Dispatcher.HasShutdownStarted || GooseAdapters.Count != 0)
-            return;
-
-        _gooseNavigationAdapterScanInFlight = true;
         try
         {
             // Native enumerations can stall several seconds on multi-NIC PCs.
@@ -186,7 +192,7 @@ public partial class MainWindow
         }
         finally
         {
-            _gooseNavigationAdapterScanInFlight = false;
+            _gooseNavigationAdapterScanTask = null;
         }
     }
 
