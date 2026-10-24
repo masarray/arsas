@@ -8,7 +8,7 @@ namespace ArIED61850Tester;
 public partial class MainWindow
 {
     // 0 = selected IED; 1 = all IEDs. Never filters the capture/decoder.
-    private int _gooseIedScopeIndex;
+    private int _gooseIedScopeIndex = 1; // Unresolved publishers must be visible at first capture.
     private ListCollectionView? _gooseEventScopeView;
     private ListCollectionView? _gooseStreamScopeView;
 
@@ -26,6 +26,16 @@ public partial class MainWindow
             RefreshGooseScopeViews();
         }
     }
+
+    // Keep the 500-event canonical timeline unchanged; this is only the
+    // presentation scope. A selected IED cannot claim unresolved Ethernet
+    // publisher identity solely from its MMS endpoint.
+    public string GooseEmptyEventTitle => GooseEvents.Count == 0
+        ? "Waiting for the first meaningful GOOSE event"
+        : "No events match the selected IED";
+    public string GooseEmptyEventDetail => GooseEvents.Count == 0
+        ? "Frames are captured independently. New publishers and actual changes will appear here."
+        : $"Captured {GooseEvents.Count:N0} timeline event(s), but none has a verified publisher identity matching the selected IED. Choose All IED GOOSE signals to view them.";
 
     public string GooseSelectedScopeHint => GooseIedScopeIndex == 1
         ? "Display messages from every captured GOOSE publisher, including unresolved identities."
@@ -58,6 +68,8 @@ public partial class MainWindow
         _gooseEventScopeView?.Refresh();
         _gooseStreamScopeView?.Refresh();
         Raise(nameof(GooseSelectedScopeHint));
+        Raise(nameof(GooseEmptyEventTitle));
+        Raise(nameof(GooseEmptyEventDetail));
         _settingGooseLiveSelection = true;
         try
         {
