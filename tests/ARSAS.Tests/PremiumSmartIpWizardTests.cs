@@ -87,8 +87,10 @@ public sealed class PremiumSmartIpWizardTests
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
         var root = Assert.IsType<XElement>(doc.Root);
 
-        Assert.InRange(int.Parse(root.Attribute("Width")!.Value), 460, 530);
-        Assert.Equal("350", root.Attribute("Height")?.Value);
+        Assert.Equal("410", root.Attribute("Width")?.Value);
+        Assert.Equal("348", root.Attribute("Height")?.Value);
+        Assert.Equal("410", root.Attribute("MinWidth")?.Value);
+        Assert.Equal("410", root.Attribute("MaxWidth")?.Value);
         Assert.Contains("AppFontFamily", root.Attribute("FontFamily")!.Value);
         Assert.Equal("Manual", root.Attribute("SizeToContent")?.Value);
 
@@ -107,9 +109,37 @@ public sealed class PremiumSmartIpWizardTests
             box => box.Attribute(x + "Name")?.Value == "MmsPortBox");
         Assert.DoesNotContain(doc.Descendants(w + "CheckBox"),
             box => box.Attribute(x + "Name")?.Value == "ManualAddressCheck");
-        Assert.Equal("265", doc.Descendants(w + "Border")
-            .Single(e => e.Attribute(x + "Name")?.Value == "IpEditorHost")
-            .Attribute("Width")?.Value);
+        var editor = doc.Descendants(w + "Border")
+            .Single(e => e.Attribute(x + "Name")?.Value == "IpEditorHost");
+        Assert.Null(editor.Attribute("Width"));
+        Assert.Equal("Stretch", editor.Attribute("HorizontalAlignment")?.Value);
+        Assert.Equal("44", editor.Attribute("Height")?.Value);
+
+        // The manual IPv6 / raw-address fallback must share the same geometry.
+        var raw = doc.Descendants(w + "TextBox")
+            .Single(e => e.Attribute(x + "Name")?.Value == "RawIpBox");
+        Assert.Null(raw.Attribute("Width"));
+        Assert.Equal("Stretch", raw.Attribute("HorizontalAlignment")?.Value);
+        Assert.Equal(editor.Attribute("Height")?.Value, raw.Attribute("Height")?.Value);
+
+        var body = doc.Descendants(w + "Grid")
+            .Single(e => e.Attribute("Margin")?.Value == "32,20,32,18");
+        Assert.Equal(3, body.Elements(w + "Grid.RowDefinitions")
+            .Elements(w + "RowDefinition").Count());
+
+        var footer = body.Elements(w + "Grid")
+            .Single(e => e.Attribute("Grid.Row")?.Value == "2");
+        var actions = footer.Elements(w + "StackPanel").Single();
+        Assert.Equal("Center", actions.Attribute("HorizontalAlignment")?.Value);
+        Assert.Equal("Horizontal", actions.Attribute("Orientation")?.Value);
+        Assert.Equal(new[] { "Cancel", "Connect" }, actions.Elements(w + "Button")
+            .Select(e => e.Attribute("Content")?.Value).ToArray());
+        Assert.All(actions.Elements(w + "Button"), button =>
+            Assert.Equal("40", button.Attribute("MinHeight")?.Value));
+        Assert.Equal("108", actions.Elements(w + "Button").First().Attribute("Width")?.Value);
+        Assert.Equal("128", actions.Elements(w + "Button").Last().Attribute("Width")?.Value);
+        Assert.Equal("True", actions.Elements(w + "Button").Last().Attribute("IsDefault")?.Value);
+        Assert.Equal("True", actions.Elements(w + "Button").First().Attribute("IsCancel")?.Value);
         Assert.Contains("expand_circle_down", File.ReadAllText(Find("IpConnectWizardWindow.xaml")));
 
         var xaml = File.ReadAllText(Find("IpConnectWizardWindow.xaml"));
