@@ -147,8 +147,12 @@ public sealed class PhasorDiagramControl : FrameworkElement
         var labelCache = _visualItems.Where(IsRenderable)
             .ToDictionary(item => item, item =>
                 CreateText(FormatPhasorLabel(item), 11.3, PhaseBrush(PhaseIndex(item.Name)), LabelTypeface));
-        var leftRail = 4.0;
-        var rightRail = 4.0;
+        // Mode-wide minimum text lanes keep the ring/grid fixed while
+        // numbers update (e.g. 9.9V -> 100V). Widths beyond the reserve
+        // still grow safely; the common case never makes the plot breathe.
+        var engineeringLabels = labelCache.Keys.Any(item => item.Unit != "counts");
+        var leftRail = engineeringLabels ? 142.0 : 92.0;
+        var rightRail = engineeringLabels ? 142.0 : 92.0;
         foreach (var pair in labelCache)
         {
             var rad = pair.Key.AngleDegrees!.Value * Math.PI / 180.0;
