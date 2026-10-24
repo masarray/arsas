@@ -93,7 +93,7 @@ public sealed class SmvP1VisualDensityTests
         Assert.Equal("{Binding PowerVisibility}", (string?)power.Attribute("Visibility"));
         var powerLabels = power.Descendants().Where(n => n.Name.LocalName == "TextBlock")
             .Select(n => (string?)n.Attribute("Text")).ToArray();
-        foreach (var field in new[] { "ACTIVE · P", "REACTIVE · Q₁", "APPARENT · S", "POWER FACTOR",
+        foreach (var field in new[] { "P", "Q₁", "S", "PF",
             "{Binding PowerP}", "{Binding PowerQ}", "{Binding PowerS}", "{Binding PowerPf}" })
             Assert.Contains(field, powerLabels);
         Assert.DoesNotContain(power.Descendants(), n => n.Name.LocalName == "UniformGrid");
