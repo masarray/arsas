@@ -144,13 +144,18 @@ public sealed class PhasorDiagramControl : FrameworkElement
         // 69-DIP side rail. This prevents value labels from crossing the ring
         // at narrower window widths or at different Windows text scaling.
         // At most six FormattedText objects are measured once per repaint.
+        // At very narrow host widths the value remains available in the
+        // measurements table. Prefer a legible vector + phase callout over
+        // an unreadable ring pushed out of view by six magnitude strings.
+        var fitNarrow = width < 420;
         var labelCache = _visualItems.Where(IsRenderable)
             .ToDictionary(item => item, item =>
-                CreateText(FormatPhasorLabel(item), 11.3, PhaseBrush(PhaseIndex(item.Name)), LabelTypeface));
+                CreateText(FormatPhasorLabel(item, fitNarrow), 11.3,
+                    PhaseBrush(PhaseIndex(item.Name)), LabelTypeface));
         // Mode-wide minimum text lanes keep the ring/grid fixed while
         // numbers update (e.g. 9.9V -> 100V). Widths beyond the reserve
         // still grow safely; the common case never makes the plot breathe.
-        var engineeringLabels = labelCache.Keys.Any(item => item.Unit != "counts");
+        var engineeringLabels = !fitNarrow && labelCache.Keys.Any(item => item.Unit != "counts");
         var leftRail = engineeringLabels ? 142.0 : 92.0;
         var rightRail = engineeringLabels ? 142.0 : 92.0;
         foreach (var pair in labelCache)
@@ -307,7 +312,7 @@ public sealed class PhasorDiagramControl : FrameworkElement
         _ => PhaseRBrush
     };
 
-    public static string FormatPhasorLabel(PhasorDisplayItem item)
+    public static string FormatPhasorLabel(PhasorDisplayItem item, bool fitNarrow = false)
     {
         if (item.AngleDegrees is not double angle || !double.IsFinite(angle))
             return item.Name;
@@ -318,7 +323,7 @@ public sealed class PhasorDiagramControl : FrameworkElement
         // + angle on the polar diagram; retain all data in Measurements.
         var degrees = SmvAnglePresentation.Normalize360(angle);
         var angleText = "∠" + degrees.ToString("0.#", CultureInfo.InvariantCulture) + "°";
-        if (item.Unit == "counts")
+        if (item.Unit == "counts" || fitNarrow)
             return item.Name + " " + angleText;
 
         if (item.Magnitude is not double magnitude || !double.IsFinite(magnitude))
