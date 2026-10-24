@@ -28,7 +28,11 @@ public sealed class SmvMeasurementCoolBlueCheckpointTests
         var x = Read("Views/SmvInlineViewer.xaml");
         Assert.Contains("x:Name=\"WaveformView\"", x);
         Assert.Contains("x:Name=\"PhasorView\"", x);
-        Assert.Contains("ItemsSource=\"{Binding Measurements}\"", x);
+        Assert.Contains("ItemsSource=\"{Binding VoltageMeasurements}\"", x);
+        Assert.Contains("ItemsSource=\"{Binding CurrentMeasurements}\"", x);
+        var code = Read("Views/SmvInlineViewer.xaml.cs");
+        Assert.Contains("ObservableCollection<SmvMeasurementLiveRow> Measurements", code);
+        Assert.Equal(2, code.Split("new ListCollectionView(Measurements)").Length - 1);
         Assert.Contains("Content=\"Raw counts\" Tag=\"Raw\"", x);
     }
 

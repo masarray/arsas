@@ -141,7 +141,7 @@ public sealed class IedBrowserPresentationTests
         var projection = new IedBrowserTreeProjection();
         projection.Reset(roots);
         Assert.Equal(
-            ["GOOSE", "Reports", "Setting Groups", "Files", "DataSets", "Data Model"],
+            ["Reports", "DataSets", "Data Model", "Files", "Setting Groups", "GOOSE"],
             projection.Rows.Select(x => x.Title).ToArray());
         Assert.All(projection.Rows, x => Assert.Equal(0, x.Depth));
     }

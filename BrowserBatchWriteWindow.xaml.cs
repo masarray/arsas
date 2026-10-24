@@ -24,6 +24,10 @@ public partial class BrowserBatchWriteWindow : Window
     private readonly CancellationTokenSource _lifetime = new();
     private bool _busy;
     private bool _prepared;
+    public long WriteAssociation { get; private set; }
+    public IReadOnlyList<(string Reference, string Fc)> AttemptedLeaves { get; private set; } =
+        Array.Empty<(string Reference, string Fc)>();
+    public string WriteStatus { get; private set; } = "";
 
     public ObservableCollection<BrowserBatchWriteRow> Rows { get; } = new();
 
@@ -325,7 +329,11 @@ public partial class BrowserBatchWriteWindow : Window
             if (!CurrentAssociation)
                 throw new InvalidOperationException("IED association changed; no Write sent.");
 
-            StatusLabel.Text = $"Writing {steps.Count} changed DA(s) and verifying readback…";
+            WriteAssociation = _association;
+            AttemptedLeaves = steps.Select(step => (
+                step.Reference.Domain + "/" + step.Reference.Item,
+                step.Reference.FunctionalConstraint)).ToArray();
+            StatusLabel.Text = $"Writing {steps.Count} changed DA(s)…";
             // Native typed admission checks every GVA/old-value/association;
             // sequential, stop-on-failure, no automatic retry or rollback.
             var result = await _runtime.WriteBrowserDataAttributesAsync(
@@ -341,83 +349,26 @@ public partial class BrowserBatchWriteWindow : Window
                 }
             }
 
-            // Refresh every selected DA regardless of success/rejection.
-            // Verify the newly displayed value against the staged exact MMS
-            // bytes; an independent mismatch can never earn a green toast.
-            var readbackMismatch = false;
-            for (var i = 0; i < selected.Length; i++)
-            {
-                var row = selected[i];
-                if (!CurrentAssociation)
-                {
-                    row.Status += " · connection changed";
-                    readbackMismatch = true;
-                    break;
-                }
-                try
-                {
-                    var actual = await _runtime.PreviewBrowserDataAttributeWriteAsync(
-                        _device, row.Reference!.Value, _lifetime.Token);
-                    if (!CurrentAssociation)
-                    {
-                        readbackMismatch = true;
-                        break;
-                    }
-                    if (actual is { IsAvailable: true, OldValue: not null })
-                    {
-                        var matches = MmsDataCodec.Encode(actual.OldValue).AsSpan()
-                            .SequenceEqual(MmsDataCodec.Encode(steps[i].ProposedValue));
-                        row.Old = actual.CurrentText;
-                        row.Preview = actual;
-                        row.ResetToReadback(actual.CurrentText);
-                        if (!matches)
-                        {
-                            row.Status += " · Readback differs: " + actual.CurrentText;
-                            readbackMismatch = true;
-                        }
-                        row.NotifyEditorChanged();
-                    }
-                    else
-                    {
-                        row.Status += " · Readback unavailable";
-                        readbackMismatch = true;
-                    }
-                }
-                catch (Exception ex) when (ex is not OutOfMemoryException)
-                {
-                    row.Status += " · Readback unavailable: " + ex.Message;
-                    readbackMismatch = true;
-                }
-            }
-            var anyFailure = readbackMismatch ||
-                result.Rejected > 0 || result.Unknown > 0 ||
-                result.Unverified > 0 || result.Unattempted > 0;
-            var shortReason = result.Rows.LastOrDefault()?.Message ?? "IED refused the requested value.";
-            if (shortReason.Length > 110) shortReason = shortReason[..107] + "…";
-            StatusLabel.Text = anyFailure
-                ? $"Write ditolak · {result.Verified} verified, {result.Rejected} rejected, " +
-                  $"{result.Unknown} unknown · {shortReason}"
-                : $"Write verified · {result.Verified} DA(s) · values refreshed from IED.";
-            ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
-                anyFailure ? System.Windows.Media.Color.FromRgb(255, 242, 228)
-                           : System.Windows.Media.Color.FromRgb(232, 248, 237));
+            WriteStatus = result.Rejected > 0 || result.Unknown > 0 ||
+                result.Unverified > 0 || result.Unattempted > 0
+                ? $"Write ditolak / unverified: {result.Rows.LastOrDefault()?.Message ?? "IED refused"}"
+                : $"Write verified · {result.Verified} DA(s)";
         }
         catch (OperationCanceledException)
         {
-            StatusLabel.Text = "Write uncertain; read the actual IED state before manual retry.";
-            ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(255, 242, 228));
+            WriteStatus = "Write uncertain: connection interrupted.";
         }
         catch (Exception ex)
         {
-            StatusLabel.Text = "Write ditolak / unresolved: " + ex.Message;
-            ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(255, 242, 228));
+            WriteStatus = "Write ditolak / unresolved: " + ex.Message;
         }
         finally
         {
             _prepared = false;
             SetBusy(false);
+            // Never read/write Browser state from the dialog. Let the owner
+            // close the popup and run canonical exact-leaf Read + SSOT ingress.
+            if (AttemptedLeaves.Count > 0 && IsLoaded) Close();
         }
     }
 

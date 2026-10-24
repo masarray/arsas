@@ -298,8 +298,15 @@ public sealed class P10MainlinePolicyExecutionTests
             foreach (var arg in new[] { "-NoProfile", "-NonInteractive",
                 "-ExecutionPolicy", "Bypass", "-File", scriptPath })
                 info.ArgumentList.Add(arg);
+            // An isolated fixture must not inherit the hosting PR's GitHub
+            // base/ref (for example a main-target promotion PR). Otherwise
+            // "p10-stacked-valid" is rejected merely because this test runs
+            // on a PR targeting main, while the tested fixture does not.
+            // Negative mainline scenarios still pass "main" explicitly.
             info.Environment["PR_BASE_REF"] = baseRef;
             info.Environment["SOURCE_REF_NAME"] = sourceRef;
+            info.Environment["GITHUB_BASE_REF"] = baseRef;
+            info.Environment["GITHUB_REF_NAME"] = sourceRef;
             info.Environment["GITHUB_ENV"] = environment;
 
             using var process = Process.Start(info)!;

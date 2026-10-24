@@ -51,9 +51,23 @@ public sealed record SmvDisplayMeasurement(
     double FundamentalRms, double PhaseDegrees, bool HasFundamental)
 {
     public string Label => $"Wire channel {ChannelIndex} · {DisplayName}";
-    public string RmsText => Rms.ToString("0.###", CultureInfo.InvariantCulture);
-    public string FundamentalRmsText => FundamentalRms.ToString("0.###", CultureInfo.InvariantCulture);
+    // The wire RMS remains the unmodified total RMS (including harmonics/DC).
+    // Auto-prefix affects presentation only, never engineering calculations.
+    public string RmsText => FormatMagnitude(Rms, Unit);
+    public string FundamentalRmsText => FormatMagnitude(FundamentalRms, Unit);
+    public string RmsDetail => HasFundamental
+        ? $"Total RMS: {RmsText} · fundamental (selected coherent timebase DFT): {FundamentalRmsText} · waveform distortion/DC may make these differ"
+        : $"Total RMS: {RmsText} · no stable fundamental phase";
     public string AngleText => HasFundamental
-        ? PhaseDegrees.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + "°"
-        : "—";
+        ? SmvAnglePresentation.Format(PhaseDegrees) : "—";
+
+    public static string FormatMagnitude(double value, string unit)
+    {
+        if (!double.IsFinite(value)) return "—";
+        if ((unit == "V" || unit == "A") && Math.Abs(value) >= 1000.0)
+            return (value / 1000.0).ToString("0.###", CultureInfo.InvariantCulture) +
+                (unit == "V" ? " kV" : " kA");
+        return value.ToString("0.###", CultureInfo.InvariantCulture) +
+            (unit is "V" or "A" ? " " + unit : string.Empty);
+    }
 }

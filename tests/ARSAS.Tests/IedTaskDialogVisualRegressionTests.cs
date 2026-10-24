@@ -27,7 +27,9 @@ public sealed class IedTaskDialogVisualRegressionTests
             Assert.Equal("TaskDialogCanvas", ResourceRef((string?)root.Attribute("Background"), "DynamicResource"));
             if (file == "IpConnectWizardWindow.xaml")
             {
-                Assert.Equal("350", (string?)root.Attribute("Height"));
+                Assert.Equal("348", (string?)root.Attribute("Height"));
+                Assert.Equal("410", (string?)root.Attribute("Width"));
+                Assert.Equal("NoResize", (string?)root.Attribute("ResizeMode"));
                 Assert.Equal("CenterOwner", (string?)root.Attribute("WindowStartupLocation"));
             }
             else

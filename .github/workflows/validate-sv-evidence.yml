@@ -3,13 +3,22 @@ name: Validate SV evidence bundles
 on:
   pull_request:
     paths:
+      # Domain-owned sources; unrelated Browser/RCB/IO tests remain covered
+      # by the canonical Build ARSAS gate without a redundant SV waiter.
+      - "MainWindow.IedSmvQuickStart.cs"
       - "SmvViewerWindow.xaml"
-      - "Services/SmvViewerWindow.P1Evidence.cs"
-      - "Services/SmvSnapshotEvidenceExporter.cs"
-      - "Services/SmvSnapshotCaptureService.cs"
-      - "tests/ARSAS.Tests/**"
+      - "SmvViewerWindow*.cs"
+      - "Services/Smv*.cs"
+      - "tests/ARSAS.Tests/Smv*.cs"
+      - "tests/ARSAS.Tests/Sv*.cs"
+      - "tests/ARSAS.Tests/SampledValue*.cs"
+      - "tests/ARSAS.Tests/ProcessBus*.cs"
+      # Changes to shared evidence authority still force SV revalidation.
       - "engines/ARIEC61850.lock.json"
+      - ".github/actions/resolve-ariec-engine/**"
+      - ".github/workflows/build.yml"
       - ".github/workflows/validate-sv-evidence.yml"
+      - "scripts/write-ci-canonical-proof.py"
       - "scripts/verify-ci-canonical-reuse.py"
       - "scripts/test-ci-canonical-reuse.py"
   workflow_dispatch:
@@ -54,6 +63,7 @@ jobs:
           PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_MERGE_SHA: ${{ github.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
           ENGINE_SHA: ${{ steps.engine.outputs.commit }}
         run: |
           set -euo pipefail
@@ -64,6 +74,7 @@ jobs:
             --head-sha "$PR_HEAD_SHA" \
             --merge-sha "$PR_MERGE_SHA" \
             --engine-sha "$ENGINE_SHA" \
+            --pr-title "$PR_TITLE" \
             --wait-seconds 960 \
             --allow-in-progress-artifact \
             --require-test-substring SmvSnapshotEvidenceExporterTests \

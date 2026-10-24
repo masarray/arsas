@@ -32,15 +32,24 @@ public sealed class WaveformPanelControl : FrameworkElement
     private static readonly Pen ZeroPen = CreatePen("#A1B4CA", 1.35);
     private static readonly Pen HighlightPen = CreatePen("#EDF3FA", 1.0);
     private static readonly Brush AxisTextBrush = CreateBrush("#7C8DA4");
-    private static readonly Pen CursorPen = CreatePen("#2563EB", 1.4);
-    private static readonly Brush CursorDotBrush = CreateBrush("#2865C7");
-    private static readonly Brush CursorFillBrush = CreateBrush("#E8F1FF");
-    private static readonly Pen CursorBorderPen = CreatePen("#2865C7", 1.0);
+    // Soft vertical guide; phase-specific leader arrows carry the information.
+    // All drawing resources are frozen and shared between render frames.
+    private static readonly Pen CursorPen = CreatePen("#8AA0BA", 1.05, [3.0, 4.0]);
+    private static readonly Brush CursorLabelSurface = CreateBrush("#FFFFFF");
+    private static readonly Pen CursorLabelFrame = CreatePen("#9EB5D4", 1.15);
+    private static readonly Pen CursorRedLeader = CreateFrozenSeriesPen(UaBrush, 1.4);
+    private static readonly Pen CursorGoldLeader = CreateFrozenSeriesPen(UbBrush, 1.4);
+    private static readonly Pen CursorBlueLeader = CreateFrozenSeriesPen(UcBrush, 1.4);
+    private static readonly Pen CursorNeutralLeader = CreateFrozenSeriesPen(NeutralBrush, 1.4);
     private static readonly Dictionary<string, Pen> SeriesPenCache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Typeface TitleTypeface = new((FontFamily)System.Windows.Application.Current.FindResource("AppFontFamily"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
-    private static readonly Typeface LabelTypeface = new((FontFamily)System.Windows.Application.Current.FindResource("AppFontFamily"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+    private static readonly Typeface LabelTypeface = new((FontFamily)System.Windows.Application.Current.FindResource("AppFontFamily"), FontStyles.Normal, FontWeights.Medium, FontStretches.Normal);
+    private static readonly Typeface CalloutTypeface = new((FontFamily)System.Windows.Application.Current.FindResource("AppFontFamily"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
     private double _cursorFraction = 0.5;
     private bool _isDraggingCursor;
+    private bool _cursorVisible;
+    private int _cursorLane = -1;
+    private int _cursorSampleIndex = -1;
     private double _voltageAutoPeak;
     private double _currentAutoPeak;
     private DateTime _voltagePeakUpdatedUtc = DateTime.MinValue;
@@ -234,11 +243,27 @@ public sealed class WaveformPanelControl : FrameworkElement
         var showVoltage = !string.Equals(ShowMode, "Current", StringComparison.OrdinalIgnoreCase);
         var showCurrent = !string.Equals(ShowMode, "Voltage", StringComparison.OrdinalIgnoreCase);
 
+        // Legacy DigSub groups are named after Ch1–4 and Ch5–8, not 9-2LE
+        // semantics. In the explicit 9-2LE profile, Ch5–8 is Ua/Ub/Uc/Un
+        // and MUST occupy the top pane; Ch1–4 (Ia/Ib/Ic/In) is below it.
+        // RAW preserves its original unverified group A/B order.
+        var nineTwoLe = snapshot.CurrentSeries.FirstOrDefault()?.Unit == "V" &&
+                        snapshot.VoltageSeries.FirstOrDefault()?.Unit == "A";
         var visibleLanes = new List<LaneDefinition>(2);
-        if (showVoltage)
-            visibleLanes.Add(new LaneDefinition(snapshot.VoltageSeries.FirstOrDefault()?.Unit == "A" ? "CURRENT · Ch1–4" : "RAW Ch1–4", snapshot.VoltageSeries.FirstOrDefault()?.Unit ?? "counts", snapshot.VoltageSeries));
-        if (showCurrent)
-            visibleLanes.Add(new LaneDefinition(snapshot.CurrentSeries.FirstOrDefault()?.Unit == "V" ? "VOLTAGE · Ch5–8" : "RAW Ch5–8", snapshot.CurrentSeries.FirstOrDefault()?.Unit ?? "counts", snapshot.CurrentSeries));
+        if (nineTwoLe)
+        {
+            if (showCurrent)
+                visibleLanes.Add(new LaneDefinition("VOLTAGE", "V", snapshot.CurrentSeries));
+            if (showVoltage)
+                visibleLanes.Add(new LaneDefinition("CURRENT", "A", snapshot.VoltageSeries));
+        }
+        else
+        {
+            if (showVoltage)
+                visibleLanes.Add(new LaneDefinition("RAW Ch1–4", "counts", snapshot.VoltageSeries));
+            if (showCurrent)
+                visibleLanes.Add(new LaneDefinition("RAW Ch5–8", "counts", snapshot.CurrentSeries));
+        }
 
         if (visibleLanes.Count == 0)
         {
@@ -252,15 +277,15 @@ public sealed class WaveformPanelControl : FrameworkElement
         var laneWidth = Math.Max(120, bounds.Width - (outerPadding * 2));
         var top = outerPadding;
 
-        foreach (var lane in visibleLanes)
+        for (var laneIndex = 0; laneIndex < visibleLanes.Count; laneIndex++)
         {
             var laneRect = new Rect(outerPadding, top, laneWidth, laneHeight);
-            DrawLane(dc, laneRect, lane, snapshot);
+            DrawLane(dc, laneRect, visibleLanes[laneIndex], snapshot, laneIndex);
             top += laneHeight + laneGap;
         }
     }
 
-    private void DrawLane(DrawingContext dc, Rect rect, LaneDefinition lane, WaveformSnapshot snapshot)
+    private void DrawLane(DrawingContext dc, Rect rect, LaneDefinition lane, WaveformSnapshot snapshot, int laneIndex)
     {
         dc.DrawRoundedRectangle(PlotBackgroundBrush, BorderPen, rect, 10, 10);
 
@@ -268,7 +293,8 @@ public sealed class WaveformPanelControl : FrameworkElement
         dc.DrawRoundedRectangle(LaneHeaderBrush, null, headerRect, 10, 10);
         dc.DrawRectangle(LaneHeaderBrush, null, new Rect(rect.Left, rect.Top + 15, rect.Width, 15));
 
-        var innerRect = new Rect(rect.Left + 12, rect.Top + 38, rect.Width - 24, rect.Height - 50);
+        // Dedicated time-axis footer prevents tick labels overlapping live traces.
+        var innerRect = new Rect(rect.Left + 12, rect.Top + 38, rect.Width - 24, rect.Height - 74);
         if (innerRect.Width <= 20 || innerRect.Height <= 20)
             return;
 
@@ -310,8 +336,15 @@ public sealed class WaveformPanelControl : FrameworkElement
                 dc.DrawText(held, new Point(rect.Right - held.Width - 12, rect.Top + 8));
         }
 
-        DrawGrid(dc, innerRect);
-        DrawYAxisScale(dc, innerRect, amplitudeMax, lane.Unit);
+        var stacked = string.Equals(LayoutMode, "Stacked", StringComparison.OrdinalIgnoreCase);
+        // Neutral at exactly zero is not a fourth *phase waveform*; retain its
+        // legend and measurements, but do not waste a Stacked band on a flat line.
+        var plotSeries = laneSeries
+            .Where(item => item.Samples.Count >= 2 && !IsSilentZeroTrace(item.Samples))
+            .ToArray();
+        DrawGrid(dc, innerRect, stacked, plotSeries.Length);
+        DrawMillisecondsAxis(dc, innerRect, snapshot);
+        DrawYAxisScale(dc, innerRect, amplitudeMax, lane.Unit, stacked, plotSeries.Length);
 
         if (laneSeries.Count == 0 || laneSeries.All(item => item.Samples.Count < 2))
         {
@@ -319,21 +352,19 @@ public sealed class WaveformPanelControl : FrameworkElement
             return;
         }
 
-        var stacked = string.Equals(LayoutMode, "Stacked", StringComparison.OrdinalIgnoreCase);
-        for (var index = 0; index < laneSeries.Count; index++)
+        for (var index = 0; index < plotSeries.Length; index++)
         {
-            var trace = laneSeries[index];
+            var trace = plotSeries[index];
             dc.PushOpacity(TraceOpacity(IsStreamLive, trace.Freshness));
-            DrawSeries(dc, innerRect, trace, amplitudeMax, stacked, index, laneSeries.Count);
+            DrawSeries(dc, innerRect, trace, amplitudeMax, stacked, index, plotSeries.Length);
             dc.Pop();
         }
 
-        // Inspection overlay is interactive only: never obstruct live curves
-        // with a permanent cursor/tooltip when the operator is not inspecting.
-        if (MarkersEnabled && _isDraggingCursor)
-            DrawCursor(dc, innerRect, laneSeries, amplitudeMax, stacked, snapshot);
+        if (MarkersEnabled && _cursorVisible && _cursorLane == laneIndex)
+            DrawCursor(dc, innerRect, plotSeries, amplitudeMax, stacked, snapshot);
 
-        DrawTimebaseLabel(dc, innerRect, snapshot);
+        if (laneIndex == 0)
+            DrawTimebaseLabel(dc, innerRect, snapshot);
     }
 
     private IReadOnlyList<WaveformSeriesModel> BuildVisibleSeries(
@@ -722,51 +753,58 @@ public sealed class WaveformPanelControl : FrameworkElement
         return samplesPerCycle * cycles;
     }
 
-    private void DrawGrid(DrawingContext dc, Rect rect)
+    private static void DrawGrid(DrawingContext dc, Rect rect, bool stacked, int traces)
     {
-        // vertical minor grid
-        for (var i = 1; i < 10; i++)
+        // Frozen pens and lightweight subdivisions; never remove the actual 0 axis.
+        // X-grid lines are the real 5ms time ticks, drawn separately from
+        // the sample-rate evidence; no arbitrary 10-column pseudo-time grid.
+
+        // Stacked gets one mathematically correct baseline per *visible phase*.
+        // Overlay gets exactly one shared baseline at Y=0.
+        if (stacked && traces > 0)
         {
-            var x = rect.Left + (rect.Width * i / 10.0);
-            var pen = i == 5 ? MajorGridPen : GridPen;
-            dc.DrawLine(pen, new Point(x, rect.Top), new Point(x, rect.Bottom));
+            var band = rect.Height / traces;
+            var zeroLabel = CreateText("0", 9.6, AxisTextBrush, LabelTypeface);
+            for (var i = 0; i < traces; i++)
+            {
+                var y = rect.Top + (i + 0.5) * band;
+                dc.DrawLine(ZeroPen, new Point(rect.Left, y), new Point(rect.Right, y));
+                dc.DrawText(zeroLabel, new Point(rect.Left + 3, y - 13));
+            }
+            for (var i = 1; i < traces; i++)
+            {
+                var y = rect.Top + i * band;
+                dc.DrawLine(GridPen, new Point(rect.Left, y), new Point(rect.Right, y));
+            }
+        }
+        else
+        {
+            for (var i = 1; i < 4; i += 2)
+            {
+                var y = rect.Top + rect.Height * i / 4.0;
+                dc.DrawLine(GridPen, new Point(rect.Left, y), new Point(rect.Right, y));
+            }
+            var zeroY = rect.Top + rect.Height / 2.0;
+            dc.DrawLine(ZeroPen, new Point(rect.Left, zeroY), new Point(rect.Right, zeroY));
+            dc.DrawText(CreateText("0", 9.6, AxisTextBrush, LabelTypeface),
+                new Point(rect.Left + 3, zeroY - 13));
         }
 
-        // horizontal grid
-        for (var i = 1; i < 4; i++)
-        {
-            var y = rect.Top + (rect.Height * i / 4.0);
-            var pen = i == 2 ? ZeroPen : GridPen;
-            dc.DrawLine(pen, new Point(rect.Left, y), new Point(rect.Right, y));
-        }
-
-        var zeroY = rect.Top + (rect.Height / 2.0);
-
-        // top/bottom subtle frame
         dc.DrawLine(HighlightPen, new Point(rect.Left, rect.Top + 1), new Point(rect.Right, rect.Top + 1));
         dc.DrawLine(HighlightPen, new Point(rect.Left, rect.Bottom - 1), new Point(rect.Right, rect.Bottom - 1));
-
-        // zero axis stronger
-        dc.DrawLine(ZeroPen, new Point(rect.Left, zeroY), new Point(rect.Right, zeroY));
     }
 
-    private static void DrawYAxisScale(DrawingContext dc, Rect rect, double peak, string unit)
+    private static void DrawYAxisScale(DrawingContext dc, Rect rect, double peak, string unit, bool stacked, int traces)
     {
-        if (peak <= 0)
-            return;
+        if (peak <= 0 || stacked)
+            return; // stacked uses per-phase zero axes; global ±peak labels are misleading.
 
         var topText = FormatAxisLabelSigned(peak, unit, positive: true);
-        var zeroText = "0";
         var bottomText = FormatAxisLabelSigned(peak, unit, positive: false);
-
         var top = CreateText(topText, 10.2, AxisTextBrush, LabelTypeface);
-        var zero = CreateText(zeroText, 10.2, AxisTextBrush, LabelTypeface);
         var bottom = CreateText(bottomText, 10.2, AxisTextBrush, LabelTypeface);
-
         var x = rect.Left + 4;
-
         dc.DrawText(top, new Point(x, rect.Top + 4));
-        dc.DrawText(zero, new Point(x, rect.Top + (rect.Height / 2.0) - (zero.Height / 2.0)));
         dc.DrawText(bottom, new Point(x, rect.Bottom - bottom.Height - 4));
     }
 
@@ -786,6 +824,12 @@ public sealed class WaveformPanelControl : FrameworkElement
     private void DrawSeries(DrawingContext dc, Rect rect, WaveformSeriesModel series, double amplitudeMax, bool stacked, int index, int totalSeries)
     {
         if (series.Samples.Count < 2)
+            return;
+
+        // Zero neutral/disabled inputs should not impersonate a permanently
+        // enabled 0-axis when phase traces are overlaid. Keep the channel in
+        // measurements/cursor evidence; only the redundant flat ink is omitted.
+        if (!stacked && IsSilentZeroTrace(series.Samples))
             return;
 
         var geometry = new StreamGeometry();
@@ -816,6 +860,16 @@ public sealed class WaveformPanelControl : FrameworkElement
         // Geometry remains the exact coherent input; no smoothing or interpolation.
         dc.DrawGeometry(null, GetSeriesPen(series.Name), geometry);
 
+    }
+
+    private static bool IsSilentZeroTrace(IReadOnlyList<double> samples)
+    {
+        // Bounded one-pass numeric check. No allocations and no tolerance that
+        // could erase a physically small but nonzero engineering signal.
+        for (var i = 0; i < samples.Count; i++)
+            if (samples[i] != 0.0)
+                return false;
+        return true;
     }
 
     private static void DrawLaneShapeBadge(DrawingContext dc, Rect rect, IReadOnlyList<WaveformSeriesModel> series)
@@ -933,6 +987,14 @@ public sealed class WaveformPanelControl : FrameworkElement
         return GetPoint(rect, samples, amplitudeMax, stacked, index, totalSeries, samples.Count - 1).Y;
     }
 
+    private static Pen GetCursorLeaderPen(string name) => name switch
+    {
+        "Ua" or "Ia" or "Ch1" or "Ch5" => CursorRedLeader,
+        "Ub" or "Ib" or "Ch2" or "Ch6" => CursorGoldLeader,
+        "Uc" or "Ic" or "Ch3" or "Ch7" => CursorBlueLeader,
+        _ => CursorNeutralLeader
+    };
+
     private void DrawCursor(
         DrawingContext dc,
         Rect rect,
@@ -941,104 +1003,177 @@ public sealed class WaveformPanelControl : FrameworkElement
         bool stacked,
         WaveformSnapshot snapshot)
     {
-        var maxSamples = series.Select(item => item.Samples.Count).DefaultIfEmpty(0).Max();
-        if (maxSamples < 2)
+        if (series.Count == 0)
             return;
 
-        var sampleIndex = (int)Math.Round(_cursorFraction * (maxSamples - 1));
-        sampleIndex = Math.Clamp(sampleIndex, 0, maxSamples - 1);
-
-        var x = rect.Left + (rect.Width * sampleIndex / (maxSamples - 1.0));
-        dc.DrawLine(CursorPen, new Point(x, rect.Top), new Point(x, rect.Bottom));
-        dc.DrawEllipse(CursorDotBrush, null, new Point(x, rect.Top + 7), 3.8, 3.8);
-
-        var sampleRate = snapshot.SampleRateHz > 0 ? snapshot.SampleRateHz : 4000.0;
-        var timeMs = sampleIndex / sampleRate * 1000.0;
-
-        var freqText = snapshot.MeasuredFrequencyHz > 0
-            ? $"{snapshot.MeasuredFrequencyHz:0.###} Hz"
-            : "freq N/A";
-
-        var chips = new List<(string Text, Brush Brush)>
-    {
-        ($"t={timeMs:0.###} ms", LabelBrush),
-        ($"n={sampleIndex}", LabelBrush),
-        (freqText, LabelBrush)
-    };
-
+        // The cursor is snapped to the visible plot position, not to a
+        // separately sampled or fabricated set of amplitudes.
+        var count = 0;
         foreach (var item in series)
+            count = Math.Max(count, item.Samples.Count);
+        if (count < 2)
+            return;
+
+        var sampleIndex = (int)Math.Round(_cursorFraction * (count - 1));
+        var x = rect.Left + rect.Width * sampleIndex / (count - 1.0);
+        dc.DrawLine(CursorPen, new Point(x, rect.Top), new Point(x, rect.Bottom));
+
+        // Compute the *exact line-segment intersection* for each plotted phase.
+        // The same 0.37 vertical transform is used by DrawSeries. This is not
+        // a new DSP sample; the displayed value is explicitly a linear
+        // interpolation between adjacent plotted vertices at the cursor.
+        var anchors = new List<WaveformCursorCalloutLayout.Anchor>(series.Count);
+        var texts = new List<FormattedText>(series.Count);
+        var colors = new List<Pen>(series.Count);
+        for (var index = 0; index < series.Count; index++)
         {
-            if (item.Samples.Count == 0)
+            var item = series[index];
+            if (item.Samples.Count < 2)
                 continue;
 
-            var localIndex = Math.Clamp(sampleIndex, 0, item.Samples.Count - 1);
-            chips.Add(($"{item.Name}={FormatEngineeringValue(item.Samples[localIndex], item.Unit)}", GetSeriesBrush(item.Name)));
+            var samplePosition = sampleIndex / (count - 1.0) * (item.Samples.Count - 1);
+            var a = (int)Math.Floor(samplePosition);
+            var b = Math.Min(a + 1, item.Samples.Count - 1);
+            var t = samplePosition - a;
+            var value = item.Samples[a] + (item.Samples[b] - item.Samples[a]) * t;
+            if (!double.IsFinite(value))
+                continue;
+
+            var bandHeight = stacked ? rect.Height / series.Count : rect.Height;
+            var bandCenter = rect.Top + (stacked ? (index + 0.5) * bandHeight : rect.Height / 2.0);
+            var y = bandCenter - (amplitudeMax > 0 ? value / amplitudeMax : 0.0)
+                * bandHeight * 0.37;
+            y = Math.Clamp(y, rect.Top, rect.Bottom);
+
+            var color = GetSeriesBrush(item.Name);
+            var formatted = CreateText(
+                item.Name + "  " + FormatEngineeringValue(value, item.Unit),
+                12.0, color, CalloutTypeface);
+            anchors.Add(new WaveformCursorCalloutLayout.Anchor(texts.Count, y, formatted.Width + 17));
+            texts.Add(formatted);
+            colors.Add(GetCursorLeaderPen(item.Name));
         }
 
-        var paddingX = 8.0;
-        var paddingY = 5.0;
-        var gap = 6.0;
-
-        var chipLayouts = chips
-            .Select(chip =>
-            {
-                var text = CreateText(chip.Text, 10.8, chip.Brush, LabelTypeface);
-                var width = text.Width + (paddingX * 2);
-                var height = text.Height + (paddingY * 2);
-                return (chip.Text, chip.Brush, Text: text, Width: width, Height: height);
-            })
-            .ToArray();
-
-        var totalWidth = chipLayouts.Sum(c => c.Width) + (gap * Math.Max(0, chipLayouts.Length - 1)) + 12;
-        var maxHeight = chipLayouts.Select(c => c.Height).DefaultIfEmpty(24).Max() + 8;
-
-        var boxWidth = Math.Min(rect.Width - 8, totalWidth);
-        var boxX = Math.Clamp(x + 10, rect.Left + 4, rect.Right - boxWidth - 4);
-        var boxY = rect.Top - (maxHeight + 6);
-
-        // kalau terlalu atas, fallback ke dalam
-        if (boxY < 4)
-            boxY = rect.Top + 6;
-
-        var box = new Rect(boxX, boxY, boxWidth, maxHeight);
-
-        dc.DrawRoundedRectangle(CloneBrushOpacity(CursorFillBrush, 0.92), CursorBorderPen, box, 8, 8);
-
-        var cx = box.Left + 6;
-        var cy = box.Top + 4;
-
-        foreach (var chip in chipLayouts)
+        var placements = WaveformCursorCalloutLayout.Arrange(rect, x, anchors);
+        // First paint leader lines, then the compact labels on top. The arrowhead
+        // tip sits precisely on the vertical cursor / phase-wave intersection.
+        foreach (var placement in placements)
         {
-            if (cx + chip.Width > box.Right - 4)
-                break;
-
-            var chipRect = new Rect(cx, cy, chip.Width, chip.Height);
-            dc.DrawRoundedRectangle(CloneBrushOpacity(chip.Brush, 0.16), null, chipRect, 7, 7);
-
-            dc.DrawEllipse(chip.Brush, null, new Point(chipRect.Left + 8, chipRect.Top + chipRect.Height / 2), 3.2, 3.2);
-            dc.DrawText(chip.Text, new Point(chipRect.Left + 14, chipRect.Top + paddingY));
-
-            cx += chip.Width + gap;
+            var tip = new Point(x, anchors[placement.Index].Y);
+            var start = new Point(placement.LabelRight ? placement.Box.Left : placement.Box.Right,
+                placement.Box.Top + placement.Box.Height / 2.0);
+            DrawCalloutArrow(dc, colors[placement.Index], start, tip);
         }
+
+        foreach (var placement in placements)
+        {
+            var box = placement.Box;
+            dc.DrawRoundedRectangle(CursorLabelSurface, CursorLabelFrame, box, 5, 5);
+            dc.DrawText(texts[placement.Index],
+                new Point(box.Left + 8, box.Top + (box.Height - texts[placement.Index].Height) / 2.0));
+        }
+
+        // One small time caption, never a row of chips over the phase legend.
+        if (snapshot.SampleRateHz > 0 && double.IsFinite(snapshot.SampleRateHz))
+        {
+            var maxSourceSamples = 2;
+            foreach (var item in snapshot.VoltageSeries)
+                maxSourceSamples = Math.Max(maxSourceSamples, item.Samples.Count);
+            foreach (var item in snapshot.CurrentSeries)
+                maxSourceSamples = Math.Max(maxSourceSamples, item.Samples.Count);
+            var windowSamples = Math.Min(CalculateVisibleSamples(snapshot), maxSourceSamples);
+            var referenceSample = SmvWaveformTimeAxis.ReferenceSample(snapshot, windowSamples);
+            var timeMs = (_cursorFraction * Math.Max(0, windowSamples - 1) - referenceSample) *
+                1000.0 / snapshot.SampleRateHz;
+            var caption = CreateText("t  " + timeMs.ToString("0.00", CultureInfo.InvariantCulture) + " ms",
+                10.1, LabelBrush, LabelTypeface);
+            var width = caption.Width + 12;
+            var left = Math.Clamp(x - width / 2, rect.Left + 4,
+                Math.Max(rect.Left + 4, rect.Right - width - 4));
+            var badge = new Rect(left, rect.Bottom - 23, width, 20);
+            dc.DrawRoundedRectangle(CursorLabelSurface, CursorLabelFrame, badge, 4, 4);
+            dc.DrawText(caption, new Point(badge.Left + 6, badge.Top + 2));
+        }
+    }
+
+    private static void DrawCalloutArrow(DrawingContext dc, Pen pen, Point start, Point tip)
+    {
+        var dx = tip.X - start.X;
+        var dy = tip.Y - start.Y;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+        if (length < 1.0)
+            return;
+        var ux = dx / length;
+        var uy = dy / length;
+        dc.DrawLine(pen, start, tip);
+        // Directional open-arrow tips (no marker dot) terminate on the signal.
+        const double arrowLength = 6.5;
+        const double arrowHalfWidth = 3.0;
+        var back = new Point(tip.X - ux * arrowLength, tip.Y - uy * arrowLength);
+        dc.DrawLine(pen, tip, new Point(back.X - uy * arrowHalfWidth, back.Y + ux * arrowHalfWidth));
+        dc.DrawLine(pen, tip, new Point(back.X + uy * arrowHalfWidth, back.Y - ux * arrowHalfWidth));
     }
 
     private static string FormatEngineeringValue(double value, string unit)
     {
+        // Cursor precision is diagnostic, but concise: small engineering
+        // signals must not disappear when rounded to one decimal place.
         if (string.Equals(unit, "V", StringComparison.OrdinalIgnoreCase) && Math.Abs(value) >= 1000.0)
-            return $"{value / 1000.0:0.##} kV";
+            return $"{value / 1000.0:0.###} kV";
 
         if (string.Equals(unit, "A", StringComparison.OrdinalIgnoreCase) && Math.Abs(value) >= 1000.0)
-            return $"{value / 1000.0:0.##} kA";
+            return $"{value / 1000.0:0.###} kA";
 
-        return $"{value:0.#} {unit}";
+        return $"{value:0.###} {unit}";
+    }
+
+    private void DrawMillisecondsAxis(DrawingContext dc, Rect plot, WaveformSnapshot snapshot)
+    {
+        if (!(snapshot.SampleRateHz > 0) || !double.IsFinite(snapshot.SampleRateHz))
+            return; // Do not invent milliseconds from an untrusted sampling rate.
+        var visible = Math.Min(CalculateVisibleSamples(snapshot),
+            SmvWaveformTimeAxis.AvailableSamples(snapshot));
+        if (visible < 2)
+            return;
+
+        var reference = SmvWaveformTimeAxis.ReferenceSample(snapshot, visible);
+        var duration = (visible - 1.0) * 1000.0 / snapshot.SampleRateHz;
+        if (duration <= 0 || !double.IsFinite(duration))
+            return;
+        var startMs = -reference * 1000.0 / snapshot.SampleRateHz;
+        var major = plot.Width * 5.0 / duration >= 48.0 ? 5.0 : 10.0;
+        var firstTick = (int)Math.Ceiling(startMs / major);
+        var lastTick = (int)Math.Floor((startMs + duration) / major);
+        for (var index = firstTick; index <= lastTick && index - firstTick < 80; index++)
+        {
+            var ms = index * major;
+            var x = plot.Left + (ms - startMs) / duration * plot.Width;
+            dc.DrawLine(MajorGridPen, new Point(x, plot.Top), new Point(x, plot.Bottom));
+            dc.DrawLine(ZeroPen, new Point(x, plot.Bottom), new Point(x, plot.Bottom + 5));
+            var label = CreateText(ms.ToString("+0.##;-0.##;0", CultureInfo.InvariantCulture) + " ms",
+                10.1, AxisTextBrush, LabelTypeface);
+            if (x + label.Width / 2 < plot.Right - 3 && x - label.Width / 2 > plot.Left + 3)
+                dc.DrawText(label, new Point(x - label.Width / 2, plot.Bottom + 7));
+        }
     }
 
     private static void DrawTimebaseLabel(DrawingContext dc, Rect rect, WaveformSnapshot snapshot)
     {
-        var sampleRateText = snapshot.SampleRateHz > 0 ? $"{snapshot.SampleRateHz:0.#} Hz sample" : "Sample rate pending";
-        var frequencyText = snapshot.MeasuredFrequencyHz > 0 ? $"{snapshot.MeasuredFrequencyHz:0.###} Hz signal" : "Signal frequency pending";
-        dc.DrawText(CreateText(sampleRateText, 10.5, MutedBrush, LabelTypeface), new Point(rect.Left, rect.Bottom + 3));
-        dc.DrawText(CreateText(frequencyText, 10.5, MutedBrush, LabelTypeface), new Point(rect.Right - 106, rect.Bottom + 3));
+        // Share this technical caption once, never duplicate pending text.
+        if (snapshot.SampleRateHz > 0 && double.IsFinite(snapshot.SampleRateHz))
+        {
+            var rate = snapshot.SampleRateHz >= 1000
+                ? (snapshot.SampleRateHz / 1000.0).ToString("0.###", CultureInfo.InvariantCulture) + " kS/s"
+                : snapshot.SampleRateHz.ToString("0.#", CultureInfo.InvariantCulture) + " S/s";
+            dc.DrawText(CreateText(rate, 10.3, MutedBrush, LabelTypeface),
+                new Point(rect.Left, rect.Bottom + 23));
+        }
+        if (snapshot.MeasuredFrequencyHz > 0 && double.IsFinite(snapshot.MeasuredFrequencyHz))
+        {
+            var label = CreateText(snapshot.MeasuredFrequencyHz.ToString("0.##",
+                CultureInfo.InvariantCulture) + " Hz", 10.3, MutedBrush, LabelTypeface);
+            dc.DrawText(label, new Point(rect.Right - label.Width, rect.Bottom + 23));
+        }
     }
 
     // Presentation only: no fade animations/timers or per-sample state.
@@ -1121,24 +1256,29 @@ public sealed class WaveformPanelControl : FrameworkElement
     protected override void OnMouseDown(MouseButtonEventArgs e)
     {
         base.OnMouseDown(e);
-        if (e.ChangedButton != MouseButton.Left)
+        if (e.ChangedButton != MouseButton.Left || !MarkersEnabled)
             return;
-
         Focus();
-        CaptureMouse();
         _isDraggingCursor = true;
-        UpdateCursorPosition(e.GetPosition(this).X);
+        CaptureMouse();
+        UpdateCursorPosition(e.GetPosition(this));
         e.Handled = true;
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        if (!_isDraggingCursor)
-            return;
+        // Passive hover costs nothing until the nearest *source sample* changes.
+        // The control has at most two lanes and already owns this drawing surface.
+        if (MarkersEnabled)
+            UpdateCursorPosition(e.GetPosition(this));
+    }
 
-        UpdateCursorPosition(e.GetPosition(this).X);
-        e.Handled = true;
+    protected override void OnMouseLeave(MouseEventArgs e)
+    {
+        base.OnMouseLeave(e);
+        if (!_isDraggingCursor)
+            HideCursor();
     }
 
     protected override void OnMouseUp(MouseButtonEventArgs e)
@@ -1146,18 +1286,85 @@ public sealed class WaveformPanelControl : FrameworkElement
         base.OnMouseUp(e);
         if (e.ChangedButton != MouseButton.Left)
             return;
-
         _isDraggingCursor = false;
-        ReleaseMouseCapture();
-        InvalidateVisual();
+        if (IsMouseCaptured)
+            ReleaseMouseCapture();
+        UpdateCursorPosition(e.GetPosition(this));
         e.Handled = true;
     }
 
-    private void UpdateCursorPosition(double x)
+    protected override void OnLostMouseCapture(MouseEventArgs e)
     {
-        const double horizontalPadding = 22.0;
-        var width = Math.Max(1.0, ActualWidth - (horizontalPadding * 2.0));
-        _cursorFraction = Math.Clamp((x - horizontalPadding) / width, 0.0, 1.0);
+        base.OnLostMouseCapture(e);
+        _isDraggingCursor = false;
+        if (!IsMouseOver)
+            HideCursor();
+    }
+
+    private void HideCursor()
+    {
+        if (!_cursorVisible) return;
+        _cursorVisible = false;
+        _cursorLane = -1;
+        _cursorSampleIndex = -1;
+        InvalidateVisual();
+    }
+
+    private void UpdateCursorPosition(Point mouse)
+    {
+        var snapshot = Snapshot;
+        if (snapshot is null)
+        {
+            HideCursor();
+            return;
+        }
+
+        const double outerPadding = 10;
+        const double laneGap = 12;
+        const double plotInsetX = 12;
+        var availableWidth = ActualWidth - 2 * (outerPadding + plotInsetX);
+        var showBoth = string.Equals(ShowMode, "Both", StringComparison.OrdinalIgnoreCase);
+        var lanes = showBoth ? 2 : 1;
+        var laneHeight = Math.Max(110, (ActualHeight - 2 * outerPadding - laneGap * (lanes - 1)) / lanes);
+
+        if (availableWidth <= 20 || mouse.X < outerPadding + plotInsetX ||
+            mouse.X > ActualWidth - outerPadding - plotInsetX)
+        {
+            HideCursor();
+            return;
+        }
+        var lane = -1;
+        for (var i = 0; i < lanes; i++)
+        {
+            var laneTop = outerPadding + i * (laneHeight + laneGap);
+            if (mouse.Y >= laneTop + 38 && mouse.Y <= laneTop + laneHeight - 12)
+            {
+                lane = i;
+                break;
+            }
+        }
+        if (lane < 0)
+        {
+            HideCursor();
+            return;
+        }
+
+        var fraction = Math.Clamp((mouse.X - outerPadding - plotInsetX) / availableWidth, 0.0, 1.0);
+        // The pointer hot path must not create LINQ enumerators or temporary
+        // arrays; received data is already bounded and read-only.
+        var count = 2;
+        foreach (var series in snapshot.VoltageSeries)
+            count = Math.Max(count, series.Samples.Count);
+        foreach (var series in snapshot.CurrentSeries)
+            count = Math.Max(count, series.Samples.Count);
+        var sampleIndex = (int)Math.Round(fraction * (count - 1));
+        if (_cursorVisible && _cursorLane == lane && _cursorSampleIndex == sampleIndex)
+            return; // sample quantization avoids per-pixel redraw on high-rate mouse moves.
+
+        _cursorFraction = fraction;
+        _cursorVisible = true;
+        _cursorLane = lane;
+        _cursorSampleIndex = sampleIndex;
         InvalidateVisual();
     }
 

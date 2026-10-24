@@ -28,6 +28,8 @@ SOURCE = "a" * 40
 ENGINE = "b" * 40
 HEAD = "c" * 40
 BRANCH = "ci/p2a-canonical-regression-reuse"
+PR_TITLE = "RC0 same-head exact-tree integration"
+OTHER_PR_TITLE = "Promote same-head trial to main"
 RUN = 1234
 
 TRX = b"""<?xml version="1.0" encoding="UTF-8"?>
@@ -97,7 +99,8 @@ class FakeApi:
         self.listing = [
             {"id": RUN, "run_attempt": 1, "name": "Build ARSAS",
              "head_sha": head_sha, "head_branch": branch, "event": event_name,
-             "status": self.status, "conclusion": self.result}
+             "status": self.status, "conclusion": self.result,
+              "display_title": PR_TITLE}
         ]
 
     def get(self, url: str, binary: bool = False):
@@ -125,6 +128,7 @@ def run_once(
     head_sha: str = HEAD,
     source_sha: str = SOURCE,
     required_test_substrings: list[str] | None = None,
+    pr_title: str | None = None,
 ):
     return consumer.verify_canonical(
         api,
@@ -138,10 +142,63 @@ def run_once(
         allow_in_progress_artifact=allow_in_progress_artifact,
         event_name=event_name,
         required_test_substrings=required_test_substrings,
+        pr_title=pr_title,
     )
 
 
 class CanonicalReuseTests(unittest.TestCase):
+    def test_same_head_two_prs_selects_matching_pr_title_and_exact_merge(self):
+        # PR #727 and PR #729 share the same head, branch and pinned engine.
+        # The newer build of the other PR uses a DIFFERENT synthetic merge.
+        # The correct older run must remain eligible, never falsely stale.
+        api = FakeApi()
+        api.listing.insert(0, {
+            "id": RUN + 1, "run_attempt": 1, "name": "Build ARSAS",
+            "head_sha": HEAD, "head_branch": BRANCH, "event": "pull_request",
+            "status": "completed", "conclusion": "success",
+            "display_title": OTHER_PR_TITLE,
+        })
+        chosen = consumer.candidate_runs(
+            {"workflow_runs": api.listing}, HEAD, BRANCH,
+            pr_title=PR_TITLE,
+        )
+        self.assertEqual([run["id"] for run in chosen], [RUN])
+        proof = run_once(api, pr_title=PR_TITLE)
+        self.assertEqual(proof["canonicalRunId"], RUN)
+        self.assertEqual(proof["mergeSha"], SOURCE)
+        self.assertEqual(proof["engineSha"], ENGINE)
+
+    def test_other_pr_red_does_not_override_exact_pr_green(self):
+        api = FakeApi()
+        api.listing.insert(0, {
+            "id": RUN + 1, "run_attempt": 1, "name": "Build ARSAS",
+            "head_sha": HEAD, "head_branch": BRANCH, "event": "pull_request",
+            "status": "completed", "conclusion": "failure",
+            "display_title": OTHER_PR_TITLE,
+        })
+        self.assertEqual(run_once(api, pr_title=PR_TITLE)["canonicalRunId"], RUN)
+
+    def test_newer_failure_in_same_pr_still_blocks_older_green(self):
+        api = FakeApi()
+        api.listing.insert(0, {
+            "id": RUN + 1, "run_attempt": 1, "name": "Build ARSAS",
+            "head_sha": HEAD, "head_branch": BRANCH, "event": "pull_request",
+            "status": "completed", "conclusion": "failure",
+            "display_title": PR_TITLE,
+        })
+        with self.assertRaisesRegex(consumer.ProofError, "Latest canonical.*failed"):
+            run_once(api, pr_title=PR_TITLE)
+
+    def test_only_wrong_pr_build_does_not_satisfy_canonical_reuse(self):
+        api = FakeApi()
+        api.listing[0]["display_title"] = OTHER_PR_TITLE
+        with self.assertRaisesRegex(consumer.ProofError, "Timed out"):
+            run_once(api, pr_title=PR_TITLE)
+
+    def test_invalid_pr_title_is_rejected(self):
+        with self.assertRaisesRegex(consumer.ProofError, "Invalid canonical PR"):
+            run_once(FakeApi(), pr_title="")
+
     def test_producer_and_consumer_accept_verified_exact_evidence(self):
         proof = run_once(FakeApi())
         self.assertEqual(proof["passed"], 1320)

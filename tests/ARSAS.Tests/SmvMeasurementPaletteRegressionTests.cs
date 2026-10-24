@@ -17,15 +17,34 @@ public sealed class SmvMeasurementPaletteRegressionTests
         XNamespace wpf = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
-        var grid = Assert.Single(document.Descendants(wpf + "DataGrid"));
-        Assert.Equal("{StaticResource SmvMeasurementGrid}", (string?)grid.Attribute("Style"));
-        Assert.Equal("{StaticResource SmvMeasurementHeader}", (string?)grid.Attribute("ColumnHeaderStyle"));
-        Assert.Equal("{StaticResource SmvMeasurementCell}", (string?)grid.Attribute("CellStyle"));
-        Assert.Equal("{StaticResource SmvMeasurementRow}", (string?)grid.Attribute("RowStyle"));
-        Assert.Equal("#F8FBFF", (string?)grid.Attribute("Background"));
-        Assert.Equal("#F8FBFF", (string?)grid.Attribute("RowBackground"));
-        Assert.Equal("#EDF5FF", (string?)grid.Attribute("AlternatingRowBackground"));
-        Assert.Equal("2", (string?)grid.Attribute("AlternationCount"));
+        // The final operator-accepted layout has TWO synchronized DataGrids:
+        // voltage and current. Do not force the obsolete single-grid layout.
+        var grids = document.Descendants(wpf + "DataGrid").ToArray();
+        Assert.Equal(2, grids.Length);
+        foreach (var (name, view) in new[]
+        {
+            ("SmvVoltageMeasurementsGrid", "VoltageMeasurements"),
+            ("SmvCurrentMeasurementsGrid", "CurrentMeasurements")
+        })
+        {
+            var grid = grids.Single(e => (string?)e.Attribute(x + "Name") == name);
+            Assert.Equal("{Binding " + view + "}", (string?)grid.Attribute("ItemsSource"));
+            Assert.Equal("True", (string?)grid.Attribute("IsReadOnly"));
+            Assert.Equal("True", (string?)grid.Attribute("EnableRowVirtualization"));
+            Assert.Equal("False", (string?)grid.Attribute("CanUserSortColumns"));
+            Assert.Equal("None", (string?)grid.Attribute("GridLinesVisibility"));
+            Assert.Equal("{StaticResource SmvMeasurementGrid}", (string?)grid.Attribute("Style"));
+            Assert.Equal("{StaticResource SmvMeasurementHeader}", (string?)grid.Attribute("ColumnHeaderStyle"));
+            Assert.Equal("{StaticResource SmvMeasurementCell}", (string?)grid.Attribute("CellStyle"));
+            Assert.Equal("{StaticResource SmvMeasurementRow}", (string?)grid.Attribute("RowStyle"));
+            Assert.Equal("#F8FBFF", (string?)grid.Attribute("Background"));
+            Assert.Equal("#F8FBFF", (string?)grid.Attribute("RowBackground"));
+            Assert.Equal("#EDF5FF", (string?)grid.Attribute("AlternatingRowBackground"));
+            Assert.Equal("2", (string?)grid.Attribute("AlternationCount"));
+            Assert.Equal(3, grid.Descendants(wpf + "DataGridColumn").Count() +
+                grid.Descendants(wpf + "DataGridTemplateColumn").Count() +
+                grid.Descendants(wpf + "DataGridTextColumn").Count());
+        }
 
         AssertStyle(document, wpf, x, "SmvMeasurementGrid", "ModernDataGrid",
             ("Background", "#F8FBFF"), ("RowBackground", "#F8FBFF"),
@@ -50,11 +69,32 @@ public sealed class SmvMeasurementPaletteRegressionTests
     public void StylingOnly_LeavesEngineeringBindingsAndDigSubPlotsIntact()
     {
         var xml = Read("Views/SmvInlineViewer.xaml");
-        Assert.Contains("ItemsSource=\"{Binding Measurements}\"", xml);
+        Assert.Contains("ItemsSource=\"{Binding VoltageMeasurements}\"", xml);
+        Assert.Contains("ItemsSource=\"{Binding CurrentMeasurements}\"", xml);
         Assert.Contains("<dig:WaveformPanelControl", xml);
         Assert.Contains("<dig:PhasorDiagramControl", xml);
-        foreach (var binding in new[] { "DisplayName", "RmsText", "FundamentalRmsText", "AngleText", "Unit" })
-            Assert.Contains($"Binding=\"{{Binding {binding}}}\"", xml.Replace("Text=\"{Binding", "Binding=\"{Binding"));
+
+        var document = XDocument.Parse(xml);
+        XNamespace wpf = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        var columns = document.Descendants(wpf + "DataGridTextColumn").ToArray();
+        Assert.Equal(2, columns.Count(e => (string?)e.Attribute("Binding") == "{Binding RmsText}"));
+        Assert.Equal(2, columns.Count(e => (string?)e.Attribute("Binding") == "{Binding AngleText}"));
+        Assert.Equal(2, document.Descendants(wpf + "TextBlock")
+            .Count(e => (string?)e.Attribute("Text") == "{Binding DisplayName}"));
+
+        // Both panels must project ONE authoritative, change-notified eight-row
+        // model. Preserve the engineering values and stable row lifetimes.
+        var viewer = Read("Views/SmvInlineViewer.xaml.cs");
+        var liveRow = Read("Views/SmvMeasurementLiveRow.cs");
+        Assert.Contains("ObservableCollection<SmvMeasurementLiveRow> Measurements", viewer);
+        Assert.Equal(2, viewer.Split("new ListCollectionView(Measurements)").Length - 1);
+        Assert.Contains("SmvEngineeringDisplay.Describe(row.ChannelIndex, ActiveUnits).IsVoltage", viewer);
+        Assert.Contains("!SmvEngineeringDisplay.Describe(row.ChannelIndex, ActiveUnits).IsVoltage", viewer);
+        Assert.Contains("VoltageMeasurements.Refresh();", viewer);
+        Assert.Contains("CurrentMeasurements.Refresh();", viewer);
+        Assert.Contains("next.ChannelIndex != _current.ChannelIndex", liveRow);
+        foreach (var field in new[] { "DisplayName", "Unit", "RmsText", "FundamentalRmsText", "AngleText" })
+            Assert.Contains("nameof(" + field + ")", liveRow);
     }
 
     private static void AssertStyle(

@@ -1,34 +1,34 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.40",
-  "title": "ARSAS 1.6.40 stable release",
-  "titleId": "Stable release ARSAS 1.6.40",
-  "summary": "ARSAS 1.6.40 is the latest verified stable Windows release. Package identity, download links, checksums and publication evidence are synchronized automatically from the tagged GitHub Release.",
-  "summaryId": "ARSAS 1.6.40 adalah stable release Windows terverifikasi terbaru. Identitas paket, link download, checksum, dan publication evidence disinkronkan otomatis dari GitHub Release bertag.",
+  "version": "1.6.41",
+  "title": "Clearer event inspection and stable RCB export",
+  "titleId": "Event Properties lebih jelas dan ekspor RCB tetap stabil",
+  "summary": "ARSAS 1.6.41 adds a versioned native title bar, readable Event Log categories and a read-only auto-hiding Event Properties drawer. The established RCB Export Filter remains the default. The unfinished IED Browser and replacement RCB exporter are not part of this stable release.",
+  "summaryId": "ARSAS 1.6.41 menambahkan versi pada title bar native, kategori Event Log yang mudah dipahami, serta drawer Event Properties read-only yang dapat tersembunyi otomatis. Form RCB Export Filter lama tetap menjadi alur utama. IED Browser dan exporter RCB pengganti yang belum selesai tidak ikut rilis stabil.",
   "highlights": [
-    "hotfix: make physical-proven Smart Discovery the only production build route",
-    "The verified Windows installer is published as the stable ARSAS 1.6.40 package.",
-    "The portable single EXE is published from the same verified stable release.",
-    "SHA-256 checksums, SPDX SBOM and release provenance are published alongside the Windows binaries."
+    "Window title reads the compiled installed version: ARSAS v1.6.41.",
+    "Operator Event categories include Spontaneous, GI, Integrity, Quality, Data update, Poll, State change and Buffer, where supported by decoded evidence.",
+    "Read-only Event Properties exposes acquisition, raw reason and RCB context in an auto-hiding drawer.",
+    "The original RCB Export Filter remains the production workflow; experimental Browser and exporter are excluded."
   ],
   "highlightsId": [
-    "Perubahan rilis: hotfix: make physical-proven Smart Discovery the only production build route",
-    "Installer Windows terverifikasi dipublikasikan sebagai paket stabil ARSAS 1.6.40.",
-    "Portable single EXE dipublikasikan dari stable release terverifikasi yang sama.",
-    "Checksum SHA-256, SPDX SBOM, dan provenance release dipublikasikan bersama binary Windows."
+    "Judul window membaca versi aplikasi terpasang: ARSAS v1.6.41.",
+    "Kategori Event mencakup Spontaneous, GI, Integrity, Quality, Data update, Poll, State change dan Buffer apabila didukung bukti decoder.",
+    "Event Properties menampilkan sumber acquisition, reason mentah, dan konteks RCB dalam drawer read-only yang otomatis tersembunyi.",
+    "RCB Export Filter lama tetap menjadi workflow produksi; Browser dan exporter eksperimen tidak disertakan."
   ],
   "improvements": [
-    "Stable release identity, publish date, package size and SHA-256 are sourced from verified release evidence rather than hand-maintained version text.",
-    "The Windows installer and portable download URLs use GitHub's releases/latest/download endpoints so the public buttons always resolve to the newest stable assets.",
-    "Release notes are synchronized before website deployment, preventing a newer binary release from being blocked by stale landing-page metadata.",
-    "The website deployment is explicitly dispatched after release synchronization so GitHub Actions token commits cannot leave Pages behind the published release."
+    "Public Windows installer and portable binaries are released with SHA-256 checksums, SPDX SBOM and source provenance.",
+    "Static DataSet monitoring remains report-only with no cyclic MMS process-value polling in that mode.",
+    "Package identity follows immutable GitHub Release v1.6.41 rather than a manually selected CI artifact.",
+    "Development work on the redesigned IED Browser and multi-RCB exporter remains isolated from the stable product."
   ],
   "improvementsId": [
-    "Identitas stable release, tanggal publikasi, ukuran paket, dan SHA-256 diambil dari evidence release terverifikasi, bukan teks versi yang dipelihara manual.",
-    "URL installer Windows dan portable memakai endpoint releases/latest/download GitHub sehingga tombol publik selalu menuju asset stabil terbaru.",
-    "Catatan rilis disinkronkan sebelum deployment website agar binary release baru tidak terblokir metadata landing page yang tertinggal.",
-    "Deployment website dipicu eksplisit setelah sinkronisasi release sehingga commit dari GitHub Actions token tidak membuat Pages tertinggal dari release publik."
+    "Installer dan portable publik disertai checksum SHA-256, SPDX SBOM dan provenance source.",
+    "Mode monitoring Static DataSet tetap report-only tanpa polling MMS process-value siklik.",
+    "Identitas paket mengikuti GitHub Release v1.6.41 yang immutable, bukan artifact CI yang dipilih manual.",
+    "Pekerjaan IED Browser dan exporter multi-RCB baru tetap terisolasi dari produk stabil."
   ],
   "knownLimitations": [
     "Physical relay validation remains necessary for vendor-specific values, report behavior and field network conditions that cannot be reproduced by CI.",
@@ -53,11 +53,11 @@
     "src": "assets/screenshots/arsas-ied-explorer-command-v1.6.40.webp",
     "width": 1920,
     "height": 1032,
-    "alt": "ARSAS 1.6.40 multi-IED Explorer with live IEC 61850 values and guarded command dock",
-    "altId": "IED Explorer multi-IED ARSAS 1.6.40 dengan live value IEC 61850 dan guarded command dock",
-    "caption": "ARSAS 1.6.40 keeps live values, acquisition evidence and validated command objects in one selected-IED shell.",
-    "captionId": "ARSAS 1.6.40 menyatukan live value, acquisition evidence, dan validated command object dalam satu shell selected-IED."
+    "alt": "ARSAS v1.6.40 operator workspace (archived visual reference)",
+    "altId": "Workspace ARSAS v1.6.40 (referensi visual arsip)",
+    "caption": "Archived v1.6.40 screenshot documents the established workspace. ARSAS v1.6.41 retains the RCB form and adds Event Properties and the versioned title bar.",
+    "captionId": "Screenshot arsip v1.6.40 mendokumentasikan workspace yang ada. ARSAS v1.6.41 mempertahankan form RCB dan menambahkan Event Properties serta versi di title bar."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.40"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.41"
 }

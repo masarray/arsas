@@ -26,6 +26,9 @@ public partial class IedBrowserWriteWindow : Window
     // Invalidate stale Command Dock permission on modal close in that case.
     public HashSet<string> PotentiallyChangedControlModels { get; } =
         new(StringComparer.OrdinalIgnoreCase);
+    public long WriteAssociation => _association;
+    public List<(string Reference, string Fc)> AttemptedLeaves { get; } = new();
+    public string WriteStatus { get; private set; } = "";
     public ObservableCollection<IedBrowserWriteRow> Rows { get; }
 
     public IedBrowserWriteWindow(
@@ -203,6 +206,7 @@ public partial class IedBrowserWriteWindow : Window
                 row.ExpireLiveRead(); // each attempt requires a NEW explicit Read
                 if (row.IsControlModel)
                     PotentiallyChangedControlModels.Add(row.Reference[..^".ctlModel".Length]);
+                AttemptedLeaves.Add((row.Reference, row.FunctionalConstraint));
                 var result = await _runtime.WriteBrowserConfigurationAsync(
                     _device.DeviceId, _model, _association, row, requested, _lifetime.Token);
                 row.Current = result.ReadbackVerified ? result.After : result.Before;
@@ -234,7 +238,12 @@ public partial class IedBrowserWriteWindow : Window
             ResultBanner.Background = new System.Windows.Media.SolidColorBrush(
                 System.Windows.Media.Color.FromRgb(255, 242, 228));
         }
-        finally { SetBusy(false); }
+        finally
+        {
+            WriteStatus = StatusText.Text;
+            SetBusy(false);
+            if (AttemptedLeaves.Count > 0 && IsLoaded) Close();
+        }
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
