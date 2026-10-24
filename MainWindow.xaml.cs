@@ -346,22 +346,42 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 }
                 else if (selectionMode == SclSignalSelectionMode.StaticDataSet)
                 {
-                    foreach (var importedDevice in selectableDevices)
-                        ApplyStaticDataSetSelection(importedDevice);
-
-                    AddLog("INFO", "SCL", $"Static DataSet selection is shared by Engineering and FAT for {selectableDevices.Length} IED workspace(s).");
-                    if (firstImported is { SelectedLiveSignalCount: > 0 })
+                    var staged = new List<Iec61850MonitorDevice>();
+                    try
                     {
-                        var connected = firstImported.IsConnected ||
-                                        await ConnectUsingSavedModelAsync(firstImported);
-                        if (connected && !firstImported.IsMonitoring)
+                        foreach (var importedDevice in selectableDevices)
                         {
-                            await _runtime.EnrichSelectedStaticDataSetUnitsAsync(
-                                firstImported,
-                                _applicationCancellation.Token);
-                            firstImported.RefreshComputed();
-                            await StartDeviceMonitorAsync(firstImported);
+                            importedDevice.BeginReportingProgress("Preparing Static DataSet reporting…");
+                            staged.Add(importedDevice);
+                            await ApplyStaticDataSetSelection(importedDevice);
+                            if (importedDevice.IsReportingProgressCanceled)
+                                return; // preempted by operator Stop
+                            if (!ReferenceEquals(importedDevice, firstImported))
+                                importedDevice.CompleteReportingProgress();
                         }
+
+                        AddLog("INFO", "SCL", $"Static DataSet selection is shared by Engineering and FAT for {selectableDevices.Length} IED workspace(s).");
+                        if (firstImported is { SelectedLiveSignalCount: > 0 } &&
+                            !firstImported.IsReportingProgressCanceled)
+                        {
+                            var connected = firstImported.IsConnected ||
+                                            await ConnectUsingSavedModelAsync(firstImported);
+                            if (connected && !firstImported.IsReportingProgressCanceled &&
+                                !firstImported.IsMonitoring)
+                            {
+                                firstImported.UpdateReportingProgress(80, "Verifying engineering units…");
+                                await _runtime.EnrichSelectedStaticDataSetUnitsAsync(
+                                    firstImported, _applicationCancellation.Token);
+                                firstImported.RefreshComputed();
+                                if (!firstImported.IsReportingProgressCanceled)
+                                    await StartDeviceMonitorAsync(firstImported);
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        foreach (var stagedDevice in staged)
+                            stagedDevice.CompleteReportingProgress();
                     }
                 }
                 else if (selectionMode == SclSignalSelectionMode.BrowseIed)
@@ -1387,6 +1407,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // Stop is a preemptive safety lane even while Connect/Start is busy.
         if (!TryGetDeviceFromButton(sender, out var device) || device.IsStopping) return;
         SelectedDevice = device;
+        if (device.IsReportingProgressActive)
+            device.CancelReportingProgress(); // Stop preempts report setup.
         if (device.IsDemo)
         {
             StopDemoDevice(device);
@@ -2405,6 +2427,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             RemoveDevicePoints(device.DeviceId);
             device.Points.Clear();
 
+            device.UpdateReportingProgress(84, "Arming configured BRCB/URCB reports…");
             SetStatus($"{device.Name}: arming static/dynamic IEC 61850 reporting…");
             var points = await _runtime.StartMonitoringAsync(
                 device,
@@ -2425,6 +2448,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             foreach (var point in points)
                 signalProjection.ProjectReportedSignals(device.LiveValues,
                     projectionAssociation, point.IecReference, point.FunctionalConstraint);
+            device.UpdateReportingProgress(96, "Applying initial report-backed signal grid…");
             device.RefreshComputed();
             RaiseWorkspaceCounts();
             if (navigateToExplorer)

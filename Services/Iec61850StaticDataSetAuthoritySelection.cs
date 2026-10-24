@@ -36,7 +36,11 @@ public static class Iec61850StaticDataSetAuthoritySelection
 
         var mandatory = Iec61850DataSetSignalInventoryProjection.GetMandatorySignals(authorityModel);
         var selected = new HashSet<SignalDefinition>(ReferenceEqualityComparer.Instance);
-        var signals = device.Signals.ToArray();
+        // Index exact DataSet ownership once instead of rescanning the entire
+        // SG7 signal catalog for every FCDA. This never infers membership.
+        var signalsByDataSet = device.Signals.ToLookup(
+            signal => NormalizeLiteral(signal.DataSetReference),
+            StringComparer.OrdinalIgnoreCase);
 
         foreach (var descriptor in mandatory)
         {
@@ -60,13 +64,14 @@ public static class Iec61850StaticDataSetAuthoritySelection
                     continue;
                 }
 
+                var datasetSignals = signalsByDataSet[NormalizeLiteral(membership.DataSetReference)];
+
                 // Command retention is independent from scalar process projection. The
                 // projection service has already rooted these companions in exact SCL/ARIEC
                 // CDC + DataObject authority. Selecting them here enables ctlModel inspection
                 // and Command Panel projection even when PrimaryValueReference is unresolved.
-                foreach (var control in signals
+                foreach (var control in datasetSignals
                              .Where(signal => signal.IsControlSignal && signal.IsValidControlObject)
-                             .Where(signal => LiteralEquals(signal.DataSetReference, membership.DataSetReference))
                              .Where(signal => LiteralEquals(signal.DisplayReference, memberReference)))
                 {
                     selected.Add(control);
@@ -78,9 +83,8 @@ public static class Iec61850StaticDataSetAuthoritySelection
                 foreach (var leaf in Iec61850StaticPhaseLeafProjection.Resolve(
                              authorityModel, memberReference, descriptor.FunctionalConstraint))
                 {
-                    var matches = signals
+                    var matches = datasetSignals
                         .Where(signal => !signal.IsControlSignal && signal.CanPublishToRuntime)
-                        .Where(signal => LiteralEquals(signal.DataSetReference, membership.DataSetReference))
                         .Where(signal => LiteralEquals(signal.ObjectReference, leaf.Reference))
                         .Where(signal => LiteralEquals(signal.DisplayReference, leaf.Reference))
                         .ToArray();
@@ -88,9 +92,8 @@ public static class Iec61850StaticDataSetAuthoritySelection
                         selected.Add(matches[0]);
                 }
 
-                var candidates = signals
+                var candidates = datasetSignals
                     .Where(signal => !signal.IsControlSignal && signal.CanPublishToRuntime)
-                    .Where(signal => LiteralEquals(signal.DataSetReference, membership.DataSetReference))
                     .Where(signal => LiteralEquals(signal.DisplayReference, memberReference))
                     .ToArray();
                 if (candidates.Length == 0)
