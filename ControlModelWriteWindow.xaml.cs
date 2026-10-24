@@ -14,7 +14,14 @@ namespace ArIED61850Tester;
 /// </summary>
 public partial class ControlModelWriteWindow : Window
 {
-    public sealed record ModelChoice(Iec61850ControlModelKind Model, string Label);
+    // WorkstationComboBox uses SelectionBoxItem for its closed state. WPF's
+    // custom ContentPresenter otherwise formats a record as "ModelChoice { ... }".
+    // Preserve the strongly typed choice for guarded MMS Write and show
+    // only the IEC enum label in both the popup and the closed state.
+    public sealed record ModelChoice(Iec61850ControlModelKind Model, string Label)
+    {
+        public override string ToString() => Label;
+    }
     private readonly Iec61850MonitorRuntime _runtime;
     private readonly Iec61850MonitorDevice _device;
     private readonly SignalDefinition _signal;
