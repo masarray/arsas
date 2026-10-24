@@ -161,6 +161,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public MainWindow()
     {
         InitializeComponent();
+        // Expand onto wide desktops, but never start off-screen or force
+        // maximization. This is initial sizing only; user resizing wins.
+        var workArea = SystemParameters.WorkArea;
+        Width = Math.Max(MinWidth, Math.Min(1880d, workArea.Width - 8d));
+        Height = Math.Max(MinHeight, Math.Min(960d, workArea.Height - 8d));
         // Register before first WPF layout; initial realized row events can
         // precede Loaded, while the existing Loaded hooks stay idempotent.
         AttachLivePointViewportPriority(ExplorerLiveValuesGrid);
@@ -2037,8 +2042,90 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             Owner = this
         };
         dialog.ShowDialog();
-        if (device.IsConnected)
-            await RefreshControlValuesAsync(device, force: true);
+        // The CF Write invalidates the EXACT edited SignalDefinition's typed
+        // authority. BkrCSWI1 is often independent of DataSet selection, so
+        // RefreshControlValuesAsync(DistinctSelected) can NEVER recover it.
+        // A modal Read-only/Cancel action never requires 13 queued MMS reads.
+        if (dialog.WriteAttempted)
+            await ReinspectConfiguredControlAsync(device, signal, dialog.WriteAssociation);
+        else if (device.IsConnected)
+        {
+            // The initial dialog Read may establish typed evidence; update
+            // membership without any redundant network inspection.
+            device.RefreshCommandSignalProjection();
+            RebuildControlFeedbackIndex(device);
+        }
+    }
+
+    private async Task ReinspectConfiguredControlAsync(
+        Iec61850MonitorDevice device, SignalDefinition signal, long writeAssociation)
+    {
+        // An association switch never inherits an old commissioning result.
+        // No implicit reconnect, retry, Operate, or second CF Write.
+        if (!device.IsConnected || _applicationCancellation.IsCancellationRequested ||
+            writeAssociation != device.LiveValues.Association ||
+            !device.Signals.Contains(signal))
+        {
+            SetStatus($"{device.Name}: ctlModel changed or association replaced; reconnect and inspect before any command.");
+            return;
+        }
+
+        // A successful CF Write/readback proves only ctlModel. A fresh typed
+        // descriptor + CDC/ctlVal/status verification must gate Operate.
+        signal.ControlInspectionBusy = true;
+        try
+        {
+            var capabilities = await _runtime.InspectControlAsync(
+                device.DeviceId, signal, _applicationCancellation.Token);
+            if (!device.IsConnected || writeAssociation != device.LiveValues.Association ||
+                !device.Signals.Contains(signal))
+            {
+                signal.ClearLiveControlAuthority();
+                signal.ControlModelText = "Auto-detect";
+                SetStatus($"{device.Name}: ctlModel inspection belongs to a replaced association.");
+                return;
+            }
+            signal.ControlCurrentValue = capabilities.CurrentValue;
+            signal.ControlInspectionEvidence =
+                $"{capabilities.ControlModelReference} | {capabilities.ControlModelText} | " +
+                $"{capabilities.EngineControlServiceStatus} | {capabilities.DiscoveryEvidence}";
+            signal.ControlLastResult = capabilities.EngineControlServiceStatus;
+            AddLog(capabilities.IsOperationallyReady && signal.ControlSupportsOperate ? "INFO" : "WARN",
+                device.Name, $"CTL_MODEL_POSTWRITE_INSPECTION: {signal.ObjectReference}; " +
+                $"association={writeAssociation}; model={capabilities.ControlModelText}; " +
+                $"typedReady={capabilities.IsOperationallyReady}; operable={signal.ControlSupportsOperate}.");
+            SetStatus($"{device.Name}: {signal.Name} ctlModel reinspection completed.");
+        }
+        catch (OperationCanceledException)
+        {
+            signal.ClearLiveControlAuthority();
+            signal.ControlModelText = "Auto-detect";
+            SetStatus($"{device.Name}: ctlModel reinspection cancelled; control remains disabled.");
+        }
+        catch (Exception ex)
+        {
+            // An incomplete read must never re-enable Operate. Do not
+            // masquerade as a spinner forever after an actual failure.
+            signal.ClearLiveControlAuthority();
+            signal.ControlModelText = "Auto-detect";
+            signal.ControlModelText = "Verification required";
+            signal.ControlInspectionEvidence = $"Fresh typed ctlModel inspection failed: {ex.Message}";
+            signal.ControlLastResult = "Command disabled: verification required.";
+            AddLog("WARN", device.Name,
+                $"CTL_MODEL_POSTWRITE_INSPECTION_FAILED: {signal.ObjectReference}; {ex.GetType().Name}: {ex.Message}");
+            SetStatus($"{device.Name}: ctlModel could not be reverified; command disabled.");
+        }
+        finally
+        {
+            signal.ControlInspectionBusy = false;
+            if (device.IsConnected)
+            {
+                device.RefreshCommandSignalProjection();
+                RebuildControlFeedbackIndex(device);
+                if (ReferenceEquals(SelectedDevice, device))
+                    ResizeCommandDockForVerifiedControls();
+            }
+        }
     }
 
     private void RemoveControlFeedbackIndex(string deviceId)
