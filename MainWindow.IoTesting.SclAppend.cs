@@ -159,7 +159,15 @@ public partial class MainWindow
                     if (device is null)
                         continue;
 
-                    ApplyStaticDataSetSelection(device);
+                    device.BeginReportingProgress("Preparing Static DataSet FAT selection…");
+                    try
+                    {
+                        await ApplyStaticDataSetSelection(device);
+                    }
+                    finally
+                    {
+                        device.CompleteReportingProgress();
+                    }
 
                     // The new FAT IED has deliberately not been published yet, so project-wide
                     // selection projection cannot see it. Project the authoritative Engineering

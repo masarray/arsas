@@ -463,6 +463,10 @@
                                                 <!-- Opacity does not affect measure/arrange: zero card jiggle. -->
                                                 <Setter TargetName="BrowserReadProgressLine" Property="Opacity" Value="1"/>
                                             </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsReportingProgressActive}" Value="True">
+                                                <Setter TargetName="BrowserReadProgressLine" Property="Opacity" Value="1"/>
+                                                <Setter TargetName="BrowserReadProgressLine" Property="Foreground" Value="#16A34A"/>
+                                            </DataTrigger>
                                         </DataTemplate.Triggers>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>

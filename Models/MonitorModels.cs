@@ -21,6 +21,9 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     private bool _isMonitoring;
     private bool _isBrowserReading;
     private bool _discoveryProgressActive;
+    private bool _reportingProgressActive;
+    private bool _reportingProgressCanceled;
+    private double _reportingProgressPercent;
     private double _browserReadProgressPercent;
     private bool _isActive;
     private bool _hasReportStream;
@@ -430,16 +433,68 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         }
     }
 
-    // The fixed under-IP line is one presentation of TWO existing progress
-    // authorities, not another progress counter or independent timer.
-    // Discovery wins while in flight; Browser Read resumes otherwise.
+    // The permanent IED-card progress line is reused for discovery, report
+    // arming, and Browser Read, without a second visual indicator or ledger.
     [JsonIgnore]
     public bool IsDiscoveryProgressActive => _discoveryProgressActive && IsBusy;
 
     [JsonIgnore]
+    public bool IsReportingProgressActive => _reportingProgressActive;
+
+    [JsonIgnore]
+    public bool IsReportingProgressCanceled => _reportingProgressCanceled;
+
+    [JsonIgnore]
     public double IedCardProgressPercent => IsDiscoveryProgressActive
         ? DiscoveryProgressPercent
-        : BrowserReadProgressPercent;
+        : IsReportingProgressActive
+            ? _reportingProgressPercent
+            : BrowserReadProgressPercent;
+
+    // Work-flow completion, NOT percentage of InformationReport traffic.
+    // Green 100% means arming finished, never proves buffered SOE continuity.
+    public void BeginReportingProgress(string stage)
+    {
+        _reportingProgressCanceled = false;
+        _reportingProgressActive = true;
+        _reportingProgressPercent = 0;
+        BusyStage = stage;
+        Raise(nameof(IsReportingProgressActive));
+        Raise(nameof(IedCardProgressPercent));
+        RefreshComputed();
+    }
+
+    public void UpdateReportingProgress(double percent, string stage)
+    {
+        if (!_reportingProgressActive) return;
+        BusyStage = stage;
+        var next = Math.Clamp(percent, 0d, 99d);
+        if (next <= _reportingProgressPercent) return;
+        _reportingProgressPercent = next;
+        Raise(nameof(IedCardProgressPercent));
+    }
+
+    public void CompleteReportingProgress()
+    {
+        if (!_reportingProgressActive) return;
+        _reportingProgressPercent = 100d;
+        Raise(nameof(IedCardProgressPercent));
+        _reportingProgressActive = false;
+        Raise(nameof(IsReportingProgressActive));
+        RefreshComputed();
+    }
+
+    // Stop preempts the selection/arming workflow without a second competing
+    // MMS request. The caller checks this before moving to the next stage.
+    public void CancelReportingProgress()
+    {
+        if (!_reportingProgressActive) return;
+        _reportingProgressCanceled = true;
+        _reportingProgressActive = false;
+        Raise(nameof(IsReportingProgressActive));
+        Raise(nameof(IedCardProgressPercent));
+        RefreshComputed();
+    }
 
     public bool IsMonitoring
     {
@@ -621,16 +676,16 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     public int SelectedControlSignalCount => _selectedControlSignalCount;
     public bool IsBulkSignalSelectionUpdate => _isBulkSignalSelectionUpdate;
     public int PointCount => Points.Count;
-    public bool IsActionEnabled => !IsBusy;
-    public bool CanEditSignals => SignalCount > 0 && !IsBusy && !IsMonitoring && !IsDemo;
-    public bool CanStartMonitor => IsConnected && SelectedLiveSignalCount > 0 && !IsBusy;
-    public bool CanStartOrStopMonitor => !IsBusy && (IsMonitoring || SelectedLiveSignalCount > 0);
-    public bool CanPlayAction => !IsStopping && !IsBusy && (!IsConnected || (!IsMonitoring && SelectedLiveSignalCount > 0));
+    public bool IsActionEnabled => !IsBusy && !IsReportingProgressActive;
+    public bool CanEditSignals => SignalCount > 0 && !IsBusy && !IsReportingProgressActive && !IsMonitoring && !IsDemo;
+    public bool CanStartMonitor => IsConnected && SelectedLiveSignalCount > 0 && !IsBusy && !IsReportingProgressActive;
+    public bool CanStartOrStopMonitor => !IsBusy && !IsReportingProgressActive && (IsMonitoring || SelectedLiveSignalCount > 0);
+    public bool CanPlayAction => !IsStopping && !IsBusy && !IsReportingProgressActive && (!IsConnected || (!IsMonitoring && SelectedLiveSignalCount > 0));
     // Stop is intentionally pre-emptive: a hung Connect/Start must not
     // disable the only safe operator exit from an in-flight MMS operation.
-    public bool CanStopAction => !IsStopping && (IsBusy || IsConnected || IsMonitoring);
-    public bool CanRescan => !IsBusy && !IsMonitoring && !IsDemo;
-    public bool CanSaveScl => !IsBusy && !IsDemo && (SclWorkspace != null || LiveDiscoveryModel != null);
+    public bool CanStopAction => !IsStopping && (IsBusy || IsConnected || IsMonitoring || IsReportingProgressActive);
+    public bool CanRescan => !IsBusy && !IsReportingProgressActive && !IsMonitoring && !IsDemo;
+    public bool CanSaveScl => !IsBusy && !IsReportingProgressActive && !IsDemo && (SclWorkspace != null || LiveDiscoveryModel != null);
     public string SaveSclToolTip => SclWorkspace != null
         ? $"Save {Name} from the opened SCL design model"
         : LiveDiscoveryModel != null
