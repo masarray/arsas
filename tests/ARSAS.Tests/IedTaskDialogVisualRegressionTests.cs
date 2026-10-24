@@ -105,9 +105,21 @@ public sealed class IedTaskDialogVisualRegressionTests
     public void SharedDialogPalette_MeetsReadableForegroundContrast()
     {
         var document = XDocument.Load(Find("Styles/IedTaskDialogStyles.xaml"));
-        string Color(string key) => document.Descendants(Presentation + "SolidColorBrush")
-            .Single(element => element.Attribute(Xaml + "Key")?.Value == key)
-            .Attribute("Color")!.Value;
+        var tokens = XDocument.Load(Find("Resources/P2BlueSteelGreige.xaml"));
+        string Color(string key)
+        {
+            var declared = document.Descendants(Presentation + "SolidColorBrush")
+                .Single(element => element.Attribute(Xaml + "Key")?.Value == key)
+                .Attribute("Color")!.Value;
+            // P1 dialog brushes reference the canonical palette at runtime.
+            // Resolve the exact Color resource rather than treating its
+            // DynamicResource markup extension as a literal six-digit hex.
+            var token = ResourceRef(declared, "DynamicResource");
+            if (token is null)
+                return declared;
+            return tokens.Descendants(Presentation + "Color")
+                .Single(element => element.Attribute(Xaml + "Key")?.Value == token).Value;
+        }
         var background = Color("TaskDialogCanvas");
         var card = Color("TaskDialogCard");
         var ink = Color("TaskDialogInk");
