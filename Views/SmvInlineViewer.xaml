@@ -61,13 +61,57 @@
                 <DataTrigger Binding="{Binding ChannelIndex}" Value="7"><Setter Property="Fill" Value="#257ADE"/></DataTrigger>
             </Style.Triggers>
         </Style>
+        <!-- Measurements intentionally keeps the official ARSAS DataGrid template,
+             but overrides native/system beige backgrounds with the same cool
+             white / blue-white surface used by the adjacent waveform panel. -->
+        <Style x:Key="SmvMeasurementGrid" TargetType="DataGrid"
+               BasedOn="{StaticResource ModernDataGrid}">
+            <Setter Property="Background" Value="#F8FBFF"/>
+            <Setter Property="RowBackground" Value="#F8FBFF"/>
+            <Setter Property="AlternatingRowBackground" Value="#EDF5FF"/>
+            <Setter Property="BorderBrush" Value="#D7E5F6"/>
+            <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+        </Style>
+        <Style x:Key="SmvMeasurementHeader" TargetType="DataGridColumnHeader"
+               BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+            <Setter Property="Background" Value="#E8F2FF"/>
+            <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+            <Setter Property="BorderBrush" Value="#D5E4F6"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        </Style>
+        <Style x:Key="SmvMeasurementCell" TargetType="DataGridCell"
+               BasedOn="{StaticResource {x:Type DataGridCell}}">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="#E2EBF7"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Padding" Value="7,0"/>
+        </Style>
+        <Style x:Key="SmvMeasurementRow" TargetType="DataGridRow"
+               BasedOn="{StaticResource {x:Type DataGridRow}}">
+            <Setter Property="BorderBrush" Value="#E2EBF7"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Style.Triggers>
+                <Trigger Property="ItemsControl.AlternationIndex" Value="0">
+                    <Setter Property="Background" Value="#F8FBFF"/>
+                </Trigger>
+                <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                    <Setter Property="Background" Value="#EDF5FF"/>
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#E4F0FF"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
         <Style x:Key="SmvNumberText" TargetType="TextBlock">
             <Setter Property="HorizontalAlignment" Value="Right"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="FontFamily" Value="{StaticResource AppCodeFontFamily}"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="12.5"/>
             <Setter Property="Foreground" Value="{StaticResource Ink}"/>
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style x:Key="SmvRmsValueText" TargetType="TextBlock" BasedOn="{StaticResource SmvNumberText}">
+            <Setter Property="ToolTip" Value="{Binding RmsDetail}"/>
         </Style>
     </UserControl.Resources>
 
@@ -251,12 +295,12 @@
                             BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1"
                             CornerRadius="8">
                         <StackPanel>
-                            <TextBlock Text="SELECTED PUBLISHER" FontSize="9"
+                            <TextBlock Text="PUBLISHER" FontSize="9"
                                        FontWeight="SemiBold" Foreground="{StaticResource Muted}"
                                        Margin="0,0,0,4"/>
                             <TextBlock Text="{Binding StreamDetail}" FontSize="10"
                                        Foreground="{StaticResource Ink}" TextWrapping="Wrap"
-                                       ToolTip="{Binding StreamDetail}" MaxHeight="95"/>
+                                       ToolTip="{Binding StreamTechnicalDetail}" MaxHeight="95"/>
                         </StackPanel>
                     </Border>
                 </Grid>
@@ -279,10 +323,24 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Waveforms" Style="{StaticResource SvHeading}"/>
-                        <TextBlock Grid.Column="2" Text="2 cycles · selected stream"
-                                   Style="{StaticResource SvCaption}" Margin="12,0,0,0"
-                                   VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="0" Text="Waveforms" Style="{StaticResource SvHeading}"
+                                   ToolTip="{Binding WaveformStatus}"/>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Background="{Binding SyncBackground}" CornerRadius="8"
+                                    Padding="8,3" Margin="0,0,9,0">
+                                <Border.ToolTip>
+                                    <ToolTip MaxWidth="330" Padding="9,7">
+                                        <TextBlock MaxWidth="310" TextWrapping="Wrap"
+                                            Text="{Binding PlacementTarget.DataContext.SyncDetail,
+                                                RelativeSource={RelativeSource AncestorType={x:Type ToolTip}}}"/>
+                                    </ToolTip>
+                                </Border.ToolTip>
+                                <TextBlock Text="{Binding SyncLabel}" Foreground="{Binding SyncForeground}"
+                                           FontSize="10.5" FontWeight="SemiBold"/>
+                            </Border>
+                            <TextBlock Text="{Binding TimeAxisCaption}" ToolTip="{Binding TimeAxisCaption}"
+                                       Style="{StaticResource SvCaption}" VerticalAlignment="Center"/>
+                        </StackPanel>
                     </Grid>
                     <WrapPanel Grid.Row="2" VerticalAlignment="Center" Margin="2,0,0,0">
                         <TextBlock Text="Show" Style="{StaticResource SvCaption}"
@@ -316,17 +374,21 @@
                             IsStreamLive="{Binding IsLiveSnapshot}" TimebaseMode="2 cycles"
                             VoltageScale="Auto Peak Hold" CurrentScale="Auto Peak Hold"
                             ShowMode="Both" LayoutMode="Overlay" MarkersEnabled="True"/>
-                    <TextBlock Grid.Row="5" Text="{Binding WaveformStatus}" Style="{StaticResource SvCaption}"
-                               Margin="3,5,3,0" FontSize="9.8" TextTrimming="CharacterEllipsis"
-                               ToolTip="{Binding WaveformStatus}"/>
+                    <!-- Diagnostic evidence lives on the heading hover, not duplicated
+                         below the active waveform on every snapshot. -->
+                    <TextBlock Grid.Row="5" Text="{Binding WaveformStatus}"
+                               Visibility="Collapsed" ToolTip="{Binding WaveformStatus}"/>
                 </Grid>
             </Border>
 
             <Grid Grid.Column="4">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="1.1*" MinHeight="235"/>
+                    <RowDefinition Height="*" MinHeight="235"/>
                     <RowDefinition Height="8"/>
-                    <RowDefinition Height="0.9*" MinHeight="220"/>
+                    <!-- Measurement sizes to its actual four fixed channel rows.
+                         All released height expands the phasor, including in RAW
+                         where the whole Power card is Collapsed. -->
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
                 <Border Grid.Row="0" Style="{StaticResource SvPane}" Padding="9">
                     <Grid>
@@ -348,7 +410,8 @@
                         </Grid>
                         <dig:PhasorDiagramControl x:Name="PhasorView" Grid.Row="2"
                                 ItemsSource="{Binding CurrentPhasors}"
-                                IsStreamLive="{Binding IsLiveSnapshot}"/>
+                                IsStreamLive="{Binding IsLiveSnapshot}"
+                                ToolTip="Voltage/current (or RAW A/B) arrows use separate magnitude scales. Full measurement precision is shown below."/>
                     </Grid>
                 </Border>
 
@@ -356,9 +419,11 @@
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="8"/>
-                            <RowDefinition Height="*"/>
                             <RowDefinition Height="6"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="5"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="3"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <Grid Margin="2,2,2,0">
@@ -368,46 +433,182 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Measurements" Style="{StaticResource SvHeading}"/>
-                            <TextBlock Grid.Column="2" Text="RMS · fundamental"
-                                       Style="{StaticResource SvCaption}" Margin="12,0,0,0"
-                                       VerticalAlignment="Center"/>
+                            <!-- RMS and angle already identify their columns. -->
                         </Grid>
-                        <DataGrid Grid.Row="2"
-                                  ItemsSource="{Binding Measurements}" IsReadOnly="True"
-                                  Style="{StaticResource ModernDataGrid}"
-                                  FontSize="11" RowHeight="31" ColumnHeaderHeight="30"
-                                  BorderThickness="0" GridLinesVisibility="None"
-                                  CanUserResizeColumns="False" CanUserSortColumns="False"
-                                  SelectionUnit="FullRow" EnableRowVirtualization="True"
-                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                  ScrollViewer.VerticalScrollBarVisibility="Auto">
-                            <DataGrid.Columns>
-                                <DataGridTemplateColumn Header="Channel" Width="*">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                <Ellipse Style="{StaticResource SmvChannelDot}"
-                                                         VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                                <TextBlock Text="{Binding DisplayName}"
-                                                           Foreground="{StaticResource Ink}" FontSize="11.3"
-                                                           ToolTip="{Binding Label}" VerticalAlignment="Center"/>
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-                                <DataGridTextColumn Header="RMS" Binding="{Binding RmsText}"
-                                                    Width="75" ElementStyle="{StaticResource SmvNumberText}"/>
-                                <DataGridTextColumn Header="Fund." Binding="{Binding FundamentalRmsText}"
-                                                    Width="76" ElementStyle="{StaticResource SmvNumberText}"/>
-                                <DataGridTextColumn Header="Angle" Binding="{Binding AngleText}"
-                                                    Width="68" ElementStyle="{StaticResource SmvNumberText}"/>
-                                <DataGridTextColumn Header="Unit" Binding="{Binding Unit}"
-                                                    Width="59" ElementStyle="{StaticResource SmvNumberText}"/>
-                            </DataGrid.Columns>
-                        </DataGrid>
-                        <TextBlock Grid.Row="4" Text="{Binding UnitStatus}"
-                                   Style="{StaticResource SvCaption}" FontSize="9.5"
-                                   Margin="3,1,0,0" TextTrimming="CharacterEllipsis"
+                        <!-- The two views filter the same eight immutable measurement rows.
+                             RAW group titles are presentation-only, not verified U/I metadata. -->
+                        <Grid Grid.Row="2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid Grid.Column="0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="4"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="{Binding VoltageGroupHeading}" FontSize="11.5"
+                                           FontWeight="SemiBold" Foreground="#31567F" Margin="5,0,0,0"
+                                           ToolTip="{Binding UnitStatus}" TextTrimming="CharacterEllipsis"/>
+                                <DataGrid x:Name="SmvVoltageMeasurementsGrid" Grid.Row="2"
+                                          ItemsSource="{Binding VoltageMeasurements}" IsReadOnly="True"
+                                          AutoGenerateColumns="False" HeadersVisibility="Column"
+                                          Style="{StaticResource SmvMeasurementGrid}"
+                                          ColumnHeaderStyle="{StaticResource SmvMeasurementHeader}"
+                                          CellStyle="{StaticResource SmvMeasurementCell}"
+                                          RowStyle="{StaticResource SmvMeasurementRow}"
+                                          RowBackground="#F8FBFF" AlternatingRowBackground="#EDF5FF"
+                                          Background="#F8FBFF" AlternationCount="2"
+                                          FontSize="12.5" RowHeight="36" ColumnHeaderHeight="29"
+                                          BorderThickness="0" GridLinesVisibility="None"
+                                          CanUserResizeColumns="False" CanUserSortColumns="False"
+                                          SelectionUnit="FullRow" EnableRowVirtualization="True"
+                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                          ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="Channel" Width="*">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <Ellipse Style="{StaticResource SmvChannelDot}"
+                                                                 VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                                        <TextBlock Text="{Binding DisplayName}"
+                                                                   Foreground="{StaticResource Ink}" FontSize="12.5"
+                                                                   ToolTip="{Binding Label}" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="RMS" Binding="{Binding RmsText}"
+                                                            Width="1.85*" ElementStyle="{StaticResource SmvRmsValueText}"/>
+                                        <DataGridTextColumn Header="Angle" Binding="{Binding AngleText}"
+                                                            Width="1.10*" ElementStyle="{StaticResource SmvNumberText}"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                            <Grid Grid.Column="2">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="4"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="{Binding CurrentGroupHeading}" FontSize="11.5"
+                                           FontWeight="SemiBold" Foreground="#31567F" Margin="5,0,0,0"
+                                           ToolTip="{Binding UnitStatus}" TextTrimming="CharacterEllipsis"/>
+                                <DataGrid x:Name="SmvCurrentMeasurementsGrid" Grid.Row="2"
+                                          ItemsSource="{Binding CurrentMeasurements}" IsReadOnly="True"
+                                          AutoGenerateColumns="False" HeadersVisibility="Column"
+                                          Style="{StaticResource SmvMeasurementGrid}"
+                                          ColumnHeaderStyle="{StaticResource SmvMeasurementHeader}"
+                                          CellStyle="{StaticResource SmvMeasurementCell}"
+                                          RowStyle="{StaticResource SmvMeasurementRow}"
+                                          RowBackground="#F8FBFF" AlternatingRowBackground="#EDF5FF"
+                                          Background="#F8FBFF" AlternationCount="2"
+                                          FontSize="12.5" RowHeight="36" ColumnHeaderHeight="29"
+                                          BorderThickness="0" GridLinesVisibility="None"
+                                          CanUserResizeColumns="False" CanUserSortColumns="False"
+                                          SelectionUnit="FullRow" EnableRowVirtualization="True"
+                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                          ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="Channel" Width="*">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <Ellipse Style="{StaticResource SmvChannelDot}"
+                                                                 VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                                        <TextBlock Text="{Binding DisplayName}"
+                                                                   Foreground="{StaticResource Ink}" FontSize="12.5"
+                                                                   ToolTip="{Binding Label}" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="RMS" Binding="{Binding RmsText}"
+                                                            Width="1.85*" ElementStyle="{StaticResource SmvRmsValueText}"/>
+                                        <DataGridTextColumn Header="Angle" Binding="{Binding AngleText}"
+                                                            Width="1.10*" ElementStyle="{StaticResource SmvNumberText}"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </Grid>
+                        <!-- Power values share one reserved row; do not place status
+                             in an undefined grid row or expand over waveform/table. -->
+                        <Border Grid.Row="4" Visibility="{Binding PowerVisibility}"
+                                Background="#F3F8FF" BorderBrush="#D6E5F7"
+                                BorderThickness="1" CornerRadius="6" Padding="8,5"
+                                ToolTip="{Binding PowerDetails}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="4"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="3φ Power" FontSize="10.5"
+                                               FontWeight="SemiBold" Foreground="#234E80"
+                                               ToolTip="{Binding PowerStatus}"/>
+                                    <!-- Computation methodology is available on hover.
+                                         Do not duplicate it beside the 3φ title. -->
+                                </Grid>
+                                <!-- Four equal-width instrument readouts, aligned
+                                     on a common baseline; no nested horizontal
+                                     StackPanels competing for their columns. -->
+                                <Grid Grid.Row="2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid Grid.Column="0" Margin="2,0,7,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="P" Foreground="#617D9A" FontSize="9.2"/>
+                                        <TextBlock Grid.Row="1" Text="{Binding PowerP}" Foreground="#183A65"
+                                                   FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                    <Grid Grid.Column="1" Margin="7,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="Q₁" Foreground="#617D9A" FontSize="9.2"/>
+                                        <TextBlock Grid.Row="1" Text="{Binding PowerQ}" Foreground="#183A65"
+                                                   FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                    <Grid Grid.Column="2" Margin="7,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="S" Foreground="#617D9A" FontSize="9.2"/>
+                                        <TextBlock Grid.Row="1" Text="{Binding PowerS}" Foreground="#183A65"
+                                                   FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                    <Grid Grid.Column="3" Margin="7,0,2,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="PF" Foreground="#617D9A" FontSize="9.2"/>
+                                        <TextBlock Grid.Row="1" Text="{Binding PowerPf}" Foreground="#183A65"
+                                                   FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                </Grid>
+                            </Grid>
+                        </Border>
+                        <!-- Full profile/scale details remain available on
+                             both group-heading tooltips, not as permanent noise. -->
+                        <TextBlock Grid.Row="6" Text="{Binding UnitStatus}" Visibility="Collapsed"
                                    ToolTip="{Binding UnitStatus}"/>
                     </Grid>
                 </Border>
@@ -419,7 +620,7 @@
                 <DockPanel>
                     <Ellipse Width="7" Height="7" Fill="#16A34A" VerticalAlignment="Center"
                              Margin="0,0,8,0" DockPanel.Dock="Left"/>
-                    <TextBlock Text="{Binding CaptureStatus}" FontSize="10.5"
+                    <TextBlock Text="{Binding CaptureBrief}" FontSize="10.5"
                                Foreground="#425F85" TextTrimming="CharacterEllipsis"
                                ToolTip="{Binding CaptureStatus}"/>
                 </DockPanel>

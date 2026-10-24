@@ -13,6 +13,8 @@ public sealed class SmvEngineeringDisplayTests
         var plotted = SmvDigSubPresentationAdapter.BuildWaveform(snapshot);
         Assert.All(plotted.VoltageSeries.Concat(plotted.CurrentSeries),
             series => Assert.Equal("counts", series.Unit));
+        Assert.Equal("Ch1", plotted.VoltageSeries[0].Name);
+        Assert.Equal("Ch5", plotted.CurrentSeries[0].Name);
         var raw = SmvEngineeringDisplay.Present(
             new SmvRawVectorMeasurement(5, "Raw Ch5", 5000, 4700, 120, true),
             SmvDisplayUnits.RawCounts);
@@ -29,6 +31,8 @@ public sealed class SmvEngineeringDisplayTests
         var plotted = SmvDigSubPresentationAdapter.BuildWaveform(snapshot, SmvDisplayUnits.NineTwoLe);
         Assert.Equal("A", plotted.VoltageSeries[0].Unit);
         Assert.Equal("V", plotted.CurrentSeries[0].Unit);
+        Assert.Equal("Ia", plotted.VoltageSeries[0].Name);
+        Assert.Equal("Ua", plotted.CurrentSeries[0].Name);
         Assert.Equal(1, plotted.VoltageSeries[0].Samples[0], 8);
         Assert.Equal(50, plotted.CurrentSeries[0].Samples[0], 8);
         Assert.Equal("Ia", SmvEngineeringDisplay.Describe(1, SmvDisplayUnits.NineTwoLe).Name);
@@ -54,6 +58,14 @@ public sealed class SmvEngineeringDisplayTests
         Assert.Equal("Ua", phasors[1].Name);
         Assert.Equal(PhasorFamily.Voltage, phasors[1].Family);
         Assert.Equal(47, phasors[1].Magnitude!.Value, 8);
+    }
+
+    [Fact]
+    public void AngleZero_NeverShowsNegativeZeroOrMisleadingSignedReference()
+    {
+        var value = new SmvDisplayMeasurement(5, "Ua", "V", 50, 50, -0.001, true);
+        Assert.Equal("∠0.0°", value.AngleText);
+        Assert.Equal(-0.001, value.PhaseDegrees);
     }
 
     [Fact]

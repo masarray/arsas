@@ -126,7 +126,7 @@
              Static faces are intentional because WPF does not provide reliable variable-font
              axis selection. Ideal metrics + ClearType keep compact engineering text smooth. -->
         <FontFamily x:Key="AppFontFamily">./Assets/Fonts/#Inter</FontFamily>
-        <FontFamily x:Key="AppCodeFontFamily">Cascadia Mono, Consolas</FontFamily>
+        <FontFamily x:Key="AppCodeFontFamily">./Assets/Fonts/#Inter</FontFamily>
 
         <Style TargetType="{x:Type Window}">
             <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}"/>

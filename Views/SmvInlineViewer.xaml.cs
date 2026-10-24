@@ -2,12 +2,14 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using ArIED61850Tester.Services;
 using ArIED61850Tester.Models;
 using ProcessBus.Core.Models;
+using ProcessBus.App.Wpf.Controls;
 
 namespace ArIED61850Tester.Views;
 
@@ -29,6 +31,11 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
     private CancellationTokenSource? _captureCancellation;
     private SmvLiveUpdate? _pendingUpdate;
     private SmvSnapshotResult? _visibleSnapshot;
+    // Single in-flight analyzer, single pending latest snapshot. No task per
+    // packet or unbounded background queue, even under a saturated UI.
+    private PendingAnalysis? _pendingAnalysis;
+    private bool _analysisRunning;
+    private sealed record PendingAnalysis(SmvSnapshotResult Snapshot, string? SelectedKey, int Generation);
     private IReadOnlyList<SmvRawVectorMeasurement> _visibleVectors = [];
     private string? _selectedKey;
     private string _captureStatus = "Select an Ethernet adapter and press Start. No IED or SCL is required.";
@@ -41,12 +48,59 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
     private bool _capturing;
     private bool _loadingAdapters;
     private bool _selectingProgrammatically;
+    private bool _awaitingPublisherSwitch;
+    private SmvDisplayUnits _lastViewProfile = SmvDisplayUnits.RawCounts;
+    private string? _lastUnitCaption;
+    private string? _lastVoltageHeading;
+    private string? _lastCurrentHeading;
+    private string? _lastReferenceHeading;
+    private string? _lastTimeAxisCaption;
+    private string? _lastSyncLabel;
+    private string? _lastSyncDetail;
+    private Visibility _lastPowerVisibility = Visibility.Collapsed;
+    private string _lastDisplayedPublisherKey = string.Empty;
     private long _frameCount;
 
     public event PropertyChangedEventHandler? PropertyChanged;
     public ObservableCollection<GooseAdapterOption> Adapters { get; } = [];
     public ObservableCollection<SmvLiveStreamSummary> Streams { get; } = [];
-    public ObservableCollection<SmvDisplayMeasurement> Measurements { get; } = [];
+    public ObservableCollection<SmvMeasurementLiveRow> Measurements { get; } = [];
+    public ObservableCollection<SmvPowerMeasurements.Phase> PowerPhases { get; } = [];
+    private SmvPowerMeasurements.Phase? _powerTotal;
+    public string PowerP => _powerTotal?.PText ?? "—";
+    public string PowerQ => _powerTotal?.QText ?? "—";
+    public string PowerS => _powerTotal?.SText ?? "—";
+    public string PowerPf => _powerTotal?.PfText ?? "—";
+    public Visibility PowerVisibility => ActiveUnits == SmvDisplayUnits.NineTwoLe && _powerTotal is not null
+        ? Visibility.Visible : Visibility.Collapsed;
+    public string PowerStatus => _powerTotal is null
+        ? "Power unavailable · requires clean 9-2LE U/I sample pairing"
+        : "P true · Q₁ fundamental · S true RMS · PF true (operator-selected U/I)";
+    public string PowerStatusShort => _powerTotal is null
+        ? "9-2LE required" : "True P · Q₁ fundamental";
+    public string PowerDetails => _powerTotal is null
+        ? "No power calculation for unverified RAW channels or incomplete snapshots."
+        : PowerStatus + "\n" + string.Join("\n", PowerPhases.Select(phase =>
+            $"{phase.Name}: P {phase.PText}  Q₁ {phase.QText}  S {phase.SText}  PF {phase.PfText}"));
+    public string SyncLabel => SmvSyncPresentation.Label(_visibleSnapshot);
+    public string SyncDetail => _awaitingPublisherSwitch && _visibleSnapshot is not null
+        ? "HOLD · Previous publisher sync shown.\nNew publisher sync not yet known.\n" +
+          SmvSyncPresentation.Detail(_visibleSnapshot)
+        : SmvSyncPresentation.Detail(_visibleSnapshot);
+    public Brush SyncBackground => SmvSyncPresentation.Background(_visibleSnapshot);
+    public Brush SyncForeground => SmvSyncPresentation.Foreground(_visibleSnapshot);
+
+    // Two lightweight live views of the original bounded eight-row collection;
+    // no duplicate samples, DSP calculations or packet observations.
+    public ICollectionView VoltageMeasurements { get; }
+    public ICollectionView CurrentMeasurements { get; }
+
+    // The data grid's column header already supplies RMS and Angle;
+    // mapping and scale remain accessible by hovering either title.
+    public string VoltageGroupHeading => ActiveUnits == SmvDisplayUnits.NineTwoLe
+        ? "Voltage (V)" : "RAW · Ch1–4";
+    public string CurrentGroupHeading => ActiveUnits == SmvDisplayUnits.NineTwoLe
+        ? "Current (A)" : "RAW · Ch5–8";
 
     // The original DigSub WPF controls repaint immutable models, not packet work.
     public WaveformSnapshot? CurrentWaveform { get; private set; }
@@ -61,25 +115,78 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
     private SmvDisplayUnits ActiveUnits
         => SmvEngineeringDisplay.Effective(_visibleSnapshot, RequestedUnits);
 
+    public string TimeAxisCaption
+    {
+        get
+        {
+            if (CurrentWaveform is not { } wave || wave.SampleRateHz <= 0)
+                return "Timebase —";
+            var count = Math.Min(2 * Math.Max(1, wave.SamplesPerCycle),
+                SmvWaveformTimeAxis.AvailableSamples(wave));
+            return ActiveUnits == SmvDisplayUnits.NineTwoLe &&
+                SmvWaveformTimeAxis.ReferenceSample(wave, count) > 0.01
+                ? "Ua = 0 ms"
+                : "Start = 0 ms";
+        }
+    }
+
     public string PhaseReferenceText => ActiveUnits == SmvDisplayUnits.NineTwoLe
-        ? "Ia (Ch1) · 0°" : "Ch1 · 0° reference";
+        ? "Ref: Ua" : "Ref: Ch1";
 
     public string UnitStatus => RequestedUnits switch
     {
-        SmvDisplayUnits.RawCounts => "RAW counts · no verified U/I channel scale",
+        SmvDisplayUnits.RawCounts => "RAW counts · Voltage/Current grouping is unverified; 9-2LE profile: Ch1–4 ×0.001 A, Ch5–8 ×0.01 V (operator-selected)",
         _ when ActiveUnits == SmvDisplayUnits.NineTwoLe
             => "9-2LE user profile · 1 mA / 10 mV per count · verify publisher DataSet",
         _ => "9-2LE selected · need eight clean channels; displaying RAW counts"
     };
 
     public string StreamCountText => $"{Streams.Count:N0} detected";
-    public string CaptureStatus { get => _captureStatus; private set => Change(ref _captureStatus, value, nameof(CaptureStatus)); }
+
+    // Instrument status stays concise; original diagnostics remain in tooltip
+    // and in the dedicated Diagnostics tab. Never conceal an actual HOLD/error.
+    public string CaptureBrief => _captureStatus switch
+    {
+        var status when status.StartsWith("HOLD", StringComparison.OrdinalIgnoreCase) =>
+            "HOLD · stream interrupted",
+        var status when status.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
+                        status.Contains("error", StringComparison.OrdinalIgnoreCase) =>
+            "SV capture error",
+        _ when _capturing && Streams.Count > 0 => $"LIVE · {Streams.Count} SV stream(s)",
+        _ when _capturing => "Searching for SV streams",
+        _ => "SMV idle"
+    };
+    private string? _lastCaptureBrief;
+    public string CaptureStatus
+    {
+        get => _captureStatus;
+        private set
+        {
+            if (_captureStatus == value) return;
+            Change(ref _captureStatus, value, nameof(CaptureStatus));
+            if (_lastCaptureBrief == CaptureBrief) return;
+            _lastCaptureBrief = CaptureBrief;
+            Notify(nameof(CaptureBrief));
+        }
+    }
     public string WaveformStatus { get => _waveformStatus; private set => Change(ref _waveformStatus, value, nameof(WaveformStatus)); }
     public string StreamDetail { get => _streamDetail; private set => Change(ref _streamDetail, value, nameof(StreamDetail)); }
+    private string _streamTechnicalDetail = "Choose an SV stream to inspect its publisher metadata.";
+    public string StreamTechnicalDetail { get => _streamTechnicalDetail; private set => Change(ref _streamTechnicalDetail, value, nameof(StreamTechnicalDetail)); }
 
     public SmvInlineViewer()
     {
         InitializeComponent();
+        VoltageMeasurements = new ListCollectionView(Measurements)
+        {
+            Filter = item => item is SmvMeasurementLiveRow row &&
+                SmvEngineeringDisplay.Describe(row.ChannelIndex, ActiveUnits).IsVoltage
+        };
+        CurrentMeasurements = new ListCollectionView(Measurements)
+        {
+            Filter = item => item is SmvMeasurementLiveRow row &&
+                !SmvEngineeringDisplay.Describe(row.ChannelIndex, ActiveUnits).IsVoltage
+        };
         DataContext = this;
         _freshness = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
         {
@@ -248,10 +355,28 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
         if (_selectingProgrammatically)
             return;
         var stream = StreamList.SelectedItem as SmvLiveStreamSummary;
-        Volatile.Write(ref _selectedKey, stream?.Key);
+        var key = stream?.Key;
+        if (key == Volatile.Read(ref _selectedKey))
+            return;
+
+        Volatile.Write(ref _selectedKey, key);
+        _pendingAnalysis = null;
         Interlocked.Increment(ref _analysisGeneration);
-        ClearPresentation(stream is null ? "Select a publisher to display samples."
-            : $"Acquiring coherent samples from {stream.SvId}.");
+        if (stream is null)
+        {
+            ClearPresentation("Select a publisher to display samples.");
+        }
+        else
+        {
+            // Keep the last real waveform, phasors, measurements and sync badge
+            // intact until a coherent window from the NEW publisher is ready.
+            // Never attribute those held values to the newly selected publisher.
+            _awaitingPublisherSwitch = _visibleSnapshot is not null;
+            WaveformStatus = _awaitingPublisherSwitch
+                ? $"Switching to {stream.SvId} · HOLD last displayed publisher until coherent samples arrive."
+                : $"Acquiring coherent samples from {stream.SvId}.";
+            Notify(nameof(SyncDetail));
+        }
         UpdateStreamDetail(stream);
     }
 
@@ -280,23 +405,33 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
         {
             var currentKey = Volatile.Read(ref _selectedKey);
             _selectingProgrammatically = true;
-            Streams.Clear();
-            foreach (var discovered in update.Streams)
-                Streams.Add(discovered);
-            _selectingProgrammatically = false;
-            Notify(nameof(StreamCountText));
+            try
+            {
+                // Reconcile by stable stream Key. Clearing the ListBox on every
+                // discovery change discards selection containers and flashes the UI.
+                for (var i = 0; i < update.Streams.Count; i++)
+                {
+                    var wanted = update.Streams[i];
+                    if (i < Streams.Count && Streams[i].Key == wanted.Key)
+                        continue;
+                    var existing = -1;
+                    for (var j = i + 1; j < Streams.Count; j++)
+                        if (Streams[j].Key == wanted.Key) { existing = j; break; }
+                    if (existing >= 0) Streams.Move(existing, i);
+                    else Streams.Insert(i, wanted);
+                }
+                while (Streams.Count > update.Streams.Count)
+                    Streams.RemoveAt(Streams.Count - 1);
+                Notify(nameof(StreamCountText));
 
-            var next = Streams.FirstOrDefault(s => s.Key == currentKey) ??
-                       (currentKey is null ? Streams.FirstOrDefault() : null);
-            if (next is not null)
-            {
+                var next = Streams.FirstOrDefault(s => s.Key == currentKey) ??
+                           (currentKey is null ? Streams.FirstOrDefault() : null);
                 StreamList.SelectedItem = next;
-                Volatile.Write(ref _selectedKey, next.Key);
+                Volatile.Write(ref _selectedKey, next?.Key);
             }
-            else
+            finally
             {
-                StreamList.SelectedItem = null;
-                Volatile.Write(ref _selectedKey, null);
+                _selectingProgrammatically = false;
             }
         }
 
@@ -328,38 +463,92 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
         // no mixing old results after stream selection or captured-source changes.
         if (update.SelectedKey != selectedKey || update.SelectedSnapshot is null)
         {
-            ClearPresentation(summary.Diagnostic);
+            // A buffer in its initial warm-up window must not repeatedly blank
+            // every pane 5 times/second. Stream changes clear only once in the
+            // SelectionChanged handler. Hold the last coherent state otherwise.
+            if (_visibleSnapshot is null && Measurements.Count == 0)
+                WaveformStatus = summary.Diagnostic;
             return;
         }
 
-        var snapshot = update.SelectedSnapshot;
-        _visibleSnapshot = snapshot;
-        IsLiveSnapshot = true;
-        Notify(nameof(IsLiveSnapshot));
-        UpdateUnitPresentation(redrawWaveform: true);
-        BeginAnalysis(snapshot, selectedKey, generation);
+        BeginAnalysis(update.SelectedSnapshot, selectedKey, generation);
     }
 
-    private async void BeginAnalysis(SmvSnapshotResult snapshot, string? selectedKey, int generation)
+    private void BeginAnalysis(SmvSnapshotResult snapshot, string? selectedKey, int generation)
     {
-        var analysis = Interlocked.Increment(ref _analysisGeneration);
+        // Latest-value backpressure: retain at most one waiting coherent window
+        // while the prior one is processed. Never accumulate Task.Run jobs.
+        _pendingAnalysis = new PendingAnalysis(snapshot, selectedKey, generation);
+        if (_analysisRunning)
+            return;
+        _analysisRunning = true;
+        _ = ProcessAnalysisQueueAsync();
+    }
+
+    private async Task ProcessAnalysisQueueAsync()
+    {
         try
         {
-            var vectors = await Task.Run(() => SmvRawVectorMath.Analyze(snapshot));
-            if (generation != _generation || analysis != _analysisGeneration ||
-                !ReferenceEquals(_visibleSnapshot, snapshot) || !IsLoaded ||
-                selectedKey != Volatile.Read(ref _selectedKey))
-                return;
-            _visibleVectors = SmvDigSubPresentationAdapter.RelativeMeasurements(vectors);
-            UpdateUnitPresentation(redrawWaveform: false);
+            while (_pendingAnalysis is { } pending)
+            {
+                _pendingAnalysis = null;
+                var snapshot = pending.Snapshot;
+                var selectedKey = pending.SelectedKey;
+                var generation = pending.Generation;
+                var analysis = Interlocked.Increment(ref _analysisGeneration);
+                var profile = RequestedUnits;
+                try
+                {
+                    // One bounded immutable publication: DSP and waveform are
+                    // calculated on the same selected snapshot off the UI thread.
+                    var rendered = await Task.Run(() =>
+                    {
+                        var vectors = SmvRawVectorMath.Analyze(snapshot);
+                        var waveform = SmvDigSubPresentationAdapter.BuildWaveform(snapshot, profile);
+                        return (vectors, waveform);
+                    });
+                    if (generation != _generation || analysis != _analysisGeneration ||
+                        !IsLoaded || !_capturing ||
+                        selectedKey != Volatile.Read(ref _selectedKey))
+                        continue;
+
+                    _visibleSnapshot = snapshot;
+                    _visibleVectors = SmvDigSubPresentationAdapter.RelativeMeasurements(rendered.vectors);
+                    _lastDisplayedPublisherKey = selectedKey ?? string.Empty;
+                    _awaitingPublisherSwitch = false;
+                    // Keep the StreamKey consistent with the published sample
+                    // identity; the old key stays attached during HOLD.
+                    if (CurrentStreamKey != _lastDisplayedPublisherKey)
+                    {
+                        CurrentStreamKey = _lastDisplayedPublisherKey;
+                        Notify(nameof(CurrentStreamKey));
+                    }
+                    CurrentWaveform = rendered.waveform;
+                    Notify(nameof(CurrentWaveform));
+                    IsLiveSnapshot = true;
+                    Notify(nameof(IsLiveSnapshot));
+                    UpdateUnitPresentation(redrawWaveform: profile != RequestedUnits);
+                    if (profile == RequestedUnits)
+                        WaveformStatus =
+                            (snapshot.TimebaseReason.StartsWith("ASSUMED", StringComparison.OrdinalIgnoreCase)
+                                ? "ASSUMED timebase · rate/PTP unverified · " : string.Empty) +
+                            $"Received {snapshot.CapturedSamples:N0} coherent samples • {snapshot.SamplesPerCycle} samples/cycle • " +
+                            (ActiveUnits == SmvDisplayUnits.NineTwoLe
+                                ? "9-2LE operator-selected engineering display"
+                                : "raw INT32 counts");
+                }
+                catch (Exception)
+                {
+                    if (generation != _generation || analysis != _analysisGeneration ||
+                        selectedKey != Volatile.Read(ref _selectedKey))
+                        continue;
+                    WaveformStatus = "New SV analysis unavailable; displaying last coherent snapshot.";
+                }
+            }
         }
-        catch (Exception)
+        finally
         {
-            if (generation != _generation || analysis != _analysisGeneration)
-                return;
-            _visibleVectors = [];
-            UpdateUnitPresentation(redrawWaveform: false);
-            WaveformStatus = "Raw phasor calculation unavailable; no substitute values shown.";
+            _analysisRunning = false;
         }
     }
 
@@ -376,17 +565,27 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
     private void UpdateStreamDetail(SmvLiveStreamSummary? summary)
     {
         StreamDetail = summary is null
-            ? "Passive discovery • no selected publisher. No MMS connection needed."
-            : $"{summary.SvId} • APPID 0x{summary.AppId:X4}\n" +
+            ? "Select an SV publisher"
+            : $"APPID 0x{summary.AppId:X4} · VLAN {summary.Vlan}";
+        StreamTechnicalDetail = summary is null
+            ? "Passive discovery; no MMS connection required."
+            : $"{summary.SvId} · APPID 0x{summary.AppId:X4}\n" +
               $"{summary.SourceMac} → {summary.DestinationMac}\n" +
-              $"VLAN {summary.Vlan} • gap {summary.Gaps} • restart {summary.Restarts}";
+              $"VLAN {summary.Vlan} · gap {summary.Gaps} · restart {summary.Restarts}";
     }
 
     private void ClearPresentation(string message)
     {
+        _pendingAnalysis = null;
+        Interlocked.Increment(ref _analysisGeneration);
+        _awaitingPublisherSwitch = false;
+        _lastDisplayedPublisherKey = string.Empty;
         _visibleSnapshot = null;
         _visibleVectors = [];
         Measurements.Clear();
+        PowerPhases.Clear();
+        _powerTotal = null;
+        NotifyPowerStatus();
         WaveformStatus = message;
         CurrentWaveform = null;
         Notify(nameof(CurrentWaveform));
@@ -428,12 +627,112 @@ public partial class SmvInlineViewer : UserControl, INotifyPropertyChanged
 
         // The immutable wire/DSP vectors remain raw. Scaling is presentation-only.
         // WPF collections remain bounded to at most the 8 displayed channels.
-        Measurements.Clear();
-        foreach (var raw in _visibleVectors)
-            Measurements.Add(SmvEngineeringDisplay.Present(raw, profile));
+        // Preserve the same bounded DataGrid collection/view and replace only
+        // changed rows; Clear/Add resets WPF row containers and visibly flickers.
+        // The phase reference is selected at PRESENTATION time; no wire value
+        // or DFT result is overwritten.
+        var presentationVectors = SmvDigSubPresentationAdapter.RelativeMeasurements(_visibleVectors, profile);
+        var rowIndex = 0;
+        foreach (var raw in presentationVectors)
+        {
+            var next = SmvEngineeringDisplay.Present(raw, profile);
+            if (rowIndex < Measurements.Count && Measurements[rowIndex].ChannelIndex == next.ChannelIndex)
+                Measurements[rowIndex].Apply(next);
+            else if (rowIndex < Measurements.Count)
+                Measurements[rowIndex] = new SmvMeasurementLiveRow(next);
+            else
+                Measurements.Add(new SmvMeasurementLiveRow(next));
+            rowIndex++;
+        }
+        while (Measurements.Count > rowIndex)
+            Measurements.RemoveAt(Measurements.Count - 1);
+
+        // Filters depend on the operator-selected profile, not each frame.
+        // Recreate the views only when the profile truly changes.
+        if (_lastViewProfile != profile)
+        {
+            _lastViewProfile = profile;
+            VoltageMeasurements.Refresh();
+            CurrentMeasurements.Refresh();
+        }
+
+        // A single two-cycle immutable snapshot is the only source of power
+        // calculations; never pair samples across different publishers/frames.
+        var power = SmvPowerMeasurements.Analyze(_visibleSnapshot, _visibleVectors, profile);
+        var phaseCount = 0;
+        if (power is { } actual)
+            foreach (var phase in actual.Phases)
+            {
+                if (phaseCount < PowerPhases.Count)
+                {
+                    if (!Equals(PowerPhases[phaseCount], phase))
+                        PowerPhases[phaseCount] = phase;
+                }
+                else
+                    PowerPhases.Add(phase);
+                phaseCount++;
+            }
+        while (PowerPhases.Count > phaseCount)
+            PowerPhases.RemoveAt(PowerPhases.Count - 1);
+        _powerTotal = power?.Total;
+        NotifyPowerStatus();
         UpdateDigSubPhasors();
-        Notify(nameof(UnitStatus));
-        Notify(nameof(PhaseReferenceText));
+
+        // Static panel text and sync brush are *not* frame-rate content.
+        // Invalidate only when identity/profile/status actually changes.
+        if (_lastUnitCaption != UnitStatus)
+        {
+            _lastUnitCaption = UnitStatus;
+            Notify(nameof(UnitStatus));
+        }
+        if (_lastVoltageHeading != VoltageGroupHeading)
+        {
+            _lastVoltageHeading = VoltageGroupHeading;
+            Notify(nameof(VoltageGroupHeading));
+        }
+        if (_lastCurrentHeading != CurrentGroupHeading)
+        {
+            _lastCurrentHeading = CurrentGroupHeading;
+            Notify(nameof(CurrentGroupHeading));
+        }
+        if (_lastReferenceHeading != PhaseReferenceText)
+        {
+            _lastReferenceHeading = PhaseReferenceText;
+            Notify(nameof(PhaseReferenceText));
+        }
+        if (_lastTimeAxisCaption != TimeAxisCaption)
+        {
+            _lastTimeAxisCaption = TimeAxisCaption;
+            Notify(nameof(TimeAxisCaption));
+        }
+        if (_lastSyncLabel != SyncLabel)
+        {
+            _lastSyncLabel = SyncLabel;
+            Notify(nameof(SyncLabel));
+            Notify(nameof(SyncBackground));
+            Notify(nameof(SyncForeground));
+        }
+        if (_lastSyncDetail != SyncDetail)
+        {
+            _lastSyncDetail = SyncDetail;
+            Notify(nameof(SyncDetail));
+        }
+    }
+
+    private void NotifyPowerStatus()
+    {
+        if (_lastPowerVisibility != PowerVisibility)
+        {
+            _lastPowerVisibility = PowerVisibility;
+            Notify(nameof(PowerVisibility));
+        }
+        Notify(nameof(PowerP));
+        Notify(nameof(PowerQ));
+        Notify(nameof(PowerS));
+        Notify(nameof(PowerPf));
+        Notify(nameof(PowerStatus));
+        Notify(nameof(PowerStatusShort));
+        Notify(nameof(PowerDetails));
     }
 
     private void WaveformOptionsChanged(object sender, SelectionChangedEventArgs e)
