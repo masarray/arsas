@@ -81,6 +81,11 @@ public sealed class IedBrowserPostWriteSsotRegressionTests
         Assert.Contains("Data Model Read incomplete", pipeline);
         Assert.Contains("Data Model not refreshed", pipeline);
         Assert.Contains("Data Model Read interrupted", pipeline);
+        Assert.Contains("postWriteRequest.WriteStatus", pipeline);
+        Assert.Contains("writeOutcome + \" · \" + readOutcome", pipeline);
+        Assert.Contains("IedBrowserDetailStatus.ToolTip", pipeline);
+        Assert.Contains("device, model, association, attempted, status", Source("MainWindow.IedBrowser.TypedDataWrite.cs"));
+        Assert.Contains("string WriteStatus = \"\"", Source("Models/IedBrowserPostWriteReadRequest.cs"));
         Assert.Contains("TimeSpan.FromSeconds(30)", pipeline);
         Assert.DoesNotContain("postWriteRequest.Targets.First().Value", pipeline);
     }
