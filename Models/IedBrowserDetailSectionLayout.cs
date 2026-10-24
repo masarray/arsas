@@ -58,7 +58,10 @@ public static class IedBrowserDetailSectionLayout
             result.Add(section with
             {
                 LoadChildren = () => children,
-                ExpandByDefault = true
+                // Status summaries are rarely needed during routine browsing.
+                // Respect any explicit user toggle when the page is revisited.
+                ExpandByDefault = section.Name is not
+                    ("Information received in last Report" or "Information received in last GOOSE")
             });
             index = end - 1;
         }
