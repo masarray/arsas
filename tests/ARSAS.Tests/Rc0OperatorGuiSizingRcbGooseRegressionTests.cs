@@ -64,7 +64,8 @@ public sealed class Rc0OperatorGuiSizingRcbGooseRegressionTests
         Assert.Contains("await Task.Run(", source, StringComparison.Ordinal);
         Assert.Contains("_gooseSubscriberRuntime.ListAdapters()", source, StringComparison.Ordinal);
         // Explicit Start and Refresh Models continue to build the model before capture.
-        Assert.Contains("RefreshGooseBindingPreview();\n            ResetGooseView", source, StringComparison.Ordinal);
+        Assert.Contains("RefreshGooseBindingPreview();", source, StringComparison.Ordinal);
+        Assert.Contains("ResetGooseView(resetCounters: true);", source, StringComparison.Ordinal);
     }
 
     [Fact]
