@@ -533,7 +533,7 @@
                              left card edge, never in a detached 5px gutter. -->
                         <Border x:Name="Card"
                                 Background="{StaticResource IedCardSurface}"
-                                BorderBrush="#B8C1C5" BorderThickness="1"
+                                BorderBrush="#D7E5F6" BorderThickness="1"
                                 CornerRadius="10" Padding="9">
                             <ContentPresenter/>
                         </Border>
@@ -588,7 +588,7 @@
                              left card edge, never in a detached 5px gutter. -->
                         <Border x:Name="IedCard"
                                 Background="{StaticResource IedCardSurface}"
-                                BorderBrush="#B8C1C5" BorderThickness="1"
+                                BorderBrush="#D7E5F6" BorderThickness="1"
                                 CornerRadius="10" Padding="10">
                             <ContentPresenter/>
                         </Border>
@@ -620,20 +620,20 @@
 
     <!-- Inputs also leave pure white behind so dialogs remain visually consistent. -->
     <Style TargetType="TextBox">
-        <Setter Property="BorderBrush" Value="#B8C1C5"/>
+        <Setter Property="BorderBrush" Value="#D7E5F6"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="11,7"/>
-        <Setter Property="Background" Value="#F1EEE8"/>
+        <Setter Property="Background" Value="#EDF5FF"/>
         <Setter Property="Foreground" Value="{StaticResource Ink}"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="MinHeight" Value="36"/>
     </Style>
 
     <Style TargetType="ComboBox">
-        <Setter Property="BorderBrush" Value="#B8C1C5"/>
+        <Setter Property="BorderBrush" Value="#D7E5F6"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="10,7"/>
-        <Setter Property="Background" Value="#F1EEE8"/>
+        <Setter Property="Background" Value="#EDF5FF"/>
         <Setter Property="Foreground" Value="{StaticResource Ink}"/>
         <Setter Property="MinHeight" Value="36"/>
     </Style>
