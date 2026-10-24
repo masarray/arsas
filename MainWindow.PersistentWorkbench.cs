@@ -43,6 +43,10 @@ public partial class MainWindow
         // SV inspection is independent of MMS command admission. Default
         // collapsed, but retain the operator's explicit override per workspace.
         public bool SmvDockExpanded { get; set; } = false;
+        // Passive GOOSE observation gets the available timeline height by
+        // default. The operator can still expand MMS controls and the choice
+        // persists independently of the rest of the engineering workspaces.
+        public bool GooseDockExpanded { get; set; } = false;
     }
 
     [ModuleInitializer]
@@ -386,6 +390,8 @@ public partial class MainWindow
 
         if (MainTabs.SelectedIndex == EngineeringNavigationRoute.SmvWorkspaceIndex)
             state.SmvDockExpanded = expanded;
+        else if (MainTabs.SelectedIndex == GooseSubscriberTabIndex)
+            state.GooseDockExpanded = expanded;
         else
             state.DockExpanded = expanded;
     }
@@ -396,7 +402,10 @@ public partial class MainWindow
         // MMS commands on passive SV inspection. Do not recreate the panel or
         // invoke any control/refresh operation as a navigation side effect.
         var desiredExpanded = workspaceIndex == EngineeringNavigationRoute.SmvWorkspaceIndex
-            ? state.SmvDockExpanded : state.DockExpanded;
+            ? state.SmvDockExpanded
+            : workspaceIndex == GooseSubscriberTabIndex
+                ? state.GooseDockExpanded
+                : state.DockExpanded;
         if (CommandPanelExpander.IsExpanded == desiredExpanded)
             return;
 

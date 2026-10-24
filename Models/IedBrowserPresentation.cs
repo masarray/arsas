@@ -348,7 +348,8 @@ public sealed class IedBrowserDetailProjection
 {
     public BulkObservableCollection<IedBrowserDetailRow> Rows { get; } = new();
 
-    public void Reset(IReadOnlyList<IedBrowserDetailRow> rows)
+    public void Reset(IReadOnlyList<IedBrowserDetailRow> rows,
+        IReadOnlySet<string>? expandedSectionNames = null)
     {
         // Attach UI-only collapsibility to exact section boundaries. Do not
         // mutate source projection rows or create a second evidence store.
@@ -357,7 +358,8 @@ public sealed class IedBrowserDetailProjection
         foreach (var row in sections)
         {
             display.Add(row);
-            if (!row.ExpandByDefault || !row.HasChildren) continue;
+            if (!row.HasChildren || (expandedSectionNames is null
+                    ? !row.ExpandByDefault : !expandedSectionNames.Contains(row.Name))) continue;
             row.IsExpanded = true;
             display.AddRange(row.GetChildren());
         }
