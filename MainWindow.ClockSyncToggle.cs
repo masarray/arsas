@@ -101,11 +101,24 @@ public partial class MainWindow
         itemStyle.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.SemiBold));
         itemStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(9, 5, 9, 5)));
 
+        // The custom premium ComboBox template renders SelectionBoxItem.
+        // DisplayMemberPath alone can fall back to the record's type name in
+        // that template. Supply one exact item template for BOTH popup items
+        // and the selected header, independent of class name/ToString.
+        var ipText = new FrameworkElementFactory(typeof(TextBlock));
+        ipText.SetBinding(TextBlock.TextProperty,
+            new Binding(nameof(SntpNetworkBinding.LocalAddress)));
+        ipText.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
+        var ipItemTemplate = new DataTemplate(typeof(SntpNetworkBinding))
+        {
+            VisualTree = ipText
+        };
+
         var picker = new ComboBox
         {
             Name = "GlobalSntpPcIpPicker",
             Width = 156, Height = 32,
-            DisplayMemberPath = nameof(SntpNetworkBinding.LocalAddress),
+            ItemTemplate = ipItemTemplate,
             FontFamily = font,
             FontSize = 12.8,
             FontWeight = FontWeights.SemiBold,
