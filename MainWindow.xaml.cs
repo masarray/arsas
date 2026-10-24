@@ -129,6 +129,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             Raise(nameof(ActiveIedSubtitle));
             RaiseWorkspaceCounts();
             TryAutoExpandCommandPanelOnce(_selectedDevice);
+            // The persistent Dock may retain the previous IED's viewport.
+            // Reposition once on real IED selection, never on report ingress.
+            if (CommandPanelExpander?.IsExpanded == true)
+                ScrollVerifiedEquipmentCommandsIntoView();
             ApplyExplorerLiveSearchFilter();
             if (MainTabs?.SelectedIndex == IedBrowserWorkspaceIndex)
                 RefreshIedBrowser();
@@ -1475,9 +1479,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded,
             new Action(() =>
             {
-                if (ReferenceEquals(SelectedDevice, device) &&
-                    device.CommandSignals.Contains(first))
-                    EquipmentCommandGrid.ScrollIntoView(first);
+                if (!ReferenceEquals(SelectedDevice, device) ||
+                    !device.CommandSignals.Contains(first))
+                    return;
+
+                // ScrollIntoView alone only ensures visibility, so a Tap
+                // already visible on the LAST row would remain at the bottom.
+                // Reset the virtualized viewport on expand/device switch only.
+                if (EquipmentCommandGrid.Template?.FindName(
+                        "DG_ScrollViewer", EquipmentCommandGrid) is ScrollViewer scroll)
+                    scroll.ScrollToTop();
+                EquipmentCommandGrid.ScrollIntoView(first);
             }));
     }
 
