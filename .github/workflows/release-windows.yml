@@ -864,11 +864,20 @@ jobs:
             "--repo", $env:GITHUB_REPOSITORY,
             "--target", $env:GITHUB_SHA,
             "--title", "ARSAS $env:RELEASE_VERSION",
-            "--generate-notes",
-            "--latest"
+            "--generate-notes"
           )
-          if ($env:RELEASE_VERSION.Contains("-") -or ($env:GITHUB_REF_TYPE -ne "tag" -and $env:GITHUB_REF -ne "refs/heads/main" -and $env:MANUAL_PRERELEASE -eq "true")) {
+          # A manual publish from a staging branch is ALWAYS a public preview.
+          # A preview must never take over /releases/latest, even if a caller
+          # accidentally supplies prerelease=false in the workflow dialog.
+          $isStagingManual = $env:GITHUB_EVENT_NAME -eq "workflow_dispatch" -and
+                             $env:GITHUB_REF -ne "refs/heads/main"
+          $isPreview = $env:RELEASE_VERSION.Contains("-") -or $isStagingManual -or
+                       $env:MANUAL_PRERELEASE -eq "true"
+          if ($isPreview) {
             $arguments += "--prerelease"
+          }
+          else {
+            $arguments += "--latest"
           }
           $arguments += $assets
 
@@ -876,7 +885,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Failed to create GitHub Release." }
 
       - name: Record verified release publication
-        if: ((github.event_name == 'push' && (github.ref_type == 'tag' || github.ref == 'refs/heads/main')) || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true)) && env.RELEASE_ALREADY_PUBLISHED != 'true'
+        # Stable updater evidence is MAINLINE-ONLY. Never overwrite
+        # .release/published.json after a preview release on an RC branch.
+        if: >-
+          ${{
+            env.RELEASE_ALREADY_PUBLISHED != 'true' &&
+            !contains(steps.release.outputs.version, '-') &&
+            (
+              (github.event_name == 'push' && (github.ref_type == 'tag' || github.ref == 'refs/heads/main')) ||
+              (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_release == true && inputs.prerelease != true)
+            )
+          }}
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
