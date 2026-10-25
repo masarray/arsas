@@ -206,6 +206,8 @@
   gap: 1rem;
 }
 .supply-chain-note > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding: 1rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
@@ -217,7 +219,7 @@
   .quick-start-grid,
   .evidence-grid,
   .faq-grid,
-  .supply-chain-note { grid-template-columns: 1fr; }
+  .supply-chain-note { grid-template-columns: minmax(0, 1fr); }
   .demo-shell { grid-template-columns: 1fr; }
   .demo-controls { flex-direction: row; }
   .demo-step-button { width: auto; }
