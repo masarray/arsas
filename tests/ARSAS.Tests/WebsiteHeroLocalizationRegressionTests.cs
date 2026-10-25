@@ -55,13 +55,12 @@ public sealed class WebsiteHeroLocalizationRegressionTests
         var page = Read(path);
 
         Assert.Contains(heading, page, StringComparison.Ordinal);
-        Assert.Contains("arsas-quick-start-choose-source-v1.6.40.webp", page, StringComparison.Ordinal);
-        Assert.Contains("arsas-quick-start-discover-ip-v1.6.40.webp", page, StringComparison.Ordinal);
-        // Setup-dialog captures are explicitly historical; step 3 is the actual public stable UI.
+        Assert.DoesNotContain("arsas-quick-start-choose-source-v1.6.40.webp", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("arsas-quick-start-discover-ip-v1.6.40.webp", page, StringComparison.Ordinal);
+        Assert.Contains("arsas-add-ied-connect-dialog-v1.6.42.webp", page, StringComparison.Ordinal);
         Assert.Contains("arsas-ied-browser-v1.6.42.webp", page, StringComparison.Ordinal);
         Assert.Contains("href=\"assets/screenshots/arsas-ied-browser-v1.6.42.png\"", page, StringComparison.Ordinal);
         Assert.DoesNotContain("arsas-quick-start-monitor-control-v1.6.40.webp", page, StringComparison.Ordinal);
-        Assert.Contains("v1.6.40", page, StringComparison.Ordinal);
         Assert.Contains("v1.6.42", page, StringComparison.Ordinal);
         Assert.Contains("SCL", page, StringComparison.Ordinal);
     }

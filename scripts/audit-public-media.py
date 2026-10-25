@@ -84,6 +84,15 @@ def audit(root: Path) -> list[dict[str, object]]:
             results.append({
                 "file": path.name, "status": status, "metadata_chunks": finding
             })
+    # Current Add IED dialog is a distinct approved crop from a later original.
+    crop = screens / "arsas-add-ied-connect-dialog-v1.6.42.webp"
+    try:
+        metadata = webp_metadata(crop.read_bytes())
+        results.append({"file": crop.name, "status": "PASS" if not metadata else "FAIL",
+                        "metadata_chunks": ",".join(metadata)})
+    except (OSError, ValueError) as exc:
+        results.append({"file": crop.name, "status": "FAIL",
+                        "metadata_chunks": type(exc).__name__})
     return results
 
 

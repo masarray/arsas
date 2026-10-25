@@ -3,10 +3,10 @@
   "audited_repository": "masarray/arsas",
   "audited_commit": "45838496e5dd289b42fbb731a6cafd8cd3547c32",
   "audited_date": "2026-10-25",
-  "scope": "All Git-tracked binary visual/font assets (.png, .jpg, .jpeg, .webp, .ico, .svg, .ttf, .otf, .woff2, .gif), including 16 verified v1.6.42 operator PNG/WebP screenshot assets.",
+  "scope": "All Git-tracked binary visual/font assets, including 16 operator-approved v1.6.42 PNG/WebP captures and one additional authentic cropped v1.6.42 Connect to IED dialog WebP.",
   "disclaimer": "Inventory and Git identity only. This manifest does not certify originality, license clearance, or freedom from resemblance. Manual origin/rights/content review remains required where disposition says so.",
-  "tracked_asset_count": 81,
-  "unique_blob_count": 58,
+  "tracked_asset_count": 82,
+  "unique_blob_count": 59,
   "files": [
     {
       "path": "Assets/app-icon-256.png",
@@ -288,6 +288,25 @@
       "size_bytes": 547,
       "duplicate_of": null,
       "review_status": "origin-rights-and-visual-similarity-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-add-ied-connect-dialog-v1.6.42.webp",
+      "blob_sha": "82221972ff30404603fa1b7a5256f16b039e38f8",
+      "size_bytes": 5194,
+      "duplicate_of": null,
+      "source_filename": "image(20261025-142302).png",
+      "source_sha256": "29e711addbc31f553ae936cdbe8a0d03f2ceb70b0579d823d0d4a3766da2a84a",
+      "crop_rectangle_xyxy": [
+        657,
+        275,
+        1035,
+        597
+      ],
+      "dimensions": [
+        378,
+        322
+      ],
+      "review_status": "authentic v1.6.42 operator-provided Connect dialog crop; user explicitly approved public screenshot privacy 2026-10-25"
     },
     {
       "path": "landing/assets/screenshots/arsas-alarm-annunciator-v1.6.40.webp",
