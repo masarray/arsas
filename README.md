@@ -33,18 +33,36 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
   <sub>One persistent multi-IED shell for discovery, live values, reporting, events, alarms, guarded control, FAT, files and diagnostics.</sub>
 </div>
 
-> **Current stable release: [ARSAS v1.6.41](https://github.com/masarray/arsas/releases/tag/v1.6.41).** The installed version is visible in the native window title. Event Log categories and the read-only Event Properties drawer are included; the established RCB Export Filter remains the default. Installer, portable EXE, checksums, SBOM and provenance belong to the exact published release. Engine revision: [`engines/ARIEC61850.lock.json`](engines/ARIEC61850.lock.json).
+> **Latest public stable: [ARSAS v1.6.42](https://github.com/masarray/arsas/releases/tag/v1.6.42)** — Windows x64, operator-tested application, published 25 October 2026. The two downloadable binaries are the exact validated public release packages. [Installer](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe) · [Portable single EXE](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.exe) · [Checksums](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt).
 >
-> **Historical field baseline:** [v1.6.40 installed-release physical verification](docs/V1-6-40_INSTALLED_RELEASE_FIELD_ACCEPTANCE.md) documents the older *exact* app/engine pair, 2.395 s Smart Discovery, 58/58 report-backed runtime points, and zero cyclic MMS process polling. These observations must not be attributed to the different v1.6.41 engine pin. Also see [v1.6.39 physical rejection](evidence/v1.6.39-physical-rejection.json).
+> **Engineering boundary:** stable is the public **application** channel, not IEC 61850 conformance certification, universal vendor compatibility, physical R7/R10 qualification or lossless buffered SOE. The latest operator snapshot recorded 432 report frames with 38 continuity findings and 9 IED-advertised BufOvfl notices (not 38 proven lost events). Some test endpoints may be simulators. See the [release notes](https://github.com/masarray/arsas/releases/tag/v1.6.42) and [tracked qualification](https://github.com/masarray/arsas/pull/729).
 >
-> **Evidence boundary:** those counts describe the recorded physical qualification target, not a universal claim for every IED. Download identity, SHA-256, SBOM, provenance, and attestations remain tied to the published GitHub Release.
+> **Exact source identity:** v1.6.42 assets were built from [`3db2ca98`](https://github.com/masarray/arsas/tree/v1.6.42) with ARIEC61850 trial engine `f75e323e`, as recorded in bundled provenance. The `main` branch contains the historical 1.6.41 application baseline while the accepted v1.6.42 integration remains separately staged pending physical-qualification guards; use the **release tag**, not `main`, to inspect the exact shipped source. [v1.6.40 historical field proof](docs/V1-6-40_INSTALLED_RELEASE_FIELD_ACCEPTANCE.md) belongs to that older exact app/engine pair.
 
-## What's new in v1.6.41
+## Start in five steps
 
-- **Visible version** — title bar reads the installed assembly and displays `ARSAS v1.6.41`.
-- **Readable Event Log and Event Properties** — Spontaneous, GI, Integrity, Quality, Data update, Poll, State change and Buffer are supported when justified by event evidence. A read-only, auto-hiding details drawer retains raw reason and RCB provenance.
-- **Original production RCB workflow preserved** — the RCB button opens the existing RCB Export Filter. The unfinished IED Browser and experimental replacement exporter are deferred and isolated.
-- **Exact published packages** — [v1.6.41 release](https://github.com/masarray/arsas/releases/tag/v1.6.41) includes Windows installer, portable EXE, SHA-256, SPDX SBOM and source provenance.
+1. **Download** the [Windows installer](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe) for a regular workstation, or the [portable EXE](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.exe) if you prefer a single file. Windows 10/11 x64.
+2. **Verify** the file with `Get-FileHash .\\ARSAS-Windows-x64-Setup.exe -Algorithm SHA256` and compare against the [published SHA-256](https://github.com/masarray/arsas/releases/tag/v1.6.42). Unsigned binaries can show Windows SmartScreen warnings.
+3. **Connect** to an authorized test-network IED using **Add IED → IP address → Smart Discovery**, or open its ICD/CID/IID/SCD file without connecting. MMS typically uses TCP port 102.
+4. **Inspect and monitor** the discovered IED: **Reports → DataSets → Data Model → Files → Setting Groups → GOOSE**. Start from the IED's configured static DataSet, then inspect live values, quality and timestamps. Avoid interpreting missing data as a successful report.
+5. **Test safely**: perform typed Write/readback or SBO control only under an approved switching/test procedure; review SOE, GOOSE, Sampled Values, FAT evidence and COMTRADE as needed. Raw-Ethernet capture requires approved Npcap and sufficient permissions.
+
+[Full beginner Quick Start](https://masarray.github.io/arsas/quick-start.html) · [Panduan Bahasa Indonesia](https://masarray.github.io/arsas/panduan-mulai-arsas.html) · [Release integrity and limitations](https://masarray.github.io/arsas/release-notes.html)
+
+## What's new in v1.6.42
+
+- **Complete IED Browser** — Reports, DataSets, Data Model, Files, Setting Groups and GOOSE, model-backed inspection and preserved per-IED selection state.
+- **Control and Write you can verify** — typed `ctlModel` Write/readback, targeted post-Write CSWI reinspection, fail-closed control admission and tested SBO Enhanced command sequences on SG7_BCU and GR_X_7SX85.
+- **Multi-IED monitoring** — 5/5 monitoring endpoints, 183/183 initial selected values and 14/14 static RCB ingress routes observed in the operator diagnostic; report-first signal state and bounded UI updates.
+- **GOOSE, SNTP and SV/SMV** — improved GOOSE timeline and SNTP IPv4 display, waveform viewing and first-received SV discovery without SCL/SVCB configuration.
+- **Modern Windows experience and COMTRADE** — compact Smart IP form, cool-blue UI, responsive workspace and pinned ArdIrec analysis bridge.
+- **Tested distribution** — 2,987/2,987 application tests passed on the release workflow; installer/portable smoke verification, SHA-256, SBOM, provenance and attestations are attached to the exact release.
+
+## Previous stable milestone: v1.6.41
+
+- Versioned native title bar, readable Event Log categories and a read-only Event Properties drawer.
+- The earlier v1.6.41 RCB Export Filter remained the default, while the redesigned Browser was still being developed. This description is **historical**, not the v1.6.42 feature set.
+- [v1.6.41 release and its exact source](https://github.com/masarray/arsas/releases/tag/v1.6.41) remain available for comparison.
 
 ## Previous stable milestone: v1.6.40
 
@@ -73,7 +91,7 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
 | [![SCL Edition 2 and Edition 1 export](Assets/screenshot/arsas-scl-edition-export-v1.6.40.webp)](Assets/screenshot/arsas-scl-edition-export-v1.6.40.webp) | [![COMTRADE phasor analysis](Assets/screenshot/arsas-comtrade-phasor-v1.6.40.webp)](Assets/screenshot/arsas-comtrade-phasor-v1.6.40.webp) |
 | Save Edition 2 IID or Edition 1 ICD with companion JSON and Markdown evidence. | Inspect native voltage and current phasors at one exact record position. |
 
-The above screenshots are labeled v1.6.40 historical UI references, not captures of v1.6.41. They remain lossless WebP assets.
+The screenshots above are archived v1.6.40 interface references, **not images of v1.6.42**. They are kept as original WebP assets until validated current-release captures are available.
 
 ## Earlier milestone: v1.6.37
 
