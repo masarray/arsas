@@ -4,6 +4,32 @@ Notable public changes to ARSAS are recorded here. Application releases must ide
 
 ## Unreleased
 
+## 1.6.42 — 2026-10-25 — Public Stable (Windows x64)
+
+Operator-accepted application release, [published on GitHub](https://github.com/masarray/arsas/releases/tag/v1.6.42) with source commit `3db2ca98d144ab4b456e8dc1db9af18ad7a948f2`. The existing preview installer/portable assets were promoted to the stable channel **without rebuilding or changing their bytes**. Tested release workflow: [#40151975055](https://github.com/masarray/arsas/actions/runs/40151975055).
+
+### Added and improved
+
+- Complete IED Browser navigation (Reports, DataSets, Data Model, Files, Setting Groups, GOOSE), selected IED identity and per-IED state retention.
+- Typed `ctlModel` Write/readback and immediate independent CSWI post-Write inspection; fail-closed SBO Enhanced command handling.
+- Report-first multi-IED monitoring with per-device quality, timestamp and RCB ingress; optimized bounded Windows GUI updates.
+- SV/SMV waveform viewer and passive first-received SV discovery without SCL/SVCB; ARStack M3.H untagged/VLAN-zero regression coverage.
+- Updated GOOSE timeline, SNTP IPv4 display, Smart IP window and cool-blue interface; pinned in-process ArdIrec COMTRADE native bridge.
+- Installer, portable, checksums, SPDX SBOM, provenance and signed attestations; 2,987/2,987 application tests passed in public release workflow.
+
+### Operator evidence and remaining qualification
+
+- Observed 5/5 monitoring endpoints, 183/183 initially displayed values and 14/14 static RCB ingress routes; targeted SG7_BCU and GR_X_7SX85 Write/readback and SBO Enhanced controls completed.
+- Later 25 October capture reported 432 frames, 38 observational continuity findings and 9 IED-advertised `BufOvfl` indications. This does **not** prove 38 lost events or establish lossless buffered SOE.
+- Engine `f75e323e9f8443aa20e0a3818a1d5d77255b2c0f` remains a code-trial pin (ARIEC61850 PR #192); independent physical R7/R10, replay, SCL parity and device-wide acceptance remain open. Some endpoints may be simulators. Stable is the operator-accepted application release, **not** IEC 61850 certification.
+- The exact shipped code is available under [tag v1.6.42](https://github.com/masarray/arsas/tree/v1.6.42); mainline application source promotion remains separately governed in [PR #729](https://github.com/masarray/arsas/pull/729).
+
+## 1.6.41 — 2026-10-13 — Previous stable
+
+- Versioned native Windows title bar and clearer Event Log categories with read-only Event Properties drawer.
+- Original RCB Export Filter remained the production navigation path in this release; the expanded IED Browser arrived in v1.6.42.
+- [Immutable historical installer/portable and release evidence](https://github.com/masarray/arsas/releases/tag/v1.6.41).
+
 ## 1.6.37 — 2026-09-16
 
 ### Added
