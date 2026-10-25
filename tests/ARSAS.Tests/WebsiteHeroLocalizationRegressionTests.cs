@@ -139,6 +139,28 @@ public sealed class WebsiteHeroLocalizationRegressionTests
     }
 
     [Fact]
+    public void PublicNavigation_UsesLocaleSpecificDestinationsAndAccessibleMenuLabels()
+    {
+        var header = Read("landing/partials/header.html");
+        var css = Read("landing/audit.css");
+        var app = Read("landing/app.js");
+
+        Assert.Contains("Langsung ke konten", header, StringComparison.Ordinal);
+        Assert.Contains("href=\"id.html\" data-nav-page=\"overview\" data-lang=\"id\"", header, StringComparison.Ordinal);
+        Assert.Contains("href=\"pusat-belajar-iec61850.html\" data-nav-page=\"learn\" data-lang=\"id\"", header, StringComparison.Ordinal);
+        Assert.Contains("href=\"panduan.html\" data-nav-page=\"guides\" data-lang=\"id\"", header, StringComparison.Ordinal);
+        Assert.Contains("href=\"unduh.html\" data-nav-page=\"download\"", header, StringComparison.Ordinal);
+        Assert.Contains("href=\"./\" lang=\"en\" hreflang=\"en\"", header, StringComparison.Ordinal);
+        Assert.Contains("aria-controls=\"arsas-primary-nav\"", header, StringComparison.Ordinal);
+        Assert.Contains("[data-lang=\"id\"] { display: none; }", css, StringComparison.Ordinal);
+        Assert.Contains("html[lang=\"id\"] [data-lang=\"en\"] { display: none; }", css, StringComparison.Ordinal);
+        Assert.Contains("Buka navigasi", app, StringComparison.Ordinal);
+        Assert.Contains("Tutup navigasi", app, StringComparison.Ordinal);
+        Assert.Contains("Navigasi utama", app, StringComparison.Ordinal);
+        Assert.Contains("menuLabel.close : menuLabel.open", app, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void CssArchitecture_ReplacesPhaseOverridesWithSemanticScopedLayers()
     {
         var header = Read("landing/partials/header.html");
