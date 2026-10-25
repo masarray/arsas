@@ -26,18 +26,23 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Resolve canonical stable version
+      - name: Resolve latest published stable release from GitHub
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          version="$(tr -d '[:space:]' < VERSION)"
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid VERSION value: $version" >&2
+          # Documentation follows the already-published GitHub stable channel,
+          # not the main branch's potentially older application VERSION.
+          tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "GitHub latest stable tag is invalid: $tag" >&2
             exit 1
           fi
+          version="${tag#v}"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Read exact GitHub Release metadata and checksums
         env:
