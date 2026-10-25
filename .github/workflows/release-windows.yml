@@ -1,4 +1,5 @@
 name: Release ARSAS Windows packages
+run-name: "ARSAS Windows · ${{ github.ref_name }} · ${{ github.event_name }}"
 
 on:
   push:
@@ -10,9 +11,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version, for example 1.6.19"
-        required: true
-        default: "1.6.20"
+        description: "Optional: blank = VERSION from selected branch (recommended)"
+        required: false
+        default: ""
         type: string
       publish_release:
         description: "Create or update a GitHub Release"
@@ -166,9 +167,16 @@ jobs:
       - name: Resolve release identity and immutable engine locks
         id: release
         shell: powershell
+        env:
+          MANUAL_VERSION: ${{ inputs.version }}
         run: |
           if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") {
-            $rawVersion = "${{ inputs.version }}"
+            # Package the checked-out revision by default. This avoids stale
+            # hardcoded workflow versions and operator/main metadata mismatches.
+            $rawVersion = [string]$env:MANUAL_VERSION
+            if ([string]::IsNullOrWhiteSpace($rawVersion)) {
+              $rawVersion = (Get-Content ".\ArIED61850Tester\VERSION" -Raw).Trim()
+            }
           }
           elseif ($env:GITHUB_REF_TYPE -eq "tag") {
             $rawVersion = $env:GITHUB_REF_NAME
@@ -870,8 +878,7 @@ jobs:
             "release", "create", $env:RELEASE_TAG,
             "--repo", $env:GITHUB_REPOSITORY,
             "--target", $env:GITHUB_SHA,
-            "--title", "ARSAS $env:RELEASE_VERSION",
-            "--generate-notes"
+            "--title", "ARSAS $env:RELEASE_VERSION"
           )
           # A manual publish from a staging branch is ALWAYS a public preview.
           # A preview must never take over /releases/latest, even if a caller
@@ -882,9 +889,21 @@ jobs:
                        $env:MANUAL_PRERELEASE -eq "true"
           if ($isPreview) {
             $arguments += "--prerelease"
+            # The current release candidate has independently accepted
+            # operator FAT scope and equally explicit unresolved limitations.
+            # Never replace those notes with automated commit-title noise.
+            $notes = Join-Path $env:GITHUB_WORKSPACE "ArIED61850Tester\docs\release\ARSAS_V1642_PUBLIC_PREVIEW_NOTES.md"
+            if ($env:RELEASE_VERSION -eq "1.6.42" -and (Test-Path $notes -PathType Leaf)) {
+              $arguments += @("--notes-file", $notes)
+            }
+            else {
+              # Future preview versions remain packagable without a
+              # version-specific document; don't create another workflow gate.
+              $arguments += "--generate-notes"
+            }
           }
           else {
-            $arguments += "--latest"
+            $arguments += @("--latest", "--generate-notes")
           }
           $arguments += $assets
 
