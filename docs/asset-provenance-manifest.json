@@ -1,13 +1,41 @@
 {
   "schema_version": 1,
   "audited_repository": "masarray/arsas",
-  "audited_commit": "b953612b535445095c808f164bebfaa4bbcbb203",
-  "audited_date": "2026-09-25",
-  "scope": "Git-tracked binary visual/font assets with extensions png,jpg,jpeg,webp,ico,svg,ttf,otf,woff2,gif",
+  "audited_commit": "45838496e5dd289b42fbb731a6cafd8cd3547c32",
+  "audited_date": "2026-10-25",
+  "scope": "All Git-tracked binary visual/font assets (.png, .jpg, .jpeg, .webp, .ico, .svg, .ttf, .otf, .woff2, .gif), including 16 verified v1.6.42 operator PNG/WebP screenshot assets.",
   "disclaimer": "Inventory and Git identity only. This manifest does not certify originality, license clearance, or freedom from resemblance. Manual origin/rights/content review remains required where disposition says so.",
-  "tracked_asset_count": 65,
-  "unique_blob_count": 42,
+  "tracked_asset_count": 81,
+  "unique_blob_count": 58,
   "files": [
+    {
+      "path": "Assets/app-icon-256.png",
+      "blob_sha": "fd8f941baa44811e97be408663c7e54b57ad85a1",
+      "size_bytes": 12891,
+      "duplicate_of": null,
+      "review_status": "origin-rights-and-visual-similarity-review-required"
+    },
+    {
+      "path": "Assets/app-icon.ico",
+      "blob_sha": "cc9036ccfb9b387891d9887b4367262b7d154bca",
+      "size_bytes": 208630,
+      "duplicate_of": null,
+      "review_status": "origin-rights-and-visual-similarity-review-required"
+    },
+    {
+      "path": "Assets/app-icon.png",
+      "blob_sha": "7b69ac247a7214d15437a69814f4036cedebc86e",
+      "size_bytes": 153165,
+      "duplicate_of": null,
+      "review_status": "origin-rights-and-visual-similarity-review-required"
+    },
+    {
+      "path": "Assets/black-fascia-ied.svg",
+      "blob_sha": "0c4594a762fe5f13df6ff7b005def3bc7b5cffd7",
+      "size_bytes": 14334,
+      "duplicate_of": null,
+      "review_status": "origin-rights-and-visual-similarity-review-required"
+    },
     {
       "path": "Assets/Fonts/Inter-Bold.ttf",
       "blob_sha": "9fb9b751e5b2441054f6eef670da7b3f53a3505a",
@@ -45,41 +73,6 @@
       "review_status": "third-party-font; upstream-v4.1-archive-and-face-sha256-corroborated; bundled-ofl-1.1-present; bytes-treated-as-unmodified-static-face"
     },
     {
-      "path": "Assets/RelayFascia.svg",
-      "blob_sha": "9a69c173b9efdbf8f622f630e4cbeb1f5318699a",
-      "size_bytes": 11506,
-      "duplicate_of": null,
-      "review_status": "origin-rights-and-visual-similarity-review-required"
-    },
-    {
-      "path": "Assets/app-icon-256.png",
-      "blob_sha": "fd8f941baa44811e97be408663c7e54b57ad85a1",
-      "size_bytes": 12891,
-      "duplicate_of": null,
-      "review_status": "origin-rights-and-visual-similarity-review-required"
-    },
-    {
-      "path": "Assets/app-icon.ico",
-      "blob_sha": "cc9036ccfb9b387891d9887b4367262b7d154bca",
-      "size_bytes": 208630,
-      "duplicate_of": null,
-      "review_status": "origin-rights-and-visual-similarity-review-required"
-    },
-    {
-      "path": "Assets/app-icon.png",
-      "blob_sha": "7b69ac247a7214d15437a69814f4036cedebc86e",
-      "size_bytes": 153165,
-      "duplicate_of": null,
-      "review_status": "origin-rights-and-visual-similarity-review-required"
-    },
-    {
-      "path": "Assets/black-fascia-ied.svg",
-      "blob_sha": "0c4594a762fe5f13df6ff7b005def3bc7b5cffd7",
-      "size_bytes": 14334,
-      "duplicate_of": null,
-      "review_status": "origin-rights-and-visual-similarity-review-required"
-    },
-    {
       "path": "Assets/gateway-hero.png",
       "blob_sha": "cb1141207830159642a8f73f981bccbce94e840e",
       "size_bytes": 1658537,
@@ -90,6 +83,13 @@
       "path": "Assets/ied-protection-relay-fascia.png",
       "blob_sha": "8d47aee5707eadd373489bc7670da9d99aa24238",
       "size_bytes": 1131989,
+      "duplicate_of": null,
+      "review_status": "origin-rights-and-visual-similarity-review-required"
+    },
+    {
+      "path": "Assets/RelayFascia.svg",
+      "blob_sha": "9a69c173b9efdbf8f622f630e4cbeb1f5318699a",
+      "size_bytes": 11506,
       "duplicate_of": null,
       "review_status": "origin-rights-and-visual-similarity-review-required"
     },
@@ -297,6 +297,22 @@
       "review_status": "capture-origin-and-sanitization-review-required"
     },
     {
+      "path": "landing/assets/screenshots/arsas-annunciator-v1.6.42.png",
+      "blob_sha": "9f652c5c21459860927872a507f2ab5410f3aafa",
+      "size_bytes": 258136,
+      "duplicate_of": null,
+      "review_status": "operator-supplied-authentic-ARSAS-v1.6.42-screen; user-approved-publication; independent-sanitization-review-not-asserted"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-annunciator-v1.6.42.webp",
+      "blob_sha": "7e8fc0d2a5260ca9781e339ce301c2c1ec0c14b7",
+      "size_bytes": 86250,
+      "duplicate_of": null,
+      "review_status": "derived-optimized-WebP-from-operator-PNG-v1.6.42; user-approved-publication; original-Git-blob-preserved",
+      "derived_from": "landing/assets/screenshots/arsas-annunciator-v1.6.42.png",
+      "derivation": "Pillow RGB WebP quality=86 method=6, original aspect ratio preserved"
+    },
+    {
       "path": "landing/assets/screenshots/arsas-comtrade-harmonics-v1.6.40.webp",
       "blob_sha": "7d8484b8ed7e613ff283ad6fdcfdadb04a56d977",
       "size_bytes": 85884,
@@ -332,6 +348,22 @@
       "review_status": "capture-origin-and-sanitization-review-required"
     },
     {
+      "path": "landing/assets/screenshots/arsas-diagnostics-v1.6.42.png",
+      "blob_sha": "5911ee36f843ae1bf0883bf85e59f78c771bae38",
+      "size_bytes": 483734,
+      "duplicate_of": null,
+      "review_status": "operator-supplied-authentic-ARSAS-v1.6.42-screen; user-approved-publication; independent-sanitization-review-not-asserted"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-diagnostics-v1.6.42.webp",
+      "blob_sha": "9466fd9ad34b56d5d12e1283413e67d253c19b89",
+      "size_bytes": 201568,
+      "duplicate_of": null,
+      "review_status": "derived-optimized-WebP-from-operator-PNG-v1.6.42; user-approved-publication; original-Git-blob-preserved",
+      "derived_from": "landing/assets/screenshots/arsas-diagnostics-v1.6.42.png",
+      "derivation": "Pillow RGB WebP quality=86 method=6, original aspect ratio preserved"
+    },
+    {
       "path": "landing/assets/screenshots/arsas-diagnostics.webp",
       "blob_sha": "5bed62792b9c383b99886df2024524b6d5d69db5",
       "size_bytes": 142298,
@@ -346,11 +378,43 @@
       "review_status": "capture-origin-and-sanitization-review-required"
     },
     {
+      "path": "landing/assets/screenshots/arsas-event-logs-v1.6.42.png",
+      "blob_sha": "8d95143a83fc30ef99d96881fbd07e76ed0ab697",
+      "size_bytes": 423523,
+      "duplicate_of": null,
+      "review_status": "operator-supplied-authentic-ARSAS-v1.6.42-screen; user-approved-publication; independent-sanitization-review-not-asserted"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-event-logs-v1.6.42.webp",
+      "blob_sha": "16608f46f6bef2233d9ac4d884a11d9eb8c9a634",
+      "size_bytes": 156752,
+      "duplicate_of": null,
+      "review_status": "derived-optimized-WebP-from-operator-PNG-v1.6.42; user-approved-publication; original-Git-blob-preserved",
+      "derived_from": "landing/assets/screenshots/arsas-event-logs-v1.6.42.png",
+      "derivation": "Pillow RGB WebP quality=86 method=6, original aspect ratio preserved"
+    },
+    {
       "path": "landing/assets/screenshots/arsas-fat-report-preview-v1.6.40.webp",
       "blob_sha": "5d2a566f4b2854a8469ec2fd4821d86fe5438c54",
       "size_bytes": 49254,
       "duplicate_of": "Assets/screenshot/arsas-fat-report-preview-v1.6.40.webp",
       "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-fat-report-preview-v1.6.42.png",
+      "blob_sha": "28b2fe94cec4ca11f12afe868161e688e98854a7",
+      "size_bytes": 364656,
+      "duplicate_of": null,
+      "review_status": "operator-supplied-authentic-ARSAS-v1.6.42-screen; user-approved-publication; independent-sanitization-review-not-asserted"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-fat-report-preview-v1.6.42.webp",
+      "blob_sha": "219cccb49aad9841352515ecb51eb530c5dda94c",
+      "size_bytes": 117232,
+      "duplicate_of": null,
+      "review_status": "derived-optimized-WebP-from-operator-PNG-v1.6.42; user-approved-publication; original-Git-blob-preserved",
+      "derived_from": "landing/assets/screenshots/arsas-fat-report-preview-v1.6.42.png",
+      "derivation": "Pillow RGB WebP quality=86 method=6, original aspect ratio preserved"
     },
     {
       "path": "landing/assets/screenshots/arsas-fault-records-v1.6.40.webp",
@@ -367,11 +431,43 @@
       "review_status": "capture-origin-and-sanitization-review-required"
     },
     {
+      "path": "landing/assets/screenshots/arsas-goose-v1.6.42.png",
+      "blob_sha": "caea4deb4cabffde5b80521f51d699be0560b1f6",
+      "size_bytes": 329558,
+      "duplicate_of": null,
+      "review_status": "operator-supplied-authentic-ARSAS-v1.6.42-screen; user-approved-publication; independent-sanitization-review-not-asserted"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-goose-v1.6.42.webp",
+      "blob_sha": "da59e8b05965c564a9f0a0422ef0497784a4b981",
+      "size_bytes": 100464,
+      "duplicate_of": null,
+      "review_status": "derived-optimized-WebP-from-operator-PNG-v1.6.42; user-approved-publication; original-Git-blob-preserved",
+      "derived_from": "landing/assets/screenshots/arsas-goose-v1.6.42.png",
+      "derivation": "Pillow RGB WebP quality=86 method=6, original aspect ratio preserved"
+    },
+    {
       "path": "landing/assets/screenshots/arsas-goose.webp",
       "blob_sha": "dde93be42222734bbccb9f724119e12dcc08b7df",
       "size_bytes": 138672,
       "duplicate_of": "Assets/screenshot/arsas (5).webp",
       "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-ied-browser-v1.6.42.png",
+      "blob_sha": "148c51d7a8f870b931f1c9f418e26b10a40be34f",
+      "size_bytes": 365083,
+      "duplicate_of": null,
+      "review_status": "operator-supplied-authentic-ARSAS-v1.6.42-screen; user-approved-publication; independent-sanitization-review-not-asserted"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-ied-browser-v1.6.42.webp",
+      "blob_sha": "436e02900e2a09e49eafa673741c50bf47c352a9",
+      "size_bytes": 133272,
+      "duplicate_of": null,
+      "review_status": "derived-optimized-WebP-from-operator-PNG-v1.6.42; user-approved-publication; original-Git-blob-preserved",
+      "derived_from": "landing/assets/screenshots/arsas-ied-browser-v1.6.42.png",
+      "derivation": "Pillow RGB WebP quality=86 method=6, original aspect ratio preserved"
     },
     {
       "path": "landing/assets/screenshots/arsas-ied-explorer-command-v1.6.40.webp",
@@ -456,6 +552,38 @@
       "size_bytes": 150598,
       "duplicate_of": "Assets/screenshot/arsas-sequence-of-events-v1.6.40.webp",
       "review_status": "capture-origin-and-sanitization-review-required"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-signal-testing-v1.6.42.png",
+      "blob_sha": "d429a92ba1a730faf2a23fc8231efad353df2df7",
+      "size_bytes": 398035,
+      "duplicate_of": null,
+      "review_status": "operator-supplied-authentic-ARSAS-v1.6.42-screen; user-approved-publication; independent-sanitization-review-not-asserted"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-signal-testing-v1.6.42.webp",
+      "blob_sha": "e5a773d7dc34b39bfaa296c2bd23e61889e28c89",
+      "size_bytes": 150810,
+      "duplicate_of": null,
+      "review_status": "derived-optimized-WebP-from-operator-PNG-v1.6.42; user-approved-publication; original-Git-blob-preserved",
+      "derived_from": "landing/assets/screenshots/arsas-signal-testing-v1.6.42.png",
+      "derivation": "Pillow RGB WebP quality=86 method=6, original aspect ratio preserved"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-smv-v1.6.42.png",
+      "blob_sha": "e1cc56166d38442816b13983ad9e894218b20d37",
+      "size_bytes": 392539,
+      "duplicate_of": null,
+      "review_status": "operator-supplied-authentic-ARSAS-v1.6.42-screen; user-approved-publication; independent-sanitization-review-not-asserted"
+    },
+    {
+      "path": "landing/assets/screenshots/arsas-smv-v1.6.42.webp",
+      "blob_sha": "9a6374c40c8b648a15c39d3eb323a2ea8e686b73",
+      "size_bytes": 129428,
+      "duplicate_of": null,
+      "review_status": "derived-optimized-WebP-from-operator-PNG-v1.6.42; user-approved-publication; original-Git-blob-preserved",
+      "derived_from": "landing/assets/screenshots/arsas-smv-v1.6.42.png",
+      "derivation": "Pillow RGB WebP quality=86 method=6, original aspect ratio preserved"
     },
     {
       "path": "landing/assets/social-card.png",

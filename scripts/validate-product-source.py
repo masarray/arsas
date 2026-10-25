@@ -446,6 +446,10 @@ def main() -> int:
     if root_html: errors.append("legacy HTML outside templates: " + ", ".join(sorted(root_html)))
     for required in ("device-evidence.json", "adoption.css", "guide-filter.js", "demo.js", "latest.json", "release-notes.json", "robots.txt", "assets/social-card.png", "assets/screenshots/arsas-ied-explorer-command-v1.6.40.webp", "assets/screenshots/arsas-quick-start-choose-source-v1.6.40.webp", "assets/screenshots/arsas-quick-start-discover-ip-v1.6.40.webp", "assets/screenshots/arsas-quick-start-monitor-control-v1.6.40.webp"):
         if not (LANDING / required).is_file(): errors.append(f"missing landing source {required}")
+    for capture in ("ied-browser", "event-logs", "signal-testing", "fat-report-preview", "smv", "goose", "annunciator", "diagnostics"):
+        for fmt in ("png", "webp"):
+            expected = LANDING / f"assets/screenshots/arsas-{capture}-v1.6.42.{fmt}"
+            if not expected.is_file(): errors.append(f"missing current v1.6.42 original/optimized screenshot: {expected}")
     for font_name in FONT_FILES:
         if not (FONT_DIR / font_name).is_file():
             errors.append(f"missing bundled Inter asset Assets/Fonts/{font_name}")
