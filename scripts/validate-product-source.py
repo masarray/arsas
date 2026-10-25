@@ -141,9 +141,22 @@ def validate_release(errors: list[str]) -> None:
     if not isinstance(installer, dict) or installer.get("name") != "ARSAS-Windows-x64-Setup.exe" or not re.fullmatch(r"[0-9a-fA-F]{64}", str(installer.get("sha256", ""))):
         errors.append("latest.json installer evidence is invalid")
     portable = evidence.get("portable")
-    portable_names = {"ARSAS-Windows-x64-Portable.zip", "ARSAS-Windows-x64-Portable.exe"}
-    if not isinstance(portable, dict) or portable.get("name") not in portable_names or not re.fullmatch(r"[0-9a-fA-F]{64}", str(portable.get("sha256", ""))):
-        errors.append("latest.json portable evidence is invalid")
+    # Modern stable distribution is a real single EXE. Legacy ZIPs are permitted
+    # only for older historical tags; do not silently regress the current channel.
+    stable_parts = (tuple(int(part) for part in version.split("."))
+                    if re.fullmatch(r"\d+\.\d+\.\d+", version) else (0, 0, 0))
+    expected_portable = (
+        "ARSAS-Windows-x64-Portable.exe" if stable_parts >= (1, 6, 42)
+        else "ARSAS-Windows-x64-Portable.zip"
+    )
+    expected_portable_url = (
+        "https://github.com/masarray/arsas/releases/latest/download/" + expected_portable
+    )
+    if (not isinstance(portable, dict)
+            or portable.get("name") != expected_portable
+            or portable.get("url") != expected_portable_url
+            or not re.fullmatch(r"[0-9a-fA-F]{64}", str(portable.get("sha256", "")))):
+        errors.append(f"latest.json portable must match the {expected_portable} stable release contract")
     if not isinstance(evidence.get("checksums"), dict): errors.append("latest.json checksum evidence is missing")
     signing = evidence.get("codeSigning")
     note_signing = notes.get("codeSigning")

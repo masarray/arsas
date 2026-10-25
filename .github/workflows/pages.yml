@@ -6,6 +6,8 @@ on:
     paths:
       - "landing/**"
       - "scripts/validate-product-source.py"
+      - "scripts/audit-public-media.py"
+      - "scripts/test-audit-public-media.py"
       - "scripts/build-product-site.py"
       - "scripts/validate-product-build.py"
       - "scripts/apply-search-authority.py"
@@ -30,6 +32,8 @@ on:
     paths:
       - "landing/**"
       - "scripts/validate-product-source.py"
+      - "scripts/audit-public-media.py"
+      - "scripts/test-audit-public-media.py"
       - "scripts/build-product-site.py"
       - "scripts/validate-product-build.py"
       - "scripts/apply-search-authority.py"
@@ -122,9 +126,12 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p _validation
           python scripts/validate-product-source.py > _validation/source.log 2>&1
           python scripts/validate-adoption-proof.py >> _validation/source.log 2>&1
+          python scripts/test-audit-public-media.py >> _validation/source.log 2>&1
+          python scripts/audit-public-media.py --report _validation/media-audit.json >> _validation/source.log 2>&1
 
       - name: Upload source validation report
         if: always()
@@ -133,6 +140,7 @@ jobs:
           name: product-source-validation
           path: |
             _validation/source.log
+            _validation/media-audit.json
             _validation/site-source.json
           if-no-files-found: error
 
