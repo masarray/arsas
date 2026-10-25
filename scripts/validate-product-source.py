@@ -457,7 +457,7 @@ def main() -> int:
         if value not in footer: errors.append(f"footer missing {value}")
     root_html = [path.name for path in LANDING.glob("*.html") if not VERIFICATION.fullmatch(path.name)]
     if root_html: errors.append("legacy HTML outside templates: " + ", ".join(sorted(root_html)))
-    for required in ("device-evidence.json", "adoption.css", "guide-filter.js", "demo.js", "latest.json", "release-notes.json", "robots.txt", "assets/social-card.png", "assets/screenshots/arsas-ied-explorer-command-v1.6.40.webp", "assets/screenshots/arsas-quick-start-choose-source-v1.6.40.webp", "assets/screenshots/arsas-quick-start-discover-ip-v1.6.40.webp", "assets/screenshots/arsas-quick-start-monitor-control-v1.6.40.webp"):
+    for required in ("device-evidence.json", "adoption.css", "guide-filter.js", "demo.js", "latest.json", "release-notes.json", "robots.txt", "assets/social-card.png", "assets/screenshots/arsas-ied-explorer-command-v1.6.40.webp", "assets/screenshots/arsas-quick-start-choose-source-v1.6.40.webp", "assets/screenshots/arsas-quick-start-discover-ip-v1.6.40.webp", "assets/screenshots/arsas-quick-start-monitor-control-v1.6.40.webp", "assets/screenshots/arsas-add-ied-connect-dialog-v1.6.42.webp"):
         if not (LANDING / required).is_file(): errors.append(f"missing landing source {required}")
     for capture in ("ied-browser", "event-logs", "signal-testing", "fat-report-preview", "smv", "goose", "annunciator", "diagnostics"):
         for fmt in ("png", "webp"):
