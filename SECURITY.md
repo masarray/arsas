@@ -2,7 +2,7 @@
 
 ## Supported code
 
-Security fixes are applied to the current `main` branch. Historical archive branches preserve earlier licensing and provenance boundaries but are not maintained as supported security release lines.
+Security reports are assessed against the exact affected version and the published release tag/source provenance. Fixes require independent review and a new validated release; **`main` may differ from the latest published stable package** while source promotion is gated. Do not assume a source checkout of `main` reproduces the public installer or portable EXE. Historical archive branches preserve earlier licensing and provenance boundaries but are not maintained as supported security release lines.
 
 ## Reporting a vulnerability
 
