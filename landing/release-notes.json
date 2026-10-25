@@ -1,46 +1,50 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.41",
-  "title": "Clearer event inspection and stable RCB export",
-  "titleId": "Event Properties lebih jelas dan ekspor RCB tetap stabil",
-  "summary": "ARSAS 1.6.41 adds a versioned native title bar, readable Event Log categories and a read-only auto-hiding Event Properties drawer. The established RCB Export Filter remains the default. The unfinished IED Browser and replacement RCB exporter are not part of this stable release.",
-  "summaryId": "ARSAS 1.6.41 menambahkan versi pada title bar native, kategori Event Log yang mudah dipahami, serta drawer Event Properties read-only yang dapat tersembunyi otomatis. Form RCB Export Filter lama tetap menjadi alur utama. IED Browser dan exporter RCB pengganti yang belum selesai tidak ikut rilis stabil.",
+  "version": "1.6.42",
+  "title": "IED Browser, verified controls and improved multi-IED monitoring",
+  "titleId": "IED Browser, kontrol terverifikasi, dan monitoring multi-IED",
+  "summary": "Operator-accepted Windows stable application release: browse Reports, DataSets, Data Model, Files, Setting Groups and GOOSE; monitor IED values with quality and timestamps; verify model-backed Write/readback and tested SBO Enhanced actions. Installer and portable packages are the same tested public v1.6.42 binaries. Stable is a software release channel, not IEC 61850 conformance certification or proof of lossless SOE.",
+  "summaryId": "Rilis aplikasi Windows stabil yang telah diterima operator: jelajahi Reports, DataSets, Data Model, Files, Setting Groups, dan GOOSE; pantau nilai IED beserta quality dan timestamp; lakukan Write/readback berbasis model dan operasi SBO Enhanced yang diuji. Installer dan portable adalah binary publik v1.6.42 yang sama dengan hasil pengujian. Status stable adalah kanal rilis software, bukan sertifikasi IEC 61850 atau bukti SOE lossless.",
   "highlights": [
-    "Window title reads the compiled installed version: ARSAS v1.6.41.",
-    "Operator Event categories include Spontaneous, GI, Integrity, Quality, Data update, Poll, State change and Buffer, where supported by decoded evidence.",
-    "Read-only Event Properties exposes acquisition, raw reason and RCB context in an auto-hiding drawer.",
-    "The original RCB Export Filter remains the production workflow; experimental Browser and exporter are excluded."
+    "IED Browser navigation: Reports, DataSets, Data Model, Files, Setting Groups and GOOSE, with retained per-IED context and precise name/IP focus.",
+    "Report-first multi-IED monitoring with static DataSet membership, live values, quality, timestamps, RCB ingress and bounded user-interface updates.",
+    "Verified typed ctlModel Write/readback, focused CSWI reinspection and association-scoped, fail-closed SBO Enhanced command handling on tested targets.",
+    "SV/SMV waveform viewer with passive first-received discovery without SCL; GOOSE timeline, SNTP IPv4 presentation and modern cool-blue Windows interface.",
+    "Native COMTRADE analysis through the pinned ArdIrec bridge, with source-verified installer and portable delivery."
   ],
   "highlightsId": [
-    "Judul window membaca versi aplikasi terpasang: ARSAS v1.6.41.",
-    "Kategori Event mencakup Spontaneous, GI, Integrity, Quality, Data update, Poll, State change dan Buffer apabila didukung bukti decoder.",
-    "Event Properties menampilkan sumber acquisition, reason mentah, dan konteks RCB dalam drawer read-only yang otomatis tersembunyi.",
-    "RCB Export Filter lama tetap menjadi workflow produksi; Browser dan exporter eksperimen tidak disertakan."
+    "IED Browser: Reports, DataSets, Data Model, Files, Setting Groups, dan GOOSE; konteks tiap IED tetap tersimpan, nama/IP perangkat jelas.",
+    "Monitoring multi-IED berbasis report: anggota DataSet statis, nilai live, quality, timestamp, ingress RCB, dan refresh antarmuka yang terkontrol.",
+    "Write/readback ctlModel bertipe dan terverifikasi, CSWI diperiksa ulang sesudah Write, serta kontrol SBO Enhanced yang dibatasi association dan aman saat verifikasi gagal.",
+    "Viewer gelombang SV/SMV dengan deteksi paket pertama tanpa SCL; timeline GOOSE, tampilan IPv4 SNTP, dan antarmuka Windows cool-blue.",
+    "Analisis COMTRADE native melalui ArdIrec yang dipin, didistribusikan dengan installer dan portable terverifikasi."
   ],
   "improvements": [
-    "Public Windows installer and portable binaries are released with SHA-256 checksums, SPDX SBOM and source provenance.",
-    "Static DataSet monitoring remains report-only with no cyclic MMS process-value polling in that mode.",
-    "Package identity follows immutable GitHub Release v1.6.41 rather than a manually selected CI artifact.",
-    "Development work on the redesigned IED Browser and multi-RCB exporter remains isolated from the stable product."
+    "Release workflow #40151975055 passed with 2,987/2,987 application tests, Windows installer and portable smoke tests, SHA-256, SPDX 2.3 SBOM, provenance and attestations.",
+    "Observed operator diagnostic: 5/5 monitoring endpoints, 183/183 initial selected values, 14/14 static RCB paths with ingress; successful targeted SG7_BCU and GR_X_7SX85 ctlModel readback and SBO Enhanced operations.",
+    "Download links target the latest stable GitHub Release assets; checksum values and source identity correspond to the exact tagged v1.6.42 binaries.",
+    "Archived v1.6.40 screenshots are historical illustrations, not representations of the latest interface."
   ],
   "improvementsId": [
-    "Installer dan portable publik disertai checksum SHA-256, SPDX SBOM dan provenance source.",
-    "Mode monitoring Static DataSet tetap report-only tanpa polling MMS process-value siklik.",
-    "Identitas paket mengikuti GitHub Release v1.6.41 yang immutable, bukan artifact CI yang dipilih manual.",
-    "Pekerjaan IED Browser dan exporter multi-RCB baru tetap terisolasi dari produk stabil."
+    "Workflow release #40151975055 sukses: 2.987/2.987 tes aplikasi, smoke test installer dan portable Windows, SHA-256, SPDX 2.3 SBOM, provenance, serta attestation.",
+    "Diagnostik operator: 5/5 endpoint monitoring, 183/183 nilai awal, 14/14 jalur RCB statis menerima report; Write/readback ctlModel dan SBO Enhanced berhasil pada target SG7_BCU serta GR_X_7SX85 yang diuji.",
+    "Link unduhan mengarah ke aset GitHub Latest Stable; checksum dan identitas source sesuai binary v1.6.42 bertag.",
+    "Screenshot v1.6.40 adalah ilustrasi arsip, bukan tampilan antarmuka terbaru."
   ],
   "knownLimitations": [
-    "Physical relay validation remains necessary for vendor-specific values, report behavior and field network conditions that cannot be reproduced by CI.",
-    "Windows x64 is the only packaged desktop platform in this stable release.",
-    "The public portable binary is not Authenticode code-signed; Windows SmartScreen may show an unrecognized-publisher warning.",
-    "Raw-Ethernet GOOSE and Sampled Values workflows require an administrator-installed and approved Npcap driver, suitable capture permission and visibility of the relevant multicast traffic."
+    "The October 25 operator capture observed 432 report frames, 38 continuity findings and 9 IED-reported BufOvfl notices. These are not 38 proven lost events, but lossless buffered SOE is NOT established.",
+    "Physical R7/R10 authority, buffered replay/EntryID and reconnect verification, SCL/IID parity, SV on-wire parity and broader device acceptance remain incomplete. Some monitored endpoints may be same-host simulators.",
+    "The ARIEC61850 engine is pinned to a code-trial revision (PR #192); application stable release does not certify this engine or universal IEC 61850 interoperability.",
+    "Windows x64 only. Installer and portable executables are not commercially Authenticode-signed; verify their SHA-256 and follow Windows security policy.",
+    "Raw-Ethernet GOOSE/SV capture requires approved Npcap, suitable network visibility and permissions. Active IED control must follow an authorized safe test procedure."
   ],
   "knownLimitationsId": [
-    "Validasi relay fisik tetap diperlukan untuk value vendor-specific, perilaku report, dan kondisi network lapangan yang tidak dapat direproduksi oleh CI.",
-    "Windows x64 adalah satu-satunya platform desktop yang dipaketkan pada stable release ini.",
-    "Binary portable publik belum ditandatangani dengan Authenticode; Windows SmartScreen dapat menampilkan peringatan unrecognized publisher.",
-    "Workflow raw-Ethernet GOOSE dan Sampled Values memerlukan driver Npcap yang telah dipasang dan disetujui administrator, capture permission yang sesuai, serta visibility traffic multicast terkait."
+    "Capture operator 25 Oktober mencatat 432 frame report, 38 temuan kontinuitas, dan 9 indikasi BufOvfl dari IED. Itu bukan bukti 38 event hilang, tetapi SOE buffered lossless BELUM dibuktikan.",
+    "Kualifikasi fisik R7/R10, replay/EntryID dan reconnect, paritas SCL/IID, SV on-wire, serta penerimaan lintas perangkat belum lengkap. Sebagian endpoint mungkin simulator lokal.",
+    "Engine ARIEC61850 tetap pada revisi code-trial (PR #192); stable aplikasi bukan sertifikasi engine atau jaminan interoperabilitas IEC 61850 universal.",
+    "Hanya Windows x64. Installer dan portable belum ditandatangani Authenticode komersial; periksa SHA-256 dan ikuti kebijakan keamanan Windows.",
+    "Capture raw-Ethernet GOOSE/SV membutuhkan Npcap yang disetujui, visibility jaringan, dan permission sesuai. Kontrol IED aktif wajib melalui prosedur pengujian yang sah dan aman."
   ],
   "codeSigning": {
     "status": "unsigned",
@@ -53,11 +57,11 @@
     "src": "assets/screenshots/arsas-ied-explorer-command-v1.6.40.webp",
     "width": 1920,
     "height": 1032,
-    "alt": "ARSAS v1.6.40 operator workspace (archived visual reference)",
-    "altId": "Workspace ARSAS v1.6.40 (referensi visual arsip)",
-    "caption": "Archived v1.6.40 screenshot documents the established workspace. ARSAS v1.6.41 retains the RCB form and adds Event Properties and the versioned title bar.",
-    "captionId": "Screenshot arsip v1.6.40 mendokumentasikan workspace yang ada. ARSAS v1.6.41 mempertahankan form RCB dan menambahkan Event Properties serta versi di title bar."
+    "alt": "ARSAS v1.6.40 archived IED workspace screenshot (not the v1.6.42 interface)",
+    "altId": "Screenshot arsip workspace IED ARSAS v1.6.40 (bukan tampilan v1.6.42)",
+    "caption": "Historical v1.6.40 interface reference. Download v1.6.42 to see the updated IED Browser, typed Write controls and SV/SMV viewer.",
+    "captionId": "Referensi antarmuka lama v1.6.40. Unduh v1.6.42 untuk IED Browser, kontrol Write bertipe, dan viewer SV/SMV terbaru."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.41"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.42"
 }
