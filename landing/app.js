@@ -12,19 +12,25 @@
 
   const toggle = document.querySelector('[data-menu-toggle]');
   const links = document.querySelector('[data-nav-links]');
+  const isIndonesian = document.documentElement.lang === 'id';
+  const menuLabel = isIndonesian
+    ? { open: 'Buka navigasi', close: 'Tutup navigasi' }
+    : { open: 'Open navigation', close: 'Close navigation' };
+  links?.setAttribute('aria-label', isIndonesian ? 'Navigasi utama' : 'Primary navigation');
+  toggle?.setAttribute('aria-label', menuLabel.open);
 
   const closeMenu = () => {
     if (!toggle || !links) return;
     links.classList.remove('open');
     toggle.setAttribute('aria-expanded', 'false');
-    toggle.setAttribute('aria-label', 'Open navigation');
+    toggle.setAttribute('aria-label', menuLabel.open);
   };
 
   if (toggle && links) {
     toggle.addEventListener('click', () => {
       const isOpen = links.classList.toggle('open');
       toggle.setAttribute('aria-expanded', String(isOpen));
-      toggle.setAttribute('aria-label', isOpen ? 'Close navigation' : 'Open navigation');
+      toggle.setAttribute('aria-label', isOpen ? menuLabel.close : menuLabel.open);
     });
 
     links.addEventListener('click', event => {
