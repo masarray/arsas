@@ -26,8 +26,8 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
 </div>
 
 <div align="center">
-  <a href="Assets/screenshot/arsas-ied-explorer-command-v1.6.40.webp">
-    <img src="Assets/screenshot/arsas-ied-explorer-command-v1.6.40.webp" alt="ARSAS v1.6.40 multi-IED Explorer, live signal values and guarded command dock" width="100%" />
+  <a href="landing/assets/screenshots/arsas-ied-browser-v1.6.42.webp">
+    <img src="landing/assets/screenshots/arsas-ied-browser-v1.6.42.webp" alt="ARSAS v1.6.42 IED Browser with live control model, typed IEC 61850 values and Command Dock" width="100%" />
   </a>
   <br />
   <sub>One persistent multi-IED shell for discovery, live values, reporting, events, alarms, guarded control, FAT, files and diagnostics.</sub>
@@ -75,23 +75,26 @@ ARSAS is an open-source Windows IEC 61850 engineering workstation for FAT, SAT, 
 - **Fault records to analysis** — scan and download COMTRADE records, then open them in-process for exact time signals, RMS, Phasor, Harmonics, six-loop distance Locus and digital protection timeline analysis.
 - **Dense-model responsiveness** — virtualized tables, coalesced UI updates, bounded background work and latest-value presentation keep large signal catalogs responsive. The recorded Smart Discovery target contains 4,925 semantic leaves; ARSAS does not publish an arbitrary universal device-count limit.
 
-## Current product tour
+## Real ARSAS v1.6.42 product screens
 
-| Live operation | Event and alarm supervision |
+Eight unedited operator PNG captures from the public v1.6.42 Windows application (25 October 2026), with full-resolution PNG links and optimized WebP previews. These screenshots show the software interface; they are **not independent IEC 61850 conformance certificates or proof of lossless SOE**.
+
+| Engineering view | Monitoring and analysis |
 |---|---|
-| [![IED Explorer, live values and command dock](Assets/screenshot/arsas-ied-explorer-command-v1.6.40.webp)](Assets/screenshot/arsas-ied-explorer-command-v1.6.40.webp) | [![Alarm Annunciator](Assets/screenshot/arsas-alarm-annunciator-v1.6.40.webp)](Assets/screenshot/arsas-alarm-annunciator-v1.6.40.webp) |
-| Searchable report-backed values and guarded controls remain attached to the selected IED. | Active, unacknowledged and returned alarms remain visually distinct and explicitly acknowledged. |
-| [![Sequence of Events](Assets/screenshot/arsas-sequence-of-events-v1.6.40.webp)](Assets/screenshot/arsas-sequence-of-events-v1.6.40.webp) | [![Native FAT workspace](Assets/screenshot/arsas-native-fat-v1.6.40.webp)](Assets/screenshot/arsas-native-fat-v1.6.40.webp) |
-| SOE preserves IED time, signal identity, value, quality and acquisition source. | FAT compares captured values and timestamps without leaving the shared engineering shell. |
+| [![IED Browser — reports, data model and verified controls](landing/assets/screenshots/arsas-ied-browser-v1.6.42.webp)](landing/assets/screenshots/arsas-ied-browser-v1.6.42.png) | [![Event Logs — sourced SOE, quality and acquisition](landing/assets/screenshots/arsas-event-logs-v1.6.42.webp)](landing/assets/screenshots/arsas-event-logs-v1.6.42.png) |
+| [![Signal Testing — FAT before-and-after evidence](landing/assets/screenshots/arsas-signal-testing-v1.6.42.webp)](landing/assets/screenshots/arsas-signal-testing-v1.6.42.png) | [![FAT Report Preview — PDF evidence, partially completed](landing/assets/screenshots/arsas-fat-report-preview-v1.6.42.webp)](landing/assets/screenshots/arsas-fat-report-preview-v1.6.42.png) |
+| [![Sampled Values — SV waveforms and phasors](landing/assets/screenshots/arsas-smv-v1.6.42.webp)](landing/assets/screenshots/arsas-smv-v1.6.42.png) | [![GOOSE Subscriber — passive publisher and DataSet inspection](landing/assets/screenshots/arsas-goose-v1.6.42.webp)](landing/assets/screenshots/arsas-goose-v1.6.42.png) |
+| [![Alarm Annunciator — unacknowledged alarm windows](landing/assets/screenshots/arsas-annunciator-v1.6.42.webp)](landing/assets/screenshots/arsas-annunciator-v1.6.42.png) | [![Diagnostics — protocol INFO/WARN journal](landing/assets/screenshots/arsas-diagnostics-v1.6.42.webp)](landing/assets/screenshots/arsas-diagnostics-v1.6.42.png) |
 
-| Engineering exchange | Disturbance analysis |
+The [guided product demo](https://masarray.github.io/arsas/demo.html) presents each current screen with a concise engineering explanation. The guided setup dialog examples are from v1.6.40 because no newer dialog captures were supplied.
+
+### Historical screenshots (v1.6.40)
+
+| SCL model and export | COMTRADE engineering analysis |
 |---|---|
-| [![RCB selection and availability](Assets/screenshot/arsas-rcb-selection-v1.6.40.webp)](Assets/screenshot/arsas-rcb-selection-v1.6.40.webp) | [![COMTRADE time signals and protection timeline](Assets/screenshot/arsas-comtrade-protection-timeline-v1.6.40.webp)](Assets/screenshot/arsas-comtrade-protection-timeline-v1.6.40.webp) |
-| Audit live availability, membership and occupancy before exporting only the required RCBs. | Review RMS time signals, synchronized cursors and digital protection-event transitions together. |
-| [![SCL Edition 2 and Edition 1 export](Assets/screenshot/arsas-scl-edition-export-v1.6.40.webp)](Assets/screenshot/arsas-scl-edition-export-v1.6.40.webp) | [![COMTRADE phasor analysis](Assets/screenshot/arsas-comtrade-phasor-v1.6.40.webp)](Assets/screenshot/arsas-comtrade-phasor-v1.6.40.webp) |
-| Save Edition 2 IID or Edition 1 ICD with companion JSON and Markdown evidence. | Inspect native voltage and current phasors at one exact record position. |
+| [![Historical SCL Edition 1/2 export](Assets/screenshot/arsas-scl-edition-export-v1.6.40.webp)](Assets/screenshot/arsas-scl-edition-export-v1.6.40.webp) | [![Historical COMTRADE protection timeline](Assets/screenshot/arsas-comtrade-protection-timeline-v1.6.40.webp)](Assets/screenshot/arsas-comtrade-protection-timeline-v1.6.40.webp) |
 
-The screenshots above are archived v1.6.40 interface references, **not images of v1.6.42**. They are kept as original WebP assets until validated current-release captures are available.
+These two historical examples remain correctly version-labeled and must not be mistaken for current-release screenshots.
 
 ## Earlier milestone: v1.6.37
 
