@@ -34,7 +34,9 @@
     });
 
     links.addEventListener('click', event => {
-      if (event.target instanceof HTMLAnchorElement) closeMenu();
+      // Localized link labels contain spans; taps on their text must also close the menu.
+      const target = event.target instanceof Element ? event.target.closest('a[href]') : null;
+      if (target instanceof HTMLAnchorElement && links.contains(target)) closeMenu();
     });
 
     document.addEventListener('keydown', event => {
