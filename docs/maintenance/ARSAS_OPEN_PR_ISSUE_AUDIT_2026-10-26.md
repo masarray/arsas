@@ -1,5 +1,8 @@
 # ARSAS — Open PR / Issue Reconciliation, 2026-10-26
 
+**Cleanup decision log (live result after this initial snapshot):** [ARSAS_RECONCILIATION_DECISIONS_2026-10-26.md](ARSAS_RECONCILIATION_DECISIONS_2026-10-26.md) — initial 154 PR/19 issues → verified 139 PR/17 issues, 15 individual PR audit-trail closures and 2 verified code-only milestone closures. **The tables below are the immutable initial inventory, not the current open-only list.**
+
+
 > **Read-only inventory checkpoint, not release acceptance or a declaration that any PR is redundant.** Snapshot verified by querying all pages of GitHub REST lists. This file lives on an audit-only branch until an appropriate docs-only promotion is approved by existing repository gates. Re-check live SHAs before every disposition.
 
 ## Immutable boundaries
