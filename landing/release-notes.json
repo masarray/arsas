@@ -55,8 +55,8 @@
   },
   "screenshot": {
     "src": "assets/screenshots/arsas-fat-report-preview-v1.6.42.webp",
-    "width": 1866,
-    "height": 953,
+    "width": 1862,
+    "height": 951,
     "alt": "Actual ARSAS v1.6.42 Windows FAT Evidence PDF Report Preview, showing partially completed tests",
     "altId": "Screenshot nyata ARSAS v1.6.42 Windows: pratinjau PDF evidence FAT dengan beberapa pengujian belum lengkap",
     "caption": "Actual v1.6.42 operator capture. The PDF preview shows 11 selected signals with 4 complete evidence records. This is application evidence, not universal relay acceptance.",
