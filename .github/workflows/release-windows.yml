@@ -903,7 +903,8 @@ jobs:
             }
           }
           else {
-            $arguments += @("--latest", "--generate-notes")
+            $arguments += "--latest"
+            $arguments += "--generate-notes"
           }
           $arguments += $assets
 

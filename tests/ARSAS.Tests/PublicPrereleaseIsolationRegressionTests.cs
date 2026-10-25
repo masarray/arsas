@@ -22,7 +22,7 @@ public sealed class PublicPrereleaseIsolationRegressionTests
         Assert.Contains("$isPreview = $env:RELEASE_VERSION.Contains(\"-\") -or $isStagingManual", publish);
         Assert.Contains("if ($isPreview)", publish);
         Assert.Contains("$arguments += \"--prerelease\"", publish);
-        Assert.Contains("else {\n            $arguments += \"--latest\"\n          }", publish);
+        Assert.Contains("else {\n            $arguments += \"--latest\"\n            $arguments += \"--generate-notes\"\n          }", publish);
         Assert.DoesNotContain("\"--generate-notes\",\n            \"--latest\"", publish);
         Assert.Equal(1, publish.Split("$arguments += \"--latest\"").Length - 1);
         Assert.Contains("inputs.publish_release == true", publish);
@@ -88,7 +88,7 @@ public sealed class PublicPrereleaseIsolationRegressionTests
         Assert.Contains("if ($env:RELEASE_VERSION -eq \"1.6.42\" -and (Test-Path $notes -PathType Leaf))", publish);
         Assert.Contains("$arguments += @(\"--notes-file\", $notes)", publish);
         Assert.Contains("$arguments += \"--generate-notes\"", publish);
-        Assert.Contains("$arguments += @(\"--latest\", \"--generate-notes\")", publish);
+        Assert.Contains("$arguments += \"--latest\"", publish);
         Assert.Contains("not final stable", Read("docs/release/ARSAS_V1642_PUBLIC_PREVIEW_NOTES.md"));
     }
 
