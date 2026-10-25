@@ -143,7 +143,8 @@ def validate_release(errors: list[str]) -> None:
     portable = evidence.get("portable")
     # Modern stable distribution is a real single EXE. Legacy ZIPs are permitted
     # only for older historical tags; do not silently regress the current channel.
-    stable_parts = tuple(int(part) for part in version.split("."))
+    stable_parts = (tuple(int(part) for part in version.split("."))
+                    if re.fullmatch(r"\d+\.\d+\.\d+", version) else (0, 0, 0))
     expected_portable = (
         "ARSAS-Windows-x64-Portable.exe" if stable_parts >= (1, 6, 42)
         else "ARSAS-Windows-x64-Portable.zip"
