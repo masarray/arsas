@@ -49,6 +49,10 @@ public partial class SmvViewerWindow : Window, INotifyPropertyChanged
             ? "MMS endpoint unassigned"
             : $"{device.IpAddress}:{device.Port}";
 
+        // Allow first-received passive Ethernet SV without requiring this
+        // IED to advertise an SVCB or the operator to import a matching SCL.
+        // Always provide at least one option, even on an empty IED model.
+        Streams.Add(SmvStreamRow.AnyReceived());
         foreach (var row in BuildRows(device))
             Streams.Add(row);
 
