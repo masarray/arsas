@@ -57,7 +57,12 @@ public sealed class WebsiteHeroLocalizationRegressionTests
         Assert.Contains(heading, page, StringComparison.Ordinal);
         Assert.Contains("arsas-quick-start-choose-source-v1.6.40.webp", page, StringComparison.Ordinal);
         Assert.Contains("arsas-quick-start-discover-ip-v1.6.40.webp", page, StringComparison.Ordinal);
-        Assert.Contains("arsas-quick-start-monitor-control-v1.6.40.webp", page, StringComparison.Ordinal);
+        // Setup-dialog captures are explicitly historical; step 3 is the actual public stable UI.
+        Assert.Contains("arsas-ied-browser-v1.6.42.webp", page, StringComparison.Ordinal);
+        Assert.Contains("href=\"assets/screenshots/arsas-ied-browser-v1.6.42.png\"", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("arsas-quick-start-monitor-control-v1.6.40.webp", page, StringComparison.Ordinal);
+        Assert.Contains("v1.6.40", page, StringComparison.Ordinal);
+        Assert.Contains("v1.6.42", page, StringComparison.Ordinal);
         Assert.Contains("SCL", page, StringComparison.Ordinal);
     }
 
@@ -111,7 +116,26 @@ public sealed class WebsiteHeroLocalizationRegressionTests
         Assert.Contains("body[data-page=\"overview\"] .home-evidence .product-tour-grid", home, StringComparison.Ordinal);
         Assert.Contains("grid-template-columns: 1fr;", home, StringComparison.Ordinal);
         Assert.Contains("minmax(0, 1.7fr)", home, StringComparison.Ordinal);
-        Assert.Contains("sizes=\"(max-width: 980px) 94vw, 68vw\"", english, StringComparison.Ordinal);
+        Assert.Contains("class=\"product-tour-grid feature-evidence\"", english, StringComparison.Ordinal);
+        Assert.Contains("src=\"assets/screenshots/arsas-ied-browser-v1.6.42.webp\"", english, StringComparison.Ordinal);
+        Assert.Contains("href=\"assets/screenshots/arsas-annunciator-v1.6.42.png\"", english, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("landing/templates/demo.html")]
+    [InlineData("landing/templates/demo-arsas.html")]
+    public void GuidedDemo_UsesActualV1642CapturesWithOriginalPngLinks(string path)
+    {
+        var page = Read(path);
+        foreach (var screen in new[]
+                 {
+                     "ied-browser", "event-logs", "signal-testing", "fat-report-preview",
+                     "smv", "goose", "annunciator", "diagnostics"
+                 })
+        {
+            Assert.Contains($"href=\"assets/screenshots/arsas-{screen}-v1.6.42.png\"", page, StringComparison.Ordinal);
+            Assert.Contains($"src=\"assets/screenshots/arsas-{screen}-v1.6.42.webp\"", page, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
