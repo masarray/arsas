@@ -57,7 +57,8 @@ public sealed class P109SRefreshControlDescriptorRegressionTests
         Assert.Contains("IsOperationallyReady = fullyVerified",inspect);
         Assert.Contains("ControlModelText = modelText",inspect);
         var main=File.ReadAllText(Path.Combine(root.FullName,"MainWindow.xaml.cs"));
-        Assert.Contains("await RefreshControlValuesAsync(device, force: true);",main);
+        Assert.Contains("await ReinspectConfiguredControlAsync(device, signal, dialog.WriteAssociation);", main);
+        Assert.DoesNotContain("await RefreshControlValuesAsync(device, force: true);", main);
     }
 
     [Fact]
