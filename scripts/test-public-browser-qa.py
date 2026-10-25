@@ -89,7 +89,21 @@ def main() -> int:
                                     "() => ({page: document.documentElement.scrollWidth, viewport: innerWidth})"
                                 )
                                 if overflow["page"] > overflow["viewport"] + 2:
-                                    errors.append(f"horizontal overflow {overflow['page']}>{overflow['viewport']}")
+                                    offenders = page.evaluate("""() => [...document.querySelectorAll('body *')]
+                                      .filter(el => el.getBoundingClientRect().right > innerWidth + 2)
+                                      .slice(0, 8).map(el => ({
+                                        tag: el.tagName.toLowerCase(),
+                                        cls: (el.getAttribute('class') || '').slice(0, 70),
+                                        right: Math.round(el.getBoundingClientRect().right),
+                                        width: Math.round(el.getBoundingClientRect().width),
+                                        label: (el.textContent || '').trim().slice(0, 55)
+                                      }))""")
+                                    errors.append(f"horizontal overflow {overflow['page']}>{overflow['viewport']}; offenders={offenders}")
+                                    if path in ("download.html", "unduh.html") and width in (360, 390):
+                                        page.screenshot(
+                                            path=str(output / f"overflow-{path}-{width}px.png"),
+                                            full_page=True, animations="disabled"
+                                        )
                                 if width < 1081:
                                     toggle = page.locator("button[data-menu-toggle]")
                                     if not toggle.is_visible():
