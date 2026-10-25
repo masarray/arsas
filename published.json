@@ -1,19 +1,12 @@
 {
+  "schemaVersion": 1,
+  "product": "ARSAS",
   "version": "1.6.42",
   "tag": "v1.6.42",
   "channel": "stable",
   "publishedAtUtc": "2026-10-25T01:55:02Z",
   "sourceCommit": "3db2ca98d144ab4b456e8dc1db9af18ad7a948f2",
-  "engine": {
-    "repository": "masarray/ARIEC61850",
-    "commit": "f75e323e9f8443aa20e0a3818a1d5d77255b2c0f"
-  },
-  "comtradeViewer": {
-    "repository": "masarray/ardirec",
-    "commit": "7dbc7149db668126a493ce338264363a6ec5ec00",
-    "nativeBridgeAbi": 1,
-    "nativeBridgeRelativeLibrary": "Tools/ArdIrec/ardirec_bridge.dll"
-  },
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.42",
   "installer": {
     "name": "ARSAS-Windows-x64-Setup.exe",
     "url": "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe",
@@ -31,15 +24,9 @@
     "url": "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt",
     "sizeBytes": 193
   },
-  "supplyChain": {
-    "sbomName": "ARSAS-Windows-x64-SBOM.spdx.json",
-    "sbomUrl": "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SBOM.spdx.json",
-    "sbomSha256": "83c8ec5bb8a87142b751b7fe2d3dd2b2ebdd74eff9b0c02b30f7de889d141baf",
-    "sbomSizeBytes": 385274,
-    "provenanceName": "ARSAS-Windows-x64-PROVENANCE.json",
-    "provenanceUrl": "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-PROVENANCE.json",
-    "provenanceSha256": "1e289373a469f102ce98a0e32f49e26b69d8ad39eab8a34979a77d659e289bf8",
-    "attestationRepository": "https://github.com/masarray/arsas/attestations",
-    "attestationWorkflow": "release-windows.yml"
+  "codeSigning": {
+    "status": "unsigned",
+    "platform": "Authenticode",
+    "detail": "The current public Windows installer and portable binaries do not carry a commercial Authenticode publisher signature. Verify the published SHA-256 value before use. SmartScreen warnings are therefore possible and are not hidden from users."
   }
 }
