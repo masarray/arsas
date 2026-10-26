@@ -255,6 +255,10 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
             ControlCurrentValue = "Open [01]"
         };
         gui.AcceptVerifiedLiveControlCdc("DPC");
+        // SignalDefinition normalizes operator labels when live CDC is
+        // accepted ("Open [01]" can become "Open"). Assert immutability
+        // against the GUI's actual pre-flight state, not a display spelling.
+        var originalGuiValue = gui.ControlCurrentValue;
         var request = new Iec61850ControlCommandRequest
         {
             Signal = gui, ValueText = "Closed [10]", TestMode = true,
@@ -284,7 +288,7 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
         detached.Signal.ControlCurrentValue = "Closed [10]";
         detached.Signal.ControlSemanticVerified = false;
         nativeFinished.TrySetResult(1);
-        Assert.Equal("Open [01]", gui.ControlCurrentValue);
+        Assert.Equal(originalGuiValue, gui.ControlCurrentValue);
         Assert.True(gui.ControlSemanticVerified);
         Assert.Equal(1, Volatile.Read(ref quarantine));
     }
