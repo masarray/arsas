@@ -120,16 +120,22 @@ public static class IedBrowserGooseInspection
         ArgumentNullException.ThrowIfNull(frame);
         ArgumentNullException.ThrowIfNull(directory);
         var members = directory.Members.OrderBy(x => x.Index).ToArray();
+        // A cached directory is not evidence for a different received datSet.
+        // Bind its complete reference before interpreting any FCDA leaf.
         if (members.Length == 0 || frame.WireDataSetEntryCount != members.Length ||
             frame.Leaves.Count != members.Length ||
-            members.Select(x => x.Index).Distinct().Count() != members.Length)
+            string.IsNullOrWhiteSpace(directory.Reference) ||
+            !string.Equals(Canonical(frame.DataSetReference),
+                Canonical(directory.Reference), StringComparison.Ordinal))
             return null;
-        // Validate entire ordered vector before exposing any member value.
+        // Validate the full zero-based directory, one-based presentation order,
+        // and each exact wire reference/FC before publishing any member value.
         for (var slot = 0; slot < members.Length; slot++)
         {
             var declared = members[slot];
             var wire = frame.Leaves[slot];
-            if (wire.DataSetIndex != slot ||
+            if (declared.Index != slot || wire.DataSetIndex != slot ||
+                wire.Order != slot + 1 ||
                 Canonical(wire.SignalReference) != Canonical(declared.Reference) ||
                 !string.Equals(wire.FunctionalConstraint, declared.FunctionalConstraint,
                     StringComparison.OrdinalIgnoreCase) ||

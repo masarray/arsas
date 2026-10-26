@@ -62,6 +62,18 @@ public sealed class IedBrowserGooseInspectionTests
             frame with { Leaves = [first, second with { Value = "" }] }));
         Assert.Null(IedBrowserGooseInspection.OrderedUnboundWireEntries(
             frame with { Leaves = [] }));
+
+        // The UI displays at most 128 entries; an invalid *129th* wire
+        // slot must still invalidate the entire PDU, including the first 128.
+        var large = Enumerable.Range(0, 129)
+            .Select(i => new GooseLeafValueSnapshot(i + 1, i,
+                $"wire[{i + 1}]", "", "", "", "", "Good", "", false, "Unbound"))
+            .ToArray();
+        Assert.Equal(129, IedBrowserGooseInspection.OrderedUnboundWireEntries(
+            Frame(leaves: large))?.Count);
+        large[128] = large[128] with { DataSetIndex = 127 };
+        Assert.Null(IedBrowserGooseInspection.OrderedUnboundWireEntries(
+            Frame(leaves: large)));
     }
 
     [Fact]
@@ -110,7 +122,27 @@ public sealed class IedBrowserGooseInspectionTests
         Assert.Null(IedBrowserGooseInspection.VerifiedMembers(frame with
             { WireDataSetEntryCount = 1 }, set));
         Assert.Null(IedBrowserGooseInspection.VerifiedMembers(frame with
+            { DataSetReference = "LD/LLN0$DIFFERENT" }, set));
+        Assert.Null(IedBrowserGooseInspection.VerifiedMembers(frame with
+            { Leaves = [a, b with { Order = 1 }] }, set));
+        Assert.Null(IedBrowserGooseInspection.VerifiedMembers(frame with
             { Leaves = [a, b with { FunctionalConstraint = "MX" }] }, set));
+        var nonContiguous = new LiveIedDataSetModel
+        {
+            Reference = set.Reference,
+            Members =
+            [
+                new LiveIedDataSetMemberModel
+                {
+                    Index = 1, Reference = first.Reference, FunctionalConstraint = "ST"
+                },
+                new LiveIedDataSetMemberModel
+                {
+                    Index = 2, Reference = second.Reference, FunctionalConstraint = "ST"
+                }
+            ]
+        };
+        Assert.Null(IedBrowserGooseInspection.VerifiedMembers(frame, nonContiguous));
         var ambiguous = new LiveIedDataSetModel { Reference = set.Reference,
             Members = [first, first] };
         Assert.Null(IedBrowserGooseInspection.VerifiedMembers(frame, ambiguous));
