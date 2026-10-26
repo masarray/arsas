@@ -15,11 +15,11 @@ Protected unchanged and re-verified at D16:
 - #756 `098ec4abdf7ce8681ec97111f12f3f6151eade78` OPEN DRAFT, base #755; retain staged dependency.
 - ARIEC61850 trial engine pin `f75e323e9f8443aa20e0a3818a1d5d77255b2c0f` unchanged.
 
-Inventory exact: **D15 initial 116 ARSAS open PR, 17 independent issues, 42 historical PR closed unmerged; D16 after actions: 111 open PR, 16 independent issues, 47 historical PR closed unmerged.** Engine retains three open PRs (#192, #196, #197), four independent issues.
+Inventory exact: **D15 initial 116 ARSAS open PR, 17 independent issues, 42 historical PR closed unmerged; D16 after actions: 108 open PR, 16 independent issues, 50 historical PR closed unmerged.** Engine retains three open PRs (#192, #196, #197), four independent issues.
 
 ## Actual GitHub actions completed in D16
 
-**Five PRs closed unmerged, each with audit comment before closure:**
+**Eight PRs closed unmerged, each with audit comment before closure:**
 
 | PR | Disposition / verified rationale |
 |---|---|
@@ -60,3 +60,13 @@ These are metadata changes, **not new commits to release/main**. Closing ancestr
 6. Keep ARSAS `main`, engine lock, stable release, all concurrent owner branches and physical acceptance criteria unchanged.
 
 No coding changes to runtime were necessary for these administrative closures. A separate safety engineering lane may continue P0 Command Inspection hazards from D15 without interference.
+
+## D16 batch B — three additional inspected historical ancestors
+
+All three historical HEADs were confirmed `behind=0` to the protected RC, with every changed file path present and original regression test blob retained; current evolved source was checked for corresponding operator and safety behavior. All are **closed unmerged**, not a push to main:
+
+- [#459](https://github.com/masarray/arsas/pull/459#issuecomment-6418423437) — P7.1 SCL cards and emergency diagnostic. 1/4 byte-identical test file; newer MainWindow retains `SelectPrimarySclWorkspaces` / `FindReusableSclDevice`, DiagnosticReportBuilder retains offline `BuildEmergency`, old IED endpoint preference remains scoped by newer exact SCL AP binding. HEAD `6e99b1a4b5282d2ca6d3683b739a661cd4064a5b`.
+- [#466](https://github.com/masarray/arsas/pull/466#issuecomment-6418430182) — P7.2 MMS association liveness owner. 3/5 original blobs byte-identical including both original regression tests and the WPF no-second-ICMP-owner boundary. Two evolved runtime/IO paths still implement event-driven report proof, association-scoped evidence and disabled cyclic static process polling. HEAD `ccf692101844aeeb780e6758882f78440bfc00a4`.
+- [#473](https://github.com/masarray/arsas/pull/473#issuecomment-6418433361) — P7.4 causal BRCB/URCB parity and truthful partial image. 3/7 byte-identical paths including both original regression tests and initial-image diagnostics; four evolved runtime/model/diagnostic paths retain PlanningAttemptId, exact RCB route proof, association-scoped acceptance and no invented completeness. HEAD `df3f8ebbaf46e823bf46083cce0efeefb227d786`.
+
+**D16 final inventory: 108 ARSAS open PR, 16 independent open issues.** D15 historical closed count 42 + eight D16 PR closures = **50**. One completed issue #518 was also closed. No source or tests were modified by D16.
