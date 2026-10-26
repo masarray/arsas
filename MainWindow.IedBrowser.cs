@@ -1707,7 +1707,13 @@ public partial class MainWindow
             var wireSlots = _iedBrowserDetails.Rows
                 .Where(row => row.GooseSlot >= 0 && row.GooseReference.Length == 0)
                 .ToArray();
-            var limit = Math.Min(frameView.Leaves.Count, 128);
+            // Unbound allData is evidence only if the ENTIRE received PDU
+            // has complete, contiguous wire slots. Do not project a partial
+            // decoder/model mismatch as real GOOSE values or as FCDA identity.
+            var unbound = ordered is null
+                ? IedBrowserGooseInspection.OrderedUnboundWireEntries(frameView)
+                : null;
+            var limit = Math.Min(unbound?.Count ?? 0, 128);
             if (ordered is not null)
             {
                 foreach (var slot in wireSlots)
@@ -1751,9 +1757,9 @@ public partial class MainWindow
             {
                 if (row.GooseSlot < 0) continue;
                 if (row.GooseReference.Length == 0 &&
-                    ordered is null && row.GooseSlot < frameView.Leaves.Count)
+                    ordered is null && unbound is not null && row.GooseSlot < unbound.Count)
                 {
-                    row.Value = frameView.Leaves[row.GooseSlot].Value;
+                    row.Value = unbound[row.GooseSlot].Value;
                     row.ObservationSource = "GOOSE raw allData · unbound";
                     row.ObservationTooltip =
                         $"allData[{row.GooseSlot + 1}] from {frameView.GoCbRef} " +
