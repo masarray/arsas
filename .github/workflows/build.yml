@@ -15,8 +15,59 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  pr-scope:
+    name: Verify documentation-only PR scope (fail closed)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      needs_windows: ${{ steps.files.outputs.needs_windows }}
+    steps:
+      - id: files
+        name: Read all changed PR paths without checkout or Windows
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Fail closed on missing/ambiguous/renamed inputs and any API/job error.
+            let needsWindows = true;
+            try {
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                per_page: 100
+              });
+              const documentationOnly = files.length > 0 && files.length < 3000 &&
+                files.every(({ filename, status, previous_filename }) => {
+                  const allowedPath = filename === 'README.md' ||
+                    (filename.startsWith('docs/') && filename.endsWith('.md') &&
+                     filename !== 'docs/INTEROPERABILITY_REFERENCE_CONTRACT.md');
+                  // Renamed and deleted documents can conceal source removals.
+                  return allowedPath && (status === 'added' || status === 'modified') &&
+                    !previous_filename;
+                });
+              needsWindows = !documentationOnly;
+              core.info(`Changed paths=${files.length}, Windows required=${needsWindows}`);
+            } catch (error) {
+              core.warning(`Cannot certify docs-only PR: ${error.message}; full Windows required.`);
+            }
+            core.setOutput('needs_windows', needsWindows ? 'true' : 'false');
+
   build-windows:
     name: Build, test, validate and package Windows application
+    needs: [pr-scope]
+    # The classifier may fail before emitting outputs. Anything except an
+    # explicit verified 'false' still triggers the full canonical Windows job.
+    # Push/manual do not run pr-scope, but MUST run canonical Windows proof.
+    if: >-
+      ${{
+        always() &&
+        (github.event_name != 'pull_request' ||
+         needs.pr-scope.result != 'success' ||
+         needs.pr-scope.outputs.needs_windows != 'false')
+      }}
     runs-on: windows-latest
     steps:
       - name: Checkout exact triggering ARSAS revision

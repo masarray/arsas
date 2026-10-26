@@ -2,7 +2,7 @@ name: Smart Discovery Field Capture Build
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths:
       # Fast PR routing: only Smart Discovery authority/dependencies trigger this gate.
       - "Services/NativeIec61850Client*.cs"
@@ -48,7 +48,9 @@ jobs:
     if: >-
       ${{
         always() &&
-        (github.event_name != 'pull_request' || !github.event.pull_request.draft) &&
+        (github.event_name != 'pull_request' ||
+         (!github.event.pull_request.draft &&
+          contains(github.event.pull_request.labels.*.name, 'ci-field-capture'))) &&
         (github.event_name != 'workflow_dispatch' ||
          needs.manual-regression.result == 'success')
       }}

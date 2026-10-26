@@ -418,5 +418,61 @@ jobs:
         ):
             self.assertFalse(matches(path), path)
 
+    def test_p4_docs_only_pr_preflight_never_fails_open(self):
+        """Exact verified doc-only PRs may skip Windows; any doubt runs Windows."""
+        repo = Path(__file__).resolve().parents[1]
+        workflow = (repo / '.github/workflows/build.yml').read_text(encoding='utf-8')
+        scope = workflow.split('  pr-scope:\n', 1)[1].split('  build-windows:\n', 1)[0]
+        build = workflow.split('  build-windows:\n', 1)[1]
+        for contract in (
+            "if: github.event_name == 'pull_request'",
+            'runs-on: ubuntu-latest',
+            'pull-requests: read',
+            'uses: actions/github-script@v7',
+            'github.paginate(github.rest.pulls.listFiles',
+            'per_page: 100',
+            'files.length > 0 && files.length < 3000',
+            "filename === 'README.md'",
+            "filename.startsWith('docs/')",
+            "filename.endsWith('.md')",
+            "filename !== 'docs/INTEROPERABILITY_REFERENCE_CONTRACT.md'",
+            "status === 'added' || status === 'modified'",
+            '!previous_filename',
+            'catch (error)',
+            "core.setOutput('needs_windows', needsWindows ? 'true' : 'false')",
+        ):
+            self.assertIn(contract, scope)
+        self.assertNotIn('actions/checkout@', scope)
+        self.assertNotIn('dotnet ', scope)
+        self.assertIn('needs: [pr-scope]', build)
+        self.assertIn('always() &&', build)
+        self.assertIn("github.event_name != 'pull_request'", build)
+        self.assertIn("needs.pr-scope.result != 'success'", build)
+        self.assertIn("needs.pr-scope.outputs.needs_windows != 'false'", build)
+        self.assertNotIn("needs.pr-scope.outputs.needs_windows == 'true'", build)
+        self.assertEqual(workflow.count('  build-windows:\n'), 1)
+        self.assertIn('name: Upload sealed Windows package input', build)
+        self.assertIn('Upload directly downloadable portable EXE (no ZIP)', build)
+        self.assertIn('archive: false', build)
+        self.assertIn('ref: ${{ github.sha }}', build)
+        self.assertIn('  push:\n    branches: [ main ]', workflow)
+        self.assertIn('  workflow_dispatch:', workflow)
+
+    def test_p4_capture_requires_opt_in_and_retains_manual_exact_sha_proof(self):
+        """An unlabeled Smart Discovery PR must not spend a 2nd Windows runner."""
+        repo = Path(__file__).resolve().parents[1]
+        src = (repo / '.github/workflows/smart-discovery-capture-build.yml').read_text(encoding='utf-8')
+        self.assertIn('types: [opened, synchronize, reopened, ready_for_review, labeled]', src)
+        self.assertIn('contains(github.event.pull_request.labels.*.name, \'ci-field-capture\')', src)
+        self.assertIn('!github.event.pull_request.draft', src)
+        self.assertIn("github.event_name == 'workflow_dispatch'", src)
+        self.assertIn("needs.manual-regression.result == 'success'", src)
+        self.assertIn('    needs: [manual-regression]', src)
+        self.assertIn('      source_sha: ${{ github.sha }}', src)
+        self.assertIn('      shadow_mode: true', src)
+        self.assertIn('    runs-on: windows-latest', src)
+        self.assertIn('cancel-in-progress: true', src)
+        self.assertIn('name: Build smart-discovery portable field capture', src)
+
 if __name__ == "__main__":
     unittest.main()
