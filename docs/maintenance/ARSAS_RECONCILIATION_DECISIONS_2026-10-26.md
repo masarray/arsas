@@ -81,3 +81,40 @@ All 15 closed PRs received an **individual audit-trail comment before closing**.
 3. Form canonical lanes by field work: IEC Control/Write; SSOT & Discovery; SG7/GR_X/ZIV; SMV/GOOSE/SOE; GUI; CI; engine. Evaluate unique delta in final tree, not just history, before each additional closure.
 4. Reconcile outstanding issues on concrete evidence. Locked checkpoints remain retrievable, and historical CodeVerified milestones may close only with linked validated merge/CI evidence.
 5. No new PR created, no Windows build triggered for administrative closure, no force push, no branch deletion, no safety gate weakened.
+
+
+---
+
+## Phase B2 / C2 — verified continuation (26 October 2026)
+
+> **Current live tally:** 154 initial → **133 open PRs** (21 closed total); 19 initial → **17 open issues** (2 closed total). This supersedes the earlier 139/17 snapshot without rewriting its historical disposition proof. No code changed on `main`, stable v1.6.42 or ARIEC61850. All six additional PR closures were individually commented and left their source branches intact.
+
+### Six additional safe closures with evidence
+
+| Closed PR | Disposition | Proof relative to protected RC `817c3910e8223fa2ac531a4426ada5d2d4bbbe50` |
+|---|---|---|
+| [#581](https://github.com/masarray/arsas/pull/581) | Integrated/superseded test-only | Only changed test `IedBrowserObservedVectorM213HTests.cs` has exact blob `4091e9b156b5352d00c0b922a69d11b7f966d5f5` in #649 and RC; verified ancestor #649 ahead 587 / behind 0. IEC Vector.ang degree-unit assertion preserved |
+| [#601](https://github.com/masarray/arsas/pull/601) | Integrated/superseded RIO compatibility | All five changed files have **exact blobs in #649** (four production files and six-method test suite). Four production files remain exact in RC; regression adapts legacy two-file CFG/DAT expectation to new engine native three-file CFG/DAT/RIO and adds bridge-idempotence assertion. Ancestor #649 ahead 482 / behind 0 |
+| [#555](https://github.com/masarray/arsas/pull/555) | Superseded native Browser splitter UX | Only touched `MainWindow.xaml`; RC retains native direct-child `GridSplitter`, 8px drag hitbox, 1px/3px hover-only passive overlay, `ShowsPreview` and `PreviousAndNext`. Ancestor RC ahead 1530 / behind 0; no old WPF code reverse-merged |
+| [#646](https://github.com/masarray/arsas/pull/646) | Superseded Command Dock icon checkpoint | Original historical checkpoint document and both icon regression tests have **identical blobs in RC**; `CommandDockTransparentHeaderExpander` remains defined in App.xaml and bound in MainWindow.xaml. Ancestor RC ahead 807 / behind 0 |
+| [#647](https://github.com/masarray/arsas/pull/647) | Superseded distinct discovery/Browser Read progress | Both regression test files have **identical blobs in RC**; current `BrowserReadProgressLine`, computed `IedCardProgressPercent` and `IsDiscoveryProgressActive`-only easing remain. Ancestor RC ahead 798 / behind 0 |
+| [#648](https://github.com/masarray/arsas/pull/648) | Superseded integrated selected-IED card rail | Exact RC checkpoint document and regression test; current `P2MainIedListItemStyle` uses one rounded card silhouette with `SelectionRail` directly on the left border, `IsHitTestVisible=False` and no detached margin. Ancestor RC ahead 793 / behind 0 |
+
+**Important:** Surviving *specific semantics* + exact regression assets are verified where production files evolved; the whole runtime tree was **not** asserted identical. All original commits remain reachable; current RC remains DRAFT and physically gated.
+
+### Protect, DO NOT close: concrete unique-delta gaps identified
+
+1. [#606](https://github.com/masarray/arsas/pull/606#issuecomment-6405354674): historical test file `tests/ARSAS.Tests/M217DFieldEvidenceConvergenceTests.cs` at blob `9df525047ac1186ed822a7f2a0cd0f86f811a4a9` is **absent in current RC**. Seven tests cover exact GoCB wire identity, ambiguous publisher fail-closed behavior, real ordered PDU slots, SGCB inventory/FC authority, and association-fenced passive subscribe. It may be reimplemented elsewhere; match all assertions before closing.
+2. [#615](https://github.com/masarray/arsas/pull/615#issuecomment-6405355124): historical service `Services/Iec61850ControlRequestSnapshot.cs` (blob `96277fceb3490a778ab0d7113fadc0bb13edee1a`) is **absent in current RC**. Its original role was copying command-only requests so retired MMS sessions cannot mutate WPF-owned signal models. A replacement is unproven: review command ownership/late-response controls and focused regression tests, not a blind cherry-pick.
+3. [#502](https://github.com/masarray/arsas/pull/502#issuecomment-6405355619): two historical C264 same-host field-trial/strategy Markdown files are **absent in RC** and the PR is **diverged**, not a clean ancestor. Keep open until an appropriate sanitized archive/equivalent is identified; plan documents are not deployed code or physical FAT acceptance.
+4. [#503](https://github.com/masarray/arsas/pull/503#issuecomment-6405356204): distinct `docs/C264_SAME_HOST_FIELD_HANDOFF_2026-10-10.md` is **absent in RC**, branch diverged. Keep historical evidence and specific scope separate from release authority.
+
+Additional checked but **not safe to close yet**: #494 has 4 of 5 changed paths byte-identical to RC (one field-critical static-selection service evolved); #459/#466/#471/#473/#476 and #481–#488 have unchanged regression assets but substantial evolving runtime paths. #574/#575 were previously closed with preservation; #576 is divergent and remains open. Do not classify as redundant merely because the later app builds.
+
+### Updated continuation priorities
+
+1. For missing #606 tests, map each of its 7 assertions to currently compiled test methods, and make an isolated, minimal test-only proposal only if true coverage is missing.
+2. For #615, establish current per-command object ownership and late-reply behavior before any code port; keep all MMS Write authority and physical-qualification gates intact.
+3. Preserve the historical C264 field-trial documents in #502/#503 unless there is an explicit sanitized, semantically complete canonical successor. Do not expose private/simulator network details in public cleanup summaries.
+4. Continue a bounded, per-PR semantic delta matrix. Prefer exact ancestry + blob identity + regression/behavior equivalence. Stop on ambiguous physical, safety, engine-pinned or active GUI work.
+5. At time of this checkpoint, no Windows Actions reruns or redundant PR builds were initiated by cleanup.
