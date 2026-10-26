@@ -34,6 +34,49 @@ public sealed class IedBrowserGooseInspectionTests
     }
 
     [Fact]
+    public void UnboundAllDataRejectsIncompleteDuplicateOrMissingRealWireSlots()
+    {
+        var first = new GooseLeafValueSnapshot(1, 0, "wire[1]", "", "", "",
+            "", "Closed [10]", "", false, "Unbound");
+        var second = new GooseLeafValueSnapshot(2, 1, "wire[2]", "", "", "",
+            "", "Good", "", false, "Unbound");
+        var frame = Frame(leaves: [first, second]);
+        var slots = IedBrowserGooseInspection.OrderedUnboundWireEntries(frame);
+        Assert.NotNull(slots);
+        Assert.Equal(2, slots.Count);
+        Assert.Same(first, slots[0]);
+        Assert.All(slots, slot => Assert.Empty(slot.SignalReference));
+        Assert.All(slots, slot => Assert.Empty(slot.FunctionalConstraint));
+
+        Assert.Null(IedBrowserGooseInspection.OrderedUnboundWireEntries(
+            frame with { WireDataSetEntryCount = 3 }));
+        Assert.Null(IedBrowserGooseInspection.OrderedUnboundWireEntries(
+            frame with { Leaves = [second, first] }));
+        Assert.Null(IedBrowserGooseInspection.OrderedUnboundWireEntries(
+            frame with { Leaves = [first, first] }));
+        Assert.Null(IedBrowserGooseInspection.OrderedUnboundWireEntries(
+            frame with { Leaves = [first, second with { Order = 7 }] }));
+        Assert.Null(IedBrowserGooseInspection.OrderedUnboundWireEntries(
+            frame with { Leaves = [first, second with { Value = "<missing in frame>" }] }));
+        Assert.Null(IedBrowserGooseInspection.OrderedUnboundWireEntries(
+            frame with { Leaves = [first, second with { Value = "" }] }));
+        Assert.Null(IedBrowserGooseInspection.OrderedUnboundWireEntries(
+            frame with { Leaves = [] }));
+
+        // The UI displays at most 128 entries; an invalid *129th* wire
+        // slot must still invalidate the entire PDU, including the first 128.
+        var large = Enumerable.Range(0, 129)
+            .Select(i => new GooseLeafValueSnapshot(i + 1, i,
+                $"wire[{i + 1}]", "", "", "", "", "Good", "", false, "Unbound"))
+            .ToArray();
+        Assert.Equal(129, IedBrowserGooseInspection.OrderedUnboundWireEntries(
+            Frame(leaves: large))?.Count);
+        large[128] = large[128] with { DataSetIndex = 127 };
+        Assert.Null(IedBrowserGooseInspection.OrderedUnboundWireEntries(
+            Frame(leaves: large)));
+    }
+
+    [Fact]
     public void ExactSclGoCbMetadata_ProjectsOnlyConfiguredVlanAndTimingFields()
     {
         var expected = Expected() with
@@ -79,7 +122,27 @@ public sealed class IedBrowserGooseInspectionTests
         Assert.Null(IedBrowserGooseInspection.VerifiedMembers(frame with
             { WireDataSetEntryCount = 1 }, set));
         Assert.Null(IedBrowserGooseInspection.VerifiedMembers(frame with
+            { DataSetReference = "LD/LLN0$DIFFERENT" }, set));
+        Assert.Null(IedBrowserGooseInspection.VerifiedMembers(frame with
+            { Leaves = [a, b with { Order = 1 }] }, set));
+        Assert.Null(IedBrowserGooseInspection.VerifiedMembers(frame with
             { Leaves = [a, b with { FunctionalConstraint = "MX" }] }, set));
+        var nonContiguous = new LiveIedDataSetModel
+        {
+            Reference = set.Reference,
+            Members =
+            [
+                new LiveIedDataSetMemberModel
+                {
+                    Index = 1, Reference = first.Reference, FunctionalConstraint = "ST"
+                },
+                new LiveIedDataSetMemberModel
+                {
+                    Index = 2, Reference = second.Reference, FunctionalConstraint = "ST"
+                }
+            ]
+        };
+        Assert.Null(IedBrowserGooseInspection.VerifiedMembers(frame, nonContiguous));
         var ambiguous = new LiveIedDataSetModel { Reference = set.Reference,
             Members = [first, first] };
         Assert.Null(IedBrowserGooseInspection.VerifiedMembers(frame, ambiguous));
@@ -229,6 +292,7 @@ public sealed class IedBrowserGooseInspectionTests
             "MainWindow.IedBrowser.cs"));
         Assert.Contains("ResolveWireDataSet(", source);
         Assert.Contains("allData[{slot + 1}] · unbound", source);
+        Assert.Contains("IedBrowserGooseInspection.OrderedUnboundWireEntries(frameView)", source);
         Assert.Contains("GOOSE raw allData · unbound", source);
         Assert.Contains("Not current", source);
         Assert.Contains("Received GOOSE PDU datSet", source);

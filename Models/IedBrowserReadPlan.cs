@@ -440,7 +440,15 @@ public static class IedBrowserReadPlan
         // must be admitted through the same bounded read plan, not skipped
         // because the generic attribute walker cannot see the control block.
         // Only read-only NumOfSG/ActSG/LActTm; never EditSG/CnfEdit/SE.
+        // A syntactically valid SGCB/GoCB from an unrelated MMS domain is
+        // not an authority for this live association. Reuse one exact domain
+        // index for both bounded read-only control-state inventories.
+        var liveDomains = verifiedLiveModel.LogicalDevices
+            .Select(ld => ld.MmsDomain)
+            .Where(domain => !string.IsNullOrWhiteSpace(domain))
+            .ToHashSet(StringComparer.Ordinal);
         var settings = verifiedLiveModel.SettingGroupControls
+            .Where(block => liveDomains.Contains(block.Domain))
             .SelectMany(block => IedBrowserControlStateEvidence.ReadTargets(block, "SGCB"))
             .GroupBy(target => IedBrowserLiveValues.CanonicalReference(target.Reference) +
                                "|" + target.FunctionalConstraint,
@@ -460,6 +468,7 @@ public static class IedBrowserReadPlan
         // Limit background status reads for dense GoCB catalogs; unvisited
         // objects retain honest Not read evidence.
         var goose = verifiedLiveModel.GooseControlBlocks
+            .Where(block => liveDomains.Contains(block.Domain))
             .SelectMany(block => IedBrowserControlStateEvidence.ReadTargets(block, "GoCB"))
             .GroupBy(target => IedBrowserLiveValues.CanonicalReference(target.Reference) +
                                "|" + target.FunctionalConstraint,

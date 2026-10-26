@@ -1311,16 +1311,34 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
             (Iec61850ControlFlightAdmission.IsUnavailable(
                 ref session.ControlCommandActive, ref session.ControlFlightQuarantined));
 
+    // Each connection owns a non-reusable identity. No device ID or control
+    // reference alone may authorize UI results after Stop/Reconnect.
+    public Guid GetControlAssociationId(string deviceId)
+        => _sessions.TryGetValue(deviceId, out var session) &&
+           session.Client.IsConnected &&
+           !session.ControlLifetimeCancellation.IsCancellationRequested
+            ? session.ControlSessionIdentity : Guid.Empty;
+
+    public bool IsControlAssociationCurrent(string deviceId, Guid associationId)
+        => associationId != Guid.Empty &&
+           GetControlAssociationId(deviceId) == associationId;
+
     public async Task<Iec61850ControlCommandResult> ExecuteControlAsync(
         string deviceId,
         Iec61850ControlCommandRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Guid expectedAssociation = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(deviceId);
         ArgumentNullException.ThrowIfNull(request);
 
         if (!_sessions.TryGetValue(deviceId, out var session) || !session.Client.IsConnected)
             throw new InvalidOperationException("The IED must be connected before a command can be sent.");
+        if (expectedAssociation != Guid.Empty &&
+            (session.ControlSessionIdentity != expectedAssociation ||
+             session.ControlLifetimeCancellation.IsCancellationRequested))
+            throw new InvalidOperationException(
+                "Control NOT SENT: MMS association changed since operator confirmation.");
 
         // One physical control target per device, regardless of DataSet aliases.
         // Failed concurrent admission is local: no additional MMS Operate.
@@ -1354,7 +1372,12 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         {
             Log("INFO", session.Device.Name,
                 $"Control execution requested: {request.Signal.ObjectReference} value={request.ValueText}; test={request.TestMode}; interlock={request.InterlockCheck}; synchro={request.SynchroCheck}; origin={request.OriginCategory}/{request.Originator}; IED acceptance is determined only from native MMS wire evidence.");
-            nativeFlight = session.Client.ExecuteControlAsync(request, nativeCancellation.Token);
+            // The native client writes decoded ctlModel/CDC/feedback after awaits.
+            // It must NEVER hold the WPF-owned mutable SignalDefinition alias:
+            // an old association can complete after the caller's deadline.
+            var detachedRequest = Iec61850ControlRequestSnapshot.Create(request);
+            nativeFlight = session.Client.ExecuteControlAsync(
+                detachedRequest, nativeCancellation.Token);
             result = await Iec61850ControlFlightAdmission.WaitForNativeAsync(
                 nativeFlight, ControlFlightDeadline, cancellationToken,
                 () => Iec61850ControlFlightAdmission.Quarantine(ref session.ControlFlightQuarantined),

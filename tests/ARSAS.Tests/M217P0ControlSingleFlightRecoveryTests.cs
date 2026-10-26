@@ -1,4 +1,5 @@
 using System.Threading;
+using ArIED61850Tester.Models;
 using ArIED61850Tester.Services;
 
 namespace ARSAS.Tests;
@@ -242,4 +243,77 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
         Assert.Contains("CONTROL_UI_TIMEOUT", code);
         Assert.Contains("Control outcome UNKNOWN", code);
     }
+    [Fact]
+    public async Task DetachedLateFlightCannotMutateGuiOwnedSignalAfterCancellation()
+    {
+        var gui = new ArIED61850Tester.Models.SignalDefinition
+        {
+            Name = "CSWI6 Pos", ObjectReference = "LD/CSWI6.Pos",
+            IsControlSignal = true, ControlCdc = "DPC",
+            ControlStatusReference = "LD/CSWI6.Pos.stVal",
+            ControlSemanticVerified = true,
+            ControlCurrentValue = "Open [01]"
+        };
+        gui.AcceptVerifiedLiveControlCdc("DPC");
+        // SignalDefinition normalizes operator labels when live CDC is
+        // accepted ("Open [01]" can become "Open"). Assert immutability
+        // against the GUI's actual pre-flight state, not a display spelling.
+        var originalGuiValue = gui.ControlCurrentValue;
+        var request = new Iec61850ControlCommandRequest
+        {
+            Signal = gui, ValueText = "Closed [10]", TestMode = true,
+            FeedbackTimeoutMs = 12000
+        };
+        var detached = Iec61850ControlRequestSnapshot.Create(request);
+        Assert.NotSame(gui, detached.Signal);
+        Assert.Equal("DPC", detached.Signal.VerifiedLiveControlCdc);
+
+        var nativeFinished = new TaskCompletionSource<int>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        using var userCancelled = new CancellationTokenSource();
+        var quarantine = 0;
+        var cancelledNative = 0;
+        var waiter = Iec61850ControlFlightAdmission.WaitForNativeAsync(
+            nativeFinished.Task, TimeSpan.FromMinutes(1),
+            userCancelled.Token,
+            () => Interlocked.Exchange(ref quarantine, 1),
+            () => Interlocked.Exchange(ref cancelledNative, 1));
+        userCancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await waiter);
+        Assert.Equal(1, Volatile.Read(ref quarantine));
+        Assert.Equal(1, Volatile.Read(ref cancelledNative));
+
+        // The real native task did not finish when its caller stopped waiting.
+        // Late completion may mutate only its private detached signal copy.
+        detached.Signal.ControlCurrentValue = "Closed [10]";
+        detached.Signal.ControlSemanticVerified = false;
+        nativeFinished.TrySetResult(1);
+        Assert.Equal(originalGuiValue, gui.ControlCurrentValue);
+        Assert.True(gui.ControlSemanticVerified);
+        Assert.Equal(1, Volatile.Read(ref quarantine));
+    }
+
+    [Fact]
+    public void OperatorControlPublicationUsesNonreusableAssociationFence()
+    {
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root is not null &&
+               !File.Exists(Path.Combine(root.FullName, "MainWindow.xaml.cs")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var ui = File.ReadAllText(Path.Combine(root!.FullName, "MainWindow.xaml.cs"));
+        var runtime = File.ReadAllText(Path.Combine(root.FullName,
+            "Services/Iec61850MonitorRuntime.cs"));
+        var facade = File.ReadAllText(Path.Combine(root.FullName,
+            "Services/UiResponsiveIec61850MonitorRuntimeFacade.cs"));
+        Assert.Contains("Guid dispatchedAssociation = Guid.Empty;", ui);
+        Assert.Contains("IsControlAssociationCurrent(device.DeviceId, dispatchedAssociation)", ui);
+        Assert.Contains("CONTROL_STALE_RESULT_IGNORED", ui);
+        Assert.Contains("_applicationCancellation.Token, dispatchedAssociation", ui);
+        Assert.Contains("session.ControlSessionIdentity != expectedAssociation", runtime);
+        Assert.Contains("Iec61850ControlRequestSnapshot.Create(request)", runtime);
+        Assert.Contains("detachedRequest, nativeCancellation.Token", runtime);
+        Assert.Contains("_inner.IsControlAssociationCurrent(deviceId, associationId)", facade);
+    }
+
 }

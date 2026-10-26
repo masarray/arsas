@@ -51,6 +51,51 @@ public sealed class IedBrowserControlStateEvidenceTests
     }
 
     [Fact]
+    public void InitialControlStateHydrationRejectsForeignMmsDomain()
+    {
+        var valid = Block(fields: ["ActSG"]);
+        var foreign = new LiveIedControlBlockModel
+        {
+            Name = "SGCB", Kind = "SettingGroupControl",
+            Domain = "FOREIGN", LogicalNode = "LLN0",
+            Reference = "FOREIGN/LLN0.SP.SGCB",
+            FunctionalConstraint = "SP", DiscoveryStatus = "AttributeInventoryOnly",
+            Attributes = ["ActSG"]
+        };
+        var localGoose = Block("GSEControl", "GO", "BCU",
+            fields: ["GoEna"]);
+        var foreignGoose = new LiveIedControlBlockModel
+        {
+            Name = "BCU", Kind = "GSEControl",
+            Domain = "FOREIGN", LogicalNode = "LLN0",
+            Reference = "FOREIGN/LLN0.GO.BCU",
+            FunctionalConstraint = "GO", DiscoveryStatus = "AttributeInventoryOnly",
+            Attributes = ["GoEna"]
+        };
+        var model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel { MmsDomain = "LD" }],
+            SettingGroupControls = [foreign, valid],
+            GooseControlBlocks = [foreignGoose, localGoose]
+        };
+        var ledger = new IedBrowserLiveValues();
+        ledger.BeginAssociation();
+        var admitted = IedBrowserReadPlan.BuildInitialPriority(model, ledger, 32);
+        Assert.Contains(admitted, target => target.Reference == "LD/LLN0.SGCB.ActSG");
+        Assert.Contains(admitted, target => target.Reference == "LD/LLN0.BCU.GoEna");
+        Assert.DoesNotContain(admitted, target =>
+            target.Reference.StartsWith("FOREIGN/", StringComparison.Ordinal));
+
+        model = new LiveIedModelDiscoveryDocument
+        {
+            LogicalDevices = [new LiveIedLogicalDeviceModel { MmsDomain = "LD" }],
+            SettingGroupControls = [foreign],
+            GooseControlBlocks = [foreignGoose]
+        };
+        Assert.Empty(IedBrowserReadPlan.BuildInitialPriority(model, ledger, 32));
+    }
+
+    [Fact]
     public void GocbGoEnaAndNdsComAreMmsReads_NotPassiveFrameAssumptions()
     {
         var block = Block("GSEControl", "GO", "BCU", fields:

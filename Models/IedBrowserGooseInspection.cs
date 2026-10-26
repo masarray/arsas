@@ -90,22 +90,52 @@ public static class IedBrowserGooseInspection
         return matches.Length == 1 ? matches[0] : null;
     }
 
+    /// <summary>
+    /// Admit only a complete and contiguous received allData vector when no
+    /// exact FCDA directory can be verified. The returned entries remain
+    /// explicitly unbound: their position never proves an IEC reference or FC.
+    /// Validate the WHOLE PDU before showing even the first bounded UI rows.
+    /// </summary>
+    public static IReadOnlyList<GooseLeafValueSnapshot>? OrderedUnboundWireEntries(
+        GooseStreamSnapshot frame)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+        var count = frame.WireDataSetEntryCount;
+        if (count <= 0 || count != frame.Leaves.Count)
+            return null;
+        for (var index = 0; index < count; index++)
+        {
+            var leaf = frame.Leaves[index];
+            if (leaf.DataSetIndex != index || leaf.Order != index + 1 ||
+                string.IsNullOrWhiteSpace(leaf.Value) ||
+                leaf.Value == "<missing in frame>")
+                return null;
+        }
+        return frame.Leaves;
+    }
+
     public static IReadOnlyList<GooseLeafValueSnapshot>? VerifiedMembers(
         GooseStreamSnapshot frame, LiveIedDataSetModel directory)
     {
         ArgumentNullException.ThrowIfNull(frame);
         ArgumentNullException.ThrowIfNull(directory);
         var members = directory.Members.OrderBy(x => x.Index).ToArray();
+        // A cached directory is not evidence for a different received datSet.
+        // Bind its complete reference before interpreting any FCDA leaf.
         if (members.Length == 0 || frame.WireDataSetEntryCount != members.Length ||
             frame.Leaves.Count != members.Length ||
-            members.Select(x => x.Index).Distinct().Count() != members.Length)
+            string.IsNullOrWhiteSpace(directory.Reference) ||
+            !string.Equals(Canonical(frame.DataSetReference),
+                Canonical(directory.Reference), StringComparison.Ordinal))
             return null;
-        // Validate entire ordered vector before exposing any member value.
+        // Validate the full zero-based directory, one-based presentation order,
+        // and each exact wire reference/FC before publishing any member value.
         for (var slot = 0; slot < members.Length; slot++)
         {
             var declared = members[slot];
             var wire = frame.Leaves[slot];
-            if (wire.DataSetIndex != slot ||
+            if (declared.Index != slot || wire.DataSetIndex != slot ||
+                wire.Order != slot + 1 ||
                 Canonical(wire.SignalReference) != Canonical(declared.Reference) ||
                 !string.Equals(wire.FunctionalConstraint, declared.FunctionalConstraint,
                     StringComparison.OrdinalIgnoreCase) ||
