@@ -7,6 +7,8 @@ on:
       - ".github/workflows/**"
       - "scripts/audit-ci-workflows.py"
       - "scripts/test-ci-workflows.py"
+      - "scripts/verify-p7-dual-ingress-diagnostic.py"
+      - "scripts/test-p7-dual-ingress-diagnostic.py"
       - "scripts/classify-ci-changes.py"
       - "scripts/test-classify-ci-changes.py"
       - "scripts/write-ci-canonical-proof.py"
@@ -32,6 +34,8 @@ on:
       - ".github/workflows/**"
       - "scripts/audit-ci-workflows.py"
       - "scripts/test-ci-workflows.py"
+      - "scripts/verify-p7-dual-ingress-diagnostic.py"
+      - "scripts/test-p7-dual-ingress-diagnostic.py"
       - "scripts/classify-ci-changes.py"
       - "scripts/test-classify-ci-changes.py"
       - "scripts/write-ci-canonical-proof.py"
@@ -77,6 +81,9 @@ jobs:
 
       - name: Run offline CI workflow guard tests
         run: python3 scripts/test-ci-workflows.py
+
+      - name: Validate sanitized P7.6 dual-ingress diagnostic parser (read-only)
+        run: python3 scripts/test-p7-dual-ingress-diagnostic.py
 
       - name: Run conservative CI P1 classifier fixtures
         run: python3 scripts/test-classify-ci-changes.py
