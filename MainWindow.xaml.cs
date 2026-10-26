@@ -1822,6 +1822,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         DismissControlShout();
         var clickStopwatch = Stopwatch.StartNew();
+        Guid dispatchedAssociation = Guid.Empty;
+        bool IsRetiredAssociation() =>
+            dispatchedAssociation != Guid.Empty &&
+            !_runtime.IsControlAssociationCurrent(device.DeviceId, dispatchedAssociation);
+        void LogStaleResult() => AddLog("WARN", device.Name,
+            $"CONTROL_STALE_RESULT_IGNORED: {signal.ObjectReference}; " +
+            $"sequence={claim.Sequence}; association={dispatchedAssociation:N}; " +
+            "no old control result published into the current GUI model.");
         signal.ControlLastResult = $"Dispatching {claim.RequestedValue}…";
         SetStatus($"{device.Name}: dispatching {signal.Name} = {claim.RequestedValue}…");
         AddLog("INFO", device.Name,
@@ -1849,6 +1857,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 }
             }
 
+            dispatchedAssociation = _runtime.GetControlAssociationId(device.DeviceId);
+            if (dispatchedAssociation == Guid.Empty)
+                throw new InvalidOperationException(
+                    "Control NOT SENT: no current MMS association after connection.");
             AddLog("INFO", device.Name,
                 $"IEC 61850 control execution started: {signal.ObjectReference}; sequence={claim.Sequence}; value={claim.RequestedValue}; wire send is not assumed until native evidence is returned.");
             var result = await _runtime.ExecuteControlAsync(
@@ -1865,8 +1877,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     CommandTerminationTimeoutMs = 10000,
                     OriginCategory = "StationControl"
                 },
-                _applicationCancellation.Token);
+                _applicationCancellation.Token, dispatchedAssociation);
 
+            if (IsRetiredAssociation())
+            {
+                LogStaleResult();
+                return;
+            }
             if (!string.IsNullOrWhiteSpace(result.ControlModelText))
                 signal.ControlModelText = result.ControlModelText;
             if (!string.IsNullOrWhiteSpace(result.FeedbackValue) && result.FeedbackValue != "-")
@@ -1889,12 +1906,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (OperationCanceledException)
         {
+            if (IsRetiredAssociation())
+            {
+                LogStaleResult();
+                return;
+            }
             signal.ControlLastResult = "Command cancelled; if Operate was already dispatched, verify actual IED position.";
             SetStatus($"{device.Name}: {signal.Name} command cancelled; verify the final process state.");
         }
         catch (InvalidOperationException ex) when (
             ex.Message.Contains("command NOT SENT", StringComparison.OrdinalIgnoreCase))
         {
+            if (IsRetiredAssociation())
+            {
+                LogStaleResult();
+                return;
+            }
             // A rejected local admission is NOT an MMS failure and not an
             // UNKNOWN process outcome. Surface the precise busy/stop reason
             // instead of the generic "Command failed" control popup.
@@ -1911,6 +1938,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             (ex.Message.Contains("in progress", StringComparison.OrdinalIgnoreCase) ||
              ex.Message.Contains("unresolved", StringComparison.OrdinalIgnoreCase)))
         {
+            if (IsRetiredAssociation())
+            {
+                LogStaleResult();
+                return;
+            }
             signal.ControlLastResult = "Command NOT SENT: " + ex.Message;
             AddLog("WARN", device.Name,
                 $"CONTROL_UI_LOCAL_GATE: {signal.ObjectReference}; {ex.Message}");
@@ -1921,6 +1953,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (TimeoutException ex)
         {
+            if (IsRetiredAssociation())
+            {
+                LogStaleResult();
+                return;
+            }
             signal.ControlLastResult =
                 "Control outcome UNKNOWN — MMS flight exceeded deadline. " +
                 "Verify IED process state and reconnect before another command.";
@@ -1933,6 +1970,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (Exception ex)
         {
+            if (IsRetiredAssociation())
+            {
+                LogStaleResult();
+                return;
+            }
             signal.ControlLastResult = $"Command failed: {ex.Message}";
             AddLog("ERROR", device.Name, $"Quick control failed for {signal.ObjectReference}: {ex}");
             SetStatus($"{device.Name}: {signal.Name} command failed — {ex.Message}");

@@ -205,10 +205,17 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             cancellationToken,
             token => _inner.ConfigureControlModelAsync(deviceId, signal, expected, requested, token));
 
+    public Guid GetControlAssociationId(string deviceId)
+        => _inner.GetControlAssociationId(deviceId);
+
+    public bool IsControlAssociationCurrent(string deviceId, Guid associationId)
+        => _inner.IsControlAssociationCurrent(deviceId, associationId);
+
     public Task<Iec61850ControlCommandResult> ExecuteControlAsync(
         string deviceId,
         Iec61850ControlCommandRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Guid expectedAssociation = default)
         // An IEC command cannot silently queue behind a bulk discovery,
         // browser Read All or lifecycle operation. If the single association
         // is busy, fail locally before a wire write; NEVER bypass its IO gate.
@@ -223,7 +230,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                     request.ValueText);
                 try
                 {
-                    return await _inner.ExecuteControlAsync(deviceId, request, token).ConfigureAwait(false);
+                    return await _inner.ExecuteControlAsync(
+                        deviceId, request, token, expectedAssociation).ConfigureAwait(false);
                 }
                 finally
                 {
