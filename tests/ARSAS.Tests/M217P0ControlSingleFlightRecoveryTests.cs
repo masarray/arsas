@@ -416,4 +416,56 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
         Assert.Contains("signal.ClearLiveControlAuthority();", facade);
     }
 
+    [Fact]
+    public void PostWriteInspectionRejectsRetiredMmsAndLiveModelEpochs()
+    {
+        var oldMms = Guid.NewGuid();
+        var currentMms = Guid.NewGuid();
+        const long writeModelEpoch = 54;
+        bool Current(Guid association) => association == currentMms;
+        Assert.False(Iec61850ControlInspectionPublication.IsCurrentPostWriteTarget(
+            Guid.Empty, Current, writeModelEpoch, writeModelEpoch, true, true));
+        Assert.False(Iec61850ControlInspectionPublication.IsCurrentPostWriteTarget(
+            oldMms, Current, writeModelEpoch, writeModelEpoch, true, true));
+        Assert.False(Iec61850ControlInspectionPublication.IsCurrentPostWriteTarget(
+            currentMms, Current, writeModelEpoch, writeModelEpoch + 1, true, true));
+        Assert.False(Iec61850ControlInspectionPublication.IsCurrentPostWriteTarget(
+            currentMms, Current, writeModelEpoch, writeModelEpoch, false, true));
+        Assert.False(Iec61850ControlInspectionPublication.IsCurrentPostWriteTarget(
+            currentMms, Current, writeModelEpoch, writeModelEpoch, true, false));
+        Assert.True(Iec61850ControlInspectionPublication.IsCurrentPostWriteTarget(
+            currentMms, Current, writeModelEpoch, writeModelEpoch, true, true));
+    }
+
+    [Fact]
+    public void PostWriteLateCancellationAndFailureNeverRevokeCurrentControlProof()
+    {
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(
+                   Path.Combine(root.FullName, "MainWindow.xaml.cs")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var code = File.ReadAllText(Path.Combine(root!.FullName, "MainWindow.xaml.cs"));
+        var begin = code.IndexOf("private async Task ReinspectConfiguredControlAsync(", StringComparison.Ordinal);
+        var end = code.IndexOf("private void RemoveControlFeedbackIndex(", begin, StringComparison.Ordinal);
+        Assert.True(begin >= 0 && end > begin);
+        var postWrite = code[begin..end];
+        Assert.Contains("expectedMmsAssociation = _runtime.GetControlAssociationId(device.DeviceId)", postWrite);
+        Assert.Contains("Iec61850ControlInspectionPublication.IsCurrentPostWriteTarget(", postWrite);
+        Assert.Contains("writeAssociation, device.LiveValues.Association", postWrite);
+        Assert.Contains("CTL_MODEL_POSTWRITE_STALE_IGNORED", postWrite);
+        var guardCount = postWrite.Split("if (!IsCurrentPostWriteInspection())").Length - 1;
+        Assert.Equal(3, guardCount); // success, cancellation, fault
+        var cancelled = postWrite.IndexOf("catch (OperationCanceledException)", StringComparison.Ordinal);
+        var failed = postWrite.IndexOf("catch (Exception ex)", StringComparison.Ordinal);
+        Assert.True(cancelled > 0 && failed > cancelled);
+        Assert.True(postWrite.IndexOf("if (!IsCurrentPostWriteInspection())", cancelled,
+            StringComparison.Ordinal) < postWrite.IndexOf("signal.ClearLiveControlAuthority();", cancelled,
+            StringComparison.Ordinal));
+        Assert.True(postWrite.IndexOf("if (!IsCurrentPostWriteInspection())", failed,
+            StringComparison.Ordinal) < postWrite.IndexOf("signal.ClearLiveControlAuthority();", failed,
+            StringComparison.Ordinal));
+        Assert.Contains("if (IsCurrentPostWriteInspection())", postWrite);
+    }
+
 }

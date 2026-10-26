@@ -2112,19 +2112,33 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        // A successful CF Write/readback proves only ctlModel. A fresh typed
-        // descriptor + CDC/ctlVal/status verification must gate Operate.
+        // Successful CF Write/readback proves only ctlModel, not Operate.
+        // Pin BOTH the native association and the model's epoch before await.
+        // A late inspection from a retired socket must not revoke, overwrite
+        // or report success for the replacement association's Command Dock.
+        var expectedMmsAssociation = _runtime.GetControlAssociationId(device.DeviceId);
+        if (expectedMmsAssociation == Guid.Empty)
+        {
+            SetStatus($"{device.Name}: ctlModel inspection requires a current MMS association.");
+            return;
+        }
+        bool IsCurrentPostWriteInspection() =>
+            Iec61850ControlInspectionPublication.IsCurrentPostWriteTarget(
+                expectedMmsAssociation,
+                token => _runtime.IsControlAssociationCurrent(device.DeviceId, token),
+                writeAssociation, device.LiveValues.Association,
+                device.IsConnected, device.Signals.Contains(signal));
+
         signal.ControlInspectionBusy = true;
         try
         {
             var capabilities = await _runtime.InspectControlAsync(
                 device.DeviceId, signal, _applicationCancellation.Token);
-            if (!device.IsConnected || writeAssociation != device.LiveValues.Association ||
-                !device.Signals.Contains(signal))
+            if (!IsCurrentPostWriteInspection())
             {
-                signal.ClearLiveControlAuthority();
-                signal.ControlModelText = "Auto-detect";
-                SetStatus($"{device.Name}: ctlModel inspection belongs to a replaced association.");
+                AddLog("WARN", device.Name,
+                    $"CTL_MODEL_POSTWRITE_STALE_IGNORED: {signal.ObjectReference}; " +
+                    "an obsolete MMS association cannot publish or revoke current control evidence.");
                 return;
             }
             signal.ControlCurrentValue = capabilities.CurrentValue;
@@ -2140,16 +2154,27 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (OperationCanceledException)
         {
+            if (!IsCurrentPostWriteInspection())
+            {
+                AddLog("WARN", device.Name,
+                    $"CTL_MODEL_POSTWRITE_STALE_IGNORED: {signal.ObjectReference}; cancelled after association replacement.");
+                return;
+            }
             signal.ClearLiveControlAuthority();
             signal.ControlModelText = "Auto-detect";
             SetStatus($"{device.Name}: ctlModel reinspection cancelled; control remains disabled.");
         }
         catch (Exception ex)
         {
+            if (!IsCurrentPostWriteInspection())
+            {
+                AddLog("WARN", device.Name,
+                    $"CTL_MODEL_POSTWRITE_STALE_IGNORED: {signal.ObjectReference}; retired inspection fault {ex.GetType().Name}.");
+                return;
+            }
             // An incomplete read must never re-enable Operate. Do not
             // masquerade as a spinner forever after an actual failure.
             signal.ClearLiveControlAuthority();
-            signal.ControlModelText = "Auto-detect";
             signal.ControlModelText = "Verification required";
             signal.ControlInspectionEvidence = $"Fresh typed ctlModel inspection failed: {ex.Message}";
             signal.ControlLastResult = "Command disabled: verification required.";
@@ -2159,8 +2184,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         finally
         {
+            // Release the original inspection's visual busy hint, but do not
+            // rebuild live control projections from a retired MMS association.
             signal.ControlInspectionBusy = false;
-            if (device.IsConnected)
+            if (IsCurrentPostWriteInspection())
             {
                 device.RefreshCommandSignalProjection();
                 RebuildControlFeedbackIndex(device);

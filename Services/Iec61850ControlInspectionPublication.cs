@@ -10,6 +10,23 @@ namespace ArIED61850Tester.Services;
 /// </summary>
 public static class Iec61850ControlInspectionPublication
 {
+    /// <summary>
+    /// The post-Write typed inspection is tied to two independent epochs:
+    /// the non-reusable MMS session GUID and the live model association.
+    /// Neither a canceled old read nor a late fault may clear new GUI proof.
+    /// </summary>
+    public static bool IsCurrentPostWriteTarget(
+        Guid expectedMmsAssociation, Func<Guid, bool> isCurrentMmsAssociation,
+        long expectedModelAssociation, long currentModelAssociation,
+        bool connected, bool belongsToCurrentModel)
+    {
+        ArgumentNullException.ThrowIfNull(isCurrentMmsAssociation);
+        return expectedMmsAssociation != Guid.Empty &&
+               connected && belongsToCurrentModel &&
+               expectedModelAssociation == currentModelAssociation &&
+               isCurrentMmsAssociation(expectedMmsAssociation);
+    }
+
     public static bool TryApply(
         SignalDefinition guiSignal, Iec61850ControlCapabilities capabilities,
         Guid expectedAssociation, Func<Guid, bool> isCurrentAssociation)
