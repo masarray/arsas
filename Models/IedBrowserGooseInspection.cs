@@ -90,6 +90,30 @@ public static class IedBrowserGooseInspection
         return matches.Length == 1 ? matches[0] : null;
     }
 
+    /// <summary>
+    /// Admit only a complete and contiguous received allData vector when no
+    /// exact FCDA directory can be verified. The returned entries remain
+    /// explicitly unbound: their position never proves an IEC reference or FC.
+    /// Validate the WHOLE PDU before showing even the first bounded UI rows.
+    /// </summary>
+    public static IReadOnlyList<GooseLeafValueSnapshot>? OrderedUnboundWireEntries(
+        GooseStreamSnapshot frame)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+        var count = frame.WireDataSetEntryCount;
+        if (count <= 0 || count != frame.Leaves.Count)
+            return null;
+        for (var index = 0; index < count; index++)
+        {
+            var leaf = frame.Leaves[index];
+            if (leaf.DataSetIndex != index || leaf.Order != index + 1 ||
+                string.IsNullOrWhiteSpace(leaf.Value) ||
+                leaf.Value == "<missing in frame>")
+                return null;
+        }
+        return frame.Leaves;
+    }
+
     public static IReadOnlyList<GooseLeafValueSnapshot>? VerifiedMembers(
         GooseStreamSnapshot frame, LiveIedDataSetModel directory)
     {
