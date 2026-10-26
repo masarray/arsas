@@ -26,6 +26,15 @@ The patch does NOT change `NativeIec61850Client`, ARIEC61850 engine, Write/readb
 ### Exact-head CI (update with final results)
 At first source checkpoint: [SCL R7 run 40331840419](https://github.com/masarray/arsas/actions/runs/40331840419) and [Windows Build run 40331840977](https://github.com/masarray/arsas/actions/runs/40331840977) **in progress**, reference guard [40331840933](https://github.com/masarray/arsas/actions/runs/40331840933) and P1 advisory [40331840873](https://github.com/masarray/arsas/actions/runs/40331840873) **SUCCESS**. SCL has passed application build, canonical regressions, and engine tests before portable packaging; Windows still processing build. Do not attribute D13 full CI to a different D15 head; no manual reruns. Recheck final Windows native bridge CTest/managed packaging, EXE publish/smoke and exact SHA artifacts.
 
+## D15 final exact-head CI and user-test candidate (post-checkpoint)
+
+**Full CI SUCCESS at EXACT stacked #756 HEAD `098ec4abdf7ce8681ec97111f12f3f6151eade78`**, still 2-file draft, parent #755 unchanged:
+- [Windows run 40331840977](https://github.com/masarray/arsas/actions/runs/40331840977): **COMPLETED SUCCESS**. App Build, pinned engine canonical test, ARSAS managed regression (including two new model-epoch fence tests), exact SHA attestation, pinned ArdIrec native CTest, managed packaged native bridge integration, portable EXE publish, portable smoke, sealed package and artifact upload all succeeded.
+- [SCL R7 run 40331840419](https://github.com/masarray/arsas/actions/runs/40331840419): **COMPLETED SUCCESS** on the same SHA, including canonical-export regression, engine build/tests, R7 portable publish and smoke.
+- [Reference Guard 40331840933](https://github.com/masarray/arsas/actions/runs/40331840933) and [P1 Advisory 40331840873](https://github.com/masarray/arsas/actions/runs/40331840873) **SUCCESS**.
+- Exact-head portable [artifact #12654339747](https://github.com/masarray/arsas/actions/runs/40331840977/artifacts/12654339747), CI name `ARSAS-1.6.42-win-x64-portable.exe` but this **is a D15 engineering build, not published stable v1.6.42**. [Test evidence #12653769824](https://github.com/masarray/arsas/actions/runs/40331840977/artifacts/12653769824), [native CTest evidence #12654109515](https://github.com/masarray/arsas/actions/runs/40331840977/artifacts/12654109515).
+- **Safety owner gate remains OPEN**: review #756 against parent #755, real Direct/SBOw late inspection and GOOSE/SGCB cases on physical IED, #615 owner, #606 owner and protected RC #727. No auto merge, no live Operate authorization, R7/R10 physical FAT still required.
+
 ## Historic RCB UI audit #599 — KEEP OPEN
 
 [Individual #599 source evidence](https://github.com/masarray/arsas/pull/599#issuecomment-6417376768): ancestor head `70ad34392fd9da0e6851f2995f740e8fd8f80aed` → RC ahead1267/behind0. All four original path blob IDs checked, original 3 test methods→two identical, 18 assertions→15 identical.
