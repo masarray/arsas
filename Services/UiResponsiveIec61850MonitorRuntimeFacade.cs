@@ -187,9 +187,16 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     public async Task<Iec61850ControlCapabilities> InspectControlAsync(
         string deviceId,
         SignalDefinition signal,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<bool>? stillCurrentPublicationTarget = null)
     {
         ArgumentNullException.ThrowIfNull(signal);
+        // Caller-owned model epoch is checked on the invoking UI context.
+        // The runtime's own nonreusable association GUID remains mandatory.
+        if (stillCurrentPublicationTarget is not null &&
+            !stillCurrentPublicationTarget())
+            throw new OperationCanceledException(
+                "Control inspection NOT SENT: the selected live model changed.");
         // Snapshot before the first await on the invoking GUI context. Runtime
         // performs the I/O on its worker lane; native never receives this
         // WPF-owned signal or a reference it can mutate after disconnect.
@@ -206,6 +213,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
                 deviceId, cancellationToken,
                 token => _inner.InspectControlAsync(deviceId, detached, token));
             if (signal.ControlCommandBusy ||
+                (stillCurrentPublicationTarget is not null &&
+                 !stillCurrentPublicationTarget()) ||
                 !Iec61850ControlInspectionPublication.TryApply(
                     signal, capabilities, association,
                     expected => _inner.IsControlAssociationCurrent(deviceId, expected)))
@@ -220,6 +229,8 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             // Do it only for this same association, on the caller's GUI
             // context; never let an old native task mutate a newer row.
             if (!signal.ControlCommandBusy &&
+                (stillCurrentPublicationTarget is null ||
+                 stillCurrentPublicationTarget()) &&
                 _inner.IsControlAssociationCurrent(deviceId, association))
             {
                 signal.ClearLiveControlAuthority();

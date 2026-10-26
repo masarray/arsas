@@ -2132,8 +2132,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         signal.ControlInspectionBusy = true;
         try
         {
+            // The predicate is evaluated by the facade on the WPF caller
+            // context BEFORE it mutates SignalDefinition or handles a fault.
+            // A post-await-only check here would be too late.
             var capabilities = await _runtime.InspectControlAsync(
-                device.DeviceId, signal, _applicationCancellation.Token);
+                device.DeviceId, signal, _applicationCancellation.Token,
+                IsCurrentPostWriteInspection);
             if (!IsCurrentPostWriteInspection())
             {
                 AddLog("WARN", device.Name,

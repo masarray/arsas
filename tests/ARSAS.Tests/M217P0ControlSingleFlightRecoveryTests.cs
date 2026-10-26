@@ -454,6 +454,9 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
         Assert.Contains("Iec61850ControlInspectionPublication.IsCurrentPostWriteTarget(", postWrite);
         Assert.Contains("writeAssociation, device.LiveValues.Association", postWrite);
         Assert.Contains("CTL_MODEL_POSTWRITE_STALE_IGNORED", postWrite);
+        Assert.Contains("IsCurrentPostWriteInspection);", postWrite);
+        Assert.Contains("predicate is evaluated by the facade", postWrite,
+            StringComparison.OrdinalIgnoreCase);
         var guardCount = postWrite.Split("if (!IsCurrentPostWriteInspection())").Length - 1;
         Assert.Equal(3, guardCount); // success, cancellation, fault
         var cancelled = postWrite.IndexOf("catch (OperationCanceledException)", StringComparison.Ordinal);
@@ -466,6 +469,39 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
             StringComparison.Ordinal) < postWrite.IndexOf("signal.ClearLiveControlAuthority();", failed,
             StringComparison.Ordinal));
         Assert.Contains("if (IsCurrentPostWriteInspection())", postWrite);
+    }
+
+    [Fact]
+    public void FacadeChecksModelEpochBeforePublishingAndBeforeFailureRevocation()
+    {
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root is not null &&
+               !File.Exists(Path.Combine(root.FullName,
+                   "Services/UiResponsiveIec61850MonitorRuntimeFacade.cs")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var code = File.ReadAllText(Path.Combine(root!.FullName,
+            "Services/UiResponsiveIec61850MonitorRuntimeFacade.cs"));
+        var begin = code.IndexOf(
+            "public async Task<Iec61850ControlCapabilities> InspectControlAsync(",
+            StringComparison.Ordinal);
+        var end = code.IndexOf("public Task<AR.Iec61850.Control.Iec61850ControlModelConfigurationResult>",
+            begin, StringComparison.Ordinal);
+        Assert.True(begin >= 0 && end > begin);
+        var inspect = code[begin..end];
+        Assert.Contains("Func<bool>? stillCurrentPublicationTarget = null", inspect);
+        Assert.Contains("Control inspection NOT SENT: the selected live model changed", inspect);
+        Assert.Contains("!Iec61850ControlInspectionPublication.TryApply(", inspect);
+        var apply = inspect.IndexOf("!Iec61850ControlInspectionPublication.TryApply(",
+            StringComparison.Ordinal);
+        Assert.True(inspect.LastIndexOf("!stillCurrentPublicationTarget()", apply,
+            StringComparison.Ordinal) >= 0);
+        var catchBegin = inspect.IndexOf("catch (Exception ex)", StringComparison.Ordinal);
+        var revoke = inspect.IndexOf("signal.ClearLiveControlAuthority();",
+            catchBegin, StringComparison.Ordinal);
+        Assert.True(catchBegin >= 0 && revoke > catchBegin);
+        Assert.True(inspect.IndexOf("stillCurrentPublicationTarget()", catchBegin,
+            StringComparison.Ordinal) < revoke);
     }
 
 }
