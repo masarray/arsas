@@ -1552,6 +1552,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (!device.IsConnected)
             return;
 
+        // A normal Command Dock refresh also owns a specific live model epoch.
+        // The MMS socket can remain the same while Rescan/rebinding replaces
+        // device.Signals. Neither native success nor a late failure may publish
+        // into that replacement model. Reuse the post-Write admission predicate;
+        // no second authority cache or additional MMS request is needed.
+        var expectedMmsAssociation = _runtime.GetControlAssociationId(device.DeviceId);
+        if (expectedMmsAssociation == Guid.Empty)
+            return;
+        var expectedModelAssociation = device.LiveValues.Association;
+        bool IsCurrentRefreshDevice() =>
+            Iec61850ControlInspectionPublication.IsCurrentPostWriteTarget(
+                expectedMmsAssociation,
+                token => _runtime.IsControlAssociationCurrent(device.DeviceId, token),
+                expectedModelAssociation, device.LiveValues.Association,
+                device.IsConnected, true);
+        bool IsCurrentRefreshTarget(SignalDefinition candidate) =>
+            IsCurrentRefreshDevice() && device.Signals.Contains(candidate);
+
         // The native runtime serializes inspection and Operate on one
         // _controlCommandGate. Enqueuing three parallel UI inspections cannot
         // improve MMS throughput, but places extra reads ahead of user control.
@@ -1581,8 +1599,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 // read. Never place another inspection behind an active
                 // operator command on this association.
                 await System.Windows.Threading.Dispatcher.Yield(DispatcherPriority.Background);
-                if (!device.IsConnected || _applicationCancellation.IsCancellationRequested ||
+                if (!IsCurrentRefreshDevice() || _applicationCancellation.IsCancellationRequested ||
                     device.CommandSignals.Any(active => active.ControlCommandBusy))
+                    break;
+                if (!IsCurrentRefreshTarget(signal))
                     break;
                 if (!Iec61850ControlIdentity.NeedsInspection(signal, force))
                     continue;
@@ -1590,10 +1610,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 signal.ControlInspectionBusy = true;
                 try
                 {
+                    // Facade evaluates the model predicate before dispatch,
+                    // before typed GUI publication, and before exception revoke.
+                    // A check only after await here would be too late.
                     var capabilities = await _runtime.InspectControlAsync(
                         device.DeviceId,
                         signal,
-                        _applicationCancellation.Token);
+                        _applicationCancellation.Token,
+                        () => IsCurrentRefreshTarget(signal));
+                    if (!IsCurrentRefreshTarget(signal))
+                        break;
                     if (!signal.ControlCommandBusy)
                     {
                         signal.ControlCurrentValue = capabilities.CurrentValue;
@@ -1615,6 +1641,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 }
                 catch (Exception ex)
                 {
+                    // Retired inspection failures must not replace the current
+                    // Command Dock's status/evidence with stale error text.
+                    if (!IsCurrentRefreshTarget(signal))
+                        break;
                     if (!signal.ControlCommandBusy)
                     {
                         signal.ControlInspectionEvidence =
@@ -1628,6 +1658,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 }
             }
 
+            if (!IsCurrentRefreshDevice())
+                return;
             device.RefreshCommandSignalProjection();
             RebuildControlFeedbackIndex(device);
             if (ReferenceEquals(SelectedDevice, device))
