@@ -184,14 +184,50 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             cancellationToken,
             token => _inner.ProbeControlModelAsync(deviceId, signal, token));
 
-    public Task<Iec61850ControlCapabilities> InspectControlAsync(
+    public async Task<Iec61850ControlCapabilities> InspectControlAsync(
         string deviceId,
         SignalDefinition signal,
         CancellationToken cancellationToken)
-        => RunDeviceOperationAsync(
-            deviceId,
-            cancellationToken,
-            token => _inner.InspectControlAsync(deviceId, signal, token));
+    {
+        ArgumentNullException.ThrowIfNull(signal);
+        // Snapshot before the first await on the invoking GUI context. Runtime
+        // performs the I/O on its worker lane; native never receives this
+        // WPF-owned signal or a reference it can mutate after disconnect.
+        var association = _inner.GetControlAssociationId(deviceId);
+        if (association == Guid.Empty)
+            throw new InvalidOperationException(
+                "Control inspection NOT SENT: no current MMS association.");
+        var detached = Iec61850ControlRequestSnapshot.CreateSignal(signal);
+        try
+        {
+            // Deliberately capture the caller context for the final view-model
+            // publication; RunDeviceOperationAsync owns the background work.
+            var capabilities = await RunDeviceOperationAsync(
+                deviceId, cancellationToken,
+                token => _inner.InspectControlAsync(deviceId, detached, token));
+            if (signal.ControlCommandBusy ||
+                !Iec61850ControlInspectionPublication.TryApply(
+                    signal, capabilities, association,
+                    expected => _inner.IsControlAssociationCurrent(deviceId, expected)))
+                throw new OperationCanceledException(
+                    "Control inspection result belongs to an old association, " +
+                    "a different control object, or an active command.");
+            return capabilities;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Native inspection failure used to revoke stale live authority.
+            // Do it only for this same association, on the caller's GUI
+            // context; never let an old native task mutate a newer row.
+            if (!signal.ControlCommandBusy &&
+                _inner.IsControlAssociationCurrent(deviceId, association))
+            {
+                signal.ClearLiveControlAuthority();
+                signal.ControlModelText = "Auto-detect";
+            }
+            throw;
+        }
+    }
 
     // The UI and the inner MMS runtime intentionally have different types.
     // ctlModel editing must cross this facade, just like inspection/Operate;

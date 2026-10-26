@@ -15,7 +15,7 @@ public static class Iec61850ControlRequestSnapshot
         ArgumentNullException.ThrowIfNull(request);
         return new Iec61850ControlCommandRequest
         {
-            Signal = CopySignal(request.Signal),
+            Signal = CreateSignal(request.Signal),
             ValueText = request.ValueText,
             InterlockCheck = request.InterlockCheck,
             SynchroCheck = request.SynchroCheck,
@@ -27,7 +27,12 @@ public static class Iec61850ControlRequestSnapshot
         };
     }
 
-    private static SignalDefinition CopySignal(SignalDefinition signal)
+    /// <summary>
+    /// Detached command/control inspection model created synchronously on the
+    /// caller's thread. This is not a live value cache or a new MMS authority.
+    /// No background native task may retain the GUI-owned SignalDefinition.
+    /// </summary>
+    public static SignalDefinition CreateSignal(SignalDefinition signal)
     {
         ArgumentNullException.ThrowIfNull(signal);
         var copy = new SignalDefinition

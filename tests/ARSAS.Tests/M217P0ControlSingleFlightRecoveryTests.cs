@@ -316,4 +316,103 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
         Assert.Contains("_inner.IsControlAssociationCurrent(deviceId, associationId)", facade);
     }
 
+    [Fact]
+    public void DetachedReadOnlyInspectionAndAssociationPublicationCannotReplayOldProof()
+    {
+        var gui = new SignalDefinition
+        {
+            Name = "CSWI6 Pos", ObjectReference = "LD/CSWI6.Pos",
+            IsControlSignal = true, FunctionalConstraint = "CO",
+            ControlCdc = "DPC", ControlModelText = "Auto-detect",
+            ControlCurrentValue = "Open"
+        };
+        var detached = Iec61850ControlRequestSnapshot.CreateSignal(gui);
+        Assert.NotSame(gui, detached);
+        detached.ControlCurrentValue = "Closed";
+        detached.ControlModelText = "Direct Operate (DO) • Normal security";
+        detached.AcceptVerifiedLiveControlCdc("DPC");
+        detached.ControlSemanticVerified = true;
+        Assert.NotEqual(detached.ControlCurrentValue, gui.ControlCurrentValue);
+        Assert.False(gui.ControlSemanticVerified);
+        Assert.Empty(gui.VerifiedLiveControlCdc);
+
+        var old = Guid.NewGuid();
+        var current = Guid.NewGuid();
+        var ready = new Iec61850ControlCapabilities
+        {
+            ObjectReference = gui.ObjectReference,
+            StatusReference = "LD/CSWI6.Pos.stVal",
+            ControlModelReference = "LD/CSWI6.Pos.ctlModel",
+            ControlModel = Iec61850ControlModelKind.DirectNormal,
+            ControlModelText = "Direct Operate (DO) • Normal security",
+            ControlCdc = "DPC", ControlValueType = "Dbpos",
+            CurrentValue = "Closed", IsOperationallyReady = true,
+            EngineControlServiceAvailable = true,
+            EngineControlServiceStatus = "Live typed descriptor verified"
+        };
+        Assert.False(Iec61850ControlInspectionPublication.TryApply(
+            gui, ready, old, id => id == current));
+        Assert.Equal("Open", gui.ControlCurrentValue);
+        Assert.False(gui.ControlSemanticVerified);
+        var foreignObject = new Iec61850ControlCapabilities
+        {
+            ObjectReference = "LD/CSWI7.Pos",
+            ControlModel = Iec61850ControlModelKind.DirectNormal,
+            ControlCdc = "DPC", IsOperationallyReady = true,
+            EngineControlServiceAvailable = true
+        };
+        Assert.False(Iec61850ControlInspectionPublication.TryApply(
+            gui, foreignObject, current, _ => true));
+        Assert.True(Iec61850ControlInspectionPublication.TryApply(
+            gui, ready, current, id => id == current));
+        Assert.Equal("Closed", gui.ControlCurrentValue);
+        Assert.Equal("DPC", gui.VerifiedLiveControlCdc);
+        Assert.True(gui.ControlSemanticVerified);
+        Assert.True(gui.ControlSupportsOperate);
+
+        var statusOnly = new Iec61850ControlCapabilities
+        {
+            ObjectReference = gui.ObjectReference,
+            ControlModel = Iec61850ControlModelKind.StatusOnly,
+            ControlModelText = "Status only",
+            ControlCdc = "DPC", CurrentValue = "-",
+            EngineControlServiceAvailable = true,
+            IsOperationallyReady = false,
+            EngineControlServiceStatus = "Status-only MMS read"
+        };
+        Assert.True(Iec61850ControlInspectionPublication.TryApply(
+            gui, statusOnly, current, id => id == current));
+        Assert.False(gui.ControlSemanticVerified);
+        Assert.Empty(gui.VerifiedLiveControlCdc);
+        Assert.False(gui.ControlSupportsOperate);
+        Assert.Equal("Status only", gui.ControlModelText);
+        Assert.Equal("Status-only MMS read", gui.ControlLastResult);
+    }
+
+
+    [Fact]
+    public void ControlInspectionNativeUsesOnlyDetachedSignalAndUiPublicationFence()
+    {
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+        while (root is not null &&
+               !File.Exists(Path.Combine(root.FullName,
+                   "Services/Iec61850MonitorRuntime.cs")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var runtime = File.ReadAllText(Path.Combine(root!.FullName,
+            "Services/Iec61850MonitorRuntime.cs"));
+        var facade = File.ReadAllText(Path.Combine(root.FullName,
+            "Services/UiResponsiveIec61850MonitorRuntimeFacade.cs"));
+        Assert.Contains(
+            "var detachedSignal = Iec61850ControlRequestSnapshot.CreateSignal(signal);",
+            runtime);
+        Assert.Contains("detachedSignal, inspectionCancellation.Token", runtime);
+        Assert.Contains("var detached = Iec61850ControlRequestSnapshot.CreateSignal(signal);",
+            facade);
+        Assert.Contains("Iec61850ControlInspectionPublication.TryApply(", facade);
+        Assert.Contains("_inner.IsControlAssociationCurrent(deviceId, expected)", facade);
+        Assert.Contains("signal.ControlCommandBusy", facade);
+        Assert.Contains("signal.ClearLiveControlAuthority();", facade);
+    }
+
 }

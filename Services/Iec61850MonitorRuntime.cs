@@ -1283,8 +1283,12 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         {
             using var inspectionCancellation = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken, session.ControlLifetimeCancellation.Token);
+            // Native inspection changes CDC, ctlModel and feedback after awaits,
+            // including on failure. Use private state so retired sessions can
+            // never mutate a WPF-owned SignalDefinition behind the facade.
+            var detachedSignal = Iec61850ControlRequestSnapshot.CreateSignal(signal);
             var capabilities = await session.Client.InspectControlAsync(
-                signal, inspectionCancellation.Token).ConfigureAwait(false);
+                detachedSignal, inspectionCancellation.Token).ConfigureAwait(false);
             if (!_sessions.TryGetValue(deviceId, out var current) ||
                 !ReferenceEquals(current, session) ||
                 session.ControlLifetimeCancellation.IsCancellationRequested)
