@@ -39,6 +39,17 @@ Original #754 corrected native *command/Operate* flight by cloning mutable `Sign
 - `tests/ARSAS.Tests/M214RcbDiscoveryStateProjectionTests.cs`: old `4ab70fd7cb774f684b1212a60ad649965b3602f5` → RC `68edc90a89f7f3ffe432d473d9c4f19702275684`, newer assertions reflect stricter current-state admission.
 - Meaningful operator semantics differ even though source ancestry is in RC. **KEEP OPEN** pending RCB owner UX acceptance; no blind closure or restored stale operational values.
 
+## FINAL D12 exact-head CI qualification — 2026-10-26
+
+The latest source/test exact HEAD `b52d4824bbadb04dc0d897b476b38bcf507cda38` **has now completed full CI SUCCESS**, while still on isolated OPEN DRAFT [#755](https://github.com/masarray/arsas/pull/755), 12 source/test paths vs protected RC (ahead3, behind0). The original D11 green `a0b96118...`, D12 first regressed `99f68472...`, and latest corrected `b52d4824...` must remain separate evidence authorities.
+
+- [Windows Build workflow 40321671036](https://github.com/masarray/arsas/actions/runs/40321671036): **COMPLETED SUCCESS** on exact SHA. Build solution; pinned engine P10 canonical regression; ARSAS application regressions (including new stale read-only inspection, Direct ready, StatusOnly blocked, wrong association/object); exact source SHA attestation; pinned ArdIrec bridge CTest; packaged native bridge managed integration; real portable single-file EXE publish/smoke; package payload sealing and artifact upload **all success**.
+- [SCL Interoperability R7 workflow 40321671103](https://github.com/masarray/arsas/actions/runs/40321671103): **COMPLETED SUCCESS** on exact SHA; canonical-export regressions + engine tests + portable single EXE publish/smoke.
+- [IEC 61850 interoperability reference guard 40321671165](https://github.com/masarray/arsas/actions/runs/40321671165): **COMPLETED SUCCESS** at exact SHA.
+- Direct [portable EXE artifact #12649647222](https://github.com/masarray/arsas/actions/runs/40321671036/artifacts/12649647222), named `ARSAS-1.6.42-win-x64-portable.exe` by packaging convention; [native CTest shadow evidence #12649816001](https://github.com/masarray/arsas/actions/runs/40321671036/artifacts/12649816001), [test evidence #12649492352](https://github.com/masarray/arsas/actions/runs/40321671036/artifacts/12649492352).
+- CI only proves tested code against managed synthetic/testbed/native packaging; **no physical relay SBO/Operate/RptEna/GOOSE qualification**, do not treat as accepted public v1.6.42, and do not auto merge.
+- **All owner gates remain:** #615 Control/Command Dock typed inspection and late session, #606 seven-case GOOSE/SGCB GUI+FAT, #727 integrated RC owner acceptance, #726 frozen Write/readback, #716 Boolean editor, #688 SG7, #732 IP form, accepted SMV, and separate R7/R10 physical FAT.
+
 ## D13 gate and next work
 
 1. Read exact current [#755](https://github.com/masarray/arsas/pull/755) source SHA and **Windows 40321671036 / SCL 40321671103** conclusions and logs. Repair a genuine failure only on isolated rehearsal branch, using known semantic cause and minimal test/source diff; natural single CI wave only.
