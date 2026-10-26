@@ -39,6 +39,24 @@ Two consecutive purposeful commits **without changing source #753/#754**:
 - `tests/ARSAS.Tests/M214BrowserCollapsibleReportSectionsTests.cs`: `6ff2aa8afda2d0dbf594911cdf7652f797ad8e0e`→`513a585cd370b1c9e6439aaa296f4eccf57f065d`, historical three method names two retained and **only 15/18 original assertion lines identical**. The default-expanded Report assertion and original Trigger options root assertion changed.
 **Disposition KEEP #599 OPEN** for Browser/RCB UX owner decision; not safe to close based on ancestry. #594 RCB `Not verified` UX and #606 GOOSE 7-case physical/GUI acceptance independently OPEN.
 
+## D13 final exact-SHA CI attestation — FULL managed/native success
+
+This amendment refers ONLY to [draft #755](https://github.com/masarray/arsas/pull/755) **HEAD `7d235554225aa0341561b4e887a852fb6fd8e269`**; no source change after the two D13 commits. The prior D12 green and superseded/canceled first D13 CI attempts are not current-head qualification.
+
+- [Windows Build run 40325732039](https://github.com/masarray/arsas/actions/runs/40325732039) **COMPLETED SUCCESS**, exact head verified. Includes immutable engine/native bridge locks, .NET build, pinned engine identity/canonical SCL regression, entire ARSAS application regression suite (new dual-epoch post-Write test), exact-SHA test attestation, pinned ArdIrec CTest, packaged native bridge managed integration, real portable EXE publish, smoke test, sealed Windows package input.
+- [SCL interoperability R7 run 40325732197](https://github.com/masarray/arsas/actions/runs/40325732197) **COMPLETED SUCCESS**, same exact head: R7 smart discovery build, canonical-export regression, engine tests, publish and smoke portable executable.
+- [IEC Reference Guard run 40325732127](https://github.com/masarray/arsas/actions/runs/40325732127) and [P1 Advisory run 40325732341](https://github.com/masarray/arsas/actions/runs/40325732341) **COMPLETED SUCCESS**.
+- Current tested [portable EXE artifact #12652020557](https://github.com/masarray/arsas/actions/runs/40325732039/artifacts/12652020557), artifact name `ARSAS-1.6.42-win-x64-portable.exe` from pipeline naming convention only. Native CTest #12651890338 and managed test evidence #12651820307. No change to actual accepted stable v1.6.42, no auto release or field FAT claim.
+- **Owner gates remain OPEN**: #615 typed Control/Direct/SBO post-Write and session recovery acceptance, #606 exact seven-case GOOSE/SGCB GUI/relay validation, #727/#729 integrated RC acceptance, field R7/R10 physical qualification. #753/#754 remain source-owned DRAFT and unchanged; #755 remains DRAFT, not merged.
+
+## D13 individual historical audit #583 — KEEP OPEN
+
+[Full proof/disposition comment](https://github.com/masarray/arsas/pull/583#issuecomment-6416564372). #583 head `756de98a2bb0e70bf4f88199617c165632986ddb` → exact RC ahead1363/behind0. All **three** original files compared:
+- `App.xaml` old `4f1233e9cb0d5788f0a1d7455c69327dfa98c9cf` → RC `d2fe57403412db2c076e944470ae6c0bb9540186`, Material icon registry evolved.
+- `MainWindow.xaml` `3ae178e957de02adf22fce87214240677cc1c940` → `ee28dfe80e011740f72d114522f4311f8d852879`, layout/nav order evolved for SMV/current IED Browser.
+- `tests/ARSAS.Tests/MaterialIconConsistencyTests.cs` `f663cc37ad343d39d825e38243fd0a1165679e26` → `4291628ff65bd7bdebb340297004aa47111be5f5`. All original **eight methods and 52 Assert lines retained**, but data-driven **`[InlineData]` materially changed**: old Explorer Tag=0, Live Tag=1, Diagnostics Tag=5, IED Browser Tag=7; RC Explorer Tag=1, IED Browser Tag=0, Diagnostics Tag=7 and added SMV `NavSmvButton` Tag=5. Identical Assert code does NOT imply identical behavior or intended navigation.
+- **KEEP OPEN** until GUI/navigation owner explicitly accepts current IED Browser-first/SMV-integrated ordering and icon geometry; never restore historic XAML Tags blindly. No closure by ancestry and no stable/main/RC mutation.
+
 ## 5. D14 continuation/owner safety gates
 
 1. Confirm latest **exact HEAD `7d235554...`** Windows [40325732039](https://github.com/masarray/arsas/actions/runs/40325732039) and SCL [40325732197](https://github.com/masarray/arsas/actions/runs/40325732197) **full conclusions**, including managed regressions and native/portable if present; fix genuine errors with minimal justified source/test change, no blind workflow reruns.
