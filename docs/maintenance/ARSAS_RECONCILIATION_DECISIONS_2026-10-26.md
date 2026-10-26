@@ -1,8 +1,8 @@
 # ARSAS PR/Issue Reconciliation — Verified Decision Checkpoint (2026-10-26)
 
-> Companion to [full inventory](ARSAS_OPEN_PR_ISSUE_AUDIT_2026-10-26.md). This records what was actually changed, why, and what MUST remain open. It is **NOT** a claim that the entire backlog is reconciled. No main/release/engine source modification in this cleanup.
+> Companion to [full inventory](ARSAS_OPEN_PR_ISSUE_AUDIT_2026-10-26.md). **Latest verified status: 133 open PRs, 17 open issues (21 PRs and 2 issues reconciled from original baseline).** This records what was actually changed, why, and what MUST remain open. It is **NOT** a claim that the entire backlog is reconciled. No main/release/engine source modification in this cleanup.
 
-## Live before → after
+## Phase C1 before → after (historical checkpoint; current Phase C2 below)
 | Metric | Baseline | Verified after cleanup | Delta |
 |---|---:|---:|---:|
 | Open PRs | 154 | 139 | -15 |
