@@ -386,7 +386,8 @@ public sealed class M217P0ControlSingleFlightRecoveryTests
         Assert.Empty(gui.VerifiedLiveControlCdc);
         Assert.False(gui.ControlSupportsOperate);
         Assert.Equal("Status only", gui.ControlModelText);
-        Assert.Equal("Status-only MMS read", gui.ControlLastResult);
+        Assert.Contains("Status only", gui.ControlLastResult);
+        Assert.Contains("read-only", gui.ControlLastResult, StringComparison.OrdinalIgnoreCase);
     }
 
 
