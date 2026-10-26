@@ -64,6 +64,17 @@ NEW draft [#755](https://github.com/masarray/arsas/pull/755), exact HEAD [`a0b96
 
 **Disposition:** KEEP OPEN. Canonical current RC preserves scalar MV, exact typed grouping, and schema authority; historical unique policy that withholds glyph from mismatched time not proven equivalent to newer explicit provenance. Related #570/#567 need measurement GUI owner. Do not relabel independent angle as atomic, fabricate q/t, or rollback current UX without field decision.
 
+## D11 exact-head combined CI FINAL attestation (post-checkpoint amendment)
+
+**CONFIRMED combined HEAD `a0b96118d1ba4f04e108ff1fb9321f81fd653146` now fully green; no source change after combined commit.**
+
+- [Windows Build run 40318195357](https://github.com/masarray/arsas/actions/runs/40318195357): **COMPLETED SUCCESS** on the exact HEAD. Build solution, pinned engine P10 canonical regression, ARSAS app regression tests, exact SHA attestation, pinned native ArdIrec CTest, packaged native bridge managed tests, portable EXE publish, portable smoke test, and sealed Windows installer input all succeeded.
+- [SCL R7 run 40318195452](https://github.com/masarray/arsas/actions/runs/40318195452): **COMPLETED SUCCESS** on the same exact HEAD; canonical-export regressions, engine tests, R7 portable publish/smoke succeeded.
+- [IEC 61850 Reference Guard 40318195336](https://github.com/masarray/arsas/actions/runs/40318195336) and [P1 Advisory 40318195335](https://github.com/masarray/arsas/actions/runs/40318195335): **SUCCESS**.
+- [Exact-head portable EXE artifact #12647678635](https://github.com/masarray/arsas/actions/runs/40318195357/artifacts/12647678635); test evidence #12648845279; native CTest shadow #12647547883. All from **#755**, not historical #753 or #754.
+- This candidate uses existing v1.6.42 package naming conventions but is **NOT** a published stable release, physical FAT, R7/R10 certification, or permission to send live Operate without commissioning authority.
+- **Remaining P0 / GOOSE gates are owner acceptance and real-device verification.** #615, #606, #753, #754 and integration rehearsal #755 remain OPEN; #755 is a DRAFT. Do not merge/release based solely on successful CI.
+
 ## E. D12 action list and stop gates
 
 1. Verify exact-head **#755 `a0b96118...`** Windows managed+native/portable and SCL run conclusions; if fail, inspect specific job logs and make minimal justified correction only on rehearsal branch (do not touch #753/#754 source without owner synchronization).
