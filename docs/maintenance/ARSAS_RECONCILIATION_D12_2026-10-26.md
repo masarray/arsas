@@ -1,0 +1,48 @@
+# ARSAS D12 — P0 native *inspection* GUI alias isolation
+
+**Date:** Monday 2026-10-26 Asia/Jakarta. **Continue from** [D11](ARSAS_RECONCILIATION_D11_2026-10-26.md), [D10](ARSAS_RECONCILIATION_D10_2026-10-26.md), earlier D9–D1. **Engineering work is source- and test-backed**. The protected RC, stable v1.6.42, consumer/engine main, frozen Write/Boolean editor, SG7/SMV, IP UI are untouched. Audit checkpoint lives only on the existing isolated maintenance branch.
+
+## Live state / owner coordination
+
+- **Open PR 116, independent issues 17**, GET `/pulls` page1 100 + page2 16 and GET `/issues` pages 100+33 with `pull_request` filtered. No new PR creation or historical closure D12; 41 earlier historical PR closures unmerged remain.
+- ARSAS main `14e5dddfbaae012b61a021366c1a864d83d316f2`, ARIEC61850 main `3d21238d0b62f24faecd5948a4ee238c82b35966`; protected #727/#729 RC `817c3910e8223fa2ac531a4426ada5d2d4bbbe50` with pinned trial engine `f75e323e9f8443aa20e0a3818a1d5d77255b2c0f`. Accepted stable v1.6.42 remains.
+- Existing draft source PR #753 GOOSE head `0652f66bed0c72dded20ff547e23e2ef1989341c` and draft #754 Command head `2aab054b6cf9eb5500b1dce5ef5957eb8ba0232d` **unchanged**. Both individually full green on their exact HEAD, D11 combo head `a0b96118d1ba4f04e108ff1fb9321f81fd653146` passed full Windows/native/portable [40318195357](https://github.com/masarray/arsas/actions/runs/40318195357) and SCL [40318195452](https://github.com/masarray/arsas/actions/runs/40318195452).
+- D12 code lives **only on same integrated rehearsal draft [#755](https://github.com/masarray/arsas/pull/755)** branch `integration/d11-goose-command-safety-rehearsal-20261026`, does not rebase/merge RC or rewrite any accepted lane.
+- #726 frozen Write `42c7cfe1364faaeeee64180bd82e5dbef4f7355a`; #716 Boolean `f53857d5f66d55d80b0f4d04eec91df5fc48053d`, #688 SG7 `774321313aac96ec87a4f24edf61731d032237e6`, #732 IP Form `c47a622037110a09ed1e16653aac0c44b5f40de2` unchanged.
+
+## P0 unique hazard (source-proven) — read-only native inspection mutates WPF state
+
+Original #754 corrected native *command/Operate* flight by cloning mutable `SignalDefinition` before native command, protecting stale result with association GUID. **But the separate read-only native `InspectControlAsync` path remained aliased**:
+
+- `Services/UiResponsiveIec61850MonitorRuntimeFacade.cs`: sent GUI-owned `SignalDefinition` directly through background `RunDeviceOperationAsync`.
+- `Services/Iec61850MonitorRuntime.cs`: forwarded same model to `session.Client.InspectControlAsync(signal,...)`, did not check replaced registry association until **after await**.
+- `Services/NativeIec61850Client.cs`: while asynchronously acquiring descriptor/status, invokes `signal.ClearControlConfirmation`, `ClearLiveControlAuthority`, `AcceptVerifiedLiveControlCdc` and assigns ControlCdc/model/status/current/semantics/inspection metadata. Its catch can revoke GUI proof as well.
+- WPF Command Dock state could therefore be modified by a detached/retired inspection on a worker thread **before** a later association check. No evidence of actual unauthorized physical Operate; this is a correctness/safety risk requiring code isolation and FAT.
+
+## Real source correction in draft #755
+
+- Initial D12 source+test exact commit [`99f68472cad22e8939a39c5fa6906e0eeffe8e6b`](https://github.com/masarray/arsas/commit/99f68472cad22e8939a39c5fa6906e0eeffe8e6b): 5 altered paths relative to D11 integration head (overall 12 files relative to RC, +1 new). Atomic Git-tree with expected-HEAD lease, no force push. Native `NativeIec61850Client.cs` **unchanged**, native wire protocol untouched.
+- `Services/Iec61850ControlRequestSnapshot.cs` creates a reusable, one-command/control-inspection **detached `CreateSignal(SignalDefinition)`** with exactly vetted command metadata and preexisting verified live CDC (never SCL/DataSet as authority). No shadow process ledger.
+- `Services/Iec61850MonitorRuntime.cs`: **detaches again** before native `InspectControlAsync` to enforce inner runtime ownership even if invoked outside UI facade. Preserves existing IED gate, association lifecycle cancellation and postawait registry equality check.
+- `Services/UiResponsiveIec61850MonitorRuntimeFacade.cs`: captures nonreusable GUID association and snapshots signal **synchronously on invoking UI context before await**; dispatches inspection using existing per-device background serialized gate, awaits completion on captured GUI context; invokes a single validated **publication** gate. Rejects changed association, wrong object and concurrent operator command; on genuine same-session failures revokes stale GUI live control authority on caller context only. No duplicate IED connection or added native MMS calls.
+- **NEW** `Services/Iec61850ControlInspectionPublication.cs`: `TryApply(SignalDefinition, Iec61850ControlCapabilities, expectedGuid, isCurrent)` checks nonempty exact GUID, same IEC control root case-sensitive and no `ControlCommandBusy`. It publishes matching ControlCdc, status, model, feedback, evidence to GUI synchronously and enables Command Dock semantic authority **LAST**, **only** when live typed capabilities `SupportsOperate`; StatusOnly/Unknown/unready revokes prior verified CDC, no invented Operate.
+- `tests/ARSAS.Tests/M217P0ControlSingleFlightRecoveryTests.cs`: two new tests: (a) deterministic changed-old-association, wrong IEC object, success typed Direct normal and StatusOnly downgrade without native mutation of original GUI model; (b) source contract native runtime detached alias and facade association/authority synchronization. Original tests and #753 GOOSE tests preserved. This is a managed fake/capability test, **not a physical device Operate**.
+
+**Test correction from actual CI:** The first combined SHA `99f68472...` compiled, SCL [40321106212](https://github.com/masarray/arsas/actions/runs/40321106212) executed 2,996 managed tests, **2,995 passed / one failed**. The sole failure was a brittle new test requiring raw `Status-only MMS read` as `SignalDefinition.ControlLastResult`; production model intentionally normalizes it to operator-facing `Status only — read-only object; commands ...`. Corrected one test only (does not change source logic) in **latest HEAD `b52d4824bbadb04dc0d897b476b38bcf507cda38`**, GitHub [commit](https://github.com/masarray/arsas/commit/b52d4824bbadb04dc0d897b476b38bcf507cda38): assert StatusOnly, read-only and no `ControlSupportsOperate`, not raw UI wording.
+
+**ONLY valid current-SHA CI:** [Windows/native/portable run 40321671036](https://github.com/masarray/arsas/actions/runs/40321671036) and [SCL run 40321671103](https://github.com/masarray/arsas/actions/runs/40321671103) triggered by latest commit; conclusions IN PROGRESS/QUEUED when recorded. Prior fully green `a0b96118...` pertains to D11 11-file version, not new 12-file D12. Prior failed 99f first regression is NOT qualification. No manual rerun. Update this checkpoint with verified exact-head results.
+
+## Additional historical individual audit: #594 remains OPEN
+
+[Historic #594 disposition comment](https://github.com/masarray/arsas/pull/594#issuecomment-6415792052). Old HEAD `0386bd10e53f1d9167437b6fba485c1fc794d553` → RC ahead1297/behind0. Exactly two original file paths compared:
+- `Models/RcbInspectionEvidence.cs`: `b243e8503ff9685682581f186964ce03ade6b1a8` → RC `19f819047b770f2b8886cbca18f7f041a027eddf`. Historic live connected `Enabled/RptEna`, `Resv`, `ResvTms` could show **clearly labeled historical discovery values** when exact MMS state was unavailable. Current RC deliberately returns **`Not verified`** connected / `—` disconnected, preventing a discovery-time `RptEna=false` from misleading while monitoring may have enabled it.
+- `tests/ARSAS.Tests/M214RcbDiscoveryStateProjectionTests.cs`: old `4ab70fd7cb774f684b1212a60ad649965b3602f5` → RC `68edc90a89f7f3ffe432d473d9c4f19702275684`, newer assertions reflect stricter current-state admission.
+- Meaningful operator semantics differ even though source ancestry is in RC. **KEEP OPEN** pending RCB owner UX acceptance; no blind closure or restored stale operational values.
+
+## D13 gate and next work
+
+1. Read exact current [#755](https://github.com/masarray/arsas/pull/755) source SHA and **Windows 40321671036 / SCL 40321671103** conclusions and logs. Repair a genuine failure only on isolated rehearsal branch, using known semantic cause and minimal test/source diff; natural single CI wave only.
+2. Confirm current source snapshot both standard Direct/SBOw command, StatusOnly, positive/negative read-only inspection and post-Write reinspection with real control owner #615, GUI owners and RC #727. The native operation remains authoritative; snapshot/state publication is not permission for new Operate.
+3. Preserve [#753](https://github.com/masarray/arsas/pull/753), [#754](https://github.com/masarray/arsas/pull/754) original reviewable source PRs. #755 now is a strict **integration + D12 follow-up** and **NOT a pure exact union anymore**: original a0b union stays in parent commit. Do not misleadingly claim 12-file head is byte-identical to simple 6+5 union; it adds a targeted new helper/inspection behavior.
+4. Strict owner gates remain open: #606 seven-case GOOSE/SGCB physical/GUI parity, #615 direct/SBOw/late native ownership and read-only inspection field verification, #727/#729 RC release, R7/R10 physical FAT. No automatic merge, no stable release repin. Frozen Write/SG7/IP/SMV preserved.
+5. Continue bounded individual source/meaning audits #599/#583/#582/#595 and phasor #577/#570/#567, do not close on ancestry alone. No fabricated live MMS/GOOSE process data.
