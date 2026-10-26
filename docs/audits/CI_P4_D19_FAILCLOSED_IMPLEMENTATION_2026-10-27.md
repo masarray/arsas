@@ -22,3 +22,10 @@ Make the canonical Windows build skip **only** when GitHub's full API PR file in
 Syntactic anchors and logic were inspected against original RC files; a nine-case conservative PR classifier truth table was evaluated in JS before the commit (docs/readme, mixed source, protected contract, source rename, removal, empty, GitHub 3000 cap, API exception). The Python regression methods are **authored but not executed on GitHub Actions** until an intentionally approved qualification run.
 
 **No need to close #653 or #542 yet**: original issue should stay pending until on-run scenario verification, runner-minute comparison, and policy acceptance. Old PR #653 diverged and is not merged byte-for-byte.
+
+### D19 execution evidence (strictly offline)
+- The inlined `github-script` decision body was reproduced and run in Node.js `vm` with mocked GitHub API and output callbacks: **11 scenarios passed** (README, multiple docs, mixed source, protected contract, source->docs rename, docs->docs rename, removal, empty list, workflow source, 3,000-file truncation, API exception).
+- The exact Windows admission predicate was checked for **six** push/manual/PR classifier-result and output cases. In particular **classifier failure and missing output always execute Windows**, while explicit `success` + `false` on a PR is the only skip.
+- The Field Capture predicate was checked for **seven** scenarios: unlabeled PR, labeled PR, labeled draft, irrelevant label, manually dispatched regression successful/failed/missing.
+- **24 local decision scenarios passed.** These are function/decision simulations, **not** proof that a GitHub-hosted workflow parsed and executed or that `scripts/test-ci-workflows.py` completed on a runner.
+- Direct branch-protection read `GET /repos/masarray/arsas/branches/main/protection` failed with **403: Resource not accessible by integration**. Repository rulesets listing returned empty, which is not proof that there are no configured required checks. Owner must verify in GitHub settings before promotion. No PR or CI run was created.
