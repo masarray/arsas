@@ -19,15 +19,17 @@ HEX64 = re.compile(r"^[0-9a-f]{64}$")
 IED = re.compile(r"^IED\s+:\s*(.+?)\s*$", re.M)
 FINGERPRINT = re.compile(r"^Static parity\s+:\s*MATCH\s+•\s*([0-9a-f]{64})\s*$", re.M)
 TRAFFIC = re.compile(r"^Routed traffic\s+:\s*DUAL INGRESS TRAFFIC PROVEN\b", re.M)
+# Native C# counters are nonnegative 32-bit decimals; cap digit widths before int().
+# This prevents malformed integer input from bypassing NOT_ESTABLISHED output.
 INGRESS = re.compile(
     r"^\s{2}(Discovery|Open SCL)\s+:\s*(LiveDiscovery|OpenScl): "
-    r"fingerprint=([0-9a-f]{64}), requested=(\d+), plans=(\d+), "
-    r"staticBRCB=(\d+), staticURCB=(\d+), uncovered=(\d+)\s*$"
+    r"fingerprint=([0-9a-f]{64}), requested=([0-9]{1,10}), plans=([0-9]{1,10}), "
+    r"staticBRCB=([0-9]{1,10}), staticURCB=([0-9]{1,10}), uncovered=([0-9]{1,10})\s*$"
 )
-SUMMARY = re.compile(r"^\s{4}traffic\s+:\s*(\d+)/(\d+) exact static RCB target\(s\) routed; first=(\S+)\s*$")
+SUMMARY = re.compile(r"^\s{4}traffic\s+:\s*([0-9]{1,10})/([0-9]{1,10}) exact static RCB target\(s\) routed; first=(\S+)\s*$")
 TARGET = re.compile(
     r"^\s{4}runtime\s+:\s*(static-brcb|static-urcb)\|dataset=([^|]+)\|"
-    r"rcb=([^|]+)\|bindings=(\d+) \[(ROUTED|PENDING)\]\s*$"
+    r"rcb=([^|]+)\|bindings=([0-9]{1,10}) \[(ROUTED|PENDING)\]\s*$"
 )
 AP = re.compile(r"^SCD selected AP\s+:\s*(\S+)\s*$", re.M)
 MAX_DIAGNOSTIC_TARGETS = 8
@@ -135,6 +137,13 @@ def qualify(text: str, *, ied: str, min_brcb: int = 1,
             raise QualificationError(f"{name}: target unbound, unrouted or empty")
         if {kind for kind, _, _, _, _ in targets} != {"static-brcb", "static-urcb"}:
             raise QualificationError(f"{name}: both BRCB and URCB must route independently")
+        # Native BuildEvidence measures binding incidences for each RCB family,
+        # not the number of distinct selected IEC reference + FC points.
+        for family, reported in (("static-brcb", entry["brcb"]),
+                                 ("static-urcb", entry["urcb"])):
+            bound = sum(n for kind, _, _, n, _ in targets if kind == family)
+            if bound != reported:
+                raise QualificationError(f"{name}: {family} target bindings do not match signal coverage")
         details[name] = {
             "plannedTargets": count,
             "routedTargets": len(targets),

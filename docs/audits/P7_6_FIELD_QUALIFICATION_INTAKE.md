@@ -16,6 +16,10 @@ The validator is matched against the current native `DiagnosticReportBuilder.App
 
 Read-only text is capped at 8 MiB. Results use atomic replacement; a failed recheck overwrites any earlier PASS with `qualification=NOT_ESTABLISHED` and false physical/PCAP flags. Do not upload private real IED reports to GitHub. No network, MMS write or physical authority is introduced.
 
+## D24 — Source-consistency hardening
+
+Before passing a local copy, the validator now reconciles **each ingress** per-family BRCB/URCB `bindings=` totals with `staticBRCB`/`staticURCB` counters, matching `StaticAcquisitionParityTracker.BuildEvidence` rather than trusting either number in isolation. Binding counts are incidences; they must **not** be equated to distinct requested IEC points because DataSets/RCBs may overlap. Every numeric diagnostic field is bounded to ASCII digits of at most ten characters before `int()`, so malformed 5,000-digit values fail cleanly and cannot leave a stale PASS output. Negative tests cover both ingress families, long header/traffic/binding numbers, non-ASCII digits, and CLI PASS→NOT_ESTABLISHED replacement. These guards add no IED, network, protocol or physical authority.
+
 ## Local 7SX85 field procedure
 
 1. Use the live IED Discovery IP path and choose a Static DataSet report-only selection covering BRCB and URCB. Wait for genuine routed process values on all configured targets, not only RptEna/GI.
@@ -36,8 +40,8 @@ Read-only text is capped at 8 MiB. Results use atomic replacement; a failed rech
 
 ## Tests, ownership and rollback
 
-The new scripts/verify-p7-dual-ingress-diagnostic.py is read-only and uses Python standard library. The companion scripts/test-p7-dual-ingress-diagnostic.py has **16 sanitized negative/positive fixtures** and makes no network call. An early check in the existing SCL Interoperability R7 Windows CI runs these fixtures, with no new workflow and no additional native/.NET build.
+The new scripts/verify-p7-dual-ingress-diagnostic.py is read-only and uses Python standard library. The companion scripts/test-p7-dual-ingress-diagnostic.py now has **24 offline unittest methods** with sanitized positive/negative fixtures, including D24 review regressions. The existing Ubuntu `CI P0 Workflow Integrity` runs the tests; no new workflow or additional native/.NET build was introduced by this validator. Exact-head GitHub Actions evidence is still required after the D24 source change.
 
-Implementation lives in a new stacked **draft child PR** based on the exact P7.5 head. It does not commit onto P7.5 or other threads' branches. Software CI alone is CodeVerified only. The draft must not be merged into main until separately authorized physical test evidence is accepted.
+Implementation is isolated in [PR #759](https://github.com/masarray/arsas/pull/759), based on the protected integrated RC. Owner review, required-check visibility and physical IEC 61850 acceptance remain separate. Do not merge into the RC/main or promote stable based only on text consistency or PR-green CI.
 
 Rollback: remove only the two scripts, this document and the small R7 path/fixture step; never change runtime/engine code to accommodate a diagnostic-only test.

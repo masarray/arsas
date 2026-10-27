@@ -22,13 +22,14 @@ STAMP = "2026-10-08T10:01:02.0000000+00:00"
 def ingress(label: str, runtime: str, *, fingerprint: str = SHA,
             brcb: int = 6, urcb: int = 6,
             planned: int = 2, routed: int = 2,
-            first: str = STAMP, last_status: str = "ROUTED") -> str:
+            first: str = STAMP, brcb_bindings: int = 6, urcb_bindings: int = 6,
+            last_status: str = "ROUTED") -> str:
     return (
         f"  {label}      : {runtime}: fingerprint={fingerprint}, requested=12, "
         f"plans={planned}, staticBRCB={brcb}, staticURCB={urcb}, uncovered=0\n"
         f"    traffic       : {routed}/{planned} exact static RCB target(s) routed; first={first}\n"
-        f"    runtime       : static-brcb|dataset=ied/lln0.events|rcb=ied/lln0.br.rpt_ind01|bindings=6 [ROUTED]\n"
-        f"    runtime       : static-urcb|dataset=ied/lln0.analog|rcb=ied/lln0.rp.rpt_meas01|bindings=6 [{last_status}]\n"
+        f"    runtime       : static-brcb|dataset=ied/lln0.events|rcb=ied/lln0.br.rpt_ind01|bindings={brcb_bindings} [ROUTED]\n"
+        f"    runtime       : static-urcb|dataset=ied/lln0.analog|rcb=ied/lln0.rp.rpt_meas01|bindings={urcb_bindings} [{last_status}]\n"
     )
 
 
@@ -139,6 +140,64 @@ class QualificationTests(unittest.TestCase):
                     "SCD selected AP  : pending"), "not a proven selected AP")
         self.assertNotQualified(diagnostic().replace("SCD selected AP  : F",
                     "SCD selected AP  : F\nSCD selected AP  : J"), "exactly one")
+
+    def test_each_ingress_requires_exact_per_family_binding_incidence(self):
+        # Summary counters cannot substitute for actual target totals.
+        for ingress_name, label, source in (
+            ("discovery", "Discovery", "LiveDiscovery"),
+            ("scl", "Open SCL ", "OpenScl"),
+        ):
+            for parameter in ("brcb_bindings", "urcb_bindings"):
+                with self.subTest(ingress=ingress_name, family=parameter):
+                    changed = ingress(label, source, **{parameter: 1})
+                    self.assertNotQualified(diagnostic(**{ingress_name: changed}),
+                                            "target bindings do not match")
+
+    def test_binding_incidence_can_exceed_unique_requested_signal_count(self):
+        # Reused points across RCBs count as multiple binding incidences.
+        result = qualifier.qualify(diagnostic().replace("requested=12", "requested=9"),
+                                   ied="GR_X_7SX85", min_brcb=6, min_urcb=6)
+        self.assertEqual(6, result["openScl"]["brcbSignals"])
+        self.assertEqual(6, result["discovery"]["urcbSignals"])
+
+    def test_overlong_numeric_fields_and_unicode_digits_fail_closed(self):
+        many = "9" * 5000
+        cases = (
+            ("ingress", diagnostic().replace("requested=12", "requested=" + many, 1),
+             "Malformed ingress header"),
+            ("traffic", diagnostic().replace("traffic       : 2/2",
+                                            "traffic       : " + many + "/2", 1),
+             "Unparseable target or traffic"),
+            ("binding", diagnostic().replace("bindings=6 [ROUTED]",
+                                            "bindings=" + many + " [ROUTED]", 1),
+             "Unparseable target or traffic"),
+            ("unicode", diagnostic().replace("requested=12", "requested=１２", 1),
+             "Malformed ingress header"),
+        )
+        for name, bad, error in cases:
+            with self.subTest(field=name):
+                self.assertNotQualified(bad, error)
+
+    def test_cli_long_numeric_recheck_cannot_leave_stale_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            incoming, result = root / "private.txt", root / "verdict.json"
+            cmd = [sys.executable, str(SCRIPT), "--diagnostic", str(incoming),
+                   "--ied", "GR_X_7SX85", "--output", str(result)]
+            incoming.write_text(diagnostic(), encoding="utf-8")
+            self.assertEqual(0, subprocess.run(cmd, capture_output=True).returncode)
+            self.assertIn("PASS", json.loads(result.read_text())["qualification"])
+            incoming.write_text(
+                diagnostic().replace("requested=12", "requested=" + "9" * 5000, 1),
+                encoding="utf-8")
+            rejected = subprocess.run(cmd, capture_output=True, text=True)
+            self.assertNotEqual(0, rejected.returncode)
+            self.assertNotIn("Traceback", rejected.stderr)
+            saved = json.loads(result.read_text())
+            self.assertEqual("NOT_ESTABLISHED", saved["qualification"])
+            self.assertFalse(saved["physicalVerification"])
+            self.assertFalse(saved["wirePcapVerification"])
+            self.assertFalse(list(root.glob(".verdict.json.*.tmp")))
 
     def test_large_or_nul_diagnostic_fail_closed(self):
         self.assertNotQualified("ARSAS Diagnostic Report\n" +
