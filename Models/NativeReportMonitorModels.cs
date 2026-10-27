@@ -32,6 +32,21 @@ public sealed class NativeReportMonitorStartResult
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 }
 
+/// <summary>
+/// Immutable per-association RCB activation result for the operator's diagnostics.
+/// These flags are ARIEC write-step outcomes, not RCB readback, Report traffic,
+/// or certification that the IED delivered every configured DataSet member.
+/// </summary>
+public sealed record Iec61850RcbActivationEvidence
+{
+    public string Rcb { get; init; } = string.Empty;
+    public string DataSet { get; init; } = string.Empty;
+    public bool SetupSucceeded { get; init; }
+    public bool? RptEnaWriteAccepted { get; init; }
+    public bool? GiWriteAccepted { get; init; }
+    public DateTimeOffset? ActivationReturnedAtUtc { get; init; }
+}
+
 public sealed class NativeReportMonitorSliceResult
 {
     public string PlanId { get; init; } = string.Empty;
