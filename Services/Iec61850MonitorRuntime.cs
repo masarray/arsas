@@ -1016,6 +1016,7 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         session.ContinuityProcessUpdatesSeen = 0;
         session.ContinuityUntrackedStreams = 0;
         session.Device.ReportContinuityEvidence = null;
+        session.Device.RcbActivationEvidence = Array.Empty<Iec61850RcbActivationEvidence>();
         session.LastUnroutedReportCount = 0;
         session.ReportPlanCursor = 0;
         session.PendingReportPlans = Array.Empty<ReportControlPlan>();
@@ -1623,6 +1624,10 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
     {
         var pending = new Queue<ReportControlPlan>(plans);
         var queuedPlanIds = plans.Select(plan => plan.PlanId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // At most 64 immutable activation records per association. Publish
+        // only when a setup attempt completes; never allocate per Report.
+        var activationEvidence = new Dictionary<string, Iec61850RcbActivationEvidence>(
+            StringComparer.OrdinalIgnoreCase);
 
         while (pending.Count > 0)
         {
@@ -1638,6 +1643,22 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                     ? await session.Client.StartHybridReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false)
                     : await session.Client.StartReportMonitorAsync(plan, cancellationToken).ConfigureAwait(false);
                 session.HybridValidation.RecordActivation(plan, result);
+                if (session.StaticDataSetReportOnly &&
+                    (activationEvidence.Count < 64 || activationEvidence.ContainsKey(plan.PlanId)))
+                {
+                    activationEvidence[plan.PlanId] = new Iec61850RcbActivationEvidence
+                    {
+                        Rcb = string.IsNullOrWhiteSpace(result.ReportControlReference)
+                            ? plan.ReportControlReference : result.ReportControlReference,
+                        DataSet = string.IsNullOrWhiteSpace(result.DataSetReference)
+                            ? plan.DataSetReference : result.DataSetReference,
+                        SetupSucceeded = result.IsSuccess,
+                        RptEnaWriteAccepted = result.RptEnaWriteAccepted,
+                        GiWriteAccepted = result.GeneralInterrogationWriteAccepted,
+                        ActivationReturnedAtUtc = result.ActivationReturnedAtUtc
+                    };
+                    session.Device.RcbActivationEvidence = activationEvidence.Values.ToArray();
+                }
                 if (!result.IsSuccess)
                 {
                     Log("WARN", session.Device.Name,
@@ -1761,6 +1782,18 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                if (session.StaticDataSetReportOnly &&
+                    !activationEvidence.ContainsKey(plan.PlanId) &&
+                    activationEvidence.Count < 64)
+                {
+                    activationEvidence[plan.PlanId] = new Iec61850RcbActivationEvidence
+                    {
+                        Rcb = plan.ReportControlReference,
+                        DataSet = plan.DataSetReference,
+                        SetupSucceeded = false
+                    };
+                    session.Device.RcbActivationEvidence = activationEvidence.Values.ToArray();
+                }
                 Log("WARN", session.Device.Name,
                     session.StaticDataSetReportOnly
                         ? $"Static DataSet report setup failed for {plan.DisplayReference}; MMS process fallback is disabled. {ex.GetType().Name}: {ex.Message}"
@@ -3185,6 +3218,7 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         session.ContinuityProcessUpdatesSeen = 0;
         session.ContinuityUntrackedStreams = 0;
         session.Device.ReportContinuityEvidence = null;
+        session.Device.RcbActivationEvidence = Array.Empty<Iec61850RcbActivationEvidence>();
         session.LastUnroutedReportCount = 0;
         session.StaticReadJournalCursor = session.Device.LiveValues.Version;
         session.StaticReadResyncIndex = -1;
@@ -3520,6 +3554,7 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         session.ContinuityProcessUpdatesSeen = 0;
         session.ContinuityUntrackedStreams = 0;
         session.Device.ReportContinuityEvidence = null;
+        session.Device.RcbActivationEvidence = Array.Empty<Iec61850RcbActivationEvidence>();
         session.LastUnroutedReportCount = 0;
         session.ReportPlanCursor = 0;
         session.PendingReportPlans = Array.Empty<ReportControlPlan>();
