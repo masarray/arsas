@@ -27,6 +27,7 @@ spec2.loader.exec_module(native)
 
 HEAD, MERGE, ENGINE, ARDIREC = "d" * 40, "a" * 40, "b" * 40, "c" * 40
 BRANCH = "ci/p3j-c-native-shadow"
+PR = 759
 RUN = 1234
 XML = b'<testsuite tests="2" failures="0" errors="0" skipped="0"><testcase name="ABI"/><testcase name="Locus"/></testsuite>'
 
@@ -49,13 +50,15 @@ def artifact_bytes(*, source=MERGE, bridge=b"canonical-tested-binary", names=XML
 
 class FakeApi:
     def __init__(self, *, blob, digest, run_status="completed", run_conclusion="success",
-                 head=HEAD, source_branch=BRANCH, artifact=True, duplicate=False):
+                 head=HEAD, source_branch=BRANCH, artifact=True, duplicate=False,
+                 pr_number=PR):
         self.blob = blob
         self.digest = digest
         self.run_status = run_status
         self.run_conclusion = run_conclusion
         self.head = head
         self.branch = source_branch
+        self.pr_number = pr_number
         self.artifact = artifact
         self.duplicate = duplicate
 
@@ -66,6 +69,7 @@ class FakeApi:
             return {"workflow_runs": [{
                 "id": RUN, "run_attempt": 1, "name": "Build ARSAS",
                 "head_sha": self.head, "head_branch": self.branch,
+                "pull_requests": [{"number": self.pr_number}],
                 "event": "pull_request", "status": self.run_status,
                 "conclusion": self.run_conclusion,
             }]}
@@ -95,7 +99,7 @@ class NativeShadowTests(unittest.TestCase):
         self.bridge.write_bytes(b"canonical-tested-binary")
         self.blob, self.digest = artifact_bytes()
         self.kwargs = {
-            "head_sha": HEAD, "head_branch": BRANCH,
+            "head_sha": HEAD, "head_branch": BRANCH, "pr_number": PR,
             "source_sha": MERGE, "engine_sha": ENGINE, "ardirec_sha": ARDIREC,
             "independent_junit": self.local, "independent_bridge": self.bridge,
             "wait_seconds": 0,
@@ -250,6 +254,76 @@ class NativeShadowTests(unittest.TestCase):
                 FakeApi(blob=self.blob, digest=self.digest, duplicate=True),
                 **self.kwargs,
             )
+
+    def test_shared_head_sha_branch_uses_correct_pr_association(self):
+        # Newer run from another PR must not shadow our actual canonical run.
+        other = {"id": RUN + 1, "run_attempt": 1, "name": "Build ARSAS",
+                 "head_sha": HEAD, "head_branch": BRANCH, "event": "pull_request",
+                 "pull_requests": [{"number": PR + 1}]}
+        correct = dict(other, id=RUN, pull_requests=[{"number": PR}])
+        chosen = shadow.choose_exact_run(
+            {"workflow_runs": [other, correct]},
+            head_sha=HEAD, head_branch=BRANCH, pr_number=PR,
+        )
+        self.assertEqual(RUN, chosen["id"])
+        self.assertIsNone(shadow.choose_exact_run(
+            {"workflow_runs": [other]},
+            head_sha=HEAD, head_branch=BRANCH, pr_number=PR,
+        ))
+
+    def test_shared_head_run_without_pr_link_fails_closed(self):
+        unlinked = {"id": RUN, "run_attempt": 1, "name": "Build ARSAS",
+                    "head_sha": HEAD, "head_branch": BRANCH, "event": "pull_request"}
+        self.assertIsNone(shadow.choose_exact_run(
+            {"workflow_runs": [unlinked]},
+            head_sha=HEAD, head_branch=BRANCH, pr_number=PR,
+        ))
+        with self.assertRaisesRegex(shadow.ShadowError, "PR number"):
+            shadow.choose_exact_run(
+                {"workflow_runs": [unlinked]},
+                head_sha=HEAD, head_branch=BRANCH, pr_number=True,
+            )
+
+    def test_online_rejects_other_pr_canonical_even_with_same_head(self):
+        with self.assertRaisesRegex(shadow.ShadowError, "timeout"):
+            shadow.compare_online(
+                FakeApi(blob=self.blob, digest=self.digest, pr_number=PR + 1),
+                **self.kwargs,
+            )
+
+    def test_advisory_output_records_exact_pr_number(self):
+        result = shadow.compare_online(
+            FakeApi(blob=self.blob, digest=self.digest), **self.kwargs
+        )
+        self.assertEqual(PR, result["canonicalPrNumber"])
+        self.assertFalse(result["deduplicationAuthorized"])
+
+    def test_event_identity_must_match_pr_number_and_exact_head(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "event.json"
+            valid = {"number": PR, "pull_request": {
+                "number": PR, "head": {"sha": HEAD, "ref": BRANCH}}}
+            path.write_text(json.dumps(valid), encoding="utf-8")
+            self.assertEqual(PR, shadow.read_event_pr_number(
+                path, head_sha=HEAD, head_branch=BRANCH))
+            tampered = [
+                dict(valid, number=PR + 1),
+                dict(valid, pull_request=dict(valid["pull_request"], number=PR + 1)),
+                dict(valid, pull_request=dict(valid["pull_request"],
+                    head={"sha": "f" * 40, "ref": BRANCH})),
+                dict(valid, pull_request=dict(valid["pull_request"],
+                    head={"sha": HEAD, "ref": "other-branch"})),
+            ]
+            for payload in tampered:
+                with self.subTest(payload=payload):
+                    path.write_text(json.dumps(payload), encoding="utf-8")
+                    with self.assertRaises(shadow.ShadowError):
+                        shadow.read_event_pr_number(
+                            path, head_sha=HEAD, head_branch=BRANCH)
+            path.write_text("{malformed", encoding="utf-8")
+            with self.assertRaises(shadow.ShadowError):
+                shadow.read_event_pr_number(
+                    path, head_sha=HEAD, head_branch=BRANCH)
 
     def test_ci_preserves_native_independent_ctest_and_advisory_only(self):
         comtrade = (ROOT.parent / ".github/workflows/comtrade-viewer-integration.yml").read_text()
