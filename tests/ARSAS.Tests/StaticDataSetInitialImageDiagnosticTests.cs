@@ -60,6 +60,48 @@ public sealed class StaticDataSetInitialImageDiagnosticTests
     }
 
     [Fact]
+    public void CopyDiagnostic_ShowsSilentRcbWithoutBorrowingTheReceivingRcbsProof()
+    {
+        const string rcbA = "SG7_BCUMaster/LLN0.BR.BrcbA01";
+        const string rcbI = "SG7_BCUMaster/LLN0.BR.BrcbI01";
+        const string dataSetA = "SG7_BCUMaster/LLN0.TT6DataSet3";
+        const string dataSetI = "SG7_BCUMaster/LLN0.TT6DataSet4";
+        var points = new[]
+        {
+            Point("SG7_BCUMeter/MMXU1.Hz.mag.f", dataSetA, rcbA, "50", "Good"),
+            Point("SG7_BCUMeter/MMXU1.PhV.phsA.cVal.mag.f", dataSetI, rcbI, "-", "Unknown")
+        };
+        var continuity = new Iec61850ReportContinuitySnapshot
+        {
+            Streams = new[]
+            {
+                new Iec61850ReportContinuityStreamSnapshot
+                {
+                    Rcb = rcbA, DataSet = dataSetA, Frames = 1,
+                    LastFrameReceivedAtUtc = DateTimeOffset.UtcNow,
+                    RptEnaWriteAccepted = true, GiWriteAccepted = true
+                }
+            }
+        };
+
+        var builder = new System.Text.StringBuilder();
+        DiagnosticReportBuilder.AppendStaticRcbImageTriage(builder, points, continuity);
+        var report = builder.ToString();
+
+        Assert.Contains("routed=1, noRoutedFrames=1", report, StringComparison.Ordinal);
+        Assert.Contains("initial image 1/1", report, StringComparison.Ordinal);
+        Assert.Contains("initial image 0/1", report, StringComparison.Ordinal);
+        Assert.Contains("actualFrames=1, RptEnaWrite=accepted, GiWrite=accepted", report, StringComparison.Ordinal);
+        Assert.Contains("actualFrames=0, RptEnaWrite=unverified, GiWrite=unverified", report, StringComparison.Ordinal);
+        Assert.Contains("ingress=NO ROUTED FRAMES", report, StringComparison.Ordinal);
+
+        builder.Clear();
+        DiagnosticReportBuilder.AppendStaticRcbImageTriage(builder, points, null);
+        Assert.Contains("routed=0, noRoutedFrames=2", builder.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("RptEnaWrite=accepted", builder.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AuditIsReadOnlyAndDiagnosticDoesNotInjectMmsAcquisition()
     {
         var path = FindRepoFile("Services/StaticDataSetInitialImageDiagnostic.cs");
