@@ -187,7 +187,8 @@ internal static class DiagnosticReportBuilder
                 if (device.IsMonitoring && Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device))
                 {
                     AppendStaticInitialImage(builder, device.Points);
-                    AppendStaticRcbImageTriage(builder, device.Points, device.ReportContinuityEvidence);
+                    AppendStaticRcbImageTriage(builder, device.Points,
+                        device.ReportContinuityEvidence, device.RcbActivationEvidence);
                 }
                 builder.AppendLine($"Saved model      : {device.HasDiscoveryCache} ({device.SignalCount:N0} signal(s))");
                 builder.AppendLine($"Selected         : live={device.SelectedLiveSignalCount:N0}, control={device.SelectedControlSignalCount:N0}");
@@ -338,16 +339,19 @@ internal static class DiagnosticReportBuilder
     internal static void AppendStaticRcbImageTriage(
         StringBuilder builder,
         IEnumerable<Iec61850MonitorPoint> points,
-        Iec61850ReportContinuitySnapshot? continuity)
+        Iec61850ReportContinuitySnapshot? continuity,
+        IReadOnlyList<Iec61850RcbActivationEvidence>? activations = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        var groups = StaticDataSetRcbImageTriage.Evaluate(points, continuity, maxGroups: 16);
+        var groups = StaticDataSetRcbImageTriage.Evaluate(
+            points, continuity, maxGroups: 16, activations: activations);
         builder.AppendLine($"Static RCB traffic : shown={groups.Count}, " +
             $"routed={groups.Count(group => group.HasActualReportFrames)}, " +
             $"noRoutedFrames={groups.Count(group => !group.HasActualReportFrames)}");
         builder.AppendLine("  Attribution     : one exact DataSet/RCB per row; zero routed frames " +
             "is not proof of IED silence, GI rejection or MMS connection failure. " +
-            "Missing activation proof stays unverified.");
+            "Write-step outcome, first routed Report, and value visibility are separate proofs; " +
+            "missing setup proof stays unverified.");
         foreach (var group in groups)
             builder.AppendLine($"  RCB evidence    : {group.Summary}, " +
                 $"ingress={(group.HasActualReportFrames ? "ROUTED" : "NO ROUTED FRAMES")}");
