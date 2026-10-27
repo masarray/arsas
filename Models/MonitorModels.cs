@@ -51,6 +51,8 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     private string _sclAccessPointName = string.Empty;
     private string _sclEndpointOrigin = "Unbound";
     private Iec61850ReportContinuitySnapshot? _reportContinuityEvidence;
+    private IReadOnlyList<Iec61850RcbActivationEvidence> _rcbActivationEvidence =
+        Array.Empty<Iec61850RcbActivationEvidence>();
 
     public string DeviceId { get; set; } = Guid.NewGuid().ToString("N");
     public BulkObservableCollection<SignalDefinition> Signals { get; } = new();
@@ -105,6 +107,18 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     {
         get => System.Threading.Volatile.Read(ref _reportContinuityEvidence);
         set => System.Threading.Volatile.Write(ref _reportContinuityEvidence, value);
+    }
+
+    // Published once per completed RCB activation attempt, not per Report
+    // frame. The immutable array belongs to this MMS association only.
+    // Reading diagnostics never locks or drives the native receive loop.
+    [JsonIgnore]
+    public IReadOnlyList<Iec61850RcbActivationEvidence> RcbActivationEvidence
+    {
+        get => System.Threading.Volatile.Read(ref _rcbActivationEvidence);
+        set => System.Threading.Volatile.Write(
+            ref _rcbActivationEvidence,
+            value ?? Array.Empty<Iec61850RcbActivationEvidence>());
     }
 
     public SclIedWorkspace? SclWorkspace
