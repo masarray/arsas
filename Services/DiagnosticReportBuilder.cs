@@ -185,7 +185,10 @@ internal static class DiagnosticReportBuilder
                 AppendStaticIngressParity(builder, device.StaticAcquisitionParity);
                 AppendReportContinuity(builder, device.ReportContinuityEvidence);
                 if (device.IsMonitoring && Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device))
+                {
                     AppendStaticInitialImage(builder, device.Points);
+                    AppendStaticRcbImageTriage(builder, device.Points, device.ReportContinuityEvidence);
+                }
                 builder.AppendLine($"Saved model      : {device.HasDiscoveryCache} ({device.SignalCount:N0} signal(s))");
                 builder.AppendLine($"Selected         : live={device.SelectedLiveSignalCount:N0}, control={device.SelectedControlSignalCount:N0}");
                 var commandCatalog = Iec61850ControlIdentity.DistinctSelected(device.Signals);
@@ -324,6 +327,30 @@ internal static class DiagnosticReportBuilder
             builder.AppendLine($"  Awaiting value  : {point.Reference} | RCB={point.RcbReference} | status={point.Status} | reason={point.Reason}");
         if (image.PendingPoints.Count > 12)
             builder.AppendLine($"  Additional pending: {image.PendingPoints.Count - 12} (showing first 12; never inferred unavailable)");
+    }
+
+    /// <summary>
+    /// Per-RCB attribution for an already-captured static monitor image.
+    /// A successful RptEna/GI request is not proof of a routed Report; zero-frame
+    /// RCBs must be visible in Copy Diagnostic even when no continuity stream exists.
+    /// This only formats immutable local evidence and performs no MMS operations.
+    /// </summary>
+    internal static void AppendStaticRcbImageTriage(
+        StringBuilder builder,
+        IEnumerable<Iec61850MonitorPoint> points,
+        Iec61850ReportContinuitySnapshot? continuity)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        var groups = StaticDataSetRcbImageTriage.Evaluate(points, continuity, maxGroups: 16);
+        builder.AppendLine($"Static RCB traffic : shown={groups.Count}, " +
+            $"routed={groups.Count(group => group.HasActualReportFrames)}, " +
+            $"noRoutedFrames={groups.Count(group => !group.HasActualReportFrames)}");
+        builder.AppendLine("  Attribution     : one exact DataSet/RCB per row; zero routed frames " +
+            "is not proof of IED silence, GI rejection or MMS connection failure. " +
+            "Missing activation proof stays unverified.");
+        foreach (var group in groups)
+            builder.AppendLine($"  RCB evidence    : {group.Summary}, " +
+                $"ingress={(group.HasActualReportFrames ? "ROUTED" : "NO ROUTED FRAMES")}");
     }
 
     internal static void AppendReportContinuity(
