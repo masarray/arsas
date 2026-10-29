@@ -47,6 +47,37 @@ function Assert-Sha {
 
 Assert-Sha -Value ([string]$lock.commit) -Name 'commit'
 
+# A later (code-only) stage trial must not let historical evidence regress.
+# The active typed-control trial can be valid while an earlier independent
+# canonical/reporting lineage was silently edited; validate *all* recorded
+# immutable contracts before considering the active trial selector.
+if ($null -ne $lock.globalTypedControlStageTrial) {
+    $baselinePath = Join-Path $PSScriptRoot '..\engines\ARIEC61850.historical-trials.json'
+    if (-not (Test-Path -LiteralPath $baselinePath -PathType Leaf)) {
+        throw 'Historical physical-tested trial anchor file is missing.'
+    }
+    $history = Get-Content -LiteralPath $baselinePath -Raw -Encoding UTF8 |
+        ConvertFrom-Json -Depth 50
+    if ([int]$history.schemaVersion -ne 1 -or
+        [string]$history.approvedEngineSha -cne 'f75e323e9f8443aa20e0a3818a1d5d77255b2c0f') {
+        throw 'Historical physical-tested trial anchor identity disagrees.'
+    }
+    foreach ($contract in $history.contracts.PSObject.Properties) {
+        $actualContract = $lock.PSObject.Properties[$contract.Name]
+        if ($null -eq $actualContract -or $null -eq $actualContract.Value) {
+            throw "Historical physical-tested trial contract missing: $($contract.Name)"
+        }
+        foreach ($expectedField in $contract.Value.PSObject.Properties) {
+            $actualField = $actualContract.Value.PSObject.Properties[$expectedField.Name]
+            if ($null -eq $actualField -or
+                [string]$actualField.Value -cne [string]$expectedField.Value) {
+                throw "Historical physical-tested trial authority changed: $($contract.Name).$($expectedField.Name)"
+            }
+        }
+    }
+}
+
+
 if ($null -ne $lock.physicalTestedCommit) {
     Assert-Sha -Value ([string]$lock.physicalTestedCommit) -Name 'physicalTestedCommit'
 }
