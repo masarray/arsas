@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "repository": "masarray/ARIEC61850",
+  "commit": "ae1ce23dbc181c2a17aef20802f7517892fe4264",
+  "approvedBaselineCommit": "f75e323e9f8443aa20e0a3818a1d5d77255b2c0f",
+  "runMode": "fast-dev-nonpromotion",
+  "scope": "reporting",
+  "enginePullRequests": [
+    198,
+    199
+  ],
+  "engineCiRun": 40870337847,
+  "mainlinePromotionForbidden": true,
+  "physicalQualificationRequired": true,
+  "automaticRcbMutationForbidden": true,
+  "cyclicMmsProcessPollingForbidden": true,
+  "purpose": "Exact source/engine nonrelease reporting multi-RCB + structured FCD trial; approved lock and stable release unchanged."
+}
