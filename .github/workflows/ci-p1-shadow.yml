@@ -30,7 +30,7 @@ on:
       focus:
         description: 'Focused regression group'
         type: choice
-        options: [quality-browser, smv, command-read, all]
+        options: [quality-browser, smv, command-read, reporting, all]
         default: quality-browser
       engine_trial_sha:
         description: 'Optional exact 40-char experimental ARIEC SHA; FAST DEV only, never FAT'
@@ -58,6 +58,7 @@ jobs:
       ci: ${{ steps.changed.outputs.ci }}
       risk: ${{ steps.changed.outputs.risk }}
       engine_trial_sha: ${{ steps.trial.outputs.sha }}
+      engine_trial_focus: ${{ steps.trial.outputs.focus }}
     steps:
       - name: Checkout PR merge source
         uses: actions/checkout@v7
@@ -85,28 +86,12 @@ jobs:
           fi
 
       - id: trial
-        name: Resolve explicit nonrelease engine trial (label-gated)
+        name: Resolve exact nonpromotion engine trial (label-gated)
         if: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci-p1-shadow') }}
         shell: bash
         run: |
-          if [[ -f engines/ARIEC61850.trial.json ]]; then
-            python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          import re
-
-          with open("engines/ARIEC61850.lock.json", encoding="utf-8") as handle:
-              production = json.load(handle)
-          with open("engines/ARIEC61850.trial.json", encoding="utf-8") as handle:
-              trial = json.load(handle)
-          sha = str(trial.get("commit", ""))
-          if (not re.fullmatch(r"[0-9a-f]{40}", sha)
-              or trial.get("runMode") != "fast-dev-nonpromotion"
-              or trial.get("scope") != "command-read"
-              or sha == production.get("commit")):
-              raise SystemExit("Invalid or non-isolated engine trial manifest")
-          print("sha=" + sha)
-          PY
-          fi
+          python3 scripts/test-resolve-ariec-trial.py
+          python3 scripts/resolve-ariec-trial.py --output "$GITHUB_OUTPUT"
 
   windows-shadow:
     name: Compare reusable build/test with legacy authority
@@ -128,6 +113,6 @@ jobs:
       source_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       shadow_mode: true
       fast_dev: ${{ (github.event_name == 'workflow_dispatch' && inputs.fast_dev == true) || (github.event_name == 'pull_request' && needs.classify.outputs.engine_trial_sha != '') }}
-      focus: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_dev == true && inputs.focus || needs.classify.outputs.engine_trial_sha != '' && 'command-read' || 'all' }}
+      focus: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_dev == true && inputs.focus || needs.classify.outputs.engine_trial_focus || 'all' }}
       engine_trial_sha: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_dev == true && inputs.engine_trial_sha || needs.classify.outputs.engine_trial_sha || '' }}
     secrets: {}

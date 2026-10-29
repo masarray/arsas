@@ -177,6 +177,7 @@ jobs:
               'quality-browser' { 'FullyQualifiedName~QualityInvalidAttentionTests|FullyQualifiedName~IedBrowserPresentationTests|FullyQualifiedName~M2TypedQualityEvidenceTests|FullyQualifiedName~P0ReadEvidenceCsvBehaviorTests|FullyQualifiedName~P0SiebcuReadAllAndLayoutRegressionTests' }
               'smv' { 'FullyQualifiedName~SmvArstack|FullyQualifiedName~SmvLiveCaptureTests|FullyQualifiedName~SmvObservedTimebaseTests|FullyQualifiedName~SmvDigSubPortTests' }
               'command-read' { 'FullyQualifiedName~ModelDrivenAutoCommandDockTests|FullyQualifiedName~P109UStableCommandProjectionTests|FullyQualifiedName~P109WCommandDockLifecycleArchitectureTests|FullyQualifiedName~P0CswiCrossDataSetCommandDiscoveryTests|FullyQualifiedName~P0GrxCswiSelectionVisibilityTests|FullyQualifiedName~P0GrxSclLiveCswiParityTests|FullyQualifiedName~P0ReadEvidenceCsvBehaviorTests|FullyQualifiedName~P109KGenericControlSafetyTests|FullyQualifiedName~ZivBscStepControlRegressionTests|FullyQualifiedName~G1ControlCorrectnessRegressionTests' }
+              'reporting' { 'FullyQualifiedName~Report|FullyQualifiedName~Rcb|FullyQualifiedName~Sg7|FullyQualifiedName~StaticDataSet|FullyQualifiedName~M217K|FullyQualifiedName~IedBrowser|FullyQualifiedName~Mms' }
               'all' { 'FullyQualifiedName~QualityInvalidAttentionTests|FullyQualifiedName~SmvArstack|FullyQualifiedName~P0CswiCrossDataSetCommandDiscoveryTests|FullyQualifiedName~P0ReadEvidenceCsvBehaviorTests' }
               default { throw 'Unknown FAST DEV scope; refusing to silently skip tests.' }
             }
@@ -204,8 +205,8 @@ jobs:
           }
           Write-Host "Exact-source regression results: executed=$($counts.executed) passed=$($counts.passed) failed=$($counts.failed)."
 
-      - name: Build locked ArdIrec bridge and native regression for SG7 BCU trial
-        if: ${{ inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.focus == 'command-read' }}
+      - name: Build locked ArdIrec bridge and native regression for nonpromotion trial
+        if: ${{ inputs.fast_dev && inputs.engine_trial_sha != '' && (inputs.focus == 'command-read' || inputs.focus == 'reporting') }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -220,8 +221,8 @@ jobs:
           }
           "SG7_NATIVE_BRIDGE=$bridge" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Publish actual self-contained SG7 BCU Ed2 trial Windows EXE
-        if: ${{ inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.focus == 'command-read' }}
+      - name: Publish self-contained exact-SHA nonpromotion Windows EXE
+        if: ${{ inputs.fast_dev && inputs.engine_trial_sha != '' && (inputs.focus == 'command-read' || inputs.focus == 'reporting') }}
         shell: pwsh
         env:
           ARSAS_NONPROMOTION_ENGINE_TRIAL: 'true'
@@ -232,8 +233,9 @@ jobs:
               -not (Test-Path $env:SG7_NATIVE_BRIDGE -PathType Leaf)) {
             throw 'Engine/ArdIrec exact-SHA trial packaging prerequisites missing.'
           }
+          $trialVersion = if ('${{ inputs.focus }}' -eq 'reporting') { '1.6.42-reportingtrial' } else { '1.6.40-sg7bcued2trial' }
           .\ARSAS\scripts\publish-windows-portable.ps1 `
-            -Version '1.6.40-sg7bcued2trial' `
+            -Version $trialVersion `
             -Runtime win-x64 `
             -SingleFile $true `
             -SelfContained $true `
@@ -243,18 +245,20 @@ jobs:
             -EngineValidationLockPath $temporary
           if ($LASTEXITCODE -ne 0) { throw 'Single EXE trial publish failed.' }
 
-      - name: Execute portable EXE smoke and seal physical FAT trial identity
-        if: ${{ inputs.fast_dev && inputs.engine_trial_sha != '' && inputs.focus == 'command-read' }}
+      - name: Execute portable EXE smoke and seal nonpromotion trial identity
+        if: ${{ inputs.fast_dev && inputs.engine_trial_sha != '' && (inputs.focus == 'command-read' || inputs.focus == 'reporting') }}
         shell: pwsh
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
           EXPERIMENTAL_ENGINE: ${{ inputs.engine_trial_sha }}
           BASELINE_ENGINE: ${{ steps.engine.outputs.commit }}
+          FOCUS: ${{ inputs.focus }}
         run: |
           $ErrorActionPreference = 'Stop'
           $root = '.\ARSAS\dist'
-          $source = Join-Path $root 'ARSAS-1.6.40-sg7bcued2trial-win-x64-portable.exe'
-          $identityPath = Join-Path $root 'ARSAS-1.6.40-sg7bcued2trial-win-x64-portable-build-identity.json'
+          $version = if ($env:FOCUS -eq 'reporting') { '1.6.42-reportingtrial' } else { '1.6.40-sg7bcued2trial' }
+          $source = Join-Path $root "ARSAS-$version-win-x64-portable.exe"
+          $identityPath = Join-Path $root "ARSAS-$version-win-x64-portable-build-identity.json"
           if (-not (Test-Path $source -PathType Leaf) -or -not (Test-Path $identityPath -PathType Leaf)) {
             throw 'Single file EXE / portable identity missing.'
           }
@@ -283,7 +287,7 @@ jobs:
           if ($proc.ExitCode -ne 0) { throw "Portable EXE smoke failed: $($proc.ExitCode)" }
           $out = '.\ARSAS\TestResults\sg7-bcu-fat-trial'
           New-Item -ItemType Directory -Path $out -Force | Out-Null
-          $name = 'ARSAS-SG7_BCU-ED2-FAT-TRIAL-' + $engineSha.Substring(0,8) + '-win-x64.exe'
+          $name = if ($env:FOCUS -eq 'reporting') { 'ARSAS-REPORTING-P8-TRIAL-' + $engineSha.Substring(0,8) + '-win-x64.exe' } else { 'ARSAS-SG7_BCU-ED2-FAT-TRIAL-' + $engineSha.Substring(0,8) + '-win-x64.exe' }
           $exe = Join-Path $out $name
           Copy-Item $source $exe -Force
           if ((Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant() -cne $exeHash) {
@@ -293,7 +297,8 @@ jobs:
           Copy-Item (Join-Path $env:RUNNER_TEMP 'sg7-ardirec-ctest.xml') (Join-Path $out 'native-ardirec-ctest.xml') -Force
           [ordered]@{
             schemaVersion = 1
-            kind = 'arsas-nonrelease-supervised-iec61850-ed2-fat-trial'
+            kind = if ($env:FOCUS -eq 'reporting') { 'arsas-nonrelease-reporting-engine-trial' } else { 'arsas-nonrelease-supervised-iec61850-ed2-fat-trial' }
+            focus = $env:FOCUS
             sourceSha = $sourceSha
             engineTrialSha = $engineSha
             sourceApprovedEngineSha = $lock.commit
@@ -307,6 +312,17 @@ jobs:
             externalRelayTestPerformed = $false
             productionReleaseAuthority = $false
           } | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $out 'FAT-TRIAL-SHA256.json') -Encoding utf8
+          if ($env:FOCUS -eq 'reporting') {
+          @'
+          ARSAS REPORTING P8 | NONRELEASE ENGINE TRIAL
+          -------------------------------------------------
+          Exact-SHA isolated Windows x64 candidate; NOT the stable release.
+          Approved engine pin has NOT changed. Verify SHA-256 in the manifest.
+          Qualification scope: READ-ONLY multi-RCB / structured FCD reporting.
+          No cyclic MMS fallback, no automatic RCB mutation and no controls.
+          CI PASS does not prove physical 77/77, 4/4, or interoperability.
+          '@ | Set-Content (Join-Path $out 'READ-ME-FIRST.txt') -Encoding utf8
+          } else {
           @'
           ARSAS SG7_BCU IEC 61850 EDITION 2 | SUPERVISED FAT TRIAL
           -------------------------------------------------------
@@ -325,6 +341,7 @@ jobs:
           An automation PASS does not prove physical command success.
           The repository production engine lock remains the qualified #184.
           '@ | Set-Content (Join-Path $out 'READ-ME-FIRST.txt') -Encoding utf8
+          }
           Write-Host "EXE SMOKE SUCCESS: $name SHA256 $exeHash"
           Write-Host 'SUPERVISED FAT candidate only. No release or physical command authority.'
 
@@ -386,10 +403,12 @@ jobs:
         run: |
           $trial = ($env:FAST_DEV -eq 'true' -and
                     $env:TRIAL_SHA -match '^[0-9a-f]{40}$' -and
-                    $env:FOCUS -eq 'command-read')
+                    $env:FOCUS -in @('command-read', 'reporting'))
           if ($trial) {
-            "artifact_name=ARSAS-SG7-BCU-FAT-TRIAL-$env:GITHUB_RUN_ID.exe" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
-            "artifact_path=ARSAS/TestResults/sg7-bcu-fat-trial/ARSAS-SG7_BCU-ED2-FAT-TRIAL-*-win-x64.exe" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+            $artifactPrefix = if ($env:FOCUS -eq 'reporting') { 'ARSAS-REPORTING-P8-TRIAL' } else { 'ARSAS-SG7-BCU-FAT-TRIAL' }
+            $filePrefix = if ($env:FOCUS -eq 'reporting') { 'ARSAS-REPORTING-P8-TRIAL' } else { 'ARSAS-SG7_BCU-ED2-FAT-TRIAL' }
+            "artifact_name=$artifactPrefix-$env:GITHUB_RUN_ID.exe" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+            "artifact_path=ARSAS/TestResults/sg7-bcu-fat-trial/$filePrefix-*-win-x64.exe" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
             "artifact_archive=false" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
           } else {
             "artifact_name=ci-p1-shadow-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8

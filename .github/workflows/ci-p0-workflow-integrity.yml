@@ -86,7 +86,9 @@ jobs:
         run: python3 scripts/test-p7-dual-ingress-diagnostic.py
 
       - name: Run conservative CI P1 classifier fixtures
-        run: python3 scripts/test-classify-ci-changes.py
+        run: |
+          python3 scripts/test-classify-ci-changes.py
+          python3 scripts/test-resolve-ariec-trial.py
 
       - name: Run canonical CI P2 evidence safety fixtures
         run: python3 scripts/test-ci-canonical-reuse.py
