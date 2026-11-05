@@ -96,6 +96,9 @@ public static class Iec61850ValueStatePresentation
             return "F";
         }
 
+        if (normalized is "BITSTRING" or "BITS")
+            return "BIT";
+
         if (normalized.StartsWith("UINT", StringComparison.Ordinal) ||
             normalized is "INT8U" or "INT16U" or "INT24U" or "INT32U" or "INT64U")
         {
