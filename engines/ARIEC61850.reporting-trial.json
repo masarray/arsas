@@ -1,18 +1,20 @@
 {
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
-  "commit": "ae1ce23dbc181c2a17aef20802f7517892fe4264",
+  "commit": "58d22be43d93d1d439df04a99ba935a7ec45cd4c",
   "approvedBaselineCommit": "f75e323e9f8443aa20e0a3818a1d5d77255b2c0f",
   "runMode": "fast-dev-nonpromotion",
   "scope": "reporting",
   "enginePullRequests": [
     198,
-    199
+    199,
+    200
   ],
-  "engineCiRun": 40870337847,
+  "engineCiRun": 41980603839,
   "mainlinePromotionForbidden": true,
   "physicalQualificationRequired": true,
   "automaticRcbMutationForbidden": true,
   "cyclicMmsProcessPollingForbidden": true,
-  "purpose": "Exact source/engine nonrelease reporting multi-RCB + structured FCD trial; approved lock and stable release unchanged."
+  "purpose": "Exact-SHA P9 nonrelease Windows integration of four-RCB reporting, bounded delivery and closed-session isolation; physical qualification mandatory. Stable and approved engine lock remain unchanged.",
+  "trialMilestone": "P9"
 }

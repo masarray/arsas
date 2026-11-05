@@ -287,7 +287,16 @@ jobs:
           if ($proc.ExitCode -ne 0) { throw "Portable EXE smoke failed: $($proc.ExitCode)" }
           $out = '.\ARSAS\TestResults\sg7-bcu-fat-trial'
           New-Item -ItemType Directory -Path $out -Force | Out-Null
-          $name = if ($env:FOCUS -eq 'reporting') { 'ARSAS-REPORTING-P8-TRIAL-' + $engineSha.Substring(0,8) + '-win-x64.exe' } else { 'ARSAS-SG7_BCU-ED2-FAT-TRIAL-' + $engineSha.Substring(0,8) + '-win-x64.exe' }
+          $reportMilestone = if ($env:FOCUS -eq 'reporting') {
+            $trial = Get-Content '.\ARSAS\engines\ARIEC61850.reporting-trial.json' -Raw | ConvertFrom-Json
+            if ($trial.commit -cne $engineSha -or $trial.runMode -cne 'fast-dev-nonpromotion') {
+              throw 'Reporting trial manifest does not match the exact engine or nonpromotion mode.'
+            }
+            if ($trial.trialMilestone -eq 'P9') { 'P9' } else { 'P8' }
+          } else { '' }
+          $name = if ($env:FOCUS -eq 'reporting') {
+            "ARSAS-REPORTING-$reportMilestone-TRIAL-$($engineSha.Substring(0,8))-win-x64.exe"
+          } else { 'ARSAS-SG7_BCU-ED2-FAT-TRIAL-' + $engineSha.Substring(0,8) + '-win-x64.exe' }
           $exe = Join-Path $out $name
           Copy-Item $source $exe -Force
           if ((Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant() -cne $exeHash) {
@@ -322,6 +331,16 @@ jobs:
           No cyclic MMS fallback, no automatic RCB mutation and no controls.
           CI PASS does not prove physical 77/77, 4/4, or interoperability.
           '@ | Set-Content (Join-Path $out 'READ-ME-FIRST.txt') -Encoding utf8
+          if ($reportMilestone -eq 'P9') {
+            @'
+          ARSAS REPORTING P9 | NONRELEASE ENGINE TRIAL
+          -------------------------------------------------
+          P9 exact-SHA engineering trial: NOT stable or production.
+          Verify physical Report continuity and per-RCB first image before qualification.
+          Preserve approved production pin, no hidden polling and no auto control.
+          Source, engine and EXE SHA must match portable-build-identity.json.
+          '@ | Set-Content (Join-Path $out 'READ-ME-FIRST.txt') -Encoding utf8
+          }
           } else {
           @'
           ARSAS SG7_BCU IEC 61850 EDITION 2 | SUPERVISED FAT TRIAL
@@ -405,8 +424,15 @@ jobs:
                     $env:TRIAL_SHA -match '^[0-9a-f]{40}$' -and
                     $env:FOCUS -in @('command-read', 'reporting'))
           if ($trial) {
-            $artifactPrefix = if ($env:FOCUS -eq 'reporting') { 'ARSAS-REPORTING-P8-TRIAL' } else { 'ARSAS-SG7-BCU-FAT-TRIAL' }
-            $filePrefix = if ($env:FOCUS -eq 'reporting') { 'ARSAS-REPORTING-P8-TRIAL' } else { 'ARSAS-SG7_BCU-ED2-FAT-TRIAL' }
+            $reportMilestone = if ($env:FOCUS -eq 'reporting') {
+              $trial = Get-Content '.\ARSAS\engines\ARIEC61850.reporting-trial.json' -Raw | ConvertFrom-Json
+              if ($trial.commit -cne $env:TRIAL_SHA -or $trial.runMode -cne 'fast-dev-nonpromotion') {
+                throw 'Artifact reporting milestone disagrees with exact engine provenance.'
+              }
+              if ($trial.trialMilestone -eq 'P9') { 'P9' } else { 'P8' }
+            } else { '' }
+            $artifactPrefix = if ($env:FOCUS -eq 'reporting') { "ARSAS-REPORTING-$reportMilestone-TRIAL" } else { 'ARSAS-SG7-BCU-FAT-TRIAL' }
+            $filePrefix = if ($env:FOCUS -eq 'reporting') { "ARSAS-REPORTING-$reportMilestone-TRIAL" } else { 'ARSAS-SG7_BCU-ED2-FAT-TRIAL' }
             "artifact_name=$artifactPrefix-$env:GITHUB_RUN_ID.exe" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
             "artifact_path=ARSAS/TestResults/sg7-bcu-fat-trial/$filePrefix-*-win-x64.exe" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
             "artifact_archive=false" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
