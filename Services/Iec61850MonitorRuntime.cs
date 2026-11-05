@@ -567,7 +567,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         try
         {
             progress?.Report(new IedDiscoveryProgress(IedDiscoveryStage.OpeningTcp, $"Opening TCP {device.IpAddress}:{device.Port}…", 8d, 2, 15));
-            await session.Client.ConnectAsync(device.IpAddress, device.Port, cancellationToken).ConfigureAwait(false);
+            await ConnectInitialDiscoveryAssociationWithRetryAsync(
+                session, cancellationToken).ConfigureAwait(false);
             if (!session.Client.IsConnected)
             {
                 device.Status = "Connection failed";
@@ -3036,55 +3037,93 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         });
     }
 
-    private async Task ConnectCachedAssociationWithRetryAsync(
-        DeviceSession session,
-        CancellationToken cancellationToken)
+    // Both initial full discovery and cached reconnect use ONE association
+    // executor; only their bounded per-attempt timeout differs. Reporting,
+    // discovery and control operations stay strictly outside this lifecycle.
+    private Task ConnectInitialDiscoveryAssociationWithRetryAsync(
+        DeviceSession session, CancellationToken cancellationToken)
+        => ConnectAssociationWithRetryAsync(session, cachedModel: false, cancellationToken);
+
+    private Task ConnectCachedAssociationWithRetryAsync(
+        DeviceSession session, CancellationToken cancellationToken)
+        => ConnectAssociationWithRetryAsync(session, cachedModel: true, cancellationToken);
+
+    private async Task ConnectAssociationWithRetryAsync(
+        DeviceSession session, bool cachedModel, CancellationToken cancellationToken)
     {
-        const int maxAttempts = 2;
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        var phase = cachedModel ? "Fast saved-model" : "Initial discovery";
+        for (var attempt = 1;
+             attempt <= SmartReconnectPolicy.InitialDiscoveryAssociationMaxAttempts;
+             attempt++)
         {
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(SmartReconnectPolicy.ConnectBudget);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Cached association already has a strict two-second attempt budget.
+            // Initial discovery retains the engine's own eight-second budget.
+            using var budget = cachedModel
+                ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+                : null;
+            if (budget is not null)
+                budget.CancelAfter(SmartReconnectPolicy.ConnectBudget);
+            var attemptToken = budget?.Token ?? cancellationToken;
+
+            var started = Stopwatch.GetTimestamp();
+            var nativeDeadlineCancelled = false;
             try
             {
                 await session.Client.ConnectAsync(
                     session.Device.IpAddress,
                     session.Device.Port,
-                    timeout.Token).ConfigureAwait(false);
+                    attemptToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                session.Device.LastDiagnosticSnapshot = session.Client.CaptureDiagnosticSnapshot(
-                    $"Fast saved-model connect attempt #{attempt} timed out");
+                // Only the attempt-local budget or native internal timeout.
+                // Explicit user cancellation still propagates and is not retried.
+                nativeDeadlineCancelled = true;
             }
-
+            var elapsed = Stopwatch.GetElapsedTime(started);
             if (session.Client.IsConnected)
             {
                 if (attempt > 1)
-                {
                     Log("INFO", session.Device.Name,
-                        $"Fast saved-model connection recovered automatically on attempt #{attempt}; no manual Play retry was required.");
-                }
+                        $"{phase} MMS connection recovered on attempt #{attempt} " +
+                        $"after {elapsed.TotalMilliseconds:0} ms; discovery and RCB setup remain single-flight.");
                 return;
             }
 
-            if (attempt >= maxAttempts)
+            var failureKind = nativeDeadlineCancelled
+                ? "NATIVE_ASSOCIATION_CANCELLED"
+                : session.Client.LastConnectionFailureKind;
+            var failureDetail = nativeDeadlineCancelled
+                ? "Association attempt deadline expired before MMS was ready."
+                : string.IsNullOrWhiteSpace(session.Client.LastErrorMessage)
+                    ? $"native state={session.Client.NativeState}"
+                    : session.Client.LastErrorMessage;
+            session.Device.LastDiagnosticSnapshot = session.Client.CaptureDiagnosticSnapshot(
+                $"{phase} MMS association attempt #{attempt} failed after {elapsed.TotalMilliseconds:0} ms");
+
+            // Fail closed on unclassified errors and ACSE/MMS refusal. Do not
+            // repeat a confirmed protocol rejection just to satisfy a retry count.
+            var retry = attempt < SmartReconnectPolicy.InitialDiscoveryAssociationMaxAttempts &&
+                SmartReconnectPolicy.CanRetryInitialDiscoveryAssociation(failureKind);
+            Log("WARN", session.Device.Name,
+                $"{phase} MMS association attempt #{attempt} failed after {elapsed.TotalMilliseconds:0} ms " +
+                $"(kind={failureKind}, retry={retry}). {failureDetail}");
+
+            if (!retry)
                 return;
 
-            var failure = string.IsNullOrWhiteSpace(session.Client.LastErrorMessage)
-                ? $"native state={session.Client.NativeState}"
-                : session.Client.LastErrorMessage;
-            Log("WARN", session.Device.Name,
-                $"Fast saved-model connection attempt #{attempt} did not establish MMS ({failure}). Retrying once after {SmartReconnectPolicy.InitialAssociationRetryDelay.TotalMilliseconds:0} ms.");
-
-            var staleClient = session.Client;
+            // A new client gives the next TCP/COTP/ACSE/MMS attempt a new
+            // ownership scope. Never recycle a failed protocol session.
+            var oldClient = session.Client;
             session.Client = new NativeIec61850Client();
             await DisposeClientForReconnectAsync(
-                staleClient,
-                session.Device.Name,
-                SmartReconnectPolicy.ClientCleanupBudget,
+                oldClient, session.Device.Name,
+                SmartReconnectPolicy.ClientCleanupBudget, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(
+                SmartReconnectPolicy.InitialAssociationRetryDelay,
                 cancellationToken).ConfigureAwait(false);
-            await Task.Delay(SmartReconnectPolicy.InitialAssociationRetryDelay, cancellationToken).ConfigureAwait(false);
         }
     }
 

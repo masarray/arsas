@@ -55,7 +55,12 @@ public sealed class P72AssociationLifecycleRegressionTests
         Assert.Contains("WaitForReportStreamAsync", source, StringComparison.Ordinal);
         Assert.Contains("device.PropertyChanged += handler;", source, StringComparison.Ordinal);
         Assert.Contains(".WaitAsync(timeout, cancellationToken)", source, StringComparison.Ordinal);
-        Assert.Contains("firstReportLatency.TotalMilliseconds", source, StringComparison.Ordinal);
+        // A timed UI pulse cannot disprove actual decoder-backed RCB frames.
+        // This was the false-negative cause in the physical SIEBCU trial.
+        Assert.Contains("StaticDataSetRcbImageTriage.Evaluate(", source, StringComparison.Ordinal);
+        Assert.Contains("row.HasActualReportFrames", source, StringComparison.Ordinal);
+        Assert.Contains("if (routedRcbs > 0)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("if (trafficObserved && device.HasReportStream)", source, StringComparison.Ordinal);
         Assert.DoesNotContain(
             "await Task.Delay(proofWindow",
             source,

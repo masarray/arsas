@@ -83,6 +83,73 @@ public sealed class Iec61850ValueFormatterTests
         Assert.Equal("123.45 V", formatted);
     }
 
+    [Theory]
+    [InlineData("bits(80, unused=6)", "Bits [10]")]
+    [InlineData("bits(40, unused=6)", "Bits [01]")]
+    [InlineData("bits(00, unused=6)", "Bits [00]")]
+    [InlineData("bits(C0, unused=6)", "Bits [11]")]
+    public void ReportTwoBitStatus_ShowsActualSignificantBits_WithoutInventingLocalRemote(
+        string wireValue, string expected)
+    {
+        Assert.Equal(expected, Iec61850ValueFormatter.FormatReportProcessValue(
+            wireValue, "BitString", "", "Status", "SIEBCUUD1/USER2.LOCREM.stVal"));
+    }
+
+    [Theory]
+    [InlineData("Measurement", "IEDLD/GGIO1.RawBits")]
+    [InlineData("Status", "IEDLD/GGIO1.RawBits")]
+    [InlineData("Status", "IEDLD/GGIO1.RawBits.q")]
+    [InlineData("Status", "IEDLD/GGIO1.RawBits.subVal")]
+    [InlineData("Quality", "IEDLD/GGIO1.RawBits.stVal")]
+    public void TwoBitRawEvidence_OutsideExactStatusStVal_IsNotMutated(
+        string category, string reference)
+    {
+        const string wire = "bits(80,unused=6)";
+        Assert.Equal(wire, Iec61850ValueFormatter.FormatReportProcessValue(
+            wire, "BitString", "", category, reference));
+    }
+
+    [Theory]
+    [InlineData("Float32")]
+    [InlineData("Quality")]
+    [InlineData("Boolean")]
+    [InlineData("Enum")]
+    [InlineData("INT32")]
+    public void TwoBitStatus_ContradictingDeclaredType_MustStayRaw(string declaredType)
+    {
+        const string raw = "bits(80,unused=6)";
+        Assert.Equal(raw, Iec61850ValueFormatter.FormatReportProcessValue(
+            raw, declaredType, "", "Status", "IEDLD/GGIO1.Flag.stVal"));
+    }
+
+    [Theory]
+    [InlineData("bits(00,unused=6)", "Bits [00]")]
+    [InlineData("bits(40,unused=6)", "Bits [01]")]
+    [InlineData("bits(80,unused=6)", "Bits [10]")]
+    [InlineData("bits(C0,unused=6)", "Bits [11]")]
+    public void TwoBitStatus_IncompleteModelRetainsTruthfulSignificantBits(string raw, string expected)
+        => Assert.Equal(expected, Iec61850ValueFormatter.FormatReportProcessValue(
+            raw, "Unknown", "", "Status", "IEDLD/GGIO1.Mode.stVal"));
+
+    [Fact]
+    public void TwoBitStatus_IsOnlyDpcWhenExplicitPositionSemanticsArePresent()
+    {
+        Assert.Equal("Close [10]", Iec61850ValueFormatter.FormatReportProcessValue(
+            "bits(80, unused=6)", "DPC", "", "Position", "SIEBCUCB3/CSWI1.Pos.stVal"));
+        Assert.Equal("Bits [10]", Iec61850ValueFormatter.FormatReportProcessValue(
+            "bits(80, unused=6)", "Unknown", "", "Status", "SIEBCUUD1/USER2.LOCREM.stVal"));
+    }
+
+    [Theory]
+    [InlineData("bits(81, unused=6)")]
+    [InlineData("bits(80, unused=5)")]
+    [InlineData("bits(FFFF, unused=6)")]
+    public void MalformedWireBitString_RemainsUnmodifiedAndCannotFabricateStatus(string raw)
+    {
+        Assert.Equal(raw, Iec61850ValueFormatter.FormatReportProcessValue(
+            raw, "BitString", "", "Status", "IED/GGIO1.VendorState.stVal"));
+    }
+
     [Fact]
     public void Format_Extracts_Boolean_StVal_From_Legacy_Report_Structure()
     {

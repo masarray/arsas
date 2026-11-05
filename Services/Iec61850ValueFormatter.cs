@@ -86,6 +86,14 @@ public static class Iec61850ValueFormatter
             return boolean ? "True [1]" : "False [0]";
         }
 
+        // The protocol decoder owns raw MMS truth. Only a typed operator
+        // status projection may render a two-bit status; never mutate MMS
+        // measurements, quality evidence or an unknown semantic field.
+        if (normalizedValue is string renderedBits &&
+            Iec61850TwoBitStatusPresentation.TryFormat(
+                renderedBits, dataType, category, reference, out var displayBits))
+            return displayBits;
+
         return FormatNormalizedValue(normalizedValue, dataType, unit);
     }
 

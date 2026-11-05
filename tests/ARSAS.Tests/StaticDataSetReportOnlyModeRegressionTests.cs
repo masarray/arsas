@@ -194,7 +194,11 @@ public sealed class StaticDataSetReportOnlyModeRegressionTests
         Assert.Contains("LogStaticRcbImageTriage(device);", source, StringComparison.Ordinal);
         Assert.Contains("waiting for actual InformationReport traffic", source, StringComparison.Ordinal);
         Assert.Contains("actual InformationReport traffic observed", source, StringComparison.Ordinal);
-        Assert.Contains("no InformationReport traffic was observed", source, StringComparison.Ordinal);
+        Assert.Contains("no exact routed RCB InformationReport traffic was observed", source, StringComparison.Ordinal);
+        Assert.Contains("var exactRcbRows = ArIED61850Tester.Services.StaticDataSetRcbImageTriage.Evaluate(", source, StringComparison.Ordinal);
+        Assert.Contains("var routedRcbs = exactRcbRows.Count(row => row.HasActualReportFrames)", source, StringComparison.Ordinal);
+        Assert.Contains("if (routedRcbs > 0)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("if (trafficObserved && device.HasReportStream)", source, StringComparison.Ordinal);
         Assert.Contains("will NOT switch process values to cyclic MMS polling", source, StringComparison.Ordinal);
     }
 
