@@ -109,6 +109,28 @@ public sealed class Iec61850ValueFormatterTests
             wire, "BitString", "", category, reference));
     }
 
+    [Theory]
+    [InlineData("Float32")]
+    [InlineData("Quality")]
+    [InlineData("Boolean")]
+    [InlineData("Enum")]
+    [InlineData("INT32")]
+    public void TwoBitStatus_ContradictingDeclaredType_MustStayRaw(string declaredType)
+    {
+        const string raw = "bits(80,unused=6)";
+        Assert.Equal(raw, Iec61850ValueFormatter.FormatReportProcessValue(
+            raw, declaredType, "", "Status", "IEDLD/GGIO1.Flag.stVal"));
+    }
+
+    [Theory]
+    [InlineData("bits(00,unused=6)", "Bits [00]")]
+    [InlineData("bits(40,unused=6)", "Bits [01]")]
+    [InlineData("bits(80,unused=6)", "Bits [10]")]
+    [InlineData("bits(C0,unused=6)", "Bits [11]")]
+    public void TwoBitStatus_IncompleteModelRetainsTruthfulSignificantBits(string raw, string expected)
+        => Assert.Equal(expected, Iec61850ValueFormatter.FormatReportProcessValue(
+            raw, "Unknown", "", "Status", "IEDLD/GGIO1.Mode.stVal"));
+
     [Fact]
     public void TwoBitStatus_IsOnlyDpcWhenExplicitPositionSemanticsArePresent()
     {
