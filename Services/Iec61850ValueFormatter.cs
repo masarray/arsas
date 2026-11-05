@@ -86,6 +86,15 @@ public static class Iec61850ValueFormatter
             return boolean ? "True [1]" : "False [0]";
         }
 
+        // MMS two-bit BIT STRING is not necessarily a DPC position: the same
+        // wire representation is also used for vendor-specific status leaves
+        // (e.g. USER2.LOCREM). Render only the two significant bits, never
+        // expose 'unused=6' as an operator value or invent Local/Remote.
+        // The position-only branch above retains the established DPC labels.
+        if (normalizedValue is string wireBits &&
+            TryNormalizeTwoBitWireStatus(wireBits, out var code))
+            return $"Bits [{Convert.ToString(code, 2).PadLeft(2, '0')}]";
+
         return FormatNormalizedValue(normalizedValue, dataType, unit);
     }
 
