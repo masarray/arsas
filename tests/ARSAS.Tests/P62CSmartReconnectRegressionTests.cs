@@ -19,6 +19,7 @@ public sealed class P62CSmartReconnectRegressionTests
     [InlineData("TCP_TIMEOUT", true)]
     [InlineData("TCP_TRANSPORT_CLOSED", true)]
     [InlineData("TCP_CONNECTION_REFUSED", true)]
+    [InlineData("NATIVE_ASSOCIATION_CANCELLED", true)]
     [InlineData("NETWORK_UNREACHABLE", false)]
     [InlineData("ACSE_MMS_ASSOCIATION_REJECTED", false)]
     [InlineData("IEC61850_CONNECTION_FAILED", false)]
