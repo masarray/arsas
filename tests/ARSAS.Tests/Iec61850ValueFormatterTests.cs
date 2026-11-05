@@ -95,6 +95,20 @@ public sealed class Iec61850ValueFormatterTests
             wireValue, "BitString", "", "Status", "SIEBCUUD1/USER2.LOCREM.stVal"));
     }
 
+    [Theory]
+    [InlineData("Measurement", "IEDLD/GGIO1.RawBits")]
+    [InlineData("Status", "IEDLD/GGIO1.RawBits")]
+    [InlineData("Status", "IEDLD/GGIO1.RawBits.q")]
+    [InlineData("Status", "IEDLD/GGIO1.RawBits.subVal")]
+    [InlineData("Quality", "IEDLD/GGIO1.RawBits.stVal")]
+    public void TwoBitRawEvidence_OutsideExactStatusStVal_IsNotMutated(
+        string category, string reference)
+    {
+        const string wire = "bits(80,unused=6)";
+        Assert.Equal(wire, Iec61850ValueFormatter.FormatReportProcessValue(
+            wire, "BitString", "", category, reference));
+    }
+
     [Fact]
     public void TwoBitStatus_IsOnlyDpcWhenExplicitPositionSemanticsArePresent()
     {
