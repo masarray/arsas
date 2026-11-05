@@ -25,6 +25,11 @@ public static class Iec61850ValueStatePresentation
 
         var normalized = text.ToLowerInvariant();
 
+        // A raw typed BIT STRING's bits are data, not a DPC/Boolean assertion.
+        // In particular Bits [10] must not inherit the DPC Closed/Active tone.
+        if (normalized.StartsWith("bits [", StringComparison.Ordinal))
+            return Neutral;
+
         // DPC state codes are process states, not health/severity. Intermediate and
         // bad are the only forms that deserve the amber attention tone.
         if (normalized.Contains("intermediate", StringComparison.Ordinal) ||

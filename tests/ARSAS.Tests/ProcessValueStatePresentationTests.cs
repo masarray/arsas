@@ -19,6 +19,19 @@ public sealed class ProcessValueStatePresentationTests
         => Assert.Equal(expected, Iec61850ValueStatePresentation.Classify(value, dataType));
 
     [Theory]
+    [InlineData("Bits [10]", "BitString")]
+    [InlineData("Bits [11]", "BitString")]
+    [InlineData("Bits [00]", "Unknown")]
+    public void RawTwoBitNonDpc_NeverAcquiresPositionTone(string value, string dataType)
+    {
+        Assert.Equal(Iec61850ValueStatePresentation.Neutral,
+            Iec61850ValueStatePresentation.Classify(value, dataType));
+        Assert.Equal(Iec61850ValueStatePresentation.Neutral,
+            Iec61850ValueStatePresentation.ClassifyVisualKind(
+                value, dataType, "Status", "SIEBCUUD1/USER2.LOCREM.stVal"));
+    }
+
+    [Theory]
     [InlineData("1", "Boolean", Iec61850ValueStatePresentation.Active)]
     [InlineData("0", "Boolean", Iec61850ValueStatePresentation.Inactive)]
     [InlineData("1", "Float", Iec61850ValueStatePresentation.Neutral)]
