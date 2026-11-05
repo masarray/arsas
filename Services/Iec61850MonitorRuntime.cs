@@ -3051,10 +3051,20 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         {
             cancellationToken.ThrowIfCancellationRequested();
             var started = Stopwatch.GetTimestamp();
-            await session.Client.ConnectAsync(
-                session.Device.IpAddress,
-                session.Device.Port,
-                cancellationToken).ConfigureAwait(false);
+            var nativeAttemptCancelled = false;
+            try
+            {
+                await session.Client.ConnectAsync(
+                    session.Device.IpAddress,
+                    session.Device.Port,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                // Only an internal/native deadline cancelled: operator shutdown or
+                // explicit external cancellation still propagates immediately.
+                nativeAttemptCancelled = true;
+            }
             var elapsed = Stopwatch.GetElapsedTime(started);
 
             if (session.Client.IsConnected)
@@ -3066,8 +3076,12 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                 return;
             }
 
-            var kind = session.Client.LastConnectionFailureKind;
-            var description = string.IsNullOrWhiteSpace(session.Client.LastErrorMessage)
+            var kind = nativeAttemptCancelled
+                ? "NATIVE_ASSOCIATION_CANCELLED"
+                : session.Client.LastConnectionFailureKind;
+            var description = nativeAttemptCancelled
+                ? "Native association attempt was cancelled before completion while the application cancellation token remained active."
+                : string.IsNullOrWhiteSpace(session.Client.LastErrorMessage)
                 ? $"native state={session.Client.NativeState}"
                 : session.Client.LastErrorMessage;
             session.Device.LastDiagnosticSnapshot = session.Client.CaptureDiagnosticSnapshot(
