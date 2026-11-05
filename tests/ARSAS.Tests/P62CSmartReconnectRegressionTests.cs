@@ -15,6 +15,46 @@ public sealed class P62CSmartReconnectRegressionTests
             TimeSpan.FromMilliseconds(expectedMilliseconds),
             SmartReconnectPolicy.GetRetryDelay(failureCount));
 
+    [Theory]
+    [InlineData("TCP_TIMEOUT", true)]
+    [InlineData("TCP_TRANSPORT_CLOSED", true)]
+    [InlineData("TCP_CONNECTION_REFUSED", true)]
+    [InlineData("NETWORK_UNREACHABLE", false)]
+    [InlineData("ACSE_MMS_ASSOCIATION_REJECTED", false)]
+    [InlineData("IEC61850_CONNECTION_FAILED", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void InitialDiscovery_RetriesOnlyKnownTransientTransportFailures(
+        string? failureKind, bool expected)
+    {
+        Assert.Equal(expected, SmartReconnectPolicy.CanRetryInitialDiscoveryAssociation(failureKind));
+        Assert.Equal(2, SmartReconnectPolicy.InitialDiscoveryAssociationMaxAttempts);
+    }
+
+    [Fact]
+    public void InitialDiscoveryTransportRetry_CannotTriggerDuplicateDiscoveryOrRCBWrite()
+    {
+        // The helper belongs exclusively to the association stage before
+        // discovering directories or attempting any RCB activation.
+        var runtime = ReadRepoFile("Services/Iec61850MonitorRuntime.cs");
+        var connect = runtime.IndexOf("await ConnectInitialDiscoveryAssociationWithRetryAsync(",
+            StringComparison.Ordinal);
+        var discovery = runtime.IndexOf("await session.Client.DiscoverSignalsAsync(",
+            StringComparison.Ordinal);
+        var helper = runtime.IndexOf("private async Task ConnectInitialDiscoveryAssociationWithRetryAsync(",
+            StringComparison.Ordinal);
+        var nextHelper = runtime.IndexOf("private async Task ConnectCachedAssociationWithRetryAsync(",
+            StringComparison.Ordinal);
+        Assert.True(connect >= 0 && discovery > connect && helper > 0 && nextHelper > helper);
+        var body = runtime[helper..nextHelper];
+        Assert.DoesNotContain("DiscoverSignalsAsync(", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("StartPersistentReport", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("WriteReport", body, StringComparison.Ordinal);
+        Assert.Contains("new NativeIec61850Client()", body, StringComparison.Ordinal);
+        Assert.Contains("InitialAssociationRetryDelay", body, StringComparison.Ordinal);
+        Assert.Contains("cancellationToken.ThrowIfCancellationRequested()", body, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void RecoveryWarmup_RemainsResponsiveForCommissioningReconnect()
     {
