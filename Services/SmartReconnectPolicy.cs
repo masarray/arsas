@@ -18,7 +18,7 @@ public static class SmartReconnectPolicy
     public const int InitialDiscoveryAssociationMaxAttempts = 2;
 
     public static bool CanRetryInitialDiscoveryAssociation(string? failureKind)
-        => failureKind is "TCP_TIMEOUT" or "TCP_TRANSPORT_CLOSED" or "TCP_CONNECTION_REFUSED";
+        => failureKind is "TCP_TIMEOUT" or "TCP_TRANSPORT_CLOSED" or "TCP_CONNECTION_REFUSED" or "NATIVE_ASSOCIATION_CANCELLED";
     public static TimeSpan ReportRearmDelay => TimeSpan.FromSeconds(1);
     public static TimeSpan ReportRearmDeadline => TimeSpan.FromSeconds(3);
     public static TimeSpan RecoveryWarmupDuration => TimeSpan.FromSeconds(3);
