@@ -567,7 +567,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         try
         {
             progress?.Report(new IedDiscoveryProgress(IedDiscoveryStage.OpeningTcp, $"Opening TCP {device.IpAddress}:{device.Port}…", 8d, 2, 15));
-            await session.Client.ConnectAsync(device.IpAddress, device.Port, cancellationToken).ConfigureAwait(false);
+            await ConnectInitialDiscoveryAssociationWithRetryAsync(
+                session, cancellationToken).ConfigureAwait(false);
             if (!session.Client.IsConnected)
             {
                 device.Status = "Connection failed";
@@ -3034,6 +3035,65 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                 .OrderBy(reference => reference, StringComparer.OrdinalIgnoreCase).ToArray(),
             Sequence = state.Sequence
         });
+    }
+
+    /// <summary>
+    /// Only initial MMS association is retried, never discovery, RCB writes,
+    /// or controls. Denied ACSE/MMS associations and unknown errors fail closed.
+    /// </summary>
+    private async Task ConnectInitialDiscoveryAssociationWithRetryAsync(
+        DeviceSession session,
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 1;
+             attempt <= SmartReconnectPolicy.InitialDiscoveryAssociationMaxAttempts;
+             attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var started = Stopwatch.GetTimestamp();
+            await session.Client.ConnectAsync(
+                session.Device.IpAddress,
+                session.Device.Port,
+                cancellationToken).ConfigureAwait(false);
+            var elapsed = Stopwatch.GetElapsedTime(started);
+
+            if (session.Client.IsConnected)
+            {
+                if (attempt > 1)
+                    Log("INFO", session.Device.Name,
+                        $"Initial MMS connection recovered on attempt #{attempt} in {elapsed.TotalMilliseconds:0} ms; " +
+                        "full discovery will run once on this association.");
+                return;
+            }
+
+            var kind = session.Client.LastConnectionFailureKind;
+            var description = string.IsNullOrWhiteSpace(session.Client.LastErrorMessage)
+                ? $"native state={session.Client.NativeState}"
+                : session.Client.LastErrorMessage;
+            session.Device.LastDiagnosticSnapshot = session.Client.CaptureDiagnosticSnapshot(
+                $"Initial MMS association attempt #{attempt} failed after {elapsed.TotalMilliseconds:0} ms");
+
+            var willRetry = attempt < SmartReconnectPolicy.InitialDiscoveryAssociationMaxAttempts &&
+                SmartReconnectPolicy.CanRetryInitialDiscoveryAssociation(kind);
+            Log("WARN", session.Device.Name,
+                $"Initial MMS association attempt #{attempt} failed after {elapsed.TotalMilliseconds:0} ms " +
+                $"(kind={kind}, retry={willRetry}). {description}");
+
+            if (!willRetry)
+                return;
+
+            // Never inherit failed ACSE/MMS state across attempt boundaries.
+            var failedClient = session.Client;
+            session.Client = new NativeIec61850Client();
+            await DisposeClientForReconnectAsync(
+                failedClient,
+                session.Device.Name,
+                SmartReconnectPolicy.ClientCleanupBudget,
+                cancellationToken).ConfigureAwait(false);
+            await Task.Delay(
+                SmartReconnectPolicy.InitialAssociationRetryDelay,
+                cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private async Task ConnectCachedAssociationWithRetryAsync(
