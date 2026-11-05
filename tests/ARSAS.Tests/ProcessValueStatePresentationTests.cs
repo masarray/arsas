@@ -74,6 +74,8 @@ public sealed class ProcessValueStatePresentationTests
     [InlineData("Enum", "E")]
     [InlineData("Dbpos", "DP")]
     [InlineData("DPC", "DP")]
+    [InlineData("BitString", "BIT")]
+    [InlineData("BITS", "BIT")]
     [InlineData("DPS", "DP")]
     [InlineData("Counter", "")]
     [InlineData("Unknown", "")]
