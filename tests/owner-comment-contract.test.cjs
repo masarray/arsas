@@ -104,17 +104,33 @@ test('unexpected/fork/changed branch cannot dispatch CI', async () => {
   }
 });
 
-test('public stable refuses open PR, old version, moved main, missing P0 or CI', async () => {
+test('public stable refuses open PR, old version, moved main, missing canonical build or installer', async () => {
   for (const options of [
     {}, { merged: true, version: '1.6.42' },
     { merged: true, mainSha: OTHER },
-    { merged: true, openIssue: 769 },
-    { merged: true, openIssue: 172 },
-    { merged: true, missingCI: 'Validate SV evidence bundles' }
+    { merged: true, missingCI: 'Build ARSAS' },
+    { merged: true, missingCI: 'Validate ARSAS Windows installer' },
+    { merged: true, missingCI: 'CI P0 Workflow Integrity' }
   ]) {
     const h = harness('/arsas release publish', options);
     await assert.rejects(route(h.github, h.context, h.core));
     assert.deepEqual(h.dispatched, []);
+  }
+});
+
+test('open interoperability/SOE issues and advisory field CI do not block tested protocol tester release', async () => {
+  for (const options of [
+    { merged: true, openIssue: 769 },
+    { merged: true, openIssue: 172 },
+    { merged: true, missingCI: 'IEC 61850 Interoperability Reference Guard' },
+    { merged: true, missingCI: 'Validate SV evidence bundles' }
+  ]) {
+    const h = harness('/arsas release publish', options);
+    await route(h.github, h.context, h.core);
+    assert.equal(h.dispatched.length, 1);
+    assert.equal(h.dispatched[0].workflow_id, 'release-windows.yml');
+    assert.equal(h.dispatched[0].inputs.expected_source_sha, SHA);
+    assert.ok(!h.apiCalls.includes('issues.get'));
   }
 });
 

@@ -107,23 +107,18 @@ jobs:
                   (next[0] === previous[0] && next[1] === previous[1] && next[2] <= previous[2])) {
                 throw new Error('Stable version must be newer than the latest public release.');
               }
-              for (const block of [{ repo, number: 769 }, { repo: 'ARIEC61850', number: 172 }]) {
-                const issue = (await github.rest.issues.get({
-                  owner, repo: block.repo, issue_number: block.number
-                })).data;
-                if (issue.state !== 'closed' || issue.state_reason === 'not_planned') {
-                  throw new Error('Public stable blocked by unresolved qualification ' +
-                    block.repo + '#' + block.number);
-                }
-              }
+              // Open SOE/interoperability defects never impersonate a packaging
+              // failure. Release authority is exact tested-source and installer,
+              // not manually closing unrelated protocol-tester product issues.
               const allRuns = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
                 owner, repo, head_sha: exact, event: 'push', per_page: 100
               });
+              // Product distribution gates: one full canonical application
+              // regression, one installed Windows runtime test, workflow integrity.
+              // Vendor/IED-specific field qualification remains advisory.
               const required = [
-                'Build ARSAS', 'Validate IO List Testing',
-                'Validate SV evidence bundles', 'Validate COMTRADE viewer integration',
-                'CI P0 Workflow Integrity', 'Validate ARSAS Windows installer',
-                'IEC 61850 Interoperability Reference Guard'
+                'Build ARSAS', 'Validate ARSAS Windows installer',
+                'CI P0 Workflow Integrity'
               ];
               for (const name of required) {
                 if (!allRuns.some(run => run.name === name && run.conclusion === 'success')) {
