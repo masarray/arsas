@@ -15,6 +15,57 @@ public sealed class StaticDataSetRcbImageTriageTests
     };
 
     [Fact]
+    public void OverlappingSg7MeterDataSetsDoNotHideFourthActiveRcb()
+    {
+        const string domain = "SG7_BCUMaster/LLN0.";
+        const string prefix = "SG7_BCUMaster/LLN0.BR.";
+        var a = prefix + "BrcbA01";
+        var b = prefix + "BrcbB01";
+        var d = prefix + "BrcbD01";
+        var i = prefix + "BrcbI01";
+        var dsA = domain + "TT6DataSet3";
+        var dsB = domain + "TT3DataSet02";
+        var dsD = domain + "TT3DataSet01";
+        var dsI = domain + "TT6DataSet4";
+        var points = new[]
+        {
+            Point("XCBR1.Pos.stVal", dsA, a, "Open [01]"),
+            Point("XCBR2.Pos.stVal", dsB, b),
+            Point("Hz.mag.f", dsI, i)
+        };
+        var activations = new[]
+        {
+            new Iec61850RcbActivationEvidence { Rcb = a, DataSet = dsA, SetupSucceeded = true, GiWriteAccepted = true },
+            new Iec61850RcbActivationEvidence { Rcb = b, DataSet = dsB, SetupSucceeded = true, GiWriteAccepted = true },
+            new Iec61850RcbActivationEvidence { Rcb = d, DataSet = dsD, SetupSucceeded = true, GiWriteAccepted = true },
+            new Iec61850RcbActivationEvidence { Rcb = i, DataSet = dsI, SetupSucceeded = true, GiWriteAccepted = true }
+        };
+        var traffic = new Iec61850ReportContinuitySnapshot
+        {
+            Streams = new[]
+            {
+                new Iec61850ReportContinuityStreamSnapshot { Rcb = a, DataSet = dsA, Frames = 7 },
+                new Iec61850ReportContinuityStreamSnapshot { Rcb = b, DataSet = dsB, Frames = 6 }
+            }
+        };
+        var rows = StaticDataSetRcbImageTriage.Evaluate(
+            points, traffic, activations: activations, maxGroups: 64);
+        Assert.Equal(4, rows.Count);
+        Assert.Equal(2, rows.Count(row => row.HasActualReportFrames));
+        var dRow = Assert.Single(rows, row => row.Rcb == d);
+        Assert.Equal(0, dRow.Selected);
+        Assert.Equal(0, dRow.Frames);
+        Assert.False(dRow.HasDisplayedPointAttribution);
+        Assert.True(dRow.SetupGiWriteAccepted);
+        Assert.Contains("NOT ATTRIBUTED", dRow.Summary);
+        Assert.Equal(1, Assert.Single(rows, row => row.Rcb == i).Pending);
+        var diag = new System.Text.StringBuilder();
+        DiagnosticReportBuilder.AppendStaticRcbImageTriage(
+            diag, points, traffic, activations);
+        Assert.Contains("shown=4/4, routed=2, noRoutedFrames=2", diag.ToString());
+    }
+
+    [Fact]
     public void OneActiveRcbNeverClaimsFramesGiOrImageForAnotherRcb()
     {
         const string datasetA = "SG7_BCUMaster/LLN0.TT6DataSet1";

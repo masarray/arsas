@@ -361,15 +361,17 @@ internal static class DiagnosticReportBuilder
         var groups = StaticDataSetRcbImageTriage.Evaluate(
             selected, continuity, maxGroups: 64, activations: activations,
             liveValues: liveValues);
-        var totalGroups = StaticDataSetInitialImageDiagnostic.Evaluate(
-            selected, liveValues).Groups.Count;
+        var totalGroups = Math.Max(groups.Count,
+            StaticDataSetInitialImageDiagnostic.Evaluate(
+                selected, liveValues).Groups.Count);
         builder.AppendLine($"Static RCB traffic : shown={groups.Count}/{totalGroups}, " +
             $"routed={groups.Count(group => group.HasActualReportFrames)}, " +
             $"noRoutedFrames={groups.Count(group => !group.HasActualReportFrames)}");
         builder.AppendLine("  Attribution     : one exact DataSet/RCB per row; zero routed frames " +
             "is not proof of IED silence, GI rejection or MMS connection failure. " +
             "Write-step outcome, first routed Report, and value visibility are separate proofs; " +
-            "missing setup proof stays unverified.");
+            "missing setup proof stays unverified. Overlapping selected values " +
+            "do not erase an independently activated RCB from triage.");
         foreach (var group in groups)
             builder.AppendLine($"  RCB evidence    : {group.Summary}, " +
                 $"ingress={(group.HasActualReportFrames ? "ROUTED" : "NO ROUTED FRAMES")}");

@@ -19,8 +19,13 @@ internal static class StaticDataSetRcbImageTriage
         internal bool? SetupGiWriteAccepted { get; init; }
         internal DateTimeOffset? SetupReturnedAtUtc { get; init; }
         internal bool HasActualReportFrames => Frames > 0;
+        internal bool HasDisplayedPointAttribution { get; init; } = true;
         internal string Summary =>
-            $"{DataSet} / {Rcb}: initial image {Visible}/{Selected}, pending={Pending}, " +
+            $"{DataSet} / {Rcb}: " +
+            (HasDisplayedPointAttribution
+                ? $"initial image {Visible}/{Selected}"
+                : "initial image NOT ATTRIBUTED (overlapping selected point rows)") +
+            $", pending={Pending}, " +
             $"q-unverified={QualityNotSupplied}, actualFrames={Frames}, " +
             $"RptEnaWrite={Proof(RptEnaWriteAccepted)}, " +
             $"GiWrite={Proof(GiWriteAccepted)}, overflowObserved={Overflow}; " +
@@ -56,8 +61,36 @@ internal static class StaticDataSetRcbImageTriage
         // A static member's current displayed value and actual RCB receive
         // frame are independent evidence. Do not infer the latter from former.
         var image = StaticDataSetInitialImageDiagnostic.Evaluate(points, liveValues);
-        return image.Groups.Take(maxGroups).Select(group =>
+        var groups = image.Groups
+            .Select(group => (Group: group, HasDisplayedAttribution: true))
+            .ToList();
+        // Live RCB lifecycle is independent of the chosen single UI owner
+        // for duplicate selected DataSet members. Do not hide such an RCB.
+        if (activations is not null)
         {
+            foreach (var activation in activations.Take(64))
+            {
+                if (string.IsNullOrWhiteSpace(activation.Rcb) ||
+                    string.IsNullOrWhiteSpace(activation.DataSet))
+                    continue;
+                var rcb = IedBrowserRcbReportEvidence.Canonical(activation.Rcb);
+                // A conflicting DataSet for a known RCB is not a second RCB.
+                if (groups.Any(item => string.Equals(
+                        IedBrowserRcbReportEvidence.Canonical(item.Group.RcbReference),
+                        rcb, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+                groups.Add((new StaticDataSetInitialImageDiagnostic.Group(
+                    activation.DataSet, activation.Rcb, 0, 0, 0, 0), false));
+            }
+        }
+
+        return groups
+            .OrderBy(item => item.Group.DataSetReference, StringComparer.Ordinal)
+            .ThenBy(item => item.Group.RcbReference, StringComparer.Ordinal)
+            .Take(maxGroups)
+            .Select(item =>
+        {
+            var group = item.Group;
             var stream = IedBrowserRcbReportEvidence.Select(
                 continuity, group.RcbReference, group.DataSetReference, "");
             // Exact RCB AND DataSet match. An activation for another plan,
@@ -82,7 +115,8 @@ internal static class StaticDataSetRcbImageTriage
                 SetupSucceeded = activation?.SetupSucceeded,
                 SetupRptEnaWriteAccepted = activation?.RptEnaWriteAccepted,
                 SetupGiWriteAccepted = activation?.GiWriteAccepted,
-                SetupReturnedAtUtc = activation?.ActivationReturnedAtUtc
+                SetupReturnedAtUtc = activation?.ActivationReturnedAtUtc,
+                HasDisplayedPointAttribution = item.HasDisplayedAttribution
             };
         }).ToArray();
     }
