@@ -55,3 +55,25 @@ The read-only initial-image and per-RCB diagnostics consult the current canonica
 Report when deciding whether a display token `Unknown` is genuinely populated.
 One verdict per selected point is reused for totals, groups and pending rows.
 Quality remains independently unknown if not supplied. No network IO added.
+
+
+## SG7 physical trial 2026-11-20 — 56/77, 2/4 ingress, explicit snapshot remedy
+
+SG7 live diagnostic from 2026-11-20 12:40 UTC showed 56/77 selected process
+values, BRCB A01 7 frames / 56 selected visible, B01 6 frames but three
+unique pending, and D01 / I01 no routed frames. All four reported RptEna and
+GI writes accepted, which do NOT prove the IED emitted one Report per target.
+Two BRCBs advertised BufOvfl=true: SOE completeness cannot be certified.
+
+The previously displayed "Static RCB traffic" group count was 3 because
+point DataSet attribution is single-valued and D01/I01 share the same 18
+metering members. Now activation-only D01 remains visible with 0 attributed
+display rows rather than disappearing; Report and GI proofs are independent.
+
+A new **operator-confirmed** "Read pending" action in Device Explorer makes
+one finite read-only pass over up to 77 selected, still-pending exact ST/MX
+leaves: 15s total budget, 2s/leaf, no alias-to-primary promotion, source
+"MMS Read" in the canonical ledger and "MMS Snapshot Read" on the live row.
+The UI explicitly labels "Snapshot Read" separately from RCB; no GI, RCB
+write, dynamic DataSet creation, cyclic polling or SOE generated. Actual
+InformationReports remain the stronger per-point process provenance.

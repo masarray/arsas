@@ -44,6 +44,8 @@ public static class Iec61850EventOriginPolicy
         IReadOnlyList<string>? routedReportControlReferences = null)
     {
         if (IsPolling(sourceMode)) return "MMS Polling";
+        if (string.Equals(sourceMode, "MMS Snapshot Read", StringComparison.Ordinal))
+            return "Snapshot Read";
         // An SOE row keeps the causative report reference separately for
         // forensics; Acquisition is the operator's short list of *observed*
         // RCB sources for that point up to this event.
@@ -67,6 +69,8 @@ public static class Iec61850EventOriginPolicy
     {
         if (offline) return "Offline";
         if (IsPolling(sourceMode)) return "MMS Polling";
+        if (string.Equals(sourceMode, "MMS Snapshot Read", StringComparison.Ordinal))
+            return "Snapshot Read";
         var names = RcbNames(liveRcbReferences);
         if (names.Length > 0) return names;
         if (sourceMode?.Contains("report", StringComparison.OrdinalIgnoreCase) == true ||

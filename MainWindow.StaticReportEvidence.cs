@@ -4,6 +4,51 @@ namespace ArIED61850Tester;
 
 public partial class MainWindow
 {
+    // Explicit operator remedy for Report-only IEDs that accepted GI but did
+    // not deliver every selected initial process value. Never claims RCB proof.
+    private async void ExplorerReadPendingSnapshot_Click(
+        object sender, System.Windows.RoutedEventArgs e)
+    {
+        var device = SelectedDevice;
+        if (device is null || !device.IsConnected || !device.IsMonitoring ||
+            device.IsDemo ||
+            !ArIED61850Tester.Services.Iec61850MonitoringModeRegistry
+                .IsStaticDataSetReportOnly(device))
+        {
+            SetStatus("Pending Snapshot Read requires a connected Static DataSet report-only IED.");
+            return;
+        }
+
+        var choice = System.Windows.MessageBox.Show(this,
+            "Read up to 77 exact pending ST/MX process leaves once from this IED?\n\n" +
+            "This is an explicit MMS Snapshot Read, NOT an RCB Report or GI. " +
+            "It does not configure the IED, create SOE events, or start cyclic polling. " +
+            "The Acquisition column will show Snapshot Read, not a proven RCB.",
+            "Read Pending Snapshot", System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Information);
+        if (choice != System.Windows.MessageBoxResult.Yes)
+            return;
+
+        try
+        {
+            SetStatus($"{device.Name}: reading pending initial values once (MMS Snapshot Read)…");
+            var result = await _runtime.ReadPendingStaticInitialImageOnceAsync(
+                device, _applicationCancellation.Token);
+            SetStatus($"{device.Name}: Snapshot Read {result.Published}/{result.Attempted} verified; " +
+                $"failed={result.Failed}, unverified={result.Unverified}. " +
+                "RCB ingress status is unchanged.");
+        }
+        catch (OperationCanceledException)
+        {
+            SetStatus($"{device.Name}: Snapshot Read cancelled; RCB monitoring unchanged.");
+        }
+        catch (Exception ex)
+        {
+            AddLog("WARN", device.Name, "Explicit Snapshot Read withheld: " + ex.Message);
+            SetStatus($"{device.Name}: Snapshot Read unavailable — {ex.Message}");
+        }
+    }
+
     /// <summary>
     /// Bounded per-RCB evidence, run only after the initial report observation
     /// window. Counts already displayed members separately from wire frames

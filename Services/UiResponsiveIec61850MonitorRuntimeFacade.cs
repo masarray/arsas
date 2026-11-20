@@ -177,6 +177,17 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             cancellationToken,
             token => _inner.StartMonitoringAsync(device, selectedSignals, pollingIntervalMs, token));
 
+    /// <summary>
+    /// Operator-only, read-only snapshot of exact pending static ST/MX leaves.
+    /// A per-IED operation gate makes Control fail locally while it runs;
+    /// preemptive Stop cancels all unfinished Read calls. No polling loop.
+    /// </summary>
+    public Task<StaticPendingSnapshotReadResult> ReadPendingStaticInitialImageOnceAsync(
+        Iec61850MonitorDevice device, CancellationToken cancellationToken)
+        => RunDeviceOperationAsync(device.DeviceId, cancellationToken,
+            token => _inner.ReadPendingStaticInitialImageOnceAsync(device, token),
+            rejectIfBusy: true);
+
     public Task<AR.Iec61850.Control.Iec61850ControlModelProbe> ProbeControlModelAsync(
         string deviceId, SignalDefinition signal, CancellationToken cancellationToken)
         => RunDeviceOperationAsync(
