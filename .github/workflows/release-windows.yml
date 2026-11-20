@@ -15,9 +15,9 @@ on:
         type: string
         default: ''
       version:
-        description: "Release version, for example 1.6.19"
-        required: true
-        default: "1.6.20"
+        description: "Optional version; blank uses VERSION from the immutable checked-out SHA"
+        required: false
+        default: ""
         type: string
       publish_release:
         description: "Create or update a GitHub Release"
@@ -194,9 +194,14 @@ jobs:
       - name: Resolve release identity and immutable engine locks
         id: release
         shell: powershell
+        env:
+          MANUAL_VERSION: ${{ inputs.version }}
         run: |
           if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") {
-            $rawVersion = "${{ inputs.version }}"
+            $rawVersion = [string]$env:MANUAL_VERSION
+            if ([string]::IsNullOrWhiteSpace($rawVersion)) {
+              $rawVersion = (Get-Content ".\ArIED61850Tester\VERSION" -Raw).Trim()
+            }
           }
           elseif ($env:GITHUB_REF_TYPE -eq "tag") {
             $rawVersion = $env:GITHUB_REF_NAME

@@ -22,6 +22,25 @@ on:
       - "*.xaml"
       - "MainWindow*.cs"
   workflow_dispatch:
+    inputs:
+      fast_dev:
+        description: Nonpromotable scoped Windows CI
+        required: false
+        type: boolean
+        default: false
+      focus:
+        description: Focused regression family
+        type: choice
+        options: [quality-browser, smv, command-read, reporting, all]
+        default: quality-browser
+      engine_trial_sha:
+        description: Explicit experimental engine SHA for FAST DEV only
+        type: string
+        default: ''
+      expected_source_sha:
+        description: Immutable owner-command source SHA
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -49,6 +68,19 @@ jobs:
         with:
           fetch-depth: 2
           persist-credentials: false
+
+      - name: Validate exact manual dispatch source before CI
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+        run: |
+          if [[ -n "$EXPECTED_SOURCE_SHA" ]] &&
+             { [[ ! "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] ||
+               [[ "$EXPECTED_SOURCE_SHA" != "$GITHUB_SHA" ]]; }; then
+            echo 'Owner-command source SHA mismatch' >&2
+            exit 1
+          fi
 
       - name: Run conservative classifier fixtures
         run: python3 scripts/test-classify-ci-changes.py
@@ -84,4 +116,7 @@ jobs:
     with:
       source_sha: ${{ github.sha }}
       shadow_mode: true
+      fast_dev: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_dev == true }}
+      focus: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_dev == true && inputs.focus || 'all' }}
+      engine_trial_sha: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_dev == true && inputs.engine_trial_sha || '' }}
     secrets: {}
