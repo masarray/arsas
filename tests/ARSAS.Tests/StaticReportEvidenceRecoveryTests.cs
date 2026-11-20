@@ -25,6 +25,17 @@ public sealed class StaticReportEvidenceRecoveryTests
     }
 
     [Theory]
+    [InlineData(0, 0, false, "No static DataSets")]
+    [InlineData(39, 0, false, "39 DataSet(s) · live RCB not yet verified")]
+    [InlineData(39, 0, true, "39 DataSet(s) · no RCB in open SCL")]
+    [InlineData(39, 3, false, "3/39 DataSet(s) with live-observed RCB · actual reporting unverified")]
+    [InlineData(39, 35, true, "35/39 DataSet(s) with SCL-configured RCB · actual reporting unverified")]
+    public void QuickStartCoverage_DoesNotClaimIncompleteInventoryIsReportReady(
+        int total, int reportBound, bool openedScl, string expected)
+        => Assert.Equal(expected,
+            StaticReportEvidencePolicy.DescribeDataSetCoverage(total, reportBound, openedScl));
+
+    [Theory]
     [InlineData(true, true, 1, true, true)]
     [InlineData(false, true, 1, true, false)]
     [InlineData(true, false, 1, true, false)]

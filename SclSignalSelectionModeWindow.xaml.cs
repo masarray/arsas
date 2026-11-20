@@ -40,11 +40,12 @@ public partial class SclSignalSelectionModeWindow : Window
                 Iec61850StaticDataSetAuthoritySelection.BuildReportBackedDataSetReferences(targetDevice).Count;
 
             CanUseStaticDataSet = dataSetCount > 0;
-            StaticDataSetAvailabilityText = dataSetCount == 0
-                ? "No static DataSets"
-                : reportBackedCount > 0
-                    ? $"{dataSetCount} DataSet(s) ready"
-                    : $"{dataSetCount} DataSet(s) • no configured RCB";
+            // Structural coverage is not RptEna/Report proof. In a live-only
+            // partial inventory an absent RCB is unverified, not impossible.
+            StaticDataSetAvailabilityText = StaticReportEvidencePolicy.DescribeDataSetCoverage(
+                dataSetCount,
+                reportBackedCount,
+                hasOpenedSclDesign: targetDevice.SclWorkspace?.DesignModel is not null);
         }
 
         DataContext = this;
