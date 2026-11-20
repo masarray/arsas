@@ -188,8 +188,10 @@ public sealed class StaticDataSetReportOnlyModeRegressionTests
         var source = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.AutoConnect.cs"));
 
         Assert.Contains("ObserveSharedStaticReportEvidenceAsync", source, StringComparison.Ordinal);
-        Assert.Contains("proofWindow - (DateTime.UtcNow - startedUtc)", source, StringComparison.Ordinal);
-        Assert.Contains("Task.Delay(remaining, _applicationCancellation.Token)", source, StringComparison.Ordinal);
+        Assert.Contains("startedUtc.Add(proofWindow) - DateTimeOffset.UtcNow", source, StringComparison.Ordinal);
+        Assert.Contains("StaticReportEvidencePolicy.ReportProofDeadline(", source, StringComparison.Ordinal);
+        Assert.Contains("device.RcbActivationEvidence", source, StringComparison.Ordinal);
+        Assert.Contains("Task.Delay(postActivationRemaining, _applicationCancellation.Token)", source, StringComparison.Ordinal);
         Assert.Contains("device.LiveValues.Association != association", source, StringComparison.Ordinal);
         Assert.Contains("LogStaticRcbImageTriage(device);", source, StringComparison.Ordinal);
         Assert.Contains("waiting for actual InformationReport traffic", source, StringComparison.Ordinal);

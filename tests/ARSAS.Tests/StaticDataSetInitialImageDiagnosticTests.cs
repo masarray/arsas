@@ -114,7 +114,8 @@ public sealed class StaticDataSetInitialImageDiagnosticTests
             {
                 Rcb = point.ReportControlReference,
                 DataSet = point.DataSetReference,
-                Frames = 1
+                Frames = 1,
+                LastFrameReceivedAtUtc = DateTimeOffset.Parse("2026-11-20T11:01:41Z")
             }).ToArray()
         };
         var builder = new System.Text.StringBuilder();
