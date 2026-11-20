@@ -146,7 +146,16 @@ public sealed class IedTaskDialogVisualRegressionTests
         Assert.Contains("StaticDataSetAvailabilityText", xml, StringComparison.Ordinal);
         Assert.Contains("ContextHeading", xml, StringComparison.Ordinal);
         Assert.Contains("ImportScopeText", xml, StringComparison.Ordinal);
-        Assert.Contains("reportBackedCount > 0", code, StringComparison.Ordinal);
+        // A catalog RCB mapping is not evidence that the peer is report-ready.
+        // Presentation must use the shared source-aware coverage policy rather
+        // than labelling any nonzero static mapping count as "ready".
+        Assert.Contains("DescribeDataSetCoverage(", code, StringComparison.Ordinal);
+        Assert.Contains("reportBackedCount,", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("DataSet(s) ready", code, StringComparison.Ordinal);
+        Assert.Equal(
+            "3/39 DataSet(s) with live-observed RCB · actual reporting unverified",
+            ArIED61850Tester.Services.StaticReportEvidencePolicy.DescribeDataSetCoverage(
+                39, 3, hasOpenedSclDesign: false));
         Assert.Contains("UseStaticDataSet => Selection == IedWorkspaceTaskChoice.StaticDataSet", code, StringComparison.Ordinal);
         Assert.Contains("Selection = IedWorkspaceTaskChoice.BrowseIed", code, StringComparison.Ordinal);
         Assert.Contains("Click=\"BrowseIed_Click\"", xml, StringComparison.Ordinal);
