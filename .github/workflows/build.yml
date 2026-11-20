@@ -9,6 +9,12 @@ on:
     paths-ignore:
       - "engines/ARIEC61850.trial.json"
   workflow_dispatch:
+    inputs:
+      expected_source_sha:
+        description: Optional immutable SHA for owner-comment CI routing
+        required: false
+        type: string
+        default: ''
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
@@ -80,11 +86,18 @@ jobs:
 
       - name: Verify tested application revision
         shell: powershell
+        env:
+          EXPECTED_DISPATCH_SHA: ${{ inputs.expected_source_sha }}
         run: |
           $actual = (git -C .\ArIED61850Tester rev-parse HEAD).Trim().ToLowerInvariant()
           $expected = $env:GITHUB_SHA.Trim().ToLowerInvariant()
           if ($actual -ne $expected) {
             throw "CI source revision mismatch. Expected $expected, checked out $actual."
+          }
+          if ($env:EXPECTED_DISPATCH_SHA -and
+              ($env:EXPECTED_DISPATCH_SHA -cnotmatch '^[0-9a-f]{40}$' -or
+               $env:EXPECTED_DISPATCH_SHA -cne $actual)) {
+            throw 'Owner-dispatched canonical CI SHA mismatch; refusing a changed PR branch.'
           }
           "ARSAS_SOURCE_COMMIT=$actual" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "Testing and packaging exact ARSAS source $actual"

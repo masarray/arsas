@@ -7,6 +7,7 @@ on:
       - ".github/workflows/**"
       - "scripts/audit-ci-workflows.py"
       - "scripts/test-ci-workflows.py"
+      - "tests/owner-comment-contract.test.cjs"
       - "scripts/verify-p7-dual-ingress-diagnostic.py"
       - "scripts/test-p7-dual-ingress-diagnostic.py"
       - "scripts/classify-ci-changes.py"
@@ -34,6 +35,7 @@ on:
       - ".github/workflows/**"
       - "scripts/audit-ci-workflows.py"
       - "scripts/test-ci-workflows.py"
+      - "tests/owner-comment-contract.test.cjs"
       - "scripts/verify-p7-dual-ingress-diagnostic.py"
       - "scripts/test-p7-dual-ingress-diagnostic.py"
       - "scripts/classify-ci-changes.py"
@@ -81,6 +83,9 @@ jobs:
 
       - name: Run offline CI workflow guard tests
         run: python3 scripts/test-ci-workflows.py
+
+      - name: Validate owner-comment authorization and release dispatch with mocked GitHub
+        run: node --test tests/owner-comment-contract.test.cjs
 
       - name: Validate sanitized P7.6 dual-ingress diagnostic parser (read-only)
         run: python3 scripts/test-p7-dual-ingress-diagnostic.py

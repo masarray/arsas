@@ -36,6 +36,10 @@ on:
         description: 'Optional exact 40-char experimental ARIEC SHA; FAST DEV only, never FAT'
         type: string
         default: ''
+      expected_source_sha:
+        description: Immutable owner-command source SHA
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -65,6 +69,19 @@ jobs:
         with:
           fetch-depth: 2
           persist-credentials: false
+
+      - name: Validate exact manual dispatch source before CI
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+        run: |
+          if [[ -n "$EXPECTED_SOURCE_SHA" ]] &&
+             { [[ ! "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] ||
+               [[ "$EXPECTED_SOURCE_SHA" != "$GITHUB_SHA" ]]; }; then
+            echo 'Owner-command source SHA mismatch' >&2
+            exit 1
+          fi
 
       - name: Run conservative classifier fixtures
         run: python3 scripts/test-classify-ci-changes.py
@@ -110,7 +127,7 @@ jobs:
       # synthetic refs/pull/<n>/merge SHA. The synthetic merge remains covered
       # independently by canonical PR CI; FAST DEV evidence must match the
       # exact operator-downloaded source revision.
-      source_sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      source_sha: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_source_sha != '' && inputs.expected_source_sha || github.event.pull_request.head.sha || github.sha }}
       shadow_mode: true
       fast_dev: ${{ (github.event_name == 'workflow_dispatch' && inputs.fast_dev == true) || (github.event_name == 'pull_request' && needs.classify.outputs.engine_trial_sha != '') }}
       focus: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_dev == true && inputs.focus || needs.classify.outputs.engine_trial_focus || 'all' }}
