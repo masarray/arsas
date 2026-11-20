@@ -38,7 +38,7 @@ public sealed class Sg7ExplicitPendingSnapshotRegressionTests
     {
         var selected = Point().IecReference;
         Assert.True(Iec61850MonitorRuntime.IsExactStaticSnapshotReadReference(
-            selected, selected.Replace('.', '$')));
+            selected, "SG7_BCUMeter/ACsrcMMXU1$MX$Hz$mag$f"));
         Assert.False(Iec61850MonitorRuntime.IsExactStaticSnapshotReadReference(
             selected, "SG7_BCUMeter/ACsrcMMXU1.Hz.instMag.f"));
         Assert.False(Iec61850MonitorRuntime.IsExactStaticSnapshotReadReference(
