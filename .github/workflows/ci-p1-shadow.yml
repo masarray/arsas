@@ -22,38 +22,17 @@ on:
       - "*.xaml"
       - "MainWindow*.cs"
   workflow_dispatch:
-    inputs:
-      fast_dev:
-        description: Bounded FAST DEV compilation and regression, not release evidence
-        type: boolean
-        default: false
-      focus:
-        description: FAST DEV regression group
-        type: choice
-        options: [quality-browser, smv, command-read, reporting, all]
-        default: quality-browser
-      engine_trial_sha:
-        description: Experimental ARIEC exact SHA; FAST DEV only
-        type: string
-        default: ''
-      expected_source_sha:
-        description: Immutable SHA required by an owner comment
-        type: string
-        default: ''
-  issue_comment:
-    types: [created]
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-p1-shadow-${{ github.event_name == 'issue_comment' && github.event.issue.number || github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'issue_comment' }}
+  group: ci-p1-shadow-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   classify:
     name: Classify changed areas (advisory, fail-safe)
-    if: github.event_name != 'issue_comment'
     runs-on: ubuntu-latest
     outputs:
       build: ${{ steps.changed.outputs.build }}
@@ -70,19 +49,6 @@ jobs:
         with:
           fetch-depth: 2
           persist-credentials: false
-
-      - name: Check immutable owner-command dispatch SHA
-        if: github.event_name == 'workflow_dispatch'
-        shell: bash
-        env:
-          EXPECTED_DISPATCH_SHA: ${{ inputs.expected_source_sha }}
-        run: |
-          if [[ -n "$EXPECTED_DISPATCH_SHA" ]] &&
-             { [[ ! "$EXPECTED_DISPATCH_SHA" =~ ^[0-9a-f]{40}$ ]] ||
-               [[ "$EXPECTED_DISPATCH_SHA" != "$GITHUB_SHA" ]]; }; then
-            echo 'Owner-dispatched source changed before the FAST DEV job.' >&2
-            exit 1
-          fi
 
       - name: Run conservative classifier fixtures
         run: python3 scripts/test-classify-ci-changes.py
@@ -116,147 +82,6 @@ jobs:
       }}
     uses: ./.github/workflows/_ci-p1-windows-build-test.yml
     with:
-      source_sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      source_sha: ${{ github.sha }}
       shadow_mode: true
-      fast_dev: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_dev == true }}
-      focus: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_dev == true && inputs.focus || 'all' }}
-      engine_trial_sha: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_dev == true && inputs.engine_trial_sha || '' }}
     secrets: {}
-
-  owner-command:
-    name: Authenticate owner and dispatch exact PR SHA
-    if: github.event_name == 'issue_comment' && github.event.issue.pull_request != null && startsWith(github.event.comment.body, '/arsas ')
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-      contents: read
-      issues: write
-      pull-requests: read
-    timeout-minutes: 5
-    steps:
-      - name: Validate immutable authority and route command
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ github.token }}
-          script: |
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const comment = context.payload.comment;
-            // No untrusted checkout, shell interpolation, forks or arbitrary workflow IDs.
-            if (owner !== 'masarray' || comment.user.login !== owner ||
-                comment.author_association !== 'OWNER') {
-              core.info('Not an authorized repository owner comment.');
-              return;
-            }
-            const body = String(comment.body || '').trim();
-            const command = /^\/arsas (ci (fast (quality-browser|smv|command-read|reporting|all)|full|installer)|release (verify|publish))$/.exec(body);
-            if (!command) {
-              await github.rest.issues.createComment({
-                owner, repo, issue_number: context.issue.number,
-                body: 'Unknown command. Use /arsas ci fast reporting, /arsas ci full, /arsas ci installer, /arsas release verify or /arsas release publish.'
-              });
-              return;
-            }
-            const pr = (await github.rest.pulls.get({
-              owner, repo, pull_number: context.issue.number
-            })).data;
-            const isPublish = body === '/arsas release publish';
-            if (!pr.head.repo || pr.head.repo.full_name !== owner + '/' + repo ||
-                !/^[0-9a-f]{40}$/.test(pr.head.sha)) {
-              throw new Error('Owner commands require an exact SHA on a same-repository PR; forks are rejected.');
-            }
-            const headSha = pr.head.sha;
-            const workflow = body.startsWith('/arsas ci fast ') ? 'ci-p1-shadow.yml'
-              : body === '/arsas ci full' ? 'build.yml'
-              : body === '/arsas ci installer' ? 'installer-windows.yml'
-              : 'release-windows.yml';
-            let ref = pr.head.ref;
-            let inputs = { expected_source_sha: headSha };
-            if (!isPublish) {
-              if (pr.state !== 'open') {
-                throw new Error('CI/verification commands require an open pull request.');
-              }
-              const branch = (await github.rest.repos.getBranch({ owner, repo, branch: ref })).data;
-              if (branch.commit.sha !== headSha) {
-                throw new Error('PR branch changed since this command was accepted; submit a new comment.');
-              }
-              if (body.startsWith('/arsas ci fast ')) {
-                inputs.fast_dev = 'true';
-                inputs.focus = command[3];
-              } else if (body === '/arsas release verify') {
-                inputs.version = '';
-                inputs.publish_release = 'false';
-                inputs.prerelease = 'true';
-              }
-            } else {
-              if (!pr.merged_at || !pr.merge_commit_sha || pr.state !== 'closed') {
-                throw new Error('Stable publication requires a merged PR, never a draft or open PR.');
-              }
-              const main = (await github.rest.repos.getBranch({ owner, repo, branch: 'main' })).data;
-              if (main.commit.sha !== pr.merge_commit_sha) {
-                throw new Error('Main has advanced beyond this merged PR; approve the newest merged PR.');
-              }
-              const exact = main.commit.sha;
-              const getText = async (path) => {
-                const file = (await github.rest.repos.getContent({ owner, repo, path, ref: exact })).data;
-                if (Array.isArray(file) || file.encoding !== 'base64') {
-                  throw new Error('Unexpected release metadata format: ' + path);
-                }
-                return Buffer.from(file.content.replace(/\s/g, ''), 'base64').toString('utf8');
-              };
-              const version = (await getText('VERSION')).trim();
-              const request = JSON.parse(await getText('.release/windows.json'));
-              if (!/^\d+\.\d+\.\d+$/.test(version) ||
-                  request.channel !== 'stable' || request.version !== version) {
-                throw new Error('Stable VERSION does not match the reviewed release request.');
-              }
-              const latest = (await github.rest.repos.getLatestRelease({ owner, repo })).data;
-              const numeric = value => value.replace(/^v/, '').split('.').map(Number);
-              const next = numeric(version), previous = numeric(latest.tag_name);
-              if (next.length !== 3 || previous.length !== 3 ||
-                  next[0] < previous[0] ||
-                  (next[0] === previous[0] && next[1] < previous[1]) ||
-                  (next[0] === previous[0] && next[1] === previous[1] && next[2] <= previous[2])) {
-                throw new Error('Stable version must be newer than the latest public release.');
-              }
-              for (const block of [{ repo, number: 769 }, { repo: 'ARIEC61850', number: 172 }]) {
-                const issue = (await github.rest.issues.get({
-                  owner, repo: block.repo, issue_number: block.number
-                })).data;
-                if (issue.state !== 'closed' || issue.state_reason === 'not_planned') {
-                  throw new Error('Public stable blocked by unresolved qualification ' +
-                    block.repo + '#' + block.number);
-                }
-              }
-              const allRuns = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
-                owner, repo, head_sha: exact, event: 'push', per_page: 100
-              });
-              const required = [
-                'Build ARSAS', 'Validate IO List Testing',
-                'Validate SV evidence bundles', 'Validate COMTRADE viewer integration',
-                'CI P0 Workflow Integrity', 'Validate ARSAS Windows installer',
-                'IEC 61850 Interoperability Reference Guard'
-              ];
-              for (const name of required) {
-                if (!allRuns.some(run => run.name === name && run.conclusion === 'success')) {
-                  throw new Error('Missing successful exact-main release gate: ' + name);
-                }
-              }
-              ref = 'main';
-              inputs = {
-                expected_source_sha: exact,
-                version: version,
-                publish_release: 'true',
-                prerelease: 'false'
-              };
-            }
-            await github.rest.actions.createWorkflowDispatch({
-              owner, repo, workflow_id: workflow, ref, inputs
-            });
-            await github.rest.issues.createComment({
-              owner, repo, issue_number: context.issue.number,
-              body: 'Owner command accepted: ' + body +
-                '. Dispatched ' + workflow + ' at ref ' + ref +
-                ' with expected source SHA ' + inputs.expected_source_sha +
-                '. Queued workflow is not CI pass or release confirmation.'
-            });

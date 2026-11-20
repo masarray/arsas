@@ -17,7 +17,7 @@
     "workflowCall": 0
   },
   "limits": {
-    "workflowFiles": 31,
+    "workflowFiles": 32,
     "actionsCheckout": 37,
     "actionsSetupDotnet": 11,
     "actionsSetupPython": 19,
@@ -733,5 +733,12 @@
     "physicalAuthorityChanged": false,
     "nativeDeduplicationAuthorized": false,
     "rollback": "Remove Ubuntu observer and independent evidence upload, restore existing Windows advisory comparison; never remove mandatory Windows CMake/CTest or native-only route checks."
+  },
+  "ownerCommandRouting": {
+    "purpose": "One isolated, default-branch-only, no-checkout, no-build issue_comment router for owner selective CI and main-only canonical guarded stable publication.",
+    "incrementalWorkflows": 1,
+    "changedCIPrimitives": 0,
+    "guard": "Owner identity + association, exact PR SHA lease, no forks, PR merged before stable, version monotonicity, exact main CI, P0 issues and canonical release revalidation.",
+    "rollback": "Remove owner-command.yml and restore workflowFiles budget=31; no release artifacts or engine pins are changed."
   }
 }
