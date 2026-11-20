@@ -1,3 +1,5 @@
+> Historical RC1 acceptance document: the user-approved tester was promoted toward v1.6.43; this checklist records the previously validated prerelease candidate, not a perpetual public-release blocker.
+
 # ARSAS 1.6.43-rc.1 — isolated Windows field-test candidate
 
 **Scope:** trial-only ARSAS P8/P9 SG7_BCU integrated reporting and model-driven UI, with independently verified background stable updater. This is NOT the public stable release, not proof of lossless buffered SOE, and not authority to issue live breaker controls.
