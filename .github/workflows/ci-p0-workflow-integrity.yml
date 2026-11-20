@@ -7,6 +7,7 @@ on:
       - ".github/workflows/**"
       - "scripts/audit-ci-workflows.py"
       - "scripts/test-ci-workflows.py"
+      - "tests/owner-comment-contract.test.cjs"
       - "scripts/classify-ci-changes.py"
       - "scripts/test-classify-ci-changes.py"
       - "scripts/write-ci-canonical-proof.py"
@@ -32,6 +33,7 @@ on:
       - ".github/workflows/**"
       - "scripts/audit-ci-workflows.py"
       - "scripts/test-ci-workflows.py"
+      - "tests/owner-comment-contract.test.cjs"
       - "scripts/classify-ci-changes.py"
       - "scripts/test-classify-ci-changes.py"
       - "scripts/write-ci-canonical-proof.py"
@@ -77,6 +79,9 @@ jobs:
 
       - name: Run offline CI workflow guard tests
         run: python3 scripts/test-ci-workflows.py
+
+      - name: Validate owner-comment authorization and release dispatch with mocked GitHub
+        run: node --test tests/owner-comment-contract.test.cjs
 
       - name: Run conservative CI P1 classifier fixtures
         run: python3 scripts/test-classify-ci-changes.py
