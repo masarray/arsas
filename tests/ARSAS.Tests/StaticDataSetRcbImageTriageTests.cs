@@ -44,8 +44,8 @@ public sealed class StaticDataSetRcbImageTriageTests
         {
             Streams = new[]
             {
-                new Iec61850ReportContinuityStreamSnapshot { Rcb = a, DataSet = dsA, Frames = 7 },
-                new Iec61850ReportContinuityStreamSnapshot { Rcb = b, DataSet = dsB, Frames = 6 }
+                new Iec61850ReportContinuityStreamSnapshot { Rcb = a, DataSet = dsA, Frames = 7, LastFrameReceivedAtUtc = DateTimeOffset.UtcNow },
+                new Iec61850ReportContinuityStreamSnapshot { Rcb = b, DataSet = dsB, Frames = 6, LastFrameReceivedAtUtc = DateTimeOffset.UtcNow }
             }
         };
         var rows = StaticDataSetRcbImageTriage.Evaluate(
