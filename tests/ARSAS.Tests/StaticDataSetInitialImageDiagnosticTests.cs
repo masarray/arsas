@@ -27,6 +27,54 @@ public sealed class StaticDataSetInitialImageDiagnosticTests
     }
 
     [Fact]
+    public void ReportedUnknown_IsVisibleOnlyWithMatchingAssociationAndExactCanonicalReport()
+    {
+        const string reference = "LD0/LTMS1.TmSrc.stVal";
+        var point = Point(reference, "LD0/LLN0.Time", "LD0/LLN0.BR.Comm",
+            "Unknown", "Unknown");
+        point.FunctionalConstraint = "ST";
+        var ledger = new IedBrowserLiveValues();
+        var first = ledger.BeginAssociation();
+        point.LastSnapshotAssociation = first;
+        Assert.Equal(1, StaticDataSetInitialImageDiagnostic.Evaluate([point], ledger).ValuePending);
+
+        Assert.True(ledger.PublishForAssociation(first, reference, "ST",
+            "Unknown", "Unknown", "", "Report", verifiedSemanticReportUnknown: true));
+        var image = StaticDataSetInitialImageDiagnostic.Evaluate([point], ledger);
+        Assert.Equal(1, image.ValueVisible);
+        Assert.Equal(0, image.ValuePending);
+        Assert.Equal(1, image.QualityNotSupplied);
+        Assert.Equal(1, Assert.Single(image.Groups).ValueVisible);
+
+        ledger.MarkOffline();
+        Assert.Equal(1, StaticDataSetInitialImageDiagnostic.Evaluate([point], ledger).ValuePending);
+        var second = ledger.BeginAssociation();
+        Assert.True(ledger.PublishForAssociation(second, reference, "ST",
+            "Unknown", "", "", "Report", verifiedSemanticReportUnknown: true));
+        Assert.Equal(1, StaticDataSetInitialImageDiagnostic.Evaluate([point], ledger).ValuePending);
+        point.LastSnapshotAssociation = second;
+        Assert.Equal(1, StaticDataSetInitialImageDiagnostic.Evaluate([point], ledger).ValueVisible);
+        point.IsOffline = true;
+        Assert.Equal(1, StaticDataSetInitialImageDiagnostic.Evaluate([point], ledger).ValuePending);
+    }
+
+    [Fact]
+    public void ReportedUnknown_WrongFcAndRcbHistoryAreNotValueProof()
+    {
+        var point = Point("LD0/LTMS1.TmSrc.stVal", "LD0/LLN0.Time",
+            "LD0/LLN0.BR.Comm", "Unknown", "Unknown");
+        point.FunctionalConstraint = "ST";
+        point.RoutedReportControlReferences = ["LD0/LLN0.BR.Comm"];
+        var ledger = new IedBrowserLiveValues();
+        var association = ledger.BeginAssociation();
+        point.LastSnapshotAssociation = association;
+        Assert.True(ledger.PublishForAssociation(association, point.IecReference,
+            "MX", "Unknown", "", "", "Report", verifiedSemanticReportUnknown: true));
+        Assert.Equal(1, StaticDataSetInitialImageDiagnostic.Evaluate([point], ledger).ValuePending);
+        Assert.Equal(1, StaticDataSetInitialImageDiagnostic.Evaluate([point]).ValuePending);
+    }
+
+    [Fact]
     public void NewReportImage_MonotonicallyResolvesPendingValueWithoutPretendingQualityIsGood()
     {
         var point = Point("IED/LLN0.Switch.stVal", "IED/LLN0.Digital", "IED/LLN0.BR.01", "Unknown", "Unknown");
@@ -133,7 +181,7 @@ public sealed class StaticDataSetInitialImageDiagnosticTests
         var source = File.ReadAllText(path);
         var diagnostic = File.ReadAllText(FindRepoFile("Services/DiagnosticReportBuilder.cs"));
         Assert.Contains("Static initial image: ", diagnostic, StringComparison.Ordinal);
-        Assert.Contains("AppendStaticInitialImage(builder, device.Points)", diagnostic, StringComparison.Ordinal);
+        Assert.Contains("AppendStaticInitialImage(builder, device.Points, device.LiveValues)", diagnostic, StringComparison.Ordinal);
         Assert.Contains("Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device)", diagnostic, StringComparison.Ordinal);
         Assert.DoesNotContain("ReadAsync(", source, StringComparison.Ordinal);
         Assert.DoesNotContain("StartReport", source, StringComparison.Ordinal);

@@ -46,7 +46,8 @@ internal static class StaticDataSetRcbImageTriage
         IEnumerable<Iec61850MonitorPoint> points,
         Iec61850ReportContinuitySnapshot? continuity,
         int maxGroups = 16,
-        IReadOnlyList<Iec61850RcbActivationEvidence>? activations = null)
+        IReadOnlyList<Iec61850RcbActivationEvidence>? activations = null,
+        IedBrowserLiveValues? liveValues = null)
     {
         ArgumentNullException.ThrowIfNull(points);
         if (maxGroups is < 1 or > 64)
@@ -54,7 +55,7 @@ internal static class StaticDataSetRcbImageTriage
 
         // A static member's current displayed value and actual RCB receive
         // frame are independent evidence. Do not infer the latter from former.
-        var image = StaticDataSetInitialImageDiagnostic.Evaluate(points);
+        var image = StaticDataSetInitialImageDiagnostic.Evaluate(points, liveValues);
         return image.Groups.Take(maxGroups).Select(group =>
         {
             var stream = IedBrowserRcbReportEvidence.Select(

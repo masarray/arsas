@@ -14,7 +14,8 @@ public partial class MainWindow
     {
         var groups = ArIED61850Tester.Services.StaticDataSetRcbImageTriage.Evaluate(
             device.Points, device.ReportContinuityEvidence, maxGroups: 64,
-            activations: device.RcbActivationEvidence);
+            activations: device.RcbActivationEvidence,
+            liveValues: device.LiveValues);
         var routed = groups.Count(group => group.HasActualReportFrames);
         var missing = groups.Count - routed;
         var valuePending = groups.Sum(group => group.Pending);

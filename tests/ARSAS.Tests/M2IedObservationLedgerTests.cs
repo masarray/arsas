@@ -8,6 +8,47 @@ public sealed class M2IedObservationLedgerTests
     private const string Position = "LD/CSWI1.Pos.stVal";
 
     [Fact]
+    public void LiteralUnknownRequiresExplicitSchemaProvenReportAndCurrentAssociation()
+    {
+        const string reference = "LD0/LTMS1.TmSrc.stVal";
+        var ledger = new IedBrowserLiveValues();
+        var first = ledger.BeginAssociation();
+        Assert.False(ledger.PublishForAssociation(first, reference, "ST",
+            "Unknown", "", "", "Report"));
+        Assert.False(ledger.PublishForAssociation(first, reference, "ST",
+            "Unknown", "", "", "MMS Read", verifiedSemanticReportUnknown: true));
+        Assert.False(ledger.PublishForAssociation(first, reference, "ST",
+            "Unknown", "", "", "Report compatibility",
+            verifiedSemanticReportUnknown: true));
+        Assert.False(ledger.PublishForAssociation(first, reference, "ST",
+            "Unknown", "", "", "Report quality",
+            verifiedSemanticReportUnknown: true));
+        Assert.False(ledger.TryGet(reference, "ST", out _));
+
+        Assert.True(ledger.PublishForAssociation(first, reference, "ST",
+            "Unknown", "", "", "Report", verifiedSemanticReportUnknown: true));
+        Assert.True(ledger.TryGet(reference, "ST", out var evidence));
+        Assert.Equal("Unknown", evidence.Value);
+        Assert.Equal("Report", evidence.Source);
+        Assert.Equal(first, evidence.Association);
+        Assert.False(evidence.IsStale);
+        Assert.False(ledger.PublishForAssociation(first, reference, "ST",
+            "-", "", "", "Report", verifiedSemanticReportUnknown: true));
+        Assert.False(ledger.PublishForAssociation(first, reference, "ST",
+            "Not read", "", "", "Report", verifiedSemanticReportUnknown: true));
+
+        ledger.MarkOffline();
+        Assert.False(ledger.PublishForAssociation(first, reference, "ST",
+            "Unknown", "", "", "Report", verifiedSemanticReportUnknown: true));
+        var next = ledger.BeginAssociation();
+        Assert.False(ledger.PublishForAssociation(first, reference, "ST",
+            "Unknown", "", "", "Report", verifiedSemanticReportUnknown: true));
+        Assert.False(ledger.TryGet(reference, "ST", out _));
+        Assert.True(ledger.PublishForAssociation(next, reference, "ST",
+            "Unknown", "", "", "Report", verifiedSemanticReportUnknown: true));
+    }
+
+    [Fact]
     public void MonitoringPrefersRealReportEvenWhenManualReadFinishesLater()
     {
         var values = new IedBrowserLiveValues();

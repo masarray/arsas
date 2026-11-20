@@ -38,3 +38,20 @@ The target IP appeared among the testing workstation's local interface aliases. 
 - GitHub engine .NET CI for exact `24077e48e393ce3dc2cd1409db6e96f27aa1e368`: run `44720030989` succeeded on second attempt. The first attempt failed on an unrelated timing-sensitive enhanced-SBO negative-application-error test; track flakiness independently, preserve guard.
 - The ARSAS P9 Windows candidate must now be built for this **new exact engine SHA** while production engine pin stays `f75e323e9f8443aa20e0a3818a1d5d77255b2c0f`.
 - Re-test on confirmed isolated field/simulator endpoint with original IID opened: observed RCB families, exact DatSet bindings, 33 configured design DataSets, report ingress per selected target, BRCB overflow/EntryID/sequence chronology, close/open feedback and no Toshiba regression. Never auto-expand user selection or send operations.
+
+## Literal Unknown semantic Report: preserve raw process evidence without accepting placeholders
+
+Previously the canonical ledger rejected every `Unknown` token even when the
+engine supplied a real `semantic-structured-leaf` Report with `HasValue=true`
+and exact FC/DataSet schema. Initial-image diagnostics also classified any
+`Unknown` string as pending solely from its displayed text. This was a
+source-level correctness hole, **not** physical proof that BCUNR reported a
+valid enumerated value on the actual wire in the next session.
+
+The narrow admission now accepts `Unknown` only when the exact semantic
+Report ingress explicitly opts in under the current association; all ordinary
+Read, compatibility, missing, non-semantic, and stale evidence remains rejected.
+The read-only initial-image and per-RCB diagnostics consult the current canonical
+Report when deciding whether a display token `Unknown` is genuinely populated.
+One verdict per selected point is reused for totals, groups and pending rows.
+Quality remains independently unknown if not supplied. No network IO added.

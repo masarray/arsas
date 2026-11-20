@@ -186,9 +186,10 @@ internal static class DiagnosticReportBuilder
                 AppendReportContinuity(builder, device.ReportContinuityEvidence);
                 if (device.IsMonitoring && Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device))
                 {
-                    AppendStaticInitialImage(builder, device.Points);
+                    AppendStaticInitialImage(builder, device.Points, device.LiveValues);
                     AppendStaticRcbImageTriage(builder, device.Points,
-                        device.ReportContinuityEvidence, device.RcbActivationEvidence);
+                        device.ReportContinuityEvidence, device.RcbActivationEvidence,
+                        device.LiveValues);
                 }
                 builder.AppendLine($"Saved model      : {device.HasDiscoveryCache} ({device.SignalCount:N0} signal(s))");
                 builder.AppendLine($"Selected         : live={device.SelectedLiveSignalCount:N0}, control={device.SelectedControlSignalCount:N0}");
@@ -317,9 +318,10 @@ internal static class DiagnosticReportBuilder
 
     private static void AppendStaticInitialImage(
         StringBuilder builder,
-        IEnumerable<Iec61850MonitorPoint> points)
+        IEnumerable<Iec61850MonitorPoint> points,
+        IedBrowserLiveValues? liveValues = null)
     {
-        var image = StaticDataSetInitialImageDiagnostic.Evaluate(points);
+        var image = StaticDataSetInitialImageDiagnostic.Evaluate(points, liveValues);
         builder.AppendLine($"Static initial image: {image.Summary}");
         builder.AppendLine("  Interpretation : display completeness only; Unknown q does not mean missing value, and RCB setup or first report does not prove every selected member is live.");
         foreach (var group in image.Groups.Take(12))
@@ -351,13 +353,16 @@ internal static class DiagnosticReportBuilder
         StringBuilder builder,
         IEnumerable<Iec61850MonitorPoint> points,
         Iec61850ReportContinuitySnapshot? continuity,
-        IReadOnlyList<Iec61850RcbActivationEvidence>? activations = null)
+        IReadOnlyList<Iec61850RcbActivationEvidence>? activations = null,
+        IedBrowserLiveValues? liveValues = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         var selected = points.ToArray();
-        var totalGroups = StaticDataSetInitialImageDiagnostic.Evaluate(selected).Groups.Count;
         var groups = StaticDataSetRcbImageTriage.Evaluate(
-            selected, continuity, maxGroups: 64, activations: activations);
+            selected, continuity, maxGroups: 64, activations: activations,
+            liveValues: liveValues);
+        var totalGroups = StaticDataSetInitialImageDiagnostic.Evaluate(
+            selected, liveValues).Groups.Count;
         builder.AppendLine($"Static RCB traffic : shown={groups.Count}/{totalGroups}, " +
             $"routed={groups.Count(group => group.HasActualReportFrames)}, " +
             $"noRoutedFrames={groups.Count(group => !group.HasActualReportFrames)}");

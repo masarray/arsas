@@ -541,7 +541,8 @@ public partial class MainWindow
             // even after all seven RCBs delivered genuine InformationReports.
             var exactRcbRows = ArIED61850Tester.Services.StaticDataSetRcbImageTriage.Evaluate(
                 device.Points, device.ReportContinuityEvidence, maxGroups: 64,
-                activations: device.RcbActivationEvidence);
+                activations: device.RcbActivationEvidence,
+                liveValues: device.LiveValues);
             var routedRcbs = exactRcbRows.Count(row => row.HasActualReportFrames);
             if (routedRcbs > 0)
             {
