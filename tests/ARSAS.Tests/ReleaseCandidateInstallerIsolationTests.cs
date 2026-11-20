@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using ArIED61850Tester;
 using Xunit;
 
 namespace ARSAS.Tests;
@@ -34,10 +35,23 @@ public sealed class ReleaseCandidateInstallerIsolationTests
 
         Assert.Contains("#define AppDirectory \"ARSAS-RC\"", installer);
         Assert.Contains("#define AppShortcut \"ARSAS RC\"", installer);
-        Assert.Contains("#define AppUserModelId \"masarray.ARSAS.IEC61850.RC\"", installer);
-        Assert.Contains("AppUserModelID: \"{#AppUserModelId}\"", installer);
+        Assert.Equal(2, installer.Split("AppUserModelID: \"masarray.ARSAS.IEC61850\"",
+            StringSplitOptions.None).Length - 1);
+        Assert.Equal(2, installer.Split("AppUserModelID: \"masarray.ARSAS.IEC61850.RC\"",
+            StringSplitOptions.None).Length - 1);
+        Assert.Equal("masarray.ARSAS.IEC61850.RC", WindowsApplicationIdentity.ResolveAppUserModelId(version));
+        Assert.Equal("ARSAS-RC", AppUpdateService.ResolveUpdaterProductDirectory(version));
         Assert.DoesNotContain("\"version\": \"" + version + "\"", publicRelease);
         Assert.Contains("\"channel\": \"stable\"", publicRelease);
+    }
+
+    [Fact]
+    public void StableAndRcProcessAndUpdaterIdentity_RemainIsolated()
+    {
+        Assert.Equal("masarray.ARSAS.IEC61850", WindowsApplicationIdentity.ResolveAppUserModelId("1.6.42"));
+        Assert.Equal("ARSAS", AppUpdateService.ResolveUpdaterProductDirectory("1.6.42"));
+        Assert.Equal("masarray.ARSAS.IEC61850.RC", WindowsApplicationIdentity.ResolveAppUserModelId("1.6.43-rc.1+gitsha"));
+        Assert.Equal("ARSAS-RC", AppUpdateService.ResolveUpdaterProductDirectory("1.6.43-rc.1+gitsha"));
     }
 
     private static string FromRoot(string relative)

@@ -22,7 +22,6 @@
   #define AppName "ARSAS IEC 61850 Release Candidate"
   #define AppDirectory "ARSAS-RC"
   #define AppShortcut "ARSAS RC"
-  #define AppUserModelId "masarray.ARSAS.IEC61850.RC"
 #else
 #ifdef SmvPreviewBuild
   ; Prevent a preview based on an earlier source version from replacing stable ARSAS.
@@ -30,12 +29,10 @@
   #define AppName "ARSAS SMV Engineering Preview"
   #define AppDirectory "ARSAS-SMV-Preview"
   #define AppShortcut "ARSAS SMV Preview"
-  #define AppUserModelId "masarray.ARSAS.IEC61850.SMVPreview"
 #else
   #define AppName "ARSAS - Smart IEC 61850 Communication Tester"
   #define AppDirectory "ARSAS"
   #define AppShortcut "ARSAS"
-  #define AppUserModelId "masarray.ARSAS.IEC61850"
 #endif
 #endif
 #define AppExeName "ARSAS.exe"
@@ -117,8 +114,13 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 #endif
 
 [Icons]
-Name: "{autoprograms}\{#AppShortcut}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\app-icon.ico"; AppUserModelID: "{#AppUserModelId}"
-Name: "{autodesktop}\{#AppShortcut}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\app-icon.ico"; AppUserModelID: "{#AppUserModelId}"; Tasks: desktopicon
+#ifdef ArsasRcBuild
+Name: "{autoprograms}\{#AppShortcut}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\app-icon.ico"; AppUserModelID: "masarray.ARSAS.IEC61850.RC"
+Name: "{autodesktop}\{#AppShortcut}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\app-icon.ico"; AppUserModelID: "masarray.ARSAS.IEC61850.RC"; Tasks: desktopicon
+#else
+Name: "{autoprograms}\{#AppShortcut}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\app-icon.ico"; AppUserModelID: "masarray.ARSAS.IEC61850"
+Name: "{autodesktop}\{#AppShortcut}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\app-icon.ico"; AppUserModelID: "masarray.ARSAS.IEC61850"; Tasks: desktopicon
+#endif
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "Launch ARSAS"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent

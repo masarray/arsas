@@ -25,10 +25,13 @@ internal sealed class AppUpdateService : IDisposable
 
     public AppUpdateService()
     {
-        CurrentVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0, 0);
+        var assembly = Assembly.GetExecutingAssembly();
+        CurrentVersion = assembly.GetName().Version ?? new Version(0, 0, 0, 0);
+        var informationalVersion = assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
         _stateDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ARSAS",
+            ResolveUpdaterProductDirectory(informationalVersion),
             "Updater");
         _statePath = Path.Combine(_stateDirectory, "state.json");
 
@@ -50,6 +53,13 @@ internal sealed class AppUpdateService : IDisposable
     }
 
     public Version CurrentVersion { get; }
+
+    // RC must not modify the stable installation's updater throttle, deferral or
+    // verified package cache; stable continues using its original ARSAS path.
+    internal static string ResolveUpdaterProductDirectory(string? informationalVersion)
+        => informationalVersion?.Contains("-rc.", StringComparison.OrdinalIgnoreCase) == true
+            ? "ARSAS-RC"
+            : "ARSAS";
 
     public async Task<UpdateManifest?> CheckForUpdateAsync(CancellationToken cancellationToken)
     {
