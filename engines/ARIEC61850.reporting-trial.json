@@ -15,6 +15,6 @@
   "physicalQualificationRequired": true,
   "automaticRcbMutationForbidden": true,
   "cyclicMmsProcessPollingForbidden": true,
-  "purpose": "Exact-SHA P9 nonrelease Windows integration of four-RCB reporting, bounded delivery and closed-session isolation; physical qualification mandatory. Stable and approved engine lock remain unchanged.",
+  "purpose": "Exact-SHA P9 nonrelease Windows validation of multi-RCB reporting plus BCUNR partial live NameList field recovery and SCL versus live RCB absence evidence. No production pin changes. Physical qualification mandatory; no automatic RCB mutation.",
   "trialMilestone": "P9"
 }
