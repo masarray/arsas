@@ -9,10 +9,15 @@ on:
       - "v*.*.*"
   workflow_dispatch:
     inputs:
+      expected_source_sha:
+        description: Exact main SHA required for manual stable publication
+        required: false
+        type: string
+        default: ''
       version:
-        description: "Release version, for example 1.6.19"
-        required: true
-        default: "1.6.20"
+        description: "Optional version; blank uses VERSION from the immutable checked-out SHA"
+        required: false
+        default: ""
         type: string
       publish_release:
         description: "Create or update a GitHub Release"
@@ -31,10 +36,15 @@ permissions:
   id-token: write
   attestations: write
 
+# Serialize publication and metadata generation across main, tags and manual requests.
+concurrency:
+  group: arsas-public-release-authority
+  cancel-in-progress: false
+
 jobs:
   release-ready:
     name: Wait for exact package and validated installer metadata
-    if: github.event_name != 'workflow_dispatch'
+    if: github.event_name != 'workflow_dispatch' || inputs.publish_release == true
     runs-on: ubuntu-latest
     timeout-minutes: 50
     permissions:
@@ -56,6 +66,23 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Validate explicit manual stable publication intent
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release == true
+        shell: bash
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == 'refs/heads/main' ]] || { echo 'Stable manual publication is main-only' >&2; exit 1; }
+          [[ "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'Expected source SHA required' >&2; exit 1; }
+          [[ "$EXPECTED_SOURCE_SHA" == "$GITHUB_SHA" ]] || { echo 'Approved main SHA drifted' >&2; exit 1; }
+
+      # ARSAS is a protocol/client tester, not an operational SCADA controller.
+      # Field-qualification issues are tracked as product bugs and MUST NOT
+      # block distribution of an otherwise fully tested Windows tester build.
+      # Exact commit, canonical regression, installer smoke and SHA authority
+      # are enforced by the steps below, not by issue closure.
 
       - name: Setup Python for release-ready gate
         uses: actions/setup-python@v7
@@ -123,7 +150,7 @@ jobs:
     if: >-
       ${{
         always() &&
-        (github.event_name == 'workflow_dispatch' ||
+        ((github.event_name == 'workflow_dispatch' && inputs.publish_release != true) ||
          needs.release-ready.result == 'success')
       }}
     runs-on: windows-latest
@@ -139,16 +166,28 @@ jobs:
 
       - name: Verify exact release source identity
         shell: powershell
+        env:
+          EXPECTED_DISPATCH_SHA: ${{ inputs.expected_source_sha }}
+          MANUAL_RELEASE_PUBLICATION: ${{ inputs.publish_release }}
         run: |
           $actual = (git -C .\ArIED61850Tester rev-parse HEAD).Trim().ToLowerInvariant()
           $expected = $env:GITHUB_SHA.Trim().ToLowerInvariant()
           if ($actual -ne $expected) {
             throw "Release source mismatch. Expected $expected, checked out $actual."
           }
+          if ($env:EXPECTED_DISPATCH_SHA -and
+              ($env:EXPECTED_DISPATCH_SHA -cnotmatch '^[0-9a-f]{40}$' -or
+               $env:EXPECTED_DISPATCH_SHA -cne $actual)) {
+            throw 'Release manual dispatch has a stale source SHA.'
+          }
+          if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch' -and $env:MANUAL_RELEASE_PUBLICATION -eq 'true' -and
+              ($env:GITHUB_REF -ne 'refs/heads/main' -or $env:EXPECTED_DISPATCH_SHA -cne $actual)) {
+            throw 'Manual stable release requires an exact approved main commit.'
+          }
           "RELEASE_SOURCE_COMMIT=$actual" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Record release-ready scheduling metadata
-        if: github.event_name != 'workflow_dispatch'
+        if: github.event_name != 'workflow_dispatch' || inputs.publish_release == true
         shell: powershell
         run: |
           @(
@@ -166,9 +205,14 @@ jobs:
       - name: Resolve release identity and immutable engine locks
         id: release
         shell: powershell
+        env:
+          MANUAL_VERSION: ${{ inputs.version }}
         run: |
           if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") {
-            $rawVersion = "${{ inputs.version }}"
+            $rawVersion = [string]$env:MANUAL_VERSION
+            if ([string]::IsNullOrWhiteSpace($rawVersion)) {
+              $rawVersion = (Get-Content ".\ArIED61850Tester\VERSION" -Raw).Trim()
+            }
           }
           elseif ($env:GITHUB_REF_TYPE -eq "tag") {
             $rawVersion = $env:GITHUB_REF_NAME
@@ -250,7 +294,7 @@ jobs:
           "ARDIREC_BRIDGE_RELATIVE_LIBRARY=$($ardirecLock.bridge.relativeLibrary)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Checkout immutable ARIEC61850 engine revision for manual fallback
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release != true
         shell: powershell
         run: |
           git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARIEC61850_REPOSITORY.git" ARIEC61850
@@ -262,7 +306,7 @@ jobs:
           }
 
       - name: Checkout immutable ArdIrec native engine revision for manual fallback
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release != true
         shell: powershell
         run: |
           git clone --quiet --filter=blob:none --no-checkout "https://github.com/$env:ARDIREC_REPOSITORY.git" ArdIrec
@@ -309,7 +353,7 @@ jobs:
           }
 
       - name: Run offline sealed-package safety fixtures
-        if: github.event_name != 'workflow_dispatch'
+        if: github.event_name != 'workflow_dispatch' || inputs.publish_release == true
         shell: powershell
         run: |
           python .\ArIED61850Tester\scripts\test-ci-package-reuse.py
@@ -318,7 +362,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Validated installer verifier fixtures failed.' }
 
       - name: Promote exact sealed canonical Windows package for release
-        if: github.event_name != 'workflow_dispatch'
+        if: github.event_name != 'workflow_dispatch' || inputs.publish_release == true
         shell: powershell
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -413,7 +457,7 @@ jobs:
           ) | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
 
       - name: Restore, build and test exact release source for manual fallback
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release != true
         shell: powershell
         run: |
           dotnet restore .\ArIED61850Tester\ArIED61850Tester.sln
@@ -429,7 +473,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Release application regression tests failed." }
 
       - name: Publish installer source folder for manual fallback
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release != true
         shell: powershell
         run: |
           .\ArIED61850Tester\scripts\publish-windows-portable.ps1 `
@@ -467,7 +511,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Release managed ArdIrec bridge/locus integration test failed." }
 
       - name: Publish real portable single EXE for manual fallback
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release != true
         shell: powershell
         run: |
           .\ArIED61850Tester\scripts\publish-windows-portable.ps1 `
@@ -485,10 +529,12 @@ jobs:
       - name: Stage unified release regression evidence
         if: always()
         shell: powershell
+        env:
+          MANUAL_RELEASE_PUBLICATION: ${{ inputs.publish_release }}
         run: |
           $evidenceDir = '.\ArIED61850Tester\TestResults\release-promoted-evidence'
           New-Item -ItemType Directory -Force $evidenceDir | Out-Null
-          if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
+          if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch' -and $env:MANUAL_RELEASE_PUBLICATION -ne 'true') {
             $trx = @(Get-ChildItem '.\ArIED61850Tester\TestResults\*.trx' -File -ErrorAction SilentlyContinue)
             if ($trx.Count -lt 1) {
               throw 'Manual release regression TRX is missing.'
@@ -536,7 +582,7 @@ jobs:
           }
 
       - name: Promote exact validated Windows installer for release
-        if: github.event_name != 'workflow_dispatch'
+        if: github.event_name != 'workflow_dispatch' || inputs.publish_release == true
         shell: powershell
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -592,12 +638,12 @@ jobs:
           ) | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
 
       - name: Install Inno Setup compiler for manual fallback
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release != true
         shell: powershell
         run: choco install innosetup --no-progress --yes
 
       - name: Build Windows installer for manual fallback
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release != true
         shell: powershell
         run: |
           .\ArIED61850Tester\scripts\build-windows-installer.ps1 `

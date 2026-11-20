@@ -71,6 +71,12 @@ on:
       - "engines/ARIEC61850.lock.json"
       - "engines/ARDIREC.lock.json"
   workflow_dispatch:
+    inputs:
+      expected_source_sha:
+        description: Optional immutable SHA for owner-comment CI routing
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -202,11 +208,18 @@ jobs:
 
       - name: Verify exact installer source identity
         shell: powershell
+        env:
+          EXPECTED_DISPATCH_SHA: ${{ inputs.expected_source_sha }}
         run: |
           $actual = (git -C .\ArIED61850Tester rev-parse HEAD).Trim().ToLowerInvariant()
           $expected = $env:GITHUB_SHA.Trim().ToLowerInvariant()
           if ($actual -ne $expected) {
             throw "Installer source mismatch. Expected $expected, got $actual."
+          }
+          if ($env:EXPECTED_DISPATCH_SHA -and
+              ($env:EXPECTED_DISPATCH_SHA -cnotmatch '^[0-9a-f]{40}$' -or
+               $env:EXPECTED_DISPATCH_SHA -cne $actual)) {
+            throw 'Owner-dispatched installer SHA mismatch; refusing a changed PR branch.'
           }
 
       - name: Resolve application version and immutable engine locks

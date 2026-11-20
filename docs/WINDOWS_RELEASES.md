@@ -15,6 +15,12 @@ The current public stable version is **[v1.6.42](https://github.com/masarray/ars
 
 The `main` branch's `VERSION` and app sources can lag the public GitHub release when a validated RC tag has been published independently. **Publication authority belongs to the latest stable tagged GitHub release and its immutable assets, not to the working tree on `main`.** Do not bump `.release/windows.json` or re-run packaging simply to refresh README/landing. For documentation-only synchronization use existing `sync-release-documentation.yml`, which reads GitHub latest stable release and normalizes the site and updater evidence. `sync-release-evidence.yml` mirrors `.release/published.json` to the `release-evidence` branch consumed by Pages and the updater.
 
+## Release policy: IEC 61850 protocol/client tester
+
+ARSAS is an engineering protocol tester, not a substation operational SCADA controller. Stable Windows publication must validate canonical full application/engine regression, source SHA/version monotonicity, native dependencies, installed-runtime installer/repair/uninstall checks, sealed SHA-256 provenance, and immutable tag/asset publication. **The state of field interoperability bugs is not a release veto.** ARSAS SOE/BufOvfl classification (#769), vendor-specific SCL tests, and ARIEC command-cancel research (#172) remain actionable, openly documented defects rather than prerequisites that must be closed by hand. Do not describe incomplete SOE replay provenance as lossless; expose uncertainty in the tester UI.
+
+The owner-comment release router requires an exact merged-main source SHA with successful `Build ARSAS`, `Validate ARSAS Windows installer`, and `CI P0 Workflow Integrity`. Feature-domain field-evidence CI (SV, COMTRADE, R7) stays visible for diagnosis, not a universal publication blocker. **Never skip failed canonical build, installer/runtime smoke, version authorization, or checksum verification.**
+
 ## Official stable release path
 
 The canonical release request is `.release/windows.json`. A reviewed change to that file on `main` triggers `.github/workflows/release-windows.yml`.
