@@ -2095,14 +2095,25 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                             out var resolvedFc) ? resolvedFc : "";
                     if (reportFc.Length > 0)
                     {
+                        // The exact schema-proven semantic leaf may legitimately
+                        // carry literal "Unknown" as its real process state.
+                        // Preserve only that decoder-backed value, not a default
+                        // placeholder, untyped field or compatibility mirror.
+                        var verifiedSemanticUnknown = update.HasValue &&
+                            string.Equals(update.Value?.Trim(), "Unknown",
+                                StringComparison.Ordinal) &&
+                            string.Equals(update.ProjectionStatus, "semantic-structured-leaf",
+                                StringComparison.Ordinal);
                         if (update.HasValue &&
-                            IedBrowserReportValueAuthority.SafeScalar(update.Value) &&
+                            (IedBrowserReportValueAuthority.SafeScalar(update.Value) ||
+                             verifiedSemanticUnknown) &&
                             !LooksLikeReferenceEcho(update.Value, update.Reference, update.Reference))
                             session.Device.LiveValues.PublishForAssociation(
                                 session.BrowserObservationAssociation,
                                 update.Reference, reportFc, update.Value,
                                 update.HasQuality ? update.Quality : "",
-                                update.HasTimestamp ? update.Timestamp : "", "Report");
+                                update.HasTimestamp ? update.Timestamp : "", "Report",
+                                verifiedSemanticReportUnknown: verifiedSemanticUnknown);
 
                         if (update.HasQuality &&
                             IedBrowserReportValueAuthority.SafeScalar(update.Quality))

@@ -131,12 +131,14 @@ public sealed class IedBrowserLiveValues
         bool? typedBoolean = null,
         AR.Iec61850.Mms.MmsDataKind? verifiedStringWireKind = null,
         string? declaredDataType = null,
-        string? readWireShapeEvidence = null)
+        string? readWireShapeEvidence = null,
+        bool verifiedSemanticReportUnknown = false)
         => TryPublish(reference, fc, value, quality, timestamp, source, association,
             utcTimeEvidence, qualityEvidence, typedBoolean: typedBoolean,
             verifiedStringWireKind: verifiedStringWireKind,
             declaredDataType: declaredDataType,
-            readWireShapeEvidence: readWireShapeEvidence);
+            readWireShapeEvidence: readWireShapeEvidence,
+            verifiedSemanticReportUnknown: verifiedSemanticReportUnknown);
 
     /// <summary>
     /// Atomically attach a verified, exact-model-owned q or t Report companion
@@ -192,14 +194,23 @@ public sealed class IedBrowserLiveValues
         bool? typedBoolean = null,
         AR.Iec61850.Mms.MmsDataKind? verifiedStringWireKind = null,
         string? declaredDataType = null,
-        string? readWireShapeEvidence = null)
+        string? readWireShapeEvidence = null,
+        bool verifiedSemanticReportUnknown = false)
     {
+        // "Unknown" can be an IEC enum value or a UI placeholder. Only
+        // schema-qualified, explicit process-value semantic Reports opt in.
+        // Neither MMS Reads nor compatibility/status mirrors can opt in.
+        var trustedUnknown = verifiedSemanticReportUnknown &&
+            expectedAssociation is > 0 && !onlyIfNoReport &&
+            string.Equals(source, "Report", StringComparison.Ordinal) &&
+            string.Equals(value?.Trim(), "Unknown", StringComparison.Ordinal);
         if (string.IsNullOrWhiteSpace(reference) || string.IsNullOrWhiteSpace(fc) ||
             string.IsNullOrWhiteSpace(value) ||
             (string.Equals(source, "MMS Read", StringComparison.Ordinal) &&
              !IedBrowserReadValuePolicy.TryAcceptVerifiedMmsString(
                  value, declaredDataType, verifiedStringWireKind, out _, out _)) ||
-            value.Trim() is "-" or "Not read" or "Unknown")
+            value.Trim() is "-" or "Not read" ||
+            (value.Trim() == "Unknown" && !trustedUnknown))
             return false;
 
         var key = Key(reference, fc);
