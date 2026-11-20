@@ -153,7 +153,7 @@ public sealed class IedTaskDialogVisualRegressionTests
         Assert.Contains("reportBackedCount,", code, StringComparison.Ordinal);
         Assert.DoesNotContain("DataSet(s) ready", code, StringComparison.Ordinal);
         Assert.Equal(
-            "3/39 DataSet(s) with live-observed RCB · actual reporting unverified",
+            "3/39 DataSet(s) with live-observed RCB/DataSet binding · Report ingress unverified",
             ArIED61850Tester.Services.StaticReportEvidencePolicy.DescribeDataSetCoverage(
                 39, 3, hasOpenedSclDesign: false));
         Assert.Contains("UseStaticDataSet => Selection == IedWorkspaceTaskChoice.StaticDataSet", code, StringComparison.Ordinal);
