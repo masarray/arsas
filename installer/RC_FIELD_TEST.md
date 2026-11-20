@@ -11,7 +11,7 @@
 
 ## Manual FAT (report observations, not unproved pass)
 1. Verify installed `ARSAS RC` shortcuts, `ARSAS-RC` Program Files path, version, no conflict with stable/uninstall.
-2. Connect first to authorized IEDScout simulator. Confirm IEC 61850 identity, 77/77 SG7_BCU initial values, 4 independent BRCBs, live report mutations, and 0 process polling.
+2. Connect first to authorized IEC 61850 test simulator. Confirm IEC 61850 identity, 77/77 SG7_BCU initial values, 4 independent BRCBs, live report mutations, and 0 process polling.
 3. Monitor buffered reports and export diagnostics **including BufOvfl, SqNum, EntryID, TimeOfEntry, GI/Integrity reason**. Correlate resets to IED/server and network traces; do not infer event continuity from 77/77 displayed values.
 4. Test deliberate disconnect/reconnect and IED ownership conflicts only in an isolated simulation environment. Verify bounded UI startup and accurate final state.
 5. Use **read-only** model browser and evidence export for initial lab trials; do not perform physical Select/Operate or blind retry. Engine #172 control-queue qualification remains open.
