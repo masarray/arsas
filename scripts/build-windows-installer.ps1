@@ -194,6 +194,13 @@ $arguments = @(
 if ($normalizedVersion -match '-smvpreview\.[0-9a-f]{12}$') {
     $arguments = @("/DSmvPreviewBuild=1") + $arguments
 }
+elseif ($normalizedVersion -match '-rc\.\d+$') {
+    # RC is side-by-side and cannot be registered as the stable product.
+    $arguments = @("/DArsasRcBuild=1") + $arguments
+}
+elseif ($normalizedVersion.Contains('-')) {
+    throw "Unrecognized prerelease channel '$normalizedVersion'; refusing to replace stable ARSAS."
+}
 & $InnoCompiler @arguments
 if ($LASTEXITCODE -ne 0) {
     throw "Inno Setup compilation failed with exit code $LASTEXITCODE."

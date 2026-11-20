@@ -17,26 +17,40 @@
   #define OutputBaseFilename "ARSAS-setup"
 #endif
 
+#ifdef ArsasRcBuild
+  ; RC has a dedicated AppId and directory. Never overwrite stable or SMV Preview.
+  #define AppName "ARSAS IEC 61850 Release Candidate"
+  #define AppDirectory "ARSAS-RC"
+  #define AppShortcut "ARSAS RC"
+  #define AppUserModelId "masarray.ARSAS.IEC61850.RC"
+#else
 #ifdef SmvPreviewBuild
   ; Prevent a preview based on an earlier source version from replacing stable ARSAS.
   ; Independent AppId, installation directory, Start Menu entry and uninstaller.
   #define AppName "ARSAS SMV Engineering Preview"
   #define AppDirectory "ARSAS-SMV-Preview"
   #define AppShortcut "ARSAS SMV Preview"
+  #define AppUserModelId "masarray.ARSAS.IEC61850.SMVPreview"
 #else
   #define AppName "ARSAS - Smart IEC 61850 Communication Tester"
   #define AppDirectory "ARSAS"
   #define AppShortcut "ARSAS"
+  #define AppUserModelId "masarray.ARSAS.IEC61850"
+#endif
 #endif
 #define AppExeName "ARSAS.exe"
 #define AppPublisher "Ari Sulistiono / masarray"
 #define AppUrl "https://github.com/masarray/arsas"
 
 [Setup]
+#ifdef ArsasRcBuild
+AppId={{7C0AA852-CF4C-4EAA-B77D-618502026111}
+#else
 #ifdef SmvPreviewBuild
 AppId={{9E3B17A4-38EC-4B2B-B61A-72788FF78B8A}
 #else
 AppId={{B68E7E86-4881-40CA-9BE2-5C553F74C72F}
+#endif
 #endif
 AppName={#AppName}
 AppVersion={#AppVersion}
@@ -67,7 +81,9 @@ PrivilegesRequired=admin
 ; Preview installs into Program Files and must never silently fall back to
 ; a current-user token when upgrading an existing protected installation.
 #ifndef SmvPreviewBuild
+#ifndef ArsasRcBuild
 PrivilegesRequiredOverridesAllowed=dialog
+#endif
 #endif
 ; Let Restart Manager close applications cleanly before any file replacement.
 ; Do not force-kill arbitrary processes with unsaved engineering work.
@@ -101,8 +117,8 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 #endif
 
 [Icons]
-Name: "{autoprograms}\{#AppShortcut}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\app-icon.ico"; AppUserModelID: "masarray.ARSAS.IEC61850"
-Name: "{autodesktop}\{#AppShortcut}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\app-icon.ico"; AppUserModelID: "masarray.ARSAS.IEC61850"; Tasks: desktopicon
+Name: "{autoprograms}\{#AppShortcut}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\app-icon.ico"; AppUserModelID: "{#AppUserModelId}"
+Name: "{autodesktop}\{#AppShortcut}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\Assets\app-icon.ico"; AppUserModelID: "{#AppUserModelId}"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "Launch ARSAS"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
