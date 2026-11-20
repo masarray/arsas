@@ -327,9 +327,12 @@ jobs:
           $assemblyVersion = [string]$versionXml.Project.PropertyGroup.AssemblyVersion
           $fileVersion = [string]$versionXml.Project.PropertyGroup.FileVersion
           $projectVersion = [string]$projectXml.Project.PropertyGroup.Version
-          if ($releaseVersion -notmatch '^\d+\.\d+\.\d+$' -or
-              $assemblyVersion -ne "$releaseVersion.0" -or
-              $fileVersion -ne "$releaseVersion.0" -or
+          # Keep stable strictly numeric; permit only an explicit -rc.N isolated
+          # field-test build. Assembly/FileVersion remain four-part numeric .NET.
+          $baseVersion = $releaseVersion -replace '-rc\.\d+$', ''
+          if ($releaseVersion -notmatch '^\d+\.\d+\.\d+(?:-rc\.\d+)?$' -or
+              $assemblyVersion -ne "$baseVersion.0" -or
+              $fileVersion -ne "$baseVersion.0" -or
               $projectVersion -ne $releaseVersion -or
               $versionFile -ne $releaseVersion -or
               $publish -notmatch 'Directory.Build.props' -or
