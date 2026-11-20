@@ -172,7 +172,27 @@ internal sealed class AppUpdateService : IDisposable
         }
     }
 
-    public void LaunchInstaller(string installerPath)
+    public async Task LaunchInstallerAsync(
+        string installerPath,
+        UpdateManifest manifest,
+        CancellationToken cancellationToken)
+    {
+        ValidateManifest(manifest);
+        var expectedPath = Path.GetFullPath(Path.Combine(
+            _stateDirectory, "Packages", ParseVersion(manifest.Version).ToString(3), InstallerFileName));
+        if (!string.Equals(Path.GetFullPath(installerPath), expectedPath, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("Update installer is outside the verified ARSAS package cache.");
+
+        // Re-hash immediately before any executable is launched. The stable manifest
+        // is pinned to the official GitHub release asset; unsigned builds must still
+        // receive explicit operator approval and Windows trust decisions.
+        if (!await VerifyInstallerAsync(installerPath, manifest.Installer, cancellationToken).ConfigureAwait(false))
+            throw new InvalidDataException("Cached installer hash or size no longer matches the stable release.");
+
+        LaunchInstaller(installerPath);
+    }
+
+    private void LaunchInstaller(string installerPath)
     {
         if (!File.Exists(installerPath))
             throw new FileNotFoundException("The verified installer could not be found.", installerPath);
@@ -208,27 +228,41 @@ internal sealed class AppUpdateService : IDisposable
         });
     }
 
-    private static void ValidateManifest(UpdateManifest? manifest)
+    internal static void ValidateManifest(UpdateManifest? manifest)
     {
         if (manifest is null)
             throw new InvalidDataException("The ARSAS update manifest is empty.");
-        if (!manifest.Product.Equals("ARSAS", StringComparison.Ordinal))
+        if (manifest.SchemaVersion != 1 ||
+            !string.Equals(manifest.Product, "ARSAS", StringComparison.Ordinal))
             throw new InvalidDataException("The update manifest is for a different product.");
-        if (!manifest.Channel.Equals("stable", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(manifest.Channel, "stable", StringComparison.Ordinal))
             throw new InvalidDataException("Only the stable ARSAS update channel is accepted.");
 
-        _ = ParseVersion(manifest.Version);
-        if (!manifest.Installer.Name.Equals(InstallerFileName, StringComparison.Ordinal))
+        var version = ParseVersion(manifest.Version);
+        if (version.ToString(3) != manifest.Version ||
+            !string.Equals(manifest.Tag, "v" + manifest.Version, StringComparison.Ordinal) ||
+            !string.Equals(manifest.ReleaseUrl,
+                "https://github.com/masarray/arsas/releases/tag/" + manifest.Tag,
+                StringComparison.Ordinal) ||
+            manifest.SourceCommit is null || manifest.SourceCommit.Length != 40 ||
+            manifest.SourceCommit.Any(character => !Uri.IsHexDigit(character)) ||
+            manifest.PublishedAtUtc is null ||
+            manifest.PublishedAtUtc.Value > DateTimeOffset.UtcNow.AddHours(24))
+        {
+            throw new InvalidDataException("Stable update provenance, version or timestamp is invalid.");
+        }
+        if (manifest.Installer is null ||
+            !string.Equals(manifest.Installer.Name, InstallerFileName, StringComparison.Ordinal))
             throw new InvalidDataException("The update manifest does not name the official ARSAS installer.");
         if (!Uri.TryCreate(manifest.Installer.Url, UriKind.Absolute, out var installerUri) ||
             installerUri.Scheme != Uri.UriSchemeHttps ||
-            !manifest.Installer.Url.Equals(ExpectedInstallerUrl, StringComparison.Ordinal))
+            !string.Equals(manifest.Installer.Url, ExpectedInstallerUrl, StringComparison.Ordinal))
         {
             throw new InvalidDataException("The update manifest points to an untrusted installer location.");
         }
         if (manifest.Installer.SizeBytes is < 1_000_000 or > 500_000_000)
             throw new InvalidDataException("The installer size in the update manifest is invalid.");
-        if (manifest.Installer.Sha256.Length != 64 ||
+        if (manifest.Installer.Sha256 is null || manifest.Installer.Sha256.Length != 64 ||
             manifest.Installer.Sha256.Any(character => !Uri.IsHexDigit(character)))
         {
             throw new InvalidDataException("The update manifest has an invalid SHA-256 value.");
@@ -237,8 +271,10 @@ internal sealed class AppUpdateService : IDisposable
 
     private static Version ParseVersion(string value)
     {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new InvalidDataException("ARSAS update version is missing.");
         var normalized = value.Trim().TrimStart('v', 'V');
-        if (!Version.TryParse(normalized, out var version))
+        if (normalized.Split('.').Length != 3 || !Version.TryParse(normalized, out var version))
             throw new InvalidDataException($"Invalid ARSAS update version '{value}'.");
         return version;
     }
@@ -322,6 +358,9 @@ internal sealed class UpdateManifest
     public int SchemaVersion { get; set; }
     public string Product { get; set; } = string.Empty;
     public string Version { get; set; } = string.Empty;
+    public string Tag { get; set; } = string.Empty;
+    public string ReleaseUrl { get; set; } = string.Empty;
+    public string SourceCommit { get; set; } = string.Empty;
     public string Channel { get; set; } = string.Empty;
     public DateTimeOffset? PublishedAtUtc { get; set; }
     public UpdateInstallerManifest Installer { get; set; } = new();
