@@ -13,13 +13,20 @@ public partial class UpdatePromptWindow : Window
     private bool _installerLaunched;
     private bool _deferred;
 
-    internal UpdatePromptWindow(AppUpdateService service, UpdateManifest manifest)
+    internal UpdatePromptWindow(AppUpdateService service, UpdateManifest manifest, string? verifiedInstallerPath = null)
     {
         InitializeComponent();
         _service = service;
         _manifest = manifest;
         CurrentVersionText.Text = service.CurrentVersion.ToString(3);
         LatestVersionText.Text = manifest.Version;
+        if (verifiedInstallerPath is not null)
+        {
+            _installerPath = verifiedInstallerPath;
+            DownloadProgress.Value = 100;
+            StatusText.Text = "The verified stable installer was downloaded automatically. Install whenever your IED work is saved.";
+            InstallButton.Content = "Install update";
+        }
     }
 
     private async void Install_Click(object sender, RoutedEventArgs e)
@@ -48,7 +55,7 @@ public partial class UpdatePromptWindow : Window
             StatusText.Text = "Download complete and SHA-256 verified. Opening the installer…";
             await Task.Delay(350);
 
-            _service.LaunchInstaller(_installerPath);
+            await _service.LaunchInstallerAsync(_installerPath, _manifest, _downloadCancellation.Token);
             _installerLaunched = true;
             _isDownloading = false;
             Close();
@@ -111,6 +118,7 @@ public partial class UpdatePromptWindow : Window
 
         _downloadCancellation?.Dispose();
         _downloadCancellation = null;
+        _service.Dispose();
     }
 
     private void SetDownloadingState(bool downloading)
