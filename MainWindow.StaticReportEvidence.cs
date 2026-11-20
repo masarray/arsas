@@ -38,27 +38,38 @@ public partial class MainWindow
         }
 
         var reports = model.ReportControls.ToArray();
+        var unobservedDataSets = new List<string>();
         foreach (var dataSet in model.DataSets)
         {
             var matchingReports = reports
                 .Where(report => SameSclReference(report.DataSetReference, dataSet.Reference))
                 .ToArray();
-
             if (matchingReports.Length == 0)
             {
-                AddLog(
-                    "WARN",
-                    device.Name,
-                    $"Static DataSet feasibility: {dataSet.Reference} · members={dataSet.Members.Count} · NO CONFIGURED RCB. These members cannot become report-live until the IED/SCL provides a BRCB/URCB for this DataSet; ARSAS will not substitute cyclic MMS process polling.");
+                unobservedDataSets.Add(dataSet.Reference);
                 continue;
             }
 
             var reportSummary = string.Join(", ", matchingReports.Select(report =>
                 $"{report.Reference} ({(report.Buffered ? "BRCB" : "URCB")})"));
-            AddLog(
-                "INFO",
-                device.Name,
+            AddLog("INFO", device.Name,
                 $"Static DataSet feasibility: {dataSet.Reference} · members={dataSet.Members.Count} · configured RCB={reportSummary}.");
+        }
+
+        if (unobservedDataSets.Count > 0)
+        {
+            // Never misrepresent incomplete live MMS discovery as peer absence.
+            // Aggregate the warning, retaining the exact count and representative
+            // references without flooding Event Logs with identical red rows.
+            var classification = Services.StaticReportEvidencePolicy.ClassifyMissingRcb(
+                device.SclWorkspace?.DesignModel is not null);
+            var examples = string.Join(", ", unobservedDataSets.Take(6));
+            AddLog("WARN", device.Name,
+                $"Static DataSet feasibility: {unobservedDataSets.Count}/{model.DataSets.Count} DataSet(s) " +
+                $"{classification.Label}; examples={examples}" +
+                (unobservedDataSets.Count > 6
+                    ? $" (+{unobservedDataSets.Count - 6} more)" : string.Empty) +
+                $". {classification.Explanation}");
         }
     }
 
@@ -112,7 +123,9 @@ public partial class MainWindow
             .GroupBy(signal => NormalizeSclReference(signal.ObjectReference), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
 
-        var unavailable = 0;
+        var classification = Services.StaticReportEvidencePolicy.ClassifyMissingRcb(
+            device.SclWorkspace?.DesignModel is not null);
+        var withoutEvidence = 0;
         foreach (var point in device.Points)
         {
             if (!selectedSignals.TryGetValue(NormalizeSclReference(point.IecReference), out var signal))
@@ -122,18 +135,15 @@ public partial class MainWindow
             if (dataSetReference.Length == 0 || reportableDataSets.Contains(dataSetReference))
                 continue;
 
-            point.SourceMode = "Static DataSet: no configured RCB";
-            point.Status = "Unavailable / no configured RCB";
-            unavailable++;
+            point.SourceMode = classification.SourceMode;
+            point.Status = classification.PointStatus;
+            withoutEvidence++;
         }
 
-        if (unavailable > 0)
-        {
-            AddLog(
-                "WARN",
-                device.Name,
-                $"Static DataSet feasibility projected to runtime: {unavailable} point(s) belong to DataSet(s) with no configured RCB and are explicitly marked unavailable instead of generic report-pending or MMS polling.");
-        }
+        if (withoutEvidence > 0)
+            AddLog("WARN", device.Name,
+                $"Static DataSet feasibility projected to runtime: {withoutEvidence} point(s): " +
+                $"{classification.Label}. {classification.Explanation}");
     }
 
     private static bool SameSclReference(string? left, string? right)
