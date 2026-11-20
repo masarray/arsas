@@ -11,6 +11,11 @@ public sealed record SntpNetworkBinding(
     string InterfaceName,
     string InterfaceId)
 {
+    // The shared WPF ComboBox selection template may render the selected
+    // object via ToString rather than DisplayMemberPath. Never expose the
+    // internal record type where the operator expects a local IPv4 address.
+    public override string ToString() => LocalAddress.ToString();
+
     public string Summary => DirectedBroadcast == null
         ? $"{InterfaceName} • {LocalAddress}"
         : $"{InterfaceName} • {LocalAddress} → {DirectedBroadcast}";

@@ -103,7 +103,7 @@ public sealed class P0LatestFieldRegressionTests
         Assert.Contains("_rows.Where(row => row.IsSelected).ToArray()", window, StringComparison.Ordinal);
         Assert.Contains("select one or more native RCBs", window, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("[ModuleInitializer]", authority, StringComparison.Ordinal);
-        Assert.DoesNotContain("window.IedEditRcbMulti_Click(button, e)", authority, StringComparison.Ordinal);
+        Assert.Contains("window.IedEditRcbMulti_Click", authority, StringComparison.Ordinal);
         Assert.DoesNotContain("CreateDynamic", source, StringComparison.OrdinalIgnoreCase);
     }
 

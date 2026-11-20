@@ -39,7 +39,8 @@ public sealed class WorkspaceModeSwitchTests
         Assert.Contains("Select Signals", selectionWindow, StringComparison.Ordinal);
         Assert.Contains("RCB Engineering", selectionWindow, StringComparison.Ordinal);
         Assert.Contains("Download COMTRADE", selectionWindow, StringComparison.Ordinal);
-        Assert.Contains("Browse Offline", selectionWindow, StringComparison.Ordinal);
+        Assert.Contains("Browse IED", selectionWindow, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Close\"", selectionWindow, StringComparison.Ordinal);
         Assert.Contains("TaskDialogPrimaryAction", selectionWindow, StringComparison.Ordinal);
         Assert.Contains("TaskDialogSecondaryAction", selectionWindow, StringComparison.Ordinal);
         Assert.Contains("x:Key=\"TaskDialogButtonBase\"", dialogStyles, StringComparison.Ordinal);

@@ -7,7 +7,6 @@ namespace ArIED61850Tester;
 public partial class SclSignalSelectionModeWindow : Window
 {
     private readonly Iec61850MonitorDevice? _targetDevice;
-    private bool _useStaticDataSet;
 
     public SclSignalSelectionModeWindow(int iedCount, Iec61850MonitorDevice? targetDevice = null)
     {
@@ -41,11 +40,12 @@ public partial class SclSignalSelectionModeWindow : Window
                 Iec61850StaticDataSetAuthoritySelection.BuildReportBackedDataSetReferences(targetDevice).Count;
 
             CanUseStaticDataSet = dataSetCount > 0;
-            StaticDataSetAvailabilityText = dataSetCount == 0
-                ? "No static DataSets"
-                : reportBackedCount > 0
-                    ? $"{dataSetCount} DataSet(s) ready"
-                    : $"{dataSetCount} DataSet(s) • no configured RCB";
+            // Structural coverage is not RptEna/Report proof. In a live-only
+            // partial inventory an absent RCB is unverified, not impossible.
+            StaticDataSetAvailabilityText = StaticReportEvidencePolicy.DescribeDataSetCoverage(
+                dataSetCount,
+                reportBackedCount,
+                hasOpenedSclDesign: targetDevice.SclWorkspace?.DesignModel is not null);
         }
 
         DataContext = this;
@@ -58,17 +58,28 @@ public partial class SclSignalSelectionModeWindow : Window
     public bool CanUseStaticDataSet { get; }
     public string StaticDataSetAvailabilityText { get; }
 
-    public bool UseStaticDataSet => _useStaticDataSet;
+    public IedWorkspaceTaskChoice Selection { get; private set; } = IedWorkspaceTaskChoice.None;
+
+    // Compatibility for older call sites; the authoritative decision is typed.
+    public bool UseStaticDataSet => Selection == IedWorkspaceTaskChoice.StaticDataSet;
 
     private void MonitorStaticDataSet_Click(object sender, RoutedEventArgs e)
     {
-        _useStaticDataSet = true;
+        Selection = IedWorkspaceTaskChoice.StaticDataSet;
         DialogResult = true;
     }
 
     private void MonitorManual_Click(object sender, RoutedEventArgs e)
     {
-        _useStaticDataSet = false;
+        Selection = IedWorkspaceTaskChoice.ManualSignals;
+        DialogResult = true;
+    }
+
+    private void BrowseIed_Click(object sender, RoutedEventArgs e)
+    {
+        // The caller owns navigation, the exact IED identity and the read policy.
+        // This action has no implicit report activation or cyclic MMS acquisition.
+        Selection = IedWorkspaceTaskChoice.BrowseIed;
         DialogResult = true;
     }
 

@@ -47,6 +47,37 @@ function Assert-Sha {
 
 Assert-Sha -Value ([string]$lock.commit) -Name 'commit'
 
+# A later (code-only) stage trial must not let historical evidence regress.
+# The active typed-control trial can be valid while an earlier independent
+# canonical/reporting lineage was silently edited; validate *all* recorded
+# immutable contracts before considering the active trial selector.
+if ($null -ne $lock.globalTypedControlStageTrial) {
+    $baselinePath = Join-Path $PSScriptRoot '..\engines\ARIEC61850.historical-trials.json'
+    if (-not (Test-Path -LiteralPath $baselinePath -PathType Leaf)) {
+        throw 'Historical physical-tested trial anchor file is missing.'
+    }
+    $history = Get-Content -LiteralPath $baselinePath -Raw -Encoding UTF8 |
+        ConvertFrom-Json -Depth 50
+    if ([int]$history.schemaVersion -ne 1 -or
+        [string]$history.approvedEngineSha -cne 'f75e323e9f8443aa20e0a3818a1d5d77255b2c0f') {
+        throw 'Historical physical-tested trial anchor identity disagrees.'
+    }
+    foreach ($contract in $history.contracts.PSObject.Properties) {
+        $actualContract = $lock.PSObject.Properties[$contract.Name]
+        if ($null -eq $actualContract -or $null -eq $actualContract.Value) {
+            throw "Historical physical-tested trial contract missing: $($contract.Name)"
+        }
+        foreach ($expectedField in $contract.Value.PSObject.Properties) {
+            $actualField = $actualContract.Value.PSObject.Properties[$expectedField.Name]
+            if ($null -eq $actualField -or
+                [string]$actualField.Value -cne [string]$expectedField.Value) {
+                throw "Historical physical-tested trial authority changed: $($contract.Name).$($expectedField.Name)"
+            }
+        }
+    }
+}
+
+
 if ($null -ne $lock.physicalTestedCommit) {
     Assert-Sha -Value ([string]$lock.physicalTestedCommit) -Name 'physicalTestedCommit'
 }
@@ -118,26 +149,54 @@ if ($null -ne $lock.sclAssociationInteroperability) {
                 [bool]$p10.cyclicMmsProcessPollingForbidden
 
             . (Join-Path $PSScriptRoot 'test-p10-9f-core-routing-trial.ps1')
+            . (Join-Path $PSScriptRoot 'test-m217k-typed-status-trial.ps1')
             $coreRoutingTrialValid = Test-P109FCoreRoutingTrial -Lock $lock
+            $m217KTrialValid = Test-M217KTypedStatusTrial -Lock $lock
+            . (Join-Path $PSScriptRoot 'test-p0-a-identity-trial.ps1')
+            $p0AIdentityTrialValid = Test-P0AIdentityTrial -Lock $lock
+            . (Join-Path $PSScriptRoot 'test-p0-b-rcb-trial.ps1')
+            $p0BRcbTrialValid = Test-P0BRcbPlannerTrial -Lock $lock
+            . (Join-Path $PSScriptRoot 'test-p0-c-typed-read-trial.ps1')
+            $p0CTypedReadTrialValid = Test-P0CTypedReadTrial -Lock $lock
+            # Only this exact, reviewed staging ancestry can be assembled
+            # as a DRAFT Windows FAT candidate. The historical physical
+            # engine and P0-C provenance stay unchanged, and neither passing
+            # CI nor reading a status bit grants a real-world Operate.
+            $typedControl = $lock.globalTypedControlStageTrial
+            $typedControlValid = (
+                $null -ne $typedControl -and
+                [string]$lock.commit -ceq 'f75e323e9f8443aa20e0a3818a1d5d77255b2c0f' -and
+                [int]$lock.sourcePullRequest -eq 192 -and
+                [string]$typedControl.baseEngineCommit -ceq '9c7cb40364023a7b217e5ec31ab3105ba90142eb' -and
+                [string]$typedControl.exactCommit -ceq [string]$lock.commit -and
+                [int]$typedControl.enginePullRequest -eq 192 -and
+                [long]$typedControl.engineCiRun -eq 39909260816L -and
+                [string]$typedControl.status -ceq 'engine-ci-success-consumer-trial-not-physical' -and
+                [bool]$typedControl.typedStatusReadRequired -and
+                [bool]$typedControl.sameDataObjectFeedbackRequired -and
+                [bool]$typedControl.ctlModelAndOperShapeRequired -and
+                [bool]$typedControl.sbowEnhancedSafetyRequired -and
+                [bool]$typedControl.noAutomaticOperate -and
+                [bool]$typedControl.physicalQualificationRequired -and
+                [bool]$typedControl.mainlinePromotionForbidden -and
+                [string]$lock.p0CStageObservationTrial.exactCommit -ceq [string]$typedControl.baseEngineCommit
+            )
             $acceptedTrial = (
                 ($trialValid -and [string]$lock.commit -ceq [string]$trial.exactCommit -and [int]$lock.sourcePullRequest -eq 148) -or
                 ($serverAtValid -and [string]$lock.commit -ceq [string]$serverAt.exactCommit -and [int]$lock.sourcePullRequest -eq 153) -or
                 ($closureValid -and [string]$lock.commit -ceq [string]$closure.exactCommit -and [int]$lock.sourcePullRequest -eq 157) -or
                 ($p10Valid -and [string]$lock.commit -ceq [string]$p10.exactCommit -and [int]$lock.sourcePullRequest -eq 161) -or
-                ($p10Valid -and $coreRoutingTrialValid)
+                ($p10Valid -and $coreRoutingTrialValid) -or
+                $m217KTrialValid -or
+                $p0AIdentityTrialValid -or
+                $p0BRcbTrialValid -or
+                $p0CTypedReadTrialValid -or
+                $typedControlValid
             )
-            . (Join-Path $PSScriptRoot 'test-exact-operator-release-acceptance.ps1')
-            $sourceRoot = Split-Path -Parent (Split-Path -Parent $LockPath)
-            $operatorReleaseAccepted = Test-ExactOperatorReleaseAcceptance -Lock $lock -SourceRoot $sourceRoot
-            if (-not $historicalAnchorValid -or (-not $acceptedTrial -and -not $operatorReleaseAccepted)) {
-                throw 'SCL association physical-tested engine head differs from integration lock without exact release scope.'
+            if (-not $historicalAnchorValid -or -not $acceptedTrial) {
+                throw 'SCL association physical-tested engine head differs from integration lock.'
             }
-            if ($operatorReleaseAccepted) {
-                Write-Host 'v1.6.41 scoped operator release approved; historical R10 hardware and SOE qualifications remain separate.'
-            }
-            else {
-                Write-Host 'Exact stacked code trial recognized; physical SCL-association/R10 authority remains historical and promotion-blocked.'
-            }
+            Write-Host 'Exact stacked code trial recognized; physical SCL-association/R10 authority remains historical and promotion-blocked.'
         }
     }
     if ($null -ne $association.mergedEngineCommit) {

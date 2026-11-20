@@ -85,7 +85,15 @@ jobs:
             throw 'Accepted post-baseline SCL association authority drifted or lost physical evidence.'
           }
           . .\ARSAS\scripts\test-p10-9f-core-routing-trial.ps1
+          . .\ARSAS\scripts\test-m217k-typed-status-trial.ps1
           $coreRoutingTrialValid = Test-P109FCoreRoutingTrial -Lock $lock
+          $m217KTrialValid = Test-M217KTypedStatusTrial -Lock $lock
+          . .\ARSAS\scripts\test-p0-a-identity-trial.ps1
+          $p0AIdentityTrialValid = Test-P0AIdentityTrial -Lock $lock
+          . .\ARSAS\scripts\test-p0-b-rcb-trial.ps1
+          $p0BRcbTrialValid = Test-P0BRcbPlannerTrial -Lock $lock
+          . .\ARSAS\scripts\test-p0-c-typed-read-trial.ps1
+          $p0CTypedReadTrialValid = Test-P0CTypedReadTrial -Lock $lock
           $trial = $lock.smartInteroperabilityCodeTrial
           $serverAt = $lock.sclServerAtTrial
           $originalTrial = $lock.commit -eq $trial.exactCommit -and
@@ -129,11 +137,34 @@ jobs:
                            [bool]$serverAt.physicalQualificationRequired -and
                            [bool]$serverAt.noAutomaticMmsFailover -and
                            $lock.ref -eq 'main'
+          # An exact typed-control trial on the existing staging ancestry:
+          # do not promote it, and never reinterpret it as physical R7/R10.
+          $typedControl = $lock.globalTypedControlStageTrial
+          $typedControlTrialValid = (
+            $null -ne $typedControl -and
+            $lock.commit -ceq 'f75e323e9f8443aa20e0a3818a1d5d77255b2c0f' -and
+            $lock.ref -ceq 'main' -and
+            [int]$lock.sourcePullRequest -eq 192 -and
+            $typedControl.baseEngineCommit -ceq '9c7cb40364023a7b217e5ec31ab3105ba90142eb' -and
+            $typedControl.exactCommit -ceq $lock.commit -and
+            [int]$typedControl.enginePullRequest -eq 192 -and
+            [long]$typedControl.engineCiRun -eq 39909260816L -and
+            $typedControl.status -ceq 'engine-ci-success-consumer-trial-not-physical' -and
+            [bool]$typedControl.typedStatusReadRequired -and
+            [bool]$typedControl.sameDataObjectFeedbackRequired -and
+            [bool]$typedControl.ctlModelAndOperShapeRequired -and
+            [bool]$typedControl.sbowEnhancedSafetyRequired -and
+            [bool]$typedControl.noAutomaticOperate -and
+            [bool]$typedControl.physicalQualificationRequired -and
+            [bool]$typedControl.mainlinePromotionForbidden -and
+            $lock.p0CStageObservationTrial.exactCommit -ceq $typedControl.baseEngineCommit -and
+            $env:GITHUB_BASE_REF -ne 'main' -and $env:GITHUB_REF_NAME -ne 'main'
+          )
           if ($null -ne $trial) {
             if ($trial.status -ne 'code-verified-not-physical' -or
                 [int]$trial.issue -ne 144 -or
                 [int]$trial.integrationPullRequest -ne 148 -or
-                -not ($originalTrial -or $serverAtTrial -or $datasetTrial -or $p10Trial -or $coreRoutingTrialValid) -or
+                -not ($originalTrial -or $serverAtTrial -or $datasetTrial -or $p10Trial -or $coreRoutingTrialValid -or $m217KTrialValid -or $p0AIdentityTrialValid -or $p0BRcbTrialValid -or $p0CTypedReadTrialValid -or $typedControlTrialValid) -or
                 -not [bool]$trial.fullDiscoveryFallbackForbidden -or
                 -not [bool]$trial.vendorBranchingForbidden -or
                 -not [bool]$trial.physicalPromotionRequired) {

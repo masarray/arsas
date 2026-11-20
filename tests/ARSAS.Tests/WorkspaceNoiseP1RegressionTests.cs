@@ -34,7 +34,7 @@ public sealed class WorkspaceNoiseP1RegressionTests
     public void Diagnostics_UsesContainedLevelBadgeAndRail_NotWholeCellSeverityFlood()
     {
         var xaml = File.ReadAllText(FindRepoFile("MainWindow.xaml"));
-        var section = Slice(xaml, "<!-- DIAGNOSTICS -->", "</TabControl>");
+        var section = Slice(xaml, "<!-- DIAGNOSTICS -->", "<!-- FAT: permanent seventh Engineering workspace host.");
 
         Assert.Contains("x:Key=\"DiagnosticLevelBadgeTemplate\"", xaml, StringComparison.Ordinal);
         Assert.Contains("CellTemplate=\"{StaticResource DiagnosticLevelBadgeTemplate}\"", section, StringComparison.Ordinal);

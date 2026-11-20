@@ -36,9 +36,8 @@ public partial class MainWindow
 
         // Class handlers execute before the XAML instance Click handler. Marking this routed
         // event handled prevents IedEditRcb_Click from opening the legacy one-RCB dialog.
-        // Release authority: the existing XAML Click opens RcbExportFilterWindow.
-        // No routed-click interception and no second invocation.
-        return;
+        e.Handled = true;
+        window.IedEditRcbMulti_Click(button, e);
     }
 
     private static bool IsProductionRcbExportButton(Button button)

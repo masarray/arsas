@@ -37,6 +37,8 @@ public partial class MainWindow
     private long _gooseOtherFrames;
     private bool _gooseWorkspaceActivationScheduled;
     private bool _gooseBindingRefreshScheduled;
+    // Native adapter discovery must never execute during a tab navigation.
+    private Task? _gooseNavigationAdapterScanTask;
 
     public BulkObservableCollection<GooseAdapterOption> GooseAdapters { get; } = new();
     public BulkObservableCollection<GooseStreamRow> GooseStreams { get; } = new();
@@ -99,7 +101,7 @@ public partial class MainWindow
     public long GooseFrames { get => _gooseFrames; private set { if (Set(ref _gooseFrames, value)) Raise(nameof(GooseCounterText)); } }
     public long GooseOtherFrames { get => _gooseOtherFrames; private set { if (Set(ref _gooseOtherFrames, value)) Raise(nameof(GooseCounterText)); } }
 
-    public bool CanStartGooseSubscriber => !IsGooseCapturing && !GooseActionBusy && SelectedGooseAdapter is not null;
+    public bool CanStartGooseSubscriber => !IsGooseCapturing && !GooseActionBusy;
     public bool CanStopGooseSubscriber => IsGooseCapturing && !GooseActionBusy;
     public bool CanRefreshGooseConfiguration => !IsGooseCapturing && !GooseActionBusy;
     public string GooseCaptureStateText => IsGooseCapturing ? "LIVE CAPTURE" : "STOPPED";
@@ -133,23 +135,65 @@ public partial class MainWindow
             return;
 
         _gooseWorkspaceActivationScheduled = true;
-        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        // GOOSE tab switching is presentation-only. Model compilation already
+        // follows workspace changes, and Start/Refresh Models can explicitly
+        // request a fresh catalog. Neither SCL scans nor synchronous Npcap
+        // enumeration belong on the navigation/rendering dispatcher path.
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
         {
             _gooseWorkspaceActivationScheduled = false;
-            try
-            {
-                RefreshGooseBindingPreview();
-                if (GooseAdapters.Count == 0)
-                    RefreshGooseAdapters();
-            }
-            catch (Exception ex)
-            {
-                // The selected tab has already rendered by this point. Keep the workspace
-                // usable in unbound/wire-order mode instead of letting a model or native
-                // dependency exception abort TabControl content creation.
-                ApplyGooseWorkspaceFallback("GOOSE workspace initialization failed", ex);
-            }
+            if (MainTabs.SelectedIndex != GooseSubscriberTabIndex || IsGooseCapturing)
+                return;
+            if (GooseAdapters.Count == 0)
+                _ = EnsureGooseAdaptersForNavigationAsync();
         }));
+    }
+
+    // Deduplicated worker shared by ordinary tab navigation and IED-card entry.
+    private Task EnsureGooseAdaptersForNavigationAsync()
+    {
+        if (_gooseNavigationAdapterScanTask is { IsCompleted: false } running)
+            return running;
+        if (IsGooseCapturing || Dispatcher.HasShutdownStarted || GooseAdapters.Count != 0)
+            return Task.CompletedTask;
+        _gooseNavigationAdapterScanTask = LoadGooseAdaptersForNavigationAsync();
+        return _gooseNavigationAdapterScanTask;
+    }
+
+    private async Task LoadGooseAdaptersForNavigationAsync()
+    {
+        try
+        {
+            // Native enumerations can stall several seconds on multi-NIC PCs.
+            // Only the discovery occurs on a worker; every bound collection
+            // mutation stays on WPF's synchronization context.
+            var adapters = await Task.Run(
+                () => _gooseSubscriberRuntime.ListAdapters());
+            if (Dispatcher.HasShutdownStarted || IsGooseCapturing ||
+                GooseAdapters.Count != 0)
+                return;
+            var previousName = SelectedGooseAdapter?.Name;
+            GooseAdapters.ReplaceAll(adapters);
+            SelectedGooseAdapter = adapters.FirstOrDefault(adapter =>
+                previousName is not null &&
+                adapter.Name.Equals(previousName, StringComparison.OrdinalIgnoreCase));
+            GooseStatusText = adapters.Count == 0
+                ? "No Npcap/WinPcap adapters found. Install Npcap, then refresh adapters."
+                : $"{adapters.Count:N0} capture adapter(s) available. Choose the station Ethernet adapter and press Start.";
+        }
+        catch (Exception ex)
+        {
+            // Failing optional capture discovery must not freeze or blank the tab.
+            if (!Dispatcher.HasShutdownStarted && !IsGooseCapturing)
+            {
+                GooseStatusText = $"Npcap adapter discovery failed: {DescribeGooseFailure(ex)}";
+                AddLog("WARN", "GOOSE", GooseStatusText);
+            }
+        }
+        finally
+        {
+            _gooseNavigationAdapterScanTask = null;
+        }
     }
 
     private void RefreshGooseAdapters_Click(object sender, RoutedEventArgs e)
@@ -176,8 +220,17 @@ public partial class MainWindow
     private async void StartGooseSubscriber_Click(object sender, RoutedEventArgs e)
     {
         _pendingIedGooseAutoStart = null;
-        if (SelectedGooseAdapter is null || GooseActionBusy || IsGooseCapturing)
+        if (GooseActionBusy || IsGooseCapturing)
             return;
+        if (SelectedGooseAdapter is null)
+        {
+            if (GooseAdapters.Count == 0)
+                RefreshGooseAdapters();
+            GooseStatusText = GooseAdapters.Count == 0
+                ? "No capture adapter found. Install Npcap and refresh."
+                : "Select the Ethernet adapter in the dropdown, then press Start. SCL is not required.";
+            return;
+        }
 
         GooseActionBusy = true;
         try
@@ -240,6 +293,11 @@ public partial class MainWindow
         Raise(nameof(GooseClearVisibility));
         Raise(nameof(GooseCounterText));
         Raise(nameof(GooseSelectedStreamText));
+        if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
+        {
+            _iedBrowserLastLiveVersion = -1;
+            RefreshIedBrowserVisibleValues();
+        }
     }
 
     private async Task StopGooseSubscriberAsync()
@@ -254,6 +312,11 @@ public partial class MainWindow
             IsGooseCapturing = false;
             GooseStatusText = "GOOSE subscriber stopped.";
             SetStatus("GOOSE Subscriber stopped.");
+            if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
+            {
+                _iedBrowserLastLiveVersion = -1;
+                RefreshIedBrowserVisibleValues();
+            }
         }
         catch (Exception ex)
         {
@@ -407,10 +470,17 @@ public partial class MainWindow
         Dispatcher.BeginInvoke(new Action(() =>
         {
             IsGooseCapturing = status.IsRunning;
+            if (MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
+                RefreshIedBrowserReadButtons();
             GooseCapturedFrames = status.CapturedFrames;
             GooseFrames = status.GooseFrames;
             GooseOtherFrames = status.OtherFrames;
             GooseStatusText = status.Message;
+            if (!status.IsRunning && MainTabs.SelectedIndex == IedBrowserWorkspaceIndex)
+            {
+                _iedBrowserLastLiveVersion = -1;
+                RefreshIedBrowserVisibleValues(); // stale frame cannot remain current
+            }
             if (status.Level.Equals("ERROR", StringComparison.OrdinalIgnoreCase))
             {
                 AddLog("ERROR", "GOOSE", status.Message);
@@ -426,7 +496,10 @@ public partial class MainWindow
 
         var processed = 0;
         var scopeIdentityChanged = false;
-        foreach (var pair in _pendingGooseFrames.ToArray())
+        // ConcurrentDictionary iteration is safe while ingress continues.
+        // Stop after 64 entries rather than copying the entire pending GOOSE
+        // dictionary into a new array on each WPF Dispatcher tick.
+        foreach (var pair in _pendingGooseFrames)
         {
             if (processed >= 64)
                 break;
@@ -474,6 +547,7 @@ public partial class MainWindow
         Raise(nameof(GooseDataSetInspectorVisibility));
         Raise(nameof(GooseClearVisibility));
         Raise(nameof(GooseSelectedStreamText));
+        UpdateIedBrowserGooseDetails(); // coalesced update, no second subscriber
     }
 
     private GooseBindingCatalog BuildGooseBindingCatalog()

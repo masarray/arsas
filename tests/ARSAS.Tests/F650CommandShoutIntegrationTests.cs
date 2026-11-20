@@ -223,7 +223,10 @@ public sealed class F650CommandShoutIntegrationTests
         var model = Read("Models/MonitorModels.cs");
         var runtime = Read("Services/Iec61850MonitorRuntime.cs");
         Assert.Contains("Iec61850ControlIdentity.DistinctSelected(Signals)", model, StringComparison.Ordinal);
-        Assert.Contains("ControlSupportsOperate", model, StringComparison.Ordinal);
+        Assert.Contains("DistinctOperable(IEnumerable<SignalDefinition>",
+            Read("Services/Iec61850ControlIdentity.cs"), StringComparison.Ordinal);
+        Assert.Contains("ControlSupportsOperate",
+            Read("Services/Iec61850ControlIdentity.cs"), StringComparison.Ordinal);
         Assert.Contains("_activeControlTargets.TryAdd(targetKey, 0)", runtime, StringComparison.Ordinal);
         Assert.Contains("_activeControlTargets.TryRemove(targetKey, out _)", runtime, StringComparison.Ordinal);
     }

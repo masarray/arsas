@@ -371,7 +371,7 @@ public partial class IoListTestingWindow
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.55, GridUnitType.Star), MinWidth = 190 });
 
         var reference = FatCommandText(signal.ObjectReference, 11.0, FontWeights.SemiBold);
-        reference.FontFamily = new FontFamily("Cascadia Mono, Consolas");
+        reference.FontFamily = new FontFamily(new Uri("pack://application:,,,/"), "./Assets/Fonts/#Inter");
         reference.ToolTip = signal.ObjectReference;
         AddFatCommandCell(row, reference, 0);
 

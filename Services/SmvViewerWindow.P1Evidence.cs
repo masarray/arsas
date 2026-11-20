@@ -49,6 +49,11 @@ public partial class SmvViewerWindow
     private async void ExportEvidence_Click(object sender, RoutedEventArgs e)
     {
         var snapshot = _snapshot;
+        if (HasLivePresentation)
+        {
+            MessageBox.Show(this, "Live monitor data cannot be exported as a guarded capture proof. Stop Live and perform Capture 2 cycles.", "SV Evidence", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
         if (snapshot is null)
         {
             MessageBox.Show(
@@ -127,7 +132,7 @@ public partial class SmvViewerWindow
         finally
         {
             IsEvidenceExportBusy = false;
-            ExportEvidenceButton.IsEnabled = _snapshot is not null && !CancelButton.IsEnabled;
+            ExportEvidenceButton.IsEnabled = _snapshot is not null && !CancelButton.IsEnabled && !HasLivePresentation;
         }
     }
 

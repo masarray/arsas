@@ -126,7 +126,7 @@ public sealed class StaticDataSetDualRoleControlRegressionTests
             ".Where(signal => signal.IsControlSignal && signal.IsValidControlObject)",
             StringComparison.Ordinal);
         var runtimeCandidates = authority.IndexOf(
-            "var candidates = signals",
+            "var candidates = datasetSignals",
             StringComparison.Ordinal);
         var noRuntimeCandidate = authority.IndexOf(
             "if (candidates.Length == 0)",

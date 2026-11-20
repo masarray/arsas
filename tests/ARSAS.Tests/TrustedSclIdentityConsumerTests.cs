@@ -23,6 +23,40 @@ public sealed class TrustedSclIdentityConsumerTests
         Assert.Equal("F650",Assert.Single(projected.LogicalDevices).Instance);
     }
 
+
+    [Fact]
+    public async Task Five_Ld_SIEBCU_Identity_Is_Verified_Only_By_Matching_Pinned_Scl_Endpoint_And_Ap()
+    {
+        using var temp=TempScl.Create("SIEBCU","CTRL","192.0.2.20");
+        var path=temp.Device.SclSourcePath;
+        var xml=File.ReadAllText(path);
+        xml=xml.Replace("</Server>", """
+            <LDevice inst="MEAS"/><LDevice inst="PROT"/><LDevice inst="UD1"/><LDevice inst="UD2"/></Server>
+            """, StringComparison.Ordinal);
+        File.WriteAllText(path,xml);
+        temp.Device.SclSourceSha256=Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
+        var domains=new[] {"SIEBCUCTRL","SIEBCUMEAS","SIEBCUPROT","SIEBCUUD1","SIEBCUUD2"};
+        var model=new LiveIedModelDiscoveryDocument
+        {
+            Host="192.0.2.20",
+            LogicalDevices=domains.Select(x=>new LiveIedLogicalDeviceModel{MmsDomain=x,Inst=x}).ToArray()
+        };
+        var verified=await TrustedSclIdentityAuthority.TryMatchAsync(temp.Device,model);
+        Assert.NotNull(verified);
+        Assert.Equal("SIEBCU",verified.IedName);
+        Assert.Equal(LiveIedDiscoveryConfidenceLevel.High,verified.Confidence);
+        Assert.Equal(5,verified.LogicalDeviceAliases.Count);
+        var projected=TrustedSclIdentityAuthority.ToConsumerIdentity(verified,domains);
+        Assert.Equal("SIEBCU",projected.IedName);
+        Assert.Equal("UD2",projected.LogicalDevices.Single(x=>x.Domain=="SIEBCUUD2").Instance);
+
+        temp.Device.SclAccessPointName="WRONG_AP";
+        Assert.Null(await TrustedSclIdentityAuthority.TryMatchAsync(temp.Device,model));
+        temp.Device.SclAccessPointName="S1";
+        temp.Device.IpAddress="192.0.2.21";
+        Assert.Null(await TrustedSclIdentityAuthority.TryMatchAsync(temp.Device,model));
+    }
+
     [Fact]
     public async Task Changed_SCL_SHA_Must_Fail_Closed_And_Never_Rename()
     {

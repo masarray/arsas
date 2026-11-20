@@ -61,7 +61,11 @@ public sealed class StaticDataSetReportOnlyModeRegressionTests
         Assert.Contains("AddReportBackedDataSets(configurationModel, result)", authority, StringComparison.Ordinal);
         Assert.DoesNotContain("AddReportBackedDataSets(device.SclWorkspace?.DesignModel, result)", authority, StringComparison.Ordinal);
         Assert.DoesNotContain("AddReportBackedDataSets(device.LiveDiscoveryModel, result)", authority, StringComparison.Ordinal);
-        Assert.Contains("LiteralEquals(signal.DataSetReference, membership.DataSetReference)", authority, StringComparison.Ordinal);
+        // Exact DataSet membership is now enforced once by a case-insensitive,
+        // Trim-normalized lookup, not one full-catalog LINQ filter per member.
+        Assert.Contains("device.Signals.ToLookup(", authority, StringComparison.Ordinal);
+        Assert.Contains("signal => NormalizeLiteral(signal.DataSetReference)", authority, StringComparison.Ordinal);
+        Assert.Contains("signalsByDataSet[NormalizeLiteral(membership.DataSetReference)]", authority, StringComparison.Ordinal);
         Assert.Contains("LiteralEquals(signal.DisplayReference, memberReference)", authority, StringComparison.Ordinal);
         Assert.DoesNotContain("StartsWith(memberReference", authority, StringComparison.Ordinal);
         Assert.DoesNotContain("Contains(memberReference", authority, StringComparison.Ordinal);
@@ -184,9 +188,19 @@ public sealed class StaticDataSetReportOnlyModeRegressionTests
         var source = File.ReadAllText(FindRepoFile("MainWindow.IoTesting.AutoConnect.cs"));
 
         Assert.Contains("ObserveSharedStaticReportEvidenceAsync", source, StringComparison.Ordinal);
+        Assert.Contains("startedUtc.Add(proofWindow) - DateTimeOffset.UtcNow", source, StringComparison.Ordinal);
+        Assert.Contains("StaticReportEvidencePolicy.ReportProofDeadline(", source, StringComparison.Ordinal);
+        Assert.Contains("device.RcbActivationEvidence", source, StringComparison.Ordinal);
+        Assert.Contains("Task.Delay(postActivationRemaining, _applicationCancellation.Token)", source, StringComparison.Ordinal);
+        Assert.Contains("device.LiveValues.Association != association", source, StringComparison.Ordinal);
+        Assert.Contains("LogStaticRcbImageTriage(device);", source, StringComparison.Ordinal);
         Assert.Contains("waiting for actual InformationReport traffic", source, StringComparison.Ordinal);
         Assert.Contains("actual InformationReport traffic observed", source, StringComparison.Ordinal);
-        Assert.Contains("no InformationReport traffic was observed", source, StringComparison.Ordinal);
+        Assert.Contains("no exact routed RCB InformationReport traffic was observed", source, StringComparison.Ordinal);
+        Assert.Contains("var exactRcbRows = ArIED61850Tester.Services.StaticDataSetRcbImageTriage.Evaluate(", source, StringComparison.Ordinal);
+        Assert.Contains("var routedRcbs = exactRcbRows.Count(row => row.HasActualReportFrames)", source, StringComparison.Ordinal);
+        Assert.Contains("if (routedRcbs > 0)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("if (trafficObserved && device.HasReportStream)", source, StringComparison.Ordinal);
         Assert.Contains("will NOT switch process values to cyclic MMS polling", source, StringComparison.Ordinal);
     }
 

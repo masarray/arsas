@@ -11,6 +11,14 @@ public static class SmartReconnectPolicy
     public static TimeSpan ClientCleanupBudget => TimeSpan.FromMilliseconds(500);
     public static TimeSpan ConnectBudget => TimeSpan.FromSeconds(2);
     public static TimeSpan InitialAssociationRetryDelay => TimeSpan.FromMilliseconds(500);
+
+    // First full discovery had no retry, while a cached-model connection already
+    // had a bounded transient retry. Never replay discovery or any RCB operation:
+    // this policy only permits one extra attempt to establish TCP/ACSE/MMS.
+    public const int InitialDiscoveryAssociationMaxAttempts = 2;
+
+    public static bool CanRetryInitialDiscoveryAssociation(string? failureKind)
+        => failureKind is "TCP_TIMEOUT" or "TCP_TRANSPORT_CLOSED" or "TCP_CONNECTION_REFUSED" or "NATIVE_ASSOCIATION_CANCELLED";
     public static TimeSpan ReportRearmDelay => TimeSpan.FromSeconds(1);
     public static TimeSpan ReportRearmDeadline => TimeSpan.FromSeconds(3);
     public static TimeSpan RecoveryWarmupDuration => TimeSpan.FromSeconds(3);

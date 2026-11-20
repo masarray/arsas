@@ -75,7 +75,11 @@ class GitHubReadOnly:
             raise ShadowError(f"Read-only GitHub shadow evidence request failed: {exc}") from exc
 
 
-def choose_exact_run(payload: dict, *, head_sha: str, head_branch: str) -> dict | None:
+def choose_exact_run(
+    payload: dict, *, head_sha: str, head_branch: str, pr_number: int
+) -> dict | None:
+    if type(pr_number) is not int or pr_number <= 0:
+        raise ShadowError("An exact positive PR number is required for canonical run identity")
     runs = payload.get("workflow_runs")
     if not isinstance(runs, list):
         raise ShadowError("Canonical run list is malformed")
@@ -85,6 +89,11 @@ def choose_exact_run(payload: dict, *, head_sha: str, head_branch: str) -> dict 
         and run.get("event") == "pull_request"
         and run.get("head_sha") == head_sha
         and run.get("head_branch") == head_branch
+        # Shared branches/commits can feed multiple PRs with distinct merge trees.
+        # The run's pull_requests[].head.sha is mutable; use its PR number only.
+        and isinstance(run.get("pull_requests"), list)
+        and any(type(link.get("number")) is int and link["number"] == pr_number
+                for link in run["pull_requests"] if isinstance(link, dict))
         and isinstance(run.get("id"), int)
         and isinstance(run.get("run_attempt"), int)
     ]
@@ -174,7 +183,7 @@ def compare_proofs(
 
 
 def compare_online(
-    api, *, head_sha: str, head_branch: str, source_sha: str,
+    api, *, head_sha: str, head_branch: str, pr_number: int, source_sha: str,
     engine_sha: str, ardirec_sha: str, independent_junit: Path,
     independent_bridge: Path, wait_seconds: int = 600, poll_seconds: int = 15,
     require_completed: bool = False,
@@ -185,6 +194,8 @@ def compare_online(
             raise ShadowError(f"Invalid exact {label} SHA")
     if not head_branch or len(head_branch) > 180 or "\n" in head_branch:
         raise ShadowError("Invalid exact PR branch")
+    if type(pr_number) is not int or pr_number <= 0:
+        raise ShadowError("Invalid exact PR number")
     if wait_seconds < 0 or wait_seconds > 1200 or poll_seconds < 1:
         raise ShadowError("Invalid bounded shadow wait")
     base = "https://api.github.com/repos/" + REPO
@@ -196,7 +207,7 @@ def compare_online(
     while True:
         run = choose_exact_run(
             api.get(f"{base}/actions/workflows/build.yml/runs?{query}"),
-            head_sha=head_sha, head_branch=head_branch,
+            head_sha=head_sha, head_branch=head_branch, pr_number=pr_number,
         )
         if run is not None:
             status, conclusion = run.get("status"), run.get("conclusion")
@@ -225,6 +236,7 @@ def compare_online(
                             run_id=run["id"], run_attempt=run["run_attempt"],
                             event="pull_request",
                         )
+                        result["canonicalPrNumber"] = pr_number
                         result["canonicalRunStatus"] = status
                         result["canonicalRunConclusion"] = conclusion
                         result["fullCanonicalBuildPassed"] = (
@@ -236,6 +248,27 @@ def compare_online(
         if time.monotonic() >= deadline:
             raise ShadowError(f"Bounded shadow comparison timeout; last={last}")
         time.sleep(min(poll_seconds, deadline - time.monotonic()))
+
+
+def read_event_pr_number(path: Path, *, head_sha: str, head_branch: str) -> int:
+    """Bind CI to the exact PR event; never infer identity from shared branches."""
+    try:
+        if path.stat().st_size > 2 * 1024 * 1024:
+            raise ShadowError("GitHub pull-request event payload is oversized")
+        event = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, UnicodeError) as exc:
+        raise ShadowError("Unable to read exact GitHub pull-request event") from exc
+    if not isinstance(event, dict):
+        raise ShadowError("GitHub pull-request event is not an object")
+    number, pr = event.get("number"), event.get("pull_request")
+    if (type(number) is not int or number <= 0 or
+            not isinstance(pr, dict) or pr.get("number") != number):
+        raise ShadowError("GitHub event lacks an unambiguous PR number")
+    head = pr.get("head")
+    if (not isinstance(head, dict) or head.get("sha") != head_sha or
+            head.get("ref") != head_branch):
+        raise ShadowError("GitHub PR event head SHA/branch differs from CI arguments")
+    return number
 
 
 def main() -> int:
@@ -251,9 +284,15 @@ def main() -> int:
     parser.add_argument("--require-completed-canonical", action="store_true")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    event_path = os.environ.get("GITHUB_EVENT_PATH")
+    if not event_path:
+        raise ShadowError("GITHUB_EVENT_PATH is required for exact PR identity")
+    pr_number = read_event_pr_number(
+        Path(event_path), head_sha=args.head_sha, head_branch=args.head_branch,
+    )
     result = compare_online(
         GitHubReadOnly(os.environ.get("GITHUB_TOKEN", "")),
-        head_sha=args.head_sha, head_branch=args.head_branch,
+        head_sha=args.head_sha, head_branch=args.head_branch, pr_number=pr_number,
         source_sha=args.source_sha, engine_sha=args.engine_sha,
         ardirec_sha=args.ardirec_sha,
         independent_junit=args.independent_junit,

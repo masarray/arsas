@@ -12,6 +12,7 @@ public partial class MainWindow
     private enum SclSignalSelectionMode
     {
         StaticDataSet,
+        BrowseIed,
         Manual
     }
 
@@ -49,38 +50,77 @@ public partial class MainWindow
             return null;
         }
 
-        var mode = dialog.UseStaticDataSet
-            ? SclSignalSelectionMode.StaticDataSet
-            : SclSignalSelectionMode.Manual;
+        SclSignalSelectionMode? mode = dialog.Selection switch
+        {
+            IedWorkspaceTaskChoice.StaticDataSet => SclSignalSelectionMode.StaticDataSet,
+            IedWorkspaceTaskChoice.BrowseIed => SclSignalSelectionMode.BrowseIed,
+            IedWorkspaceTaskChoice.ManualSignals => SclSignalSelectionMode.Manual,
+            _ => null
+        };
         _pendingSharedStaticSelectionAssignments = mode == SclSignalSelectionMode.StaticDataSet
             ? Math.Max(1, iedCount)
             : 0;
         return mode;
     }
 
-    private void ApplyStaticDataSetSelection(Iec61850MonitorDevice device)
+    private async Task ApplyStaticDataSetSelection(Iec61850MonitorDevice device)
     {
-        // Static DataSet remains the protocol authority established by the report-only
-        // baseline. Materialize every ARIEC-owned member first, then select exactly one
-        // presentation/runtime row per literal static membership. A browsed alias carrying
-        // DataSetReference is not enough authority and must not inflate the live plan.
+        // WPF-owned SignalDefinition collections stay on their Dispatcher.
+        // Cooperative slices keep input/render live; matching is indexed by
+        // exact ARIEC DataSet owner, not a background thread over live bindings.
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        device.UpdateReportingProgress(4, "Preparing ARIEC Static DataSet members…");
+        await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
         var merge = Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(device);
         RegisterRecoveredDataSetSignals(device, merge);
-        var authoritativeSignals = Iec61850StaticDataSetAuthoritySelection.Build(device);
-        Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device);
+        var inventoryMs = clock.Elapsed.TotalMilliseconds;
+        device.UpdateReportingProgress(20, "Matching exact DataSet authority…");
+        await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
 
+        var authoritativeSignals = Iec61850StaticDataSetAuthoritySelection.Build(device);
+        var authorityMs = clock.Elapsed.TotalMilliseconds;
+        Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device);
+        device.UpdateReportingProgress(30, "Selecting verified DataSet member rows…");
+        await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
+
+        // Snapshot object identities before yielding: even a pre-emptive Stop
+        // cannot invalidate a live WPF collection enumerator mid-operation.
+        var signalRows = device.Signals.ToArray();
         device.BeginBulkSignalSelection();
         try
         {
-            foreach (var signal in device.Signals)
+            var index = 0;
+            var total = signalRows.Length;
+            foreach (var signal in signalRows)
+            {
                 signal.IsSelected = authoritativeSignals.Contains(signal);
+                index++;
+                if ((index & 127) == 0 && index < total)
+                {
+                    device.UpdateReportingProgress(30d + 30d * index / Math.Max(1, total),
+                        $"Selecting Static DataSet members · {index:N0}/{total:N0}…");
+                    await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
+                }
+            }
         }
         finally
         {
             device.EndBulkSignalSelection();
         }
+        var selectionMs = clock.Elapsed.TotalMilliseconds;
+        device.UpdateReportingProgress(63, "Synchronizing FAT signal selection…");
+        await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
 
-        SynchronizeAllEngineeringSelectionsToFat(device);
+        if (_ioFatSelectionBridgeProject is not null)
+        {
+            var index = 0;
+            foreach (var signal in signalRows)
+            {
+                SynchronizeEngineeringSelectionToFat(signal, device);
+                if ((++index & 127) == 0)
+                    await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
+            }
+        }
         _sharedSclSelectionAuthorityDeviceIds.Add(device.DeviceId);
         _sharedSclStaticDataSetAuthorityDeviceIds.Add(device.DeviceId);
         SaveSignalSelectionMemory(device);
@@ -88,20 +128,14 @@ public partial class MainWindow
         if (_pendingSharedStaticSelectionAssignments > 0)
             _pendingSharedStaticSelectionAssignments--;
 
-        AddLog(
-            "INFO",
-            device.Name,
+        AddLog("INFO", device.Name,
             $"Static DataSet report-only authority selected: {device.SelectedLiveSignalCount} exact runtime member row(s) from {merge.MandatoryCatalogCount} ARIEC static membership descriptor(s); cyclic MMS process polling and dynamic DataSet writes remain disabled.");
+        AddLog("INFO", device.Name,
+            $"P0_STATIC_UI_WORK inventoryMs={inventoryMs:0.###} exactAuthorityMs={authorityMs - inventoryMs:0.###} selectionMs={selectionMs - authorityMs:0.###} totalMs={clock.Elapsed.TotalMilliseconds:0.###} signalRows={device.Signals.Count} selected={authoritativeSignals.Count}");
 
-        // Make feasibility and first-report proof visible from the initial Engineering
-        // workflow rather than waiting until FAT is opened. The observer waits for the
-        // shared monitor to start and never changes acquisition method.
+        device.UpdateReportingProgress(75, "Checking configured RCB reporting coverage…");
         LogStaticDataSetReportFeasibility(device);
         _ = ObserveInitialStaticReportEvidenceAsync(device);
-
-        // P5 native FAT is a thin view over SelectedDevice.Points. Re-synchronize after
-        // static DataSet authority refresh so same-IED SCL refreshes are visible without
-        // reviving the retired Engineering -> legacy IoTest bootstrap.
         SynchronizeProductionFatSelectedIed();
     }
 
@@ -126,7 +160,31 @@ public partial class MainWindow
         // report-only authority instead of silently demoting it to Hybrid.
         if (_pendingSharedStaticSelectionAssignments > 0)
         {
-            ApplyStaticDataSetSelection(device);
+            // Legacy synchronous FAT hook retains exact membership semantics.
+            // Card/SCL actions use the cooperative responsive path above.
+            var merge = Iec61850DataSetSignalInventoryService.EnsureMandatorySignals(device);
+            RegisterRecoveredDataSetSignals(device, merge);
+            var selected = Iec61850StaticDataSetAuthoritySelection.Build(device);
+            Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device);
+            device.BeginBulkSignalSelection();
+            try
+            {
+                foreach (var signal in device.Signals)
+                    signal.IsSelected = selected.Contains(signal);
+            }
+            finally
+            {
+                device.EndBulkSignalSelection();
+            }
+            SynchronizeAllEngineeringSelectionsToFat(device);
+            _sharedSclSelectionAuthorityDeviceIds.Add(device.DeviceId);
+            _sharedSclStaticDataSetAuthorityDeviceIds.Add(device.DeviceId);
+            SaveSignalSelectionMemory(device);
+            device.RefreshComputed();
+            _pendingSharedStaticSelectionAssignments--;
+            LogStaticDataSetReportFeasibility(device);
+            _ = ObserveInitialStaticReportEvidenceAsync(device);
+            SynchronizeProductionFatSelectedIed();
             return;
         }
 

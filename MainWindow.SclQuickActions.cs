@@ -71,15 +71,15 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Reopens the same task-first chooser used after Open SCL, but pins every action
-    /// to the IED card that invoked it. Cancel/X/Browse Offline are intentionally
-    /// side-effect free: no selection, connection, polling, report ownership or FAT
-    /// state is changed unless the user explicitly chooses a monitoring task.
+    /// Reopens the same typed task-first chooser used after Open SCL, scoped to
+    /// this IED. Browse navigates without changing reporting/selection authority;
+    /// cancel/X remain side-effect free. Only explicit monitoring tasks can
+    /// mutate acquisition state.
     /// </summary>
     internal async Task OpenIedWorkspaceActionsAsync(Iec61850MonitorDevice device)
     {
         ArgumentNullException.ThrowIfNull(device);
-        if (device.IsBusy)
+        if (device.IsBusy || device.IsReportingProgressActive)
         {
             SetStatus($"{device.Name}: wait for the current IED task to finish before opening IED Actions.");
             return;
@@ -93,9 +93,8 @@ public partial class MainWindow
             WindowStartupLocation = WindowStartupLocation.CenterOwner
         };
 
-        // RCB Engineering and COMTRADE are executed by the dialog against _targetDevice
-        // and close with DialogResult=false. Browse Offline / Cancel / X also return false
-        // but deliberately execute nothing. Only the two monitoring choices return true.
+        // Engineering/file tasks close the chooser themselves with false; close/X
+        // must not act as a monitoring choice or change saved signal authority.
         if (dialog.ShowDialog() != true)
         {
             device.RefreshComputed();
@@ -103,41 +102,60 @@ public partial class MainWindow
             return;
         }
 
-        if (dialog.UseStaticDataSet)
+        if (dialog.Selection == IedWorkspaceTaskChoice.BrowseIed)
         {
-            if (device.IsMonitoring)
-                await StopDeviceMonitorAsync(device);
-
-            ApplyStaticDataSetSelection(device);
-            if (device.SelectedLiveSignalCount == 0)
-            {
-                SetStatus($"{device.Name}: Static DataSet selected, but no report-authoritative process leaf is available to monitor.");
-                return;
-            }
-
-            if (!device.IsConnected)
-            {
-                var connected = device.HasDiscoveryCache && device.Signals.Count > 0
-                    ? await ConnectUsingSavedModelAsync(device)
-                    : await ConnectAndConfigureDeviceAsync(device, openWizard: false);
-                if (!connected)
-                    return;
-            }
-
-            // Unit metadata belongs to the same source-neutral Static DataSet workflow.
-            // Resolve only selected measurement owners on the active MMS session, before
-            // any RCB is armed, so discovery and opened-SCL paths expose the same verified
-            // engineering-unit behavior without disturbing active reporting.
-            SetStatus($"{device.Name}: verifying engineering units for selected Static DataSet measurements…");
-            await _runtime.EnrichSelectedStaticDataSetUnitsAsync(
-                device,
-                _applicationCancellation.Token);
+            OpenIedBrowserModel(device);
             device.RefreshComputed();
+            RaiseWorkspaceCounts();
+            return; // no RCB, GI, polling, manual wizard or selection mutation
+        }
 
-            if (!device.IsMonitoring)
-                await StartDeviceMonitorAsync(device);
+        if (dialog.Selection == IedWorkspaceTaskChoice.StaticDataSet)
+        {
+            device.BeginReportingProgress("Preparing Static DataSet reporting…");
+            try
+            {
+                if (device.IsMonitoring)
+                    await StopDeviceMonitorAsync(device);
+
+                if (device.IsReportingProgressCanceled) return;
+                await ApplyStaticDataSetSelection(device);
+                if (device.IsReportingProgressCanceled) return;
+
+                if (device.SelectedLiveSignalCount == 0)
+                {
+                    SetStatus($"{device.Name}: Static DataSet selected, but no report-authoritative process leaf is available to monitor.");
+                    return;
+                }
+
+                if (!device.IsConnected)
+                {
+                    var connected = device.HasDiscoveryCache && device.Signals.Count > 0
+                        ? await ConnectUsingSavedModelAsync(device)
+                        : await ConnectAndConfigureDeviceAsync(device, openWizard: false);
+                    if (!connected || device.IsReportingProgressCanceled)
+                        return;
+                }
+
+                device.UpdateReportingProgress(80, "Verifying measurement engineering units…");
+                SetStatus($"{device.Name}: verifying engineering units for selected Static DataSet measurements…");
+                await _runtime.EnrichSelectedStaticDataSetUnitsAsync(
+                    device, _applicationCancellation.Token);
+                device.RefreshComputed();
+                if (device.IsReportingProgressCanceled) return;
+
+                if (!device.IsMonitoring)
+                    await StartDeviceMonitorAsync(device);
+            }
+            finally
+            {
+                device.CompleteReportingProgress();
+            }
             return;
         }
+
+        if (dialog.Selection != IedWorkspaceTaskChoice.ManualSignals)
+            return; // fail closed on new/unknown action kinds
 
         // Manual is deliberately two-stage when reopened from a card. Keep the existing
         // acquisition mode untouched while the manual wizard is open so cancelling that

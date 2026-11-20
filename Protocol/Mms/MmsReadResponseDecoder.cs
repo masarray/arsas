@@ -47,6 +47,12 @@ public static class MmsReadResponseDecoder
             if (TryDecodeByHint(values, hint, out var hinted))
                 return Ok(hinted, hex);
 
+            // A declared Quality/Dbpos BIT STRING of the wrong width is not
+            // another valid process type. Never reinterpret it via generic fallback.
+            if ((hint.Contains("quality") || hint == "q" || hint.Contains("dbpos")) &&
+                values.Any(v => v.Tag == 0x84))
+                return Fail("MMS BIT STRING does not match the declared IEC value width.", hex);
+
             if (TryDecodeAny(values, out var value))
                 return Ok(value, hex);
 
@@ -288,24 +294,21 @@ public static class MmsReadResponseDecoder
 
     private static bool TryDecodeDbpos(List<BerTlv> values, out object? value)
     {
-        var tlv = values.LastOrDefault(v => v.Tag == 0x84 && v.Length >= 2);
-        if (tlv.Tag == 0x84)
+        var tlv = values.LastOrDefault(v => v.Tag == 0x84);
+        // IEC 61850 Dbpos is a two-bit MMS BIT STRING. Quality and other
+        // BIT STRINGs must never be interpreted as a process position.
+        if (tlv.Tag == 0x84 && tlv.Length == 2 &&
+            tlv.Value.Span[0] == 6 && (tlv.Value.Span[1] & 0x3F) == 0)
         {
-            var span = tlv.Value.Span;
-            var bytes = span[1..];
-            if (bytes.Length > 0)
+            var code = tlv.Value.Span[1] >> 6;
+            value = code switch
             {
-                var code = (bytes[0] >> 6) & 0x03;
-                value = code switch
-                {
-                    0 => "Intermediate [00]",
-                    1 => "Open [01]",
-                    2 => "Close [10]",
-                    3 => "Invalid [11]",
-                    _ => code.ToString(CultureInfo.InvariantCulture)
-                };
-                return true;
-            }
+                0 => "Intermediate [00]",
+                1 => "Open [01]",
+                2 => "Close [10]",
+                _ => "Bad state [11]"
+            };
+            return true;
         }
         value = null;
         return false;
@@ -314,9 +317,10 @@ public static class MmsReadResponseDecoder
     private static bool TryDecodeQuality(List<BerTlv> values, out object? value)
     {
         var tlv = values.LastOrDefault(v => v.Tag == 0x84 && v.Length >= 2);
-        if (tlv.Tag == 0x84)
+        if (tlv.Tag == 0x84 &&
+            MmsQualityDecoder.TryDecode(tlv.Value.Span, out var quality))
         {
-            value = MmsQualityDecoder.Decode(tlv.Value.Span);
+            value = quality.Summary;
             return true;
         }
         value = null;

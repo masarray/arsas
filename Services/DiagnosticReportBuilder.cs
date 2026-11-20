@@ -166,6 +166,18 @@ internal static class DiagnosticReportBuilder
                 }
                 builder.AppendLine($"Connected        : {device.IsConnected}");
                 builder.AppendLine($"Monitoring       : {device.IsMonitoring}");
+                // Diagnostic projection only: no MMS reads, new caches, or
+                // synthetic values. Samples are scoped to the active IED.
+                builder.AppendLine($"Browser ledger   : association={device.LiveValues.Association}, version={device.LiveValues.Version}, offline={device.LiveValues.IsOffline}");
+                var hydrationFailures = device.InitialHydrationFailures?
+                    .SnapshotCurrent(device, maxEntries: 12) ??
+                    Array.Empty<IedBrowserReadFailureSample>();
+                builder.AppendLine($"Initial MMS errors (sample max 12): {hydrationFailures.Count}");
+                foreach (var evidence in hydrationFailures)
+                {
+                    var detail = evidence.Reason.Replace('\r', ' ').Replace('\n', ' ');
+                    builder.AppendLine($"  {evidence.Reference} [{evidence.FunctionalConstraint}] : {detail}");
+                }
                 builder.AppendLine($"Busy             : {device.IsBusy}");
                 builder.AppendLine($"Status           : {device.Status}");
                 builder.AppendLine($"Detail           : {device.Detail}");
@@ -173,7 +185,12 @@ internal static class DiagnosticReportBuilder
                 AppendStaticIngressParity(builder, device.StaticAcquisitionParity);
                 AppendReportContinuity(builder, device.ReportContinuityEvidence);
                 if (device.IsMonitoring && Iec61850MonitoringModeRegistry.IsStaticDataSetReportOnly(device))
-                    AppendStaticInitialImage(builder, device.Points);
+                {
+                    AppendStaticInitialImage(builder, device.Points, device.LiveValues);
+                    AppendStaticRcbImageTriage(builder, device.Points,
+                        device.ReportContinuityEvidence, device.RcbActivationEvidence,
+                        device.LiveValues);
+                }
                 builder.AppendLine($"Saved model      : {device.HasDiscoveryCache} ({device.SignalCount:N0} signal(s))");
                 builder.AppendLine($"Selected         : live={device.SelectedLiveSignalCount:N0}, control={device.SelectedControlSignalCount:N0}");
                 var commandCatalog = Iec61850ControlIdentity.DistinctSelected(device.Signals);
@@ -187,6 +204,29 @@ internal static class DiagnosticReportBuilder
                     if (evidence.Length > 480) evidence = evidence[..480] + "…";
                     builder.AppendLine($"  {command.ObjectReference} | CDC={command.ControlCdc} | liveVerifiedCdc={command.VerifiedLiveControlCdc} | dataSetCdc={command.DataSetAdvisoryCdc} | model={command.ControlModelText} | canOperate={command.ControlSupportsOperate} | {evidence}");
                 }
+                // A static DataSet may report XCBR/XSWI Pos but omit the
+                // separate command-owning CSWI.Pos in another LD. Report the
+                // live discovery candidates independently of user selection;
+                // diagnostic visibility NEVER grants an MMS control command.
+                var independentCswi = device.LiveDiscoveryModel is not null
+                    ? Iec61850ControlIdentity.IndependentCswiInspectionCandidates(device.Signals)
+                    : [];
+                var cswiTotal = device.Signals
+                    .Count(s => !s.IsSelected &&
+                        Iec61850ControlIdentity.IsIndependentCswiCandidate(s));
+                builder.AppendLine($"CSWI outside DataSet: live candidates={cswiTotal}, bounded candidates={independentCswi.Length}, typed-operable={independentCswi.Count(s => s.ControlSupportsOperate)}, unresolved/status-only={independentCswi.Count(s => !s.ControlSupportsOperate)}; discovery does not imply command authority");
+                foreach (var cswi in independentCswi.Take(12))
+                {
+                    var note = (cswi.ControlInspectionEvidence ?? string.Empty)
+                        .Replace('\r', ' ').Replace('\n', ' ');
+                    if (note.Length > 180) note = note[..180] + "…";
+                    builder.AppendLine($"  CSWI {cswi.ObjectReference} | model={cswi.ControlModelText} | verifiedCDC={cswi.VerifiedLiveControlCdc} | operable={cswi.ControlSupportsOperate} | {note}");
+                }
+                // Side-effect-free SCD ↔ wire-model command parity for Siemens,
+                // ZIV and other vendors; do not confuse offline ctlModel design
+                // intent with a live MMS inspection or promote StatusOnly rows.
+                foreach (var parity in Iec61850SclLiveCswiParityDiagnostic.Summarize(device))
+                    builder.AppendLine(parity);
                 builder.AppendLine($"Logical Devices  : {EmptyAsUnavailable(device.LogicalDeviceSummary)}");
                 builder.AppendLine($"Identity source  : {EmptyAsUnavailable(device.IdentitySource)}");
 
@@ -197,6 +237,14 @@ internal static class DiagnosticReportBuilder
                     builder.AppendLine("DataSet inventory:");
                     foreach (var line in Iec61850DataSetCompletenessDiagnostic.FormatReportLines(completeness))
                         builder.AppendLine($"  {line}");
+                    // Exact FCD/FCDA conflict diagnostics from the already
+                    // attached model. This never opens an MMS association,
+                    // reads a value, or changes Report/Read ownership.
+                    var fcConflicts = IedBrowserDataSetFcConflictDiagnostic.Evaluate(
+                        dataSetModel, maxSamples: 12);
+                    builder.AppendLine($"DataSet FC model conflicts: {fcConflicts.TotalCount} across {fcConflicts.CheckedMembers} declared member(s)");
+                    foreach (var conflict in fcConflicts.Samples)
+                        builder.AppendLine($"  {conflict.DataSet} :: {conflict.Reference} [{conflict.FunctionalConstraint}] · inconsistent FCD/FCDA coverage");
                 }
                 else
                 {
@@ -270,17 +318,63 @@ internal static class DiagnosticReportBuilder
 
     private static void AppendStaticInitialImage(
         StringBuilder builder,
-        IEnumerable<Iec61850MonitorPoint> points)
+        IEnumerable<Iec61850MonitorPoint> points,
+        IedBrowserLiveValues? liveValues = null)
     {
-        var image = StaticDataSetInitialImageDiagnostic.Evaluate(points);
+        var image = StaticDataSetInitialImageDiagnostic.Evaluate(points, liveValues);
         builder.AppendLine($"Static initial image: {image.Summary}");
         builder.AppendLine("  Interpretation : display completeness only; Unknown q does not mean missing value, and RCB setup or first report does not prove every selected member is live.");
         foreach (var group in image.Groups.Take(12))
             builder.AppendLine($"  DataSet/RCB     : {group.DataSetReference} | {group.RcbReference} | visible={group.ValueVisible}/{group.Selected}, pending={group.ValuePending}, qNotSupplied={group.QualityNotSupplied}");
+        if (image.Groups.Count > 12)
+            builder.AppendLine($"  DataSet/RCB list: shown=12/{image.Groups.Count}; remaining groups omitted from initial-image detail only");
         foreach (var point in image.PendingPoints.Take(12))
-            builder.AppendLine($"  Awaiting value  : {point.Reference} | RCB={point.RcbReference} | status={point.Status} | reason={point.Reason}");
+        {
+            // This is the UI's current display token, NOT a decoded raw MMS
+            // value. A legitimate enum/string "Unknown" must not be presented
+            // as proof that the IED sent no value.
+            var token = (point.DisplayValueToken ?? string.Empty)
+                .Replace('\r', ' ').Replace('\n', ' ');
+            if (token.Length > 80)
+                token = token[..80] + "…";
+            builder.AppendLine($"  Awaiting value  : {point.Reference} | RCB={point.RcbReference} | displayToken={token} | status={point.Status} | reason={point.Reason}");
+        }
         if (image.PendingPoints.Count > 12)
             builder.AppendLine($"  Additional pending: {image.PendingPoints.Count - 12} (showing first 12; never inferred unavailable)");
+    }
+
+    /// <summary>
+    /// Per-RCB attribution for an already-captured static monitor image.
+    /// A successful RptEna/GI request is not proof of a routed Report; zero-frame
+    /// RCBs must be visible in Copy Diagnostic even when no continuity stream exists.
+    /// This only formats immutable local evidence and performs no MMS operations.
+    /// </summary>
+    internal static void AppendStaticRcbImageTriage(
+        StringBuilder builder,
+        IEnumerable<Iec61850MonitorPoint> points,
+        Iec61850ReportContinuitySnapshot? continuity,
+        IReadOnlyList<Iec61850RcbActivationEvidence>? activations = null,
+        IedBrowserLiveValues? liveValues = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        var selected = points.ToArray();
+        var groups = StaticDataSetRcbImageTriage.Evaluate(
+            selected, continuity, maxGroups: 64, activations: activations,
+            liveValues: liveValues);
+        var totalGroups = Math.Max(groups.Count,
+            StaticDataSetInitialImageDiagnostic.Evaluate(
+                selected, liveValues).Groups.Count);
+        builder.AppendLine($"Static RCB traffic : shown={groups.Count}/{totalGroups}, " +
+            $"routed={groups.Count(group => group.HasActualReportFrames)}, " +
+            $"noRoutedFrames={groups.Count(group => !group.HasActualReportFrames)}");
+        builder.AppendLine("  Attribution     : one exact DataSet/RCB per row; zero routed frames " +
+            "is not proof of IED silence, GI rejection or MMS connection failure. " +
+            "Write-step outcome, first routed Report, and value visibility are separate proofs; " +
+            "missing setup proof stays unverified. Overlapping selected values " +
+            "do not erase an independently activated RCB from triage.");
+        foreach (var group in groups)
+            builder.AppendLine($"  RCB evidence    : {group.Summary}, " +
+                $"ingress={(group.HasActualReportFrames ? "ROUTED" : "NO ROUTED FRAMES")}");
     }
 
     internal static void AppendReportContinuity(

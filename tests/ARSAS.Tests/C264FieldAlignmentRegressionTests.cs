@@ -11,26 +11,24 @@ public sealed class C264FieldAlignmentRegressionTests
     private static readonly XNamespace Wpf = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
     [Fact]
-    public void IedIpAddress_CentersEditableText_WithoutReplacingComboBoxTemplate()
+    public void IedIpAddress_HasFourAlignedOctets_SearchableHistory_AndNoDuplicateStorage()
     {
         var document = XDocument.Load(Find("IpConnectWizardWindow.xaml"));
-        var combo = document.Descendants(Wpf + "ComboBox")
-            .Single(x => (string?)x.Attribute(XName.Get("Name", "http://schemas.microsoft.com/winfx/2006/xaml")) == "RelayIpBox");
+        var boxes = document.Descendants(Wpf + "TextBox")
+            .Where(e => ((string?)e.Attribute(XName.Get("Name", "http://schemas.microsoft.com/winfx/2006/xaml")))?.StartsWith("Octet", StringComparison.Ordinal) == true)
+            .ToArray();
 
-        Assert.Equal("True", (string?)combo.Attribute("IsEditable"));
-        Assert.Equal("Center", (string?)combo.Attribute("HorizontalContentAlignment"));
-        Assert.Equal("Center", (string?)combo.Attribute("VerticalContentAlignment"));
-        Assert.Equal("RelayIpBox_Loaded", (string?)combo.Attribute("Loaded"));
-        Assert.Contains("RecentRelayIps", (string?)combo.Attribute("ItemsSource"));
-        Assert.Contains("RelayIpAddress", (string?)combo.Attribute("Text"));
-        Assert.Empty(combo.Elements(Wpf + "ComboBox.Template"));
-
+        Assert.Equal(4, boxes.Length);
+        Assert.All(boxes, box => Assert.Equal("{StaticResource SmartIpOctet}", (string?)box.Attribute("Style")));
+        Assert.Contains(document.Descendants(Wpf + "Popup"),
+            popup => (string?)popup.Attribute(XName.Get("Name", "http://schemas.microsoft.com/winfx/2006/xaml")) == "HistoryPopup");
         var source = File.ReadAllText(Find("IpConnectWizardWindow.xaml.cs"));
-        Assert.Contains("RelayIpBox.Template.FindName(\"PART_EditableTextBox\", RelayIpBox)", source);
-        Assert.Contains("editor.TextAlignment = TextAlignment.Center;", source);
-        Assert.Contains("editor.VerticalContentAlignment = VerticalAlignment.Center;", source);
-        Assert.Contains("UserPreferenceStore.LoadRecentEndpoints()", source);
-        Assert.Contains("System.Net.IPAddress.TryParse", source);
+        Assert.Contains("UserPreferenceStore.LoadRecentEndpointDetails()", source);
+        Assert.Contains("Octet_Pasting", source);
+        Assert.Contains("Octet_PreviewKeyDown", source);
+        Assert.Contains("CommitHistorySelection()", source);
+        Assert.Contains("RelayIpAddress = submittedAddress;", source);
+        Assert.DoesNotContain("File.WriteAllText", source);
     }
 
     [Fact]

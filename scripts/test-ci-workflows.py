@@ -418,5 +418,177 @@ jobs:
         ):
             self.assertFalse(matches(path), path)
 
+    def test_p4_docs_only_pr_preflight_never_fails_open(self):
+        """Exact verified doc-only PRs may skip Windows; any doubt runs Windows."""
+        repo = Path(__file__).resolve().parents[1]
+        workflow = (repo / '.github/workflows/build.yml').read_text(encoding='utf-8')
+        scope = workflow.split('  pr-scope:\n', 1)[1].split('  build-windows:\n', 1)[0]
+        build = workflow.split('  build-windows:\n', 1)[1]
+        for contract in (
+            "if: github.event_name == 'pull_request'",
+            'runs-on: ubuntu-latest',
+            'pull-requests: read',
+            'uses: actions/github-script@v7',
+            'github.paginate(github.rest.pulls.listFiles',
+            'per_page: 100',
+            'files.length > 0 && files.length < 3000',
+            "filename === 'README.md'",
+            "filename.startsWith('docs/')",
+            "filename.endsWith('.md')",
+            "filename !== 'docs/INTEROPERABILITY_REFERENCE_CONTRACT.md'",
+            "status === 'added' || status === 'modified'",
+            '!previous_filename',
+            'catch (error)',
+            "core.setOutput('needs_windows', needsWindows ? 'true' : 'false')",
+        ):
+            self.assertIn(contract, scope)
+        self.assertNotIn('actions/checkout@', scope)
+        self.assertNotIn('dotnet ', scope)
+        self.assertIn('needs: [pr-scope]', build)
+        self.assertIn('always() &&', build)
+        self.assertIn("github.event_name != 'pull_request'", build)
+        self.assertIn("needs.pr-scope.result != 'success'", build)
+        self.assertIn("needs.pr-scope.outputs.needs_windows != 'false'", build)
+        self.assertNotIn("needs.pr-scope.outputs.needs_windows == 'true'", build)
+        self.assertEqual(workflow.count('  build-windows:\n'), 1)
+        self.assertIn('name: Upload sealed Windows package input', build)
+        self.assertIn('Upload directly downloadable portable EXE (no ZIP)', build)
+        self.assertIn('archive: false', build)
+        self.assertIn('ref: ${{ github.sha }}', build)
+        self.assertIn('  push:\n    branches: [ main ]', workflow)
+        self.assertIn('  workflow_dispatch:', workflow)
+
+    def test_p4_capture_requires_opt_in_and_retains_manual_exact_sha_proof(self):
+        """An unlabeled Smart Discovery PR must not spend a 2nd Windows runner."""
+        repo = Path(__file__).resolve().parents[1]
+        src = (repo / '.github/workflows/smart-discovery-capture-build.yml').read_text(encoding='utf-8')
+        self.assertIn('types: [opened, synchronize, reopened, ready_for_review, labeled]', src)
+        self.assertIn('contains(github.event.pull_request.labels.*.name, \'ci-field-capture\')', src)
+        self.assertIn('!github.event.pull_request.draft', src)
+        self.assertIn("github.event_name == 'workflow_dispatch'", src)
+        self.assertIn("needs.manual-regression.result == 'success'", src)
+        self.assertIn('    needs: [manual-regression]', src)
+        self.assertIn('      source_sha: ${{ github.sha }}', src)
+        self.assertIn('      shadow_mode: true', src)
+        self.assertIn('    runs-on: windows-latest', src)
+        self.assertIn('cancel-in-progress: true', src)
+        self.assertIn('name: Build smart-discovery portable field capture', src)
+
+
+    def test_p4_execute_actual_api_script_and_job_conditions(self):
+        """Execute extracted P4 code and job if-expressions on Node, no GitHub CI."""
+        import shutil
+        import textwrap
+
+        self.assertIsNotNone(shutil.which("node"), "Ubuntu CI P0 needs Node.js")
+        repo = Path(__file__).resolve().parents[1]
+        build = (repo / ".github/workflows/build.yml").read_text(encoding="utf-8")
+        capture = (repo / ".github/workflows/smart-discovery-capture-build.yml").read_text(encoding="utf-8")
+        scope = build.split("  pr-scope:\n", 1)[1].split("  build-windows:\n", 1)[0]
+        js_script = textwrap.dedent(scope.split("          script: |\n", 1)[1]).strip()
+
+        def condition(source, job, after):
+            body = source.split("  " + job + ":\n", 1)[1]
+            raw = body.split("    if: >-\n", 1)[1].split("    " + after + ":", 1)[0]
+            raw = textwrap.dedent(raw).strip()
+            self.assertTrue(raw.startswith("$" + "{{") and raw.endswith("}}"))
+            return raw[3:-2].strip()
+
+        def changed(name, status="modified", **extra):
+            return dict(filename=name, status=status, **extra)
+
+        fixtures = {
+            "script": js_script,
+            "win": condition(build, "build-windows", "runs-on"),
+            "capture": condition(capture, "build-smart-capture", "name"),
+            "files": [
+                dict(name="readme", files=[changed("README.md")], expected="false"),
+                dict(name="docs", files=[changed("docs/A.md", "added"), changed("docs/B.md")], expected="false"),
+                dict(name="source", files=[changed("Models/MonitorModels.cs")], expected="true"),
+                dict(name="mixed", files=[changed("README.md"), changed("Services/Runtime.cs")], expected="true"),
+                dict(name="protected", files=[changed("docs/INTEROPERABILITY_REFERENCE_CONTRACT.md")], expected="true"),
+                dict(name="rename_source", files=[changed("docs/A.md", "renamed", previous_filename="Services/Main.cs")], expected="true"),
+                dict(name="rename_docs", files=[changed("docs/A.md", "renamed", previous_filename="docs/B.md")], expected="true"),
+                dict(name="removed", files=[changed("docs/A.md", "removed")], expected="true"),
+                dict(name="empty", files=[], expected="true"),
+                dict(name="workflow", files=[changed(".github/workflows/build.yml")], expected="true"),
+                dict(name="truncated", files=[changed("docs/" + str(i) + ".md") for i in range(3000)], expected="true"),
+                dict(name="api_failure", files=[changed("README.md")], fail=True, expected="true"),
+            ],
+            "windows": [
+                dict(name="docs_ok", event="pull_request", result="success", output="false", expected=False),
+                dict(name="source", event="pull_request", result="success", output="true", expected=True),
+                dict(name="no_output", event="pull_request", result="success", output="", expected=True),
+                dict(name="failed", event="pull_request", result="failure", output="", expected=True),
+                dict(name="skipped", event="pull_request", result="skipped", output="", expected=True),
+                dict(name="push", event="push", result="skipped", output="", expected=True),
+                dict(name="manual", event="workflow_dispatch", result="skipped", output="", expected=True),
+            ],
+            "field": [
+                dict(name="unlabeled", event="pull_request", draft=False, labels=[], manual="skipped", expected=False),
+                dict(name="irrelevant", event="pull_request", draft=False, labels=["other"], manual="skipped", expected=False),
+                dict(name="labeled", event="pull_request", draft=False, labels=["ci-field-capture"], manual="skipped", expected=True),
+                dict(name="draft", event="pull_request", draft=True, labels=["ci-field-capture"], manual="skipped", expected=False),
+                dict(name="manual_ok", event="workflow_dispatch", manual="success", expected=True),
+                dict(name="manual_fail", event="workflow_dispatch", manual="failure", expected=False),
+                dict(name="manual_missing", event="workflow_dispatch", manual="skipped", expected=False),
+            ],
+        }
+
+        runner = r'''
+const fs = require("node:fs"), vm = require("node:vm");
+const input = JSON.parse(fs.readFileSync(0, "utf8"));
+const equal = (got, want, name) => {
+  if (got !== want) throw Error(name + ": got=" + got + " expected=" + want);
+};
+(async () => {
+  const classify = vm.runInNewContext("(async (github, context, core) => {\n" + input.script + "\n})");
+  for (const c of input.files) {
+    const emitted = {};
+    const github = {
+      rest: {pulls: {listFiles() {}}},
+      paginate: async (method, args) => {
+        if (args.per_page !== 100 || args.pull_number !== 123) throw Error("bad pagination");
+        if (c.fail) throw Error("synthetic API failure");
+        return c.files;
+      }
+    };
+    const context = {repo: {owner: "owner", repo: "arsas"}, issue: {number: 123}};
+    const core = {info() {}, warning() {}, setOutput(k,v) {emitted[k] = v;}};
+    await classify(github, context, core);
+    equal(emitted.needs_windows, c.expected, "classification/" + c.name);
+  }
+  const windows = input.win.replaceAll("needs.pr-scope", "needs.prScope");
+  const capture = input.capture.replaceAll("needs.manual-regression", "needs.manualRegression")
+    .replaceAll("github.event.pull_request.labels.*.name",
+                "github.event.pull_request.labels.map(x => x.name)");
+  for (const c of input.windows) {
+    const context = {
+      always: () => true, github: {event_name: c.event},
+      needs: {prScope: {result: c.result, outputs: {needs_windows: c.output}}}
+    };
+    equal(Boolean(vm.runInNewContext("(" + windows + ")", context)), c.expected, "Windows/" + c.name);
+  }
+  for (const c of input.field) {
+    const context = {
+      always: () => true,
+      github: {event_name: c.event, event: {pull_request: {
+        draft: c.draft, labels: (c.labels || []).map(name => ({name}))
+      }}},
+      contains: (values, target) => values.includes(target),
+      needs: {manualRegression: {result: c.manual}}
+    };
+    equal(Boolean(vm.runInNewContext("(" + capture + ")", context)), c.expected, "Field/" + c.name);
+  }
+  console.log("CI-P4 actual-source policy expressions: 26/26 PASS");
+})().catch(e => { console.error(e.stack || e); process.exitCode=1; });
+'''
+        completed = subprocess.run(
+            ["node", "-e", runner], input=json.dumps(fixtures), text=True,
+            capture_output=True, timeout=20, check=False
+        )
+        self.assertEqual(0, completed.returncode, completed.stdout + "\n" + completed.stderr)
+        self.assertIn("26/26 PASS", completed.stdout)
+
 if __name__ == "__main__":
     unittest.main()

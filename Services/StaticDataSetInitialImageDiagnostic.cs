@@ -22,7 +22,8 @@ internal static class StaticDataSetInitialImageDiagnostic
         string DataSetReference,
         string RcbReference,
         string Status,
-        string Reason);
+        string Reason,
+        string DisplayValueToken);
 
     internal sealed record Snapshot(
         int Selected,
@@ -38,7 +39,8 @@ internal static class StaticDataSetInitialImageDiagnostic
             $"qualityNotSupplied={QualityNotSupplied}, questionableQuality={QuestionableQuality}";
     }
 
-    internal static Snapshot Evaluate(IEnumerable<Iec61850MonitorPoint> points)
+    internal static Snapshot Evaluate(IEnumerable<Iec61850MonitorPoint> points,
+        IedBrowserLiveValues? liveValues = null)
     {
         ArgumentNullException.ThrowIfNull(points);
         // Detach a bounded in-memory snapshot. "Ready" means a process value is
@@ -46,15 +48,19 @@ internal static class StaticDataSetInitialImageDiagnostic
         var rows = points
             .Where(point => !string.IsNullOrWhiteSpace(point.DataSetReference))
             .ToArray();
-        var visible = rows.Count(point => HasVisibleValue(point.Value));
+        // Resolve at most one canonical evidence verdict per point, then
+        // reuse it for totals, group counts and pending detail.
+        var observed = rows.Select(point =>
+            (Point: point, Visible: HasVisibleValue(point, liveValues))).ToArray();
+        var visible = observed.Count(row => row.Visible);
         var qualityMissing = rows.Count(point => !HasReportedQuality(point.Quality));
         var questionable = rows.Count(point =>
             (point.Quality ?? string.Empty).Contains("questionable", StringComparison.OrdinalIgnoreCase));
-        var groups = rows
-            .GroupBy(point => new
+        var groups = observed
+            .GroupBy(row => new
             {
-                DataSet = Normalize(point.DataSetReference),
-                Rcb = Normalize(point.ReportControlReference)
+                DataSet = Normalize(row.Point.DataSetReference),
+                Rcb = Normalize(row.Point.ReportControlReference)
             })
             .OrderBy(group => group.Key.DataSet, StringComparer.Ordinal)
             .ThenBy(group => group.Key.Rcb, StringComparer.Ordinal)
@@ -62,23 +68,47 @@ internal static class StaticDataSetInitialImageDiagnostic
                 group.Key.DataSet,
                 group.Key.Rcb,
                 group.Count(),
-                group.Count(point => HasVisibleValue(point.Value)),
-                group.Count(point => !HasVisibleValue(point.Value)),
-                group.Count(point => !HasReportedQuality(point.Quality))))
+                group.Count(row => row.Visible),
+                group.Count(row => !row.Visible),
+                group.Count(row => !HasReportedQuality(row.Point.Quality))))
             .ToArray();
-        var pending = rows
-            .Where(point => !HasVisibleValue(point.Value))
+        var pending = observed
+            .Where(row => !row.Visible)
+            .Select(row => row.Point)
             .OrderBy(point => point.IecReference, StringComparer.OrdinalIgnoreCase)
             .Select(point => new PendingPoint(
                 point.IecReference,
                 point.DataSetReference,
                 point.ReportControlReference,
                 point.Status,
-                point.Reason))
+                point.Reason,
+                point.Value))
             .ToArray();
 
         return new Snapshot(rows.Length, visible, rows.Length - visible,
             qualityMissing, questionable, groups, pending);
+    }
+
+    // Current-association canonical Report provenance distinguishes a
+    // real "Unknown" enumeration from a missing-value UI placeholder.
+    // RCB traffic, status labels, and quality alone never prove this.
+    private static bool HasVisibleValue(Iec61850MonitorPoint point,
+        IedBrowserLiveValues? liveValues)
+    {
+        if (HasVisibleValue(point.Value)) return true;
+        if (!string.Equals(point.Value?.Trim(), "Unknown",
+                StringComparison.OrdinalIgnoreCase) ||
+            point.IsOffline || liveValues is null || liveValues.IsOffline ||
+            point.LastSnapshotAssociation <= 0 ||
+            liveValues.Association != point.LastSnapshotAssociation ||
+            !liveValues.TryGet(point.IecReference, point.FunctionalConstraint,
+                out var evidence) ||
+            evidence.IsStale ||
+            evidence.Association != point.LastSnapshotAssociation ||
+            !string.Equals(evidence.Source, "Report", StringComparison.Ordinal) ||
+            !string.Equals(evidence.Value, "Unknown", StringComparison.Ordinal))
+            return false;
+        return true;
     }
 
     internal static bool HasVisibleValue(string? value)

@@ -1,3 +1,5 @@
+using ArIED61850Tester.Protocol.Mms;
+
 namespace ArIED61850Tester.Models;
 
 /// <summary>
@@ -22,6 +24,11 @@ public static class Iec61850ValueStatePresentation
         }
 
         var normalized = text.ToLowerInvariant();
+
+        // A raw typed BIT STRING's bits are data, not a DPC/Boolean assertion.
+        // In particular Bits [10] must not inherit the DPC Closed/Active tone.
+        if (normalized.StartsWith("bits [", StringComparison.Ordinal))
+            return Neutral;
 
         // DPC state codes are process states, not health/severity. Intermediate and
         // bad are the only forms that deserve the amber attention tone.
@@ -93,6 +100,9 @@ public static class Iec61850ValueStatePresentation
         {
             return "F";
         }
+
+        if (normalized is "BITSTRING" or "BITS")
+            return "BIT";
 
         if (normalized.StartsWith("UINT", StringComparison.Ordinal) ||
             normalized is "INT8U" or "INT16U" or "INT24U" or "INT32U" or "INT64U")
@@ -255,6 +265,33 @@ public static class Iec61850ValueStatePresentation
 /// </summary>
 public static class Iec61850QualityPresentation
 {
+    public static string FormatObserved(string? observed, string evidenceField = "")
+    {
+        if (MmsQualityDecoder.TryDecodeRendered(observed, out var typed))
+            return typed.FormatField(evidenceField);
+
+        var value = (observed ?? "").Trim();
+        // Legacy report projection may retain only the validity word. It is
+        // not evidence for any other Quality bit (including a zero bit).
+        var separator = value.IndexOf(" / ", StringComparison.Ordinal);
+        var validity = separator < 0 ? value : value[..separator];
+        if (validity.Equals("Good", StringComparison.OrdinalIgnoreCase) ||
+            validity.Equals("Invalid", StringComparison.OrdinalIgnoreCase) ||
+            validity.Equals("Reserved", StringComparison.OrdinalIgnoreCase) ||
+            validity.Equals("Questionable", StringComparison.OrdinalIgnoreCase))
+        {
+            if (evidenceField == "Validity")
+                return validity.ToLowerInvariant();
+            return evidenceField.Length == 0 ? value : "Not exposed";
+        }
+
+        // The malformed renderer text is still preserved for diagnostics,
+        // never presented as a trusted live IEC state.
+        return evidenceField.Length == 0 &&
+            value.Length > 0 && !value.StartsWith("bits(", StringComparison.OrdinalIgnoreCase)
+                ? value : "Not exposed";
+    }
+
     public const string Good = "Good";
     public const string Attention = "Attention";
     public const string Bad = "Bad";

@@ -8,6 +8,8 @@ on:
       - "scripts/audit-ci-workflows.py"
       - "scripts/test-ci-workflows.py"
       - "tests/owner-comment-contract.test.cjs"
+      - "scripts/verify-p7-dual-ingress-diagnostic.py"
+      - "scripts/test-p7-dual-ingress-diagnostic.py"
       - "scripts/classify-ci-changes.py"
       - "scripts/test-classify-ci-changes.py"
       - "scripts/write-ci-canonical-proof.py"
@@ -34,6 +36,8 @@ on:
       - "scripts/audit-ci-workflows.py"
       - "scripts/test-ci-workflows.py"
       - "tests/owner-comment-contract.test.cjs"
+      - "scripts/verify-p7-dual-ingress-diagnostic.py"
+      - "scripts/test-p7-dual-ingress-diagnostic.py"
       - "scripts/classify-ci-changes.py"
       - "scripts/test-classify-ci-changes.py"
       - "scripts/write-ci-canonical-proof.py"
@@ -83,8 +87,13 @@ jobs:
       - name: Validate owner-comment authorization and release dispatch with mocked GitHub
         run: node --test tests/owner-comment-contract.test.cjs
 
+      - name: Validate sanitized P7.6 dual-ingress diagnostic parser (read-only)
+        run: python3 scripts/test-p7-dual-ingress-diagnostic.py
+
       - name: Run conservative CI P1 classifier fixtures
-        run: python3 scripts/test-classify-ci-changes.py
+        run: |
+          python3 scripts/test-classify-ci-changes.py
+          python3 scripts/test-resolve-ariec-trial.py
 
       - name: Run canonical CI P2 evidence safety fixtures
         run: python3 scripts/test-ci-canonical-reuse.py

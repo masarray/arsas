@@ -5,7 +5,7 @@ namespace ARSAS.Tests;
 public sealed class P2BlueSteelGreigeThemeTests
 {
     [Fact]
-    public void Theme_UsesBlueSteelShellAndWarmGreigeZebraRows()
+    public void Theme_UsesBlueSteelShellAndCoolBlueZebraRows()
     {
         var source = File.ReadAllText(FindRepoFile("Resources/P2BlueSteelGreige.xaml"));
         var document = XDocument.Parse(source);
@@ -19,9 +19,15 @@ public sealed class P2BlueSteelGreigeThemeTests
                 ?? throw new Xunit.Sdk.XunitException($"Missing {key}.{attribute}");
 
         Assert.Equal("#2A465B", ResourceValue("SolidColorBrush", "BlueSteelNavSurface", "Color"));
-        Assert.Equal("#F3F0EA", ResourceValue("SolidColorBrush", "GreigeRowA", "Color"));
-        Assert.Equal("#ECE8E1", ResourceValue("SolidColorBrush", "GreigeRowB", "Color"));
-        Assert.Equal("#E1DDD5", ResourceValue("SolidColorBrush", "GreigeHeader", "Color"));
+        Assert.Equal("#F8FBFF", document.Descendants(presentation + "Color")
+            .Single(node => (string?)node.Attribute(x + "Key") == "CoolPanelColor").Value);
+        Assert.Equal("#EDF5FF", document.Descendants(presentation + "Color")
+            .Single(node => (string?)node.Attribute(x + "Key") == "CoolAlternateColor").Value);
+        Assert.Equal("#E8F2FF", document.Descendants(presentation + "Color")
+            .Single(node => (string?)node.Attribute(x + "Key") == "CoolHeaderColor").Value);
+        Assert.Equal("{StaticResource CoolPanelColor}", ResourceValue("SolidColorBrush", "GreigeRowA", "Color"));
+        Assert.Equal("{StaticResource CoolAlternateColor}", ResourceValue("SolidColorBrush", "GreigeRowB", "Color"));
+        Assert.Equal("{StaticResource CoolHeaderColor}", ResourceValue("SolidColorBrush", "GreigeHeader", "Color"));
 
         var appBackground = document.Descendants(presentation + "LinearGradientBrush")
             .Single(node => (string?)node.Attribute(x + "Key") == "AppBackgroundGradient")
@@ -33,9 +39,9 @@ public sealed class P2BlueSteelGreigeThemeTests
             .Single(node => (string?)node.Attribute(x + "Key") == "ModernDataGrid")
             .ToString();
         Assert.Contains("RowBackground", modernGrid, StringComparison.Ordinal);
-        Assert.Contains("GreigeRowA", modernGrid, StringComparison.Ordinal);
+        Assert.Contains("GridRowPrimary", modernGrid, StringComparison.Ordinal);
         Assert.Contains("AlternatingRowBackground", modernGrid, StringComparison.Ordinal);
-        Assert.Contains("GreigeRowB", modernGrid, StringComparison.Ordinal);
+        Assert.Contains("GridRowAlternate", modernGrid, StringComparison.Ordinal);
         Assert.Contains("AlternationCount", modernGrid, StringComparison.Ordinal);
     }
 
@@ -53,16 +59,17 @@ public sealed class P2BlueSteelGreigeThemeTests
     }
 
     [Fact]
-    public void RuntimeAdapter_KeepsMaximizedWorkstationAndFatZebraRows()
+    public void RuntimeAdapter_PreservesWindowGeometryAndBlueGridRows()
     {
         var source = File.ReadAllText(FindRepoFile("P2BlueSteelGreigeUx.cs"));
 
-        Assert.Contains("window.WindowState = WindowState.Maximized", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("WindowState.Maximized", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApplyEngineeringGrid", source, StringComparison.Ordinal);
         Assert.Contains("P2MainIedListItemStyle", source, StringComparison.Ordinal);
         Assert.Contains("P2FatIedListItemStyle", source, StringComparison.Ordinal);
         Assert.Contains("P2FatDataGridRow", source, StringComparison.Ordinal);
-        Assert.Contains("GreigeRowA", source, StringComparison.Ordinal);
-        Assert.Contains("GreigeRowB", source, StringComparison.Ordinal);
+        Assert.Contains("GridRowPrimary", source, StringComparison.Ordinal);
+        Assert.Contains("GridRowAlternate", source, StringComparison.Ordinal);
         Assert.Contains("AlternationCount = 2", source, StringComparison.Ordinal);
     }
 

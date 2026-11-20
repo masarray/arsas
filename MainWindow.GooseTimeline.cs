@@ -458,6 +458,9 @@ public partial class MainWindow
     {
         Raise(nameof(GoosePublisherCountText));
         Raise(nameof(GooseEventCountText));
+        Raise(nameof(GooseEmptyEventTitle));
+        Raise(nameof(GooseEmptyEventDetail));
+        Raise(nameof(GooseShowAllPublishersVisibility));
         Raise(nameof(GooseSelectedLeafCountText));
         Raise(nameof(GooseNoEventsVisibility));
     }

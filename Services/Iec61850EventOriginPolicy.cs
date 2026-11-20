@@ -24,7 +24,10 @@ public static class Iec61850EventOriginPolicy
         // another optional trigger accompanies them.
         if (Includes("general-interrogation", "gi")) return "GI";
         if (Includes("integrity", "intg")) return "Integrity";
-        if (Includes("data-change", "dchg")) return "Spontaneous";
+        // dchg is the IEC ReasonForInclusion, not proof that an event was
+        // unbuffered or "spontaneous" on the wire. The RCB acquisition lane
+        // and verified buffered replay are separate evidence dimensions.
+        if (Includes("data-change", "dchg")) return "Data change";
         if (Includes("quality-change", "qchg")) return "Quality";
         if (Includes("data-update", "dupd")) return "Data update";
 
@@ -41,6 +44,8 @@ public static class Iec61850EventOriginPolicy
         IReadOnlyList<string>? routedReportControlReferences = null)
     {
         if (IsPolling(sourceMode)) return "MMS Polling";
+        if (string.Equals(sourceMode, "MMS Snapshot Read", StringComparison.Ordinal))
+            return "Snapshot Read";
         // An SOE row keeps the causative report reference separately for
         // forensics; Acquisition is the operator's short list of *observed*
         // RCB sources for that point up to this event.
@@ -64,6 +69,8 @@ public static class Iec61850EventOriginPolicy
     {
         if (offline) return "Offline";
         if (IsPolling(sourceMode)) return "MMS Polling";
+        if (string.Equals(sourceMode, "MMS Snapshot Read", StringComparison.Ordinal))
+            return "Snapshot Read";
         var names = RcbNames(liveRcbReferences);
         if (names.Length > 0) return names;
         if (sourceMode?.Contains("report", StringComparison.OrdinalIgnoreCase) == true ||

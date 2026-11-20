@@ -1,8 +1,8 @@
 <Window x:Class="ArIED61850Tester.IpConnectWizardWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Add IEC 61850 IED" Width="700" MinWidth="640" MaxHeight="620"
-        SizeToContent="Height" WindowStartupLocation="CenterOwner"
+        Title="Add IEC 61850 IED" Width="410" Height="348" MinWidth="410" MaxWidth="410"
+        SizeToContent="Manual" WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize" ShowInTaskbar="False"
         Background="{DynamicResource TaskDialogCanvas}"
         FontFamily="{DynamicResource AppFontFamily}" Icon="Assets/app-icon.ico">
@@ -11,12 +11,127 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="Styles/IedTaskDialogStyles.xaml"/>
             </ResourceDictionary.MergedDictionaries>
+
+            <Style x:Key="SmartIpOctet" TargetType="{x:Type TextBox}">
+                <Setter Property="Width" Value="44"/>
+                <Setter Property="Height" Value="32"/>
+                <Setter Property="MaxLength" Value="3"/>
+                <Setter Property="Padding" Value="1,4"/>
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="FontWeight" Value="Medium"/>
+                <Setter Property="FontFamily" Value="{DynamicResource AppFontFamily}"/>
+                <Setter Property="TextAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource TaskDialogInk}"/>
+                <Setter Property="CaretBrush" Value="{DynamicResource Accent}"/>
+                <Setter Property="InputMethod.IsInputMethodEnabled" Value="False"/>
+                <EventSetter Event="PreviewTextInput" Handler="Octet_PreviewTextInput"/>
+                <EventSetter Event="PreviewKeyDown" Handler="Octet_PreviewKeyDown"/>
+                <EventSetter Event="TextChanged" Handler="Octet_TextChanged"/>
+            </Style>
+            <Style x:Key="SmartIpDot" TargetType="{x:Type TextBlock}">
+                <Setter Property="Foreground" Value="{StaticResource TaskDialogMuted}"/>
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="TextAlignment" Value="Center"/>
+                <Setter Property="Width" Value="11"/>
+                <Setter Property="Margin" Value="0"/>
+            </Style>
+            <Style x:Key="SmartIpHistoryButton" TargetType="{x:Type Button}">
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type Button}">
+                            <Border x:Name="HistoryChrome" Background="{TemplateBinding Background}"
+                                    CornerRadius="0,8,8,0">
+                                <!-- Google Material Icons: expand_circle_down (24dp). -->
+                                <Path Data="M12,2 C6.48,2 2,6.48 2,12 C2,17.52 6.48,22 12,22 C17.52,22 22,17.52 22,12 C22,6.48 17.52,2 12,2 Z M12,16.5 L6,10.5 7.41,9.09 12,13.67 16.59,9.09 18,10.5 Z"
+                                      Width="20" Height="20" Stretch="Uniform"
+                                      Fill="{StaticResource TaskDialogMuted}"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="HistoryChrome" Property="Background" Value="#ECF3FF"/>
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="HistoryChrome" Property="Background" Value="#ECF3FF"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+            <!-- Own the disclosure chrome instead of the default black circular
+                 WPF Expander arrow; retain native IsExpanded and keyboard behavior. -->
+            <Style x:Key="SmartIpOptionsExpander" TargetType="{x:Type Expander}">
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type Expander}">
+                            <StackPanel>
+                                <ToggleButton x:Name="AdvancedToggle"
+                                              AutomationProperties.Name="Advanced settings"
+                                              HorizontalAlignment="Left" Cursor="Hand"
+                                              IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                    <ToggleButton.Template>
+                                        <ControlTemplate TargetType="{x:Type ToggleButton}">
+                                            <Border x:Name="Chrome" CornerRadius="6" Padding="2,5"
+                                                    Background="Transparent">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <!-- Same Material circle-chevron as the IP history control. -->
+                                                    <Path x:Name="AdvancedChevron"
+                                                          Data="M12,2 C6.48,2 2,6.48 2,12 C2,17.52 6.48,22 12,22 C17.52,22 22,17.52 22,12 C22,6.48 17.52,2 12,2 Z M12,16.5 L6,10.5 7.41,9.09 12,13.67 16.59,9.09 18,10.5 Z"
+                                                          Width="17" Height="17" Stretch="Uniform"
+                                                          RenderTransformOrigin="0.5,0.5"
+                                                          Fill="{StaticResource TaskDialogMuted}"
+                                                          VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Advanced settings"
+                                                               Margin="8,0,0,0" FontSize="11.5"
+                                                               Foreground="{StaticResource TaskDialogMuted}"
+                                                               VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsChecked" Value="True">
+                                                    <Setter TargetName="AdvancedChevron" Property="RenderTransform">
+                                                        <Setter.Value>
+                                                            <RotateTransform Angle="180"/>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </Trigger>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Chrome" Property="Background" Value="#EAF2FF"/>
+                                                </Trigger>
+                                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                                    <Setter TargetName="Chrome" Property="Background" Value="#EAF2FF"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </ToggleButton.Template>
+                                </ToggleButton>
+                                <ContentPresenter x:Name="ExpandSite" ContentSource="Content"
+                                                  Visibility="Collapsed"/>
+                            </StackPanel>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsExpanded" Value="True">
+                                    <Setter TargetName="ExpandSite" Property="Visibility" Value="Visible"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
         </ResourceDictionary>
     </Window.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                   Focusable="False">
-        <Grid Margin="24,22,24,22">
+        <!-- Balanced content insets and a narrower single-column dialog. -->
+        <Grid Margin="32,20,32,18">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
@@ -24,74 +139,171 @@
             </Grid.RowDefinitions>
 
             <StackPanel>
-                <TextBlock Text="Add IEC 61850 IED" Style="{StaticResource TaskDialogHeading}"/>
-                <TextBlock Margin="0,5,0,0" Style="{StaticResource TaskDialogSubtitle}"
-                           Text="Enter the IED IP address to connect and discover available signals."/>
+                <TextBlock Text="Connect to IED" FontSize="18" FontWeight="SemiBold"
+                           Foreground="{StaticResource TaskDialogInk}"/>
+                <TextBlock Text="Enter the IP address of your device."
+                           Margin="0,5,0,0" FontSize="12"
+                           Foreground="{StaticResource TaskDialogMuted}"/>
             </StackPanel>
 
-            <Border Grid.Row="1" Margin="0,18,0,0" Style="{StaticResource TaskDialogCardStyle}">
+            <StackPanel Grid.Row="1" Margin="0,20,0,0">
+                <TextBlock Text="IP address" FontSize="12" FontWeight="SemiBold"
+                           Foreground="{StaticResource TaskDialogInk}" Margin="0,0,0,8"/>
                 <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="14"/>
-                        <ColumnDefinition Width="128"/>
-                    </Grid.ColumnDefinitions>
+                    <Border x:Name="IpEditorHost" Height="44" HorizontalAlignment="Stretch" CornerRadius="10"
+                            BorderThickness="1" Background="{StaticResource TaskDialogCard}">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="BorderBrush" Value="{StaticResource TaskDialogBorder}"/>
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="BorderBrush" Value="#A4BAD3"/>
+                                    </Trigger>
+                                    <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                        <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="1"/>
+                                <ColumnDefinition Width="43"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel x:Name="OctetEditor" Orientation="Horizontal"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center">
+                                <TextBox x:Name="Octet1Box" Style="{StaticResource SmartIpOctet}"
+                                         AutomationProperties.Name="IP address, group 1"/>
+                                <TextBlock Text="." Style="{StaticResource SmartIpDot}"/>
+                                <TextBox x:Name="Octet2Box" Style="{StaticResource SmartIpOctet}"
+                                         AutomationProperties.Name="IP address, group 2"/>
+                                <TextBlock Text="." Style="{StaticResource SmartIpDot}"/>
+                                <TextBox x:Name="Octet3Box" Style="{StaticResource SmartIpOctet}"
+                                         AutomationProperties.Name="IP address, group 3"/>
+                                <TextBlock Text="." Style="{StaticResource SmartIpDot}"/>
+                                <TextBox x:Name="Octet4Box" Style="{StaticResource SmartIpOctet}"
+                                         AutomationProperties.Name="IP address, group 4"/>
+                            </StackPanel>
+                            <Border Grid.Column="1" Height="20"
+                                    Background="{StaticResource TaskDialogBorder}"
+                                    VerticalAlignment="Center"/>
+                            <Button x:Name="HistoryButton" Grid.Column="2"
+                                    Style="{StaticResource SmartIpHistoryButton}"
+                                    ToolTip="Choose a recently entered address"
+                                    AutomationProperties.Name="Recent IP addresses"
+                                    Click="HistoryButton_Click"/>
+                        </Grid>
+                    </Border>
+                    <TextBox x:Name="RawIpBox" Height="44" HorizontalAlignment="Stretch" Padding="12,7"
+                             VerticalContentAlignment="Center" Visibility="Collapsed"
+                             FontSize="13"
+                             Foreground="{StaticResource TaskDialogInk}"
+                             Background="{StaticResource TaskDialogCard}"
+                             BorderBrush="{StaticResource TaskDialogBorder}"
+                             Text="{Binding RelayIpAddress, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=LostFocus}"
+                             ToolTip="Enter an IP address manually"
+                             AutomationProperties.Name="Manual IP address"/>
+                </Grid>
 
-                    <StackPanel Grid.Row="0" Grid.Column="0">
-                        <TextBlock Text="IED IP Address" Style="{StaticResource TaskDialogFieldLabel}"
-                                   Margin="0,0,0,7"/>
-                        <ComboBox x:Name="RelayIpBox" Height="40" MinWidth="0"
-                                  Foreground="{StaticResource TaskDialogInk}"
-                                  Background="{StaticResource TaskDialogCard}"
-                                  BorderBrush="{StaticResource TaskDialogBorder}"
-                                  IsEditable="True" IsTextSearchEnabled="False"
-                                  HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                  Loaded="RelayIpBox_Loaded"
-                                  ToolTip="Enter a new IP address or choose a previously saved address"
-                                  ItemsSource="{Binding RecentRelayIps, RelativeSource={RelativeSource AncestorType=Window}}"
-                                  Text="{Binding RelayIpAddress, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=LostFocus}"/>
-                    </StackPanel>
-                    <StackPanel Grid.Row="0" Grid.Column="2">
-                        <TextBlock Text="MMS Port" Style="{StaticResource TaskDialogFieldLabel}"
-                                   Margin="0,0,0,7"/>
-                        <TextBox Height="40" VerticalContentAlignment="Center"
-                                 Padding="9,5" Foreground="{StaticResource TaskDialogInk}"
-                                 Background="{StaticResource TaskDialogCard}"
-                                 BorderBrush="{StaticResource TaskDialogBorder}"
-                                 ToolTip="IEC 61850 MMS normally uses TCP port 102"
-                                 Text="{Binding MmsPortText, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=PropertyChanged}"/>
-                    </StackPanel>
-
-                    <Border Grid.Row="1" Grid.ColumnSpan="3" Margin="0,16,0,0"
-                            Background="{StaticResource TaskDialogHintSurface}"
-                            BorderBrush="{StaticResource TaskDialogHintBorder}"
-                            BorderThickness="1" CornerRadius="10" Padding="12,11">
+                <Popup x:Name="HistoryPopup" PlacementTarget="{Binding ElementName=IpEditorHost}"
+                       Placement="Bottom" VerticalOffset="4" AllowsTransparency="True"
+                       StaysOpen="False" PopupAnimation="Fade">
+                    <Border Width="{Binding ActualWidth, ElementName=IpEditorHost}"
+                            MaxHeight="240" CornerRadius="10" Background="White"
+                            BorderThickness="1" BorderBrush="{StaticResource TaskDialogBorder}"
+                            Padding="10" SnapsToDevicePixels="True">
+                        <Border.Effect>
+                            <DropShadowEffect Color="#25334D" BlurRadius="12" ShadowDepth="3" Opacity="0.15"/>
+                        </Border.Effect>
                         <StackPanel>
-                            <TextBlock Text="Smart discovery" FontSize="12.5" FontWeight="SemiBold"
+                            <TextBlock Text="Recent addresses" Margin="5,0,0,7"
+                                       FontFamily="{DynamicResource AppFontFamily}"
+                                       FontSize="11.5" FontWeight="SemiBold"
                                        Foreground="{StaticResource TaskDialogInk}"/>
-                            <TextBlock Margin="0,3,0,0" Style="{StaticResource TaskDialogSubtitle}"
-                                       Text="Reads the live DataSets and RCBs, and restores saved signal choices."/>
+                            <TextBox x:Name="HistorySearchBox" Height="33" Padding="9,5"
+                                     FontFamily="{DynamicResource AppFontFamily}"
+                                     VerticalContentAlignment="Center" FontSize="12"
+                                     Background="#F8FAFD"
+                                     BorderBrush="{StaticResource TaskDialogBorder}"
+                                     ToolTip="Filter saved IP addresses"
+                                     AutomationProperties.Name="Search saved addresses"
+                                     TextChanged="HistorySearchBox_TextChanged"
+                                     PreviewKeyDown="HistorySearchBox_PreviewKeyDown"/>
+                            <ListBox x:Name="HistoryListBox" MaxHeight="158" Margin="0,5,0,0"
+                                     FontFamily="{DynamicResource AppFontFamily}"
+                                     FontSize="12" BorderThickness="0" Background="Transparent"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     MouseLeftButtonUp="HistoryListBox_MouseLeftButtonUp"
+                                     PreviewKeyDown="HistoryListBox_PreviewKeyDown">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="7,5">
+                                            <TextBlock Text="{Binding IpAddress}" FontSize="12.5"
+                                                       FontWeight="Medium"
+                                                       Foreground="{StaticResource TaskDialogInk}"/>
+                                            <TextBlock Text="{Binding Subtitle}" FontSize="11"
+                                                       Foreground="{StaticResource TaskDialogMuted}"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <TextBlock x:Name="HistoryEmptyText" Margin="7,8,0,3"
+                                       FontFamily="{DynamicResource AppFontFamily}"
+                                       Text="No matching addresses" Visibility="Collapsed"
+                                       Style="{StaticResource TaskDialogSubtitle}"/>
                         </StackPanel>
                     </Border>
+                </Popup>
 
-                    <TextBlock x:Name="WizardStatusText" Grid.Row="2" Grid.ColumnSpan="3"
-                               Margin="0,12,0,0" Style="{StaticResource TaskDialogError}"
-                               AutomationProperties.LiveSetting="Assertive"/>
-                </Grid>
-            </Border>
+                <TextBlock x:Name="AddressHintText" Text="Example: 192.168.1.10"
+                           FontSize="11" Margin="2,7,0,0"
+                           Foreground="{StaticResource TaskDialogMuted}"/>
 
-            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right"
-                        Margin="0,18,0,0">
-                <Button Content="Cancel" Style="{StaticResource TaskDialogFooterButton}"
-                        Click="Cancel_Click" IsCancel="True" Margin="0,0,10,0"/>
-                <Button Content="Connect &amp; Discover" Style="{StaticResource TaskDialogSubmitAction}"
-                        MinWidth="174" MinHeight="38" IsDefault="True" Click="Connect_Click"/>
+                <Expander x:Name="MoreOptionsExpander" Margin="0,15,0,0"
+                          Style="{StaticResource SmartIpOptionsExpander}"
+                          AutomationProperties.Name="Advanced connection settings">
+                    <StackPanel Margin="2,9,0,0">
+                        <TextBlock Text="Port" FontSize="11"
+                                   Foreground="{StaticResource TaskDialogMuted}"
+                                   Margin="0,0,0,5"/>
+                        <Border Width="96" Height="36" HorizontalAlignment="Left"
+                                Background="{StaticResource TaskDialogCard}"
+                                BorderBrush="{StaticResource TaskDialogBorder}"
+                                BorderThickness="1" CornerRadius="9">
+                            <TextBox x:Name="MmsPortBox" BorderThickness="0"
+                                     Background="Transparent" Padding="10,5"
+                                     FontSize="12" VerticalContentAlignment="Center"
+                                     Foreground="{StaticResource TaskDialogInk}"
+                                     ToolTip="Default port: 102"
+                                     Text="{Binding MmsPortText, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=PropertyChanged}"/>
+                        </Border>
+                    </StackPanel>
+                </Expander>
+
+                <TextBlock x:Name="WizardStatusText" Margin="2,9,0,0"
+                           Style="{StaticResource TaskDialogError}"
+                           AutomationProperties.LiveSetting="Assertive"/>
             </StackPanel>
+
+            <Grid Grid.Row="2" Margin="0,22,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="1"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Border Background="{StaticResource TaskDialogBorder}" Opacity="0.7"/>
+                <!-- Center the action pair inside the same balanced content column. -->
+                <StackPanel Grid.Row="1" Orientation="Horizontal"
+                            HorizontalAlignment="Center" Margin="0,14,0,0">
+                    <Button Content="Cancel" Style="{StaticResource TaskDialogFooterButton}"
+                            Width="108" MinHeight="40" Padding="14,8"
+                            Click="Cancel_Click" IsCancel="True" Margin="0,0,10,0"/>
+                    <Button Content="Connect" Style="{StaticResource TaskDialogSubmitAction}"
+                            Width="128" MinHeight="40" Padding="16,8"
+                            IsDefault="True" Click="Connect_Click"/>
+                </StackPanel>
+            </Grid>
         </Grid>
     </ScrollViewer>
 </Window>

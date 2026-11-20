@@ -133,7 +133,8 @@ public sealed class P109NControlAuthorityTimelineTests
         Assert.DoesNotContain("ExplorerLiveRow.Height", code);
         Assert.Contains("RowHeight=\"43\" MinRowHeight=\"42\"", xaml);
         Assert.Contains("Height=\"29\" MinHeight=\"29\" Padding=\"10,3\"", xaml);
-        Assert.Contains("Content=\"Model\"", xaml);
+        Assert.Contains("Content=\"ctlModel\"", xaml);
+        Assert.Contains("Style=\"{StaticResource CommandDockCtlModelButton}\"", xaml);
         Assert.Contains("CommandParameter=\"Raise\" Click=\"ControlStageAction_Click\"", xaml);
         Assert.Contains("CommandParameter=\"Lower\" Click=\"ControlStageAction_Click\"", xaml);
     }

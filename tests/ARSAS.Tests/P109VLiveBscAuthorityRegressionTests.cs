@@ -130,6 +130,11 @@ public sealed class P109VLiveBscAuthorityRegressionTests
             Name = "ctlVal", MmsType = wireType, Size = width == 0 ? null : width
         },
         OperSpecification = new MmsTypeSpecificationNode { MmsType = "structure" },
-        StatusReference = feedback
+        StatusReference = feedback,
+        // DPC can expose Boolean CO. A live TWO-BIT status read, not the
+        // CSWI name or a stale SCL label, must corroborate this one fixture.
+        LiveStatusIsDoublePoint =
+            cdc == "SPC" && wireType == "boolean" &&
+            feedback.Equals(reference + ".stVal", StringComparison.Ordinal)
     };
 }

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "repository": "masarray/ARIEC61850",
+  "commit": "24077e48e393ce3dc2cd1409db6e96f27aa1e368",
+  "approvedBaselineCommit": "f75e323e9f8443aa20e0a3818a1d5d77255b2c0f",
+  "runMode": "fast-dev-nonpromotion",
+  "scope": "reporting",
+  "enginePullRequests": [
+    198,
+    199,
+    200,
+    203
+  ],
+  "engineCiRun": 44720030989,
+  "mainlinePromotionForbidden": true,
+  "physicalQualificationRequired": true,
+  "automaticRcbMutationForbidden": true,
+  "cyclicMmsProcessPollingForbidden": true,
+  "purpose": "Isolated P9 BCUNR interoperability experiment: fixed-budget family-balanced live RCB metadata enrichment and source-aware DataSet binding UX. Exact-source and CI-gated; no production engine promotion, no automatic control or RCB mutation.",
+  "trialMilestone": "P9"
+}

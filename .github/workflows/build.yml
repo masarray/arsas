@@ -4,6 +4,10 @@ on:
   push:
     branches: [ main ]
   pull_request:
+    # A trial-manifest-only PR already runs FAST CI-P1; don't duplicate a
+    # full Windows application build, native bridge build or package upload.
+    paths-ignore:
+      - "engines/ARIEC61850.trial.json"
   workflow_dispatch:
     inputs:
       expected_source_sha:
@@ -17,8 +21,59 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  pr-scope:
+    name: Verify documentation-only PR scope (fail closed)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      needs_windows: ${{ steps.files.outputs.needs_windows }}
+    steps:
+      - id: files
+        name: Read all changed PR paths without checkout or Windows
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Fail closed on missing/ambiguous/renamed inputs and any API/job error.
+            let needsWindows = true;
+            try {
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                per_page: 100
+              });
+              const documentationOnly = files.length > 0 && files.length < 3000 &&
+                files.every(({ filename, status, previous_filename }) => {
+                  const allowedPath = filename === 'README.md' ||
+                    (filename.startsWith('docs/') && filename.endsWith('.md') &&
+                     filename !== 'docs/INTEROPERABILITY_REFERENCE_CONTRACT.md');
+                  // Renamed and deleted documents can conceal source removals.
+                  return allowedPath && (status === 'added' || status === 'modified') &&
+                    !previous_filename;
+                });
+              needsWindows = !documentationOnly;
+              core.info(`Changed paths=${files.length}, Windows required=${needsWindows}`);
+            } catch (error) {
+              core.warning(`Cannot certify docs-only PR: ${error.message}; full Windows required.`);
+            }
+            core.setOutput('needs_windows', needsWindows ? 'true' : 'false');
+
   build-windows:
     name: Build, test, validate and package Windows application
+    needs: [pr-scope]
+    # The classifier may fail before emitting outputs. Anything except an
+    # explicit verified 'false' still triggers the full canonical Windows job.
+    # Push/manual do not run pr-scope, but MUST run canonical Windows proof.
+    if: >-
+      ${{
+        always() &&
+        (github.event_name != 'pull_request' ||
+         needs.pr-scope.result != 'success' ||
+         needs.pr-scope.outputs.needs_windows != 'false')
+      }}
     runs-on: windows-latest
     steps:
       - name: Checkout exact triggering ARSAS revision
@@ -200,8 +255,12 @@ jobs:
               $main -notmatch '<Viewbox Width="50" Height="50" Stretch="Uniform"' -or
               $main -notmatch 'x:Name="MonitorStateBadge"' -or
               $main -match '<Control\.Effect><DropShadowEffect BlurRadius="5" ShadowDepth="1" Opacity="0\.22" Color="#26313B"/></Control\.Effect>' -or
-              $main -notmatch 'LucideSquare.*Stroke="\{StaticResource Warning\}"' -or
-              $main -notmatch 'LucideX.*Stroke="\{StaticResource Danger\}"' -or
+              # Material migration changes glyph identity, never action tone.
+              # Keep both the stop and remove semantic color invariants.
+              $main -notmatch 'Click="IedStopAction_Click"' -or
+              $main -notmatch 'MaterialStopIcon.*Fill="\{StaticResource Warning\}"' -or
+              $main -notmatch 'Click="IedRemove_Click"' -or
+              $main -notmatch 'MaterialCloseIcon.*Fill="\{StaticResource Danger\}"' -or
               $app -notmatch 'x:Key="CommandOpenGradient"' -or
               $app -notmatch 'x:Key="CommandCloseGradient"' -or
               $app -notmatch 'x:Key="CommandActionButtonBase"' -or
@@ -281,9 +340,12 @@ jobs:
           $assemblyVersion = [string]$versionXml.Project.PropertyGroup.AssemblyVersion
           $fileVersion = [string]$versionXml.Project.PropertyGroup.FileVersion
           $projectVersion = [string]$projectXml.Project.PropertyGroup.Version
-          if ($releaseVersion -notmatch '^\d+\.\d+\.\d+$' -or
-              $assemblyVersion -ne "$releaseVersion.0" -or
-              $fileVersion -ne "$releaseVersion.0" -or
+          # Keep stable strictly numeric; permit only an explicit -rc.N isolated
+          # field-test build. Assembly/FileVersion remain four-part numeric .NET.
+          $baseVersion = $releaseVersion -replace '-rc\.\d+$', ''
+          if ($releaseVersion -notmatch '^\d+\.\d+\.\d+(?:-rc\.\d+)?$' -or
+              $assemblyVersion -ne "$baseVersion.0" -or
+              $fileVersion -ne "$baseVersion.0" -or
               $projectVersion -ne $releaseVersion -or
               $versionFile -ne $releaseVersion -or
               $publish -notmatch 'Directory.Build.props' -or
@@ -685,11 +747,13 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Upload portable single EXE
+      # GitHub Actions upload-artifact v7: a SINGLE file plus archive:false
+      # makes the artifact itself download as a real .exe in the browser.
+      # Keep the canonical sealed Windows package (previous upload) unchanged:
+      # it carries portable-build-identity.json, manifests and release evidence.
+      - name: Upload directly downloadable portable EXE (no ZIP)
         uses: actions/upload-artifact@v7
         with:
-          name: ARSAS-win-x64-portable-single-exe
-          path: |
-            ArIED61850Tester\dist\ARSAS-*-win-x64-portable.exe
-            ArIED61850Tester\dist\ARSAS-*-win-x64-portable-build-identity.json
+          path: ArIED61850Tester\dist\ARSAS-*-win-x64-portable.exe
+          archive: false
           if-no-files-found: error

@@ -41,6 +41,48 @@ public sealed class P109MControlDockPresentationTests
     }
 
     [Fact]
+    public void CommandDockShowsSelectedControlObjectsWithoutAuthorizingUnverifiedOnes()
+    {
+        var device = new Iec61850MonitorDevice();
+        var readOnly = Control("C264CONTROL/CSWI1.Mod", "ENC");
+        var unknown = Control("C264CONTROL/CSWI4.Pos", "DPC");
+        unknown.ControlModelText = "Auto-detect";
+        var unsafeSemantic = Control("C264CONTROL/CSWI6.Pos", "DPC");
+        unsafeSemantic.ControlModelText = "SBO • Enhanced security";
+        // ctlModel alone is NOT command authority: CDC/status semantic proof is required.
+        var verified = Control("C264CONTROL/CSWI1.Pos", "DPC");
+        verified.ControlModelText = "SBO • Enhanced security";
+        verified.ControlSemanticVerified = true;
+        Assert.True(verified.ControlSupportsOperate);
+        device.Signals.ReplaceAll([readOnly, unknown, unsafeSemantic, verified]);
+        device.RecountSelectedSignals();
+        Assert.Equal(4, device.CommandSignals.Count);
+        Assert.Contains(verified, device.CommandSignals);
+        Assert.Contains(readOnly, device.CommandSignals);
+        Assert.False(readOnly.ControlSupportsOperate);
+        Assert.False(unknown.ControlSupportsOperate);
+        Assert.False(unsafeSemantic.ControlSupportsOperate);
+        Assert.Single(Iec61850ControlIdentity.DistinctOperable(device.Signals));
+        Assert.Equal(4, Iec61850ControlIdentity.CountSelected(device.Signals));
+
+        // Connected inspection makes another Pos operable without a new
+        // selection wizard, cache or second command model.
+        unsafeSemantic.ControlSemanticVerified = true;
+        device.RefreshCommandSignalProjection();
+        Assert.Equal(4, device.CommandSignals.Count);
+        Assert.Equal(2, Iec61850ControlIdentity.DistinctOperable(device.Signals).Length);
+        Assert.Contains(device.CommandSignals, x => x.Name == "Mod");
+        Assert.Contains(device.CommandSignals, x => x.ControlModelKind ==
+            Iec61850ControlModelKind.StatusOnly);
+        // Lost association revokes command authority, not operator inventory.
+        verified.ClearLiveControlAuthority();
+        unsafeSemantic.ClearLiveControlAuthority();
+        device.RefreshCommandSignalProjection();
+        Assert.Equal(4, device.CommandSignals.Count);
+        Assert.Empty(Iec61850ControlIdentity.DistinctOperable(device.Signals));
+    }
+
+    [Fact]
     public void MismatchedCdc_RequiresExactStepStatus_NotTapChgNameHeuristics()
     {
         var control = Control("IED/ATCC1.TapChg", "SPC");

@@ -1,0 +1,630 @@
+<UserControl x:Class="ArIED61850Tester.Views.SmvInlineViewer"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:dig="clr-namespace:ProcessBus.App.Wpf.Controls"
+             Background="Transparent"
+             FontFamily="{StaticResource AppFontFamily}"
+             Loaded="Viewer_Loaded" Unloaded="Viewer_Unloaded">
+    <UserControl.Resources>
+        <!-- Reuse the exact ARSAS light workstation contract; no independent theme. -->
+        <Style x:Key="SvPane" TargetType="Border" BasedOn="{StaticResource WorkspaceCard}">
+            <Setter Property="Padding" Value="10"/>
+            <Setter Property="CornerRadius" Value="11"/>
+        </Style>
+        <Style x:Key="SvCaption" TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+            <Setter Property="FontSize" Value="10.5"/>
+        </Style>
+        <Style x:Key="SvHeading" TargetType="TextBlock" BasedOn="{StaticResource SectionTitle}">
+            <Setter Property="FontSize" Value="12.5"/>
+        </Style>
+        <Style x:Key="SmvStreamItem" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0,0,0,5"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Surface" Background="#F8FAFD" BorderBrush="#E1E8F2"
+                                BorderThickness="1" CornerRadius="9" Padding="9,8">
+                            <ContentPresenter Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="#EEF5FF"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="#B9D1F5"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Surface" Property="Background" Value="#E8F1FF"/>
+                                <Setter TargetName="Surface" Property="BorderBrush" Value="#6398EE"/>
+                                <Setter TargetName="Surface" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Surface" Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="SmvChannelDot" TargetType="Ellipse">
+            <Setter Property="Width" Value="7"/>
+            <Setter Property="Height" Value="7"/>
+            <Setter Property="Fill" Value="#A4B3C5"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding ChannelIndex}" Value="1"><Setter Property="Fill" Value="#E33455"/></DataTrigger>
+                <DataTrigger Binding="{Binding ChannelIndex}" Value="2"><Setter Property="Fill" Value="#D99A0B"/></DataTrigger>
+                <DataTrigger Binding="{Binding ChannelIndex}" Value="3"><Setter Property="Fill" Value="#257ADE"/></DataTrigger>
+                <DataTrigger Binding="{Binding ChannelIndex}" Value="5"><Setter Property="Fill" Value="#E33455"/></DataTrigger>
+                <DataTrigger Binding="{Binding ChannelIndex}" Value="6"><Setter Property="Fill" Value="#D99A0B"/></DataTrigger>
+                <DataTrigger Binding="{Binding ChannelIndex}" Value="7"><Setter Property="Fill" Value="#257ADE"/></DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <!-- Measurements intentionally keeps the official ARSAS DataGrid template,
+             but overrides native/system beige backgrounds with the same cool
+             white / blue-white surface used by the adjacent waveform panel. -->
+        <Style x:Key="SmvMeasurementGrid" TargetType="DataGrid"
+               BasedOn="{StaticResource ModernDataGrid}">
+            <Setter Property="Background" Value="#F8FBFF"/>
+            <Setter Property="RowBackground" Value="#F8FBFF"/>
+            <Setter Property="AlternatingRowBackground" Value="#EDF5FF"/>
+            <Setter Property="BorderBrush" Value="#D7E5F6"/>
+            <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+        </Style>
+        <Style x:Key="SmvMeasurementHeader" TargetType="DataGridColumnHeader"
+               BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+            <Setter Property="Background" Value="#E8F2FF"/>
+            <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+            <Setter Property="BorderBrush" Value="#D5E4F6"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        </Style>
+        <Style x:Key="SmvMeasurementCell" TargetType="DataGridCell"
+               BasedOn="{StaticResource {x:Type DataGridCell}}">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="#E2EBF7"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Padding" Value="7,0"/>
+        </Style>
+        <Style x:Key="SmvMeasurementRow" TargetType="DataGridRow"
+               BasedOn="{StaticResource {x:Type DataGridRow}}">
+            <Setter Property="BorderBrush" Value="#E2EBF7"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Style.Triggers>
+                <Trigger Property="ItemsControl.AlternationIndex" Value="0">
+                    <Setter Property="Background" Value="#F8FBFF"/>
+                </Trigger>
+                <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                    <Setter Property="Background" Value="#EDF5FF"/>
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#E4F0FF"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="SmvNumberText" TargetType="TextBlock">
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="FontFamily" Value="{StaticResource AppCodeFontFamily}"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style x:Key="SmvRmsValueText" TargetType="TextBlock" BasedOn="{StaticResource SmvNumberText}">
+            <Setter Property="ToolTip" Value="{Binding RmsDetail}"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="8"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Same compact command bar visual language as the GOOSE workspace. -->
+        <Border Grid.Row="0" Style="{StaticResource SvPane}" Padding="10,7">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="246"/>
+                    <ColumnDefinition Width="5"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="9"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="6"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="7"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="7" Height="7" Fill="{StaticResource Accent}"
+                                 Margin="0,0,7,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="Sampled Values" Style="{StaticResource SvHeading}"/>
+                    </StackPanel>
+                    <TextBlock Text="IEC 61850-9-2 · passive monitor"
+                               Style="{StaticResource SvCaption}" Margin="14,2,0,0"/>
+                </StackPanel>
+                <ComboBox x:Name="AdapterCombo" Grid.Column="2" Width="246" MaxWidth="246" HorizontalAlignment="Left"
+                          Style="{StaticResource ModernComboBox}" Height="33" MinHeight="33"
+                          FontSize="11.5" Padding="10,3" VerticalAlignment="Center"
+                          ItemsSource="{Binding Adapters}" DisplayMemberPath="DisplayText"
+                          ToolTip="{Binding SelectedItem.DisplayText, ElementName=AdapterCombo}"
+                          SelectionChanged="Adapter_SelectionChanged"/>
+                <Button Grid.Column="4" Style="{StaticResource IedIconButton}"
+                        Height="32" Width="32" Click="RefreshAdapters_Click"
+                        ToolTip="Refresh Ethernet adapters">
+                    <Path Data="{StaticResource LucideRefreshCw}" Style="{StaticResource LucideIcon}"
+                          Width="15" Height="15"/>
+                </Button>
+                <ComboBox x:Name="FrequencyCombo" Grid.Column="10"
+                          Style="{StaticResource ModernComboBox}" Width="90" Height="33"
+                          MinHeight="33" FontSize="11" Padding="8,3"
+                          VerticalAlignment="Center" SelectedIndex="0"
+                          ToolTip="Nominal system frequency for SV timebase">
+                    <ComboBoxItem Content="50 Hz" Tag="50"/>
+                    <ComboBoxItem Content="60 Hz" Tag="60"/>
+                </ComboBox>
+                <TextBlock Grid.Column="12" Text="Values" Style="{StaticResource SvCaption}"
+                           VerticalAlignment="Center" Margin="0,0,2,0"/>
+                <ComboBox x:Name="UnitsModeCombo" Grid.Column="14"
+                          Style="{StaticResource ModernComboBox}" Width="175" Height="33"
+                          MinHeight="33" Padding="9,2" FontSize="11" SelectedIndex="0"
+                          VerticalAlignment="Center" SelectionChanged="UnitsMode_SelectionChanged"
+                          ToolTip="9-2LE assumes I channels 1–4 and U channels 5–8; verify publisher DataSet before interpreting V/A.">
+                    <ComboBoxItem Content="Raw counts" Tag="Raw"/>
+                    <ComboBoxItem Content="9-2LE · V/A" Tag="NineTwoLe"/>
+                </ComboBox>
+                <ComboBox x:Name="TimebaseCombo" Grid.Column="16"
+                          Style="{StaticResource ModernComboBox}" Width="126" Height="33"
+                          MinHeight="33" Padding="8,2" FontSize="10.5" SelectedIndex="0"
+                          ToolTip="Auto proves rate from metadata or NIC timing. 80/256 is an unverified display-only assumption for problematic field streams.">
+                    <ComboBoxItem Content="Timebase Auto" Tag="Auto"/>
+                    <ComboBoxItem Content="80 / cycle" Tag="80"/>
+                    <ComboBoxItem Content="256 / cycle" Tag="256"/>
+                </ComboBox>
+                <Button x:Name="StartButton" Grid.Column="6"
+                        Style="{StaticResource PrimaryButton}" Padding="12,6"
+                        MinHeight="33" MinWidth="82" Height="33"
+                        Click="Start_Click" ToolTip="Start passive SMV capture">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="▶" FontSize="11" Margin="0,0,6,0"/>
+                        <TextBlock Text="Start"/>
+                    </StackPanel>
+                </Button>
+                <Button x:Name="StopButton" Grid.Column="8"
+                        Style="{StaticResource SoftButton}" Padding="11,6"
+                        MinHeight="33" Height="33" MinWidth="77"
+                        IsEnabled="False" Click="Stop_Click" ToolTip="Stop SMV capture">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="■" Margin="0,0,6,0" Foreground="{StaticResource Danger}"/>
+                        <TextBlock Text="Stop"/>
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" MinHeight="325"/>
+                <RowDefinition Height="7"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="208" MinWidth="180"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="1.24*" MinWidth="310"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="1.0*" MinWidth="305"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Stream explorer: virtualized, selectable cards, no tiny OS grid. -->
+            <Border Grid.Column="0" Style="{StaticResource SvPane}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="8"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="7"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <DockPanel LastChildFill="True">
+                        <Border DockPanel.Dock="Right" CornerRadius="8" Padding="7,3"
+                                Background="{StaticResource SoftBlue}">
+                            <TextBlock Text="{Binding StreamCountText}" Foreground="{StaticResource AccentDeep}"
+                                       FontSize="9.6" FontWeight="SemiBold"/>
+                        </Border>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse Width="7" Height="7" Fill="{StaticResource Accent}" Margin="0,0,7,0"/>
+                            <TextBlock Text="SV Streams" Style="{StaticResource SvHeading}"/>
+                        </StackPanel>
+                    </DockPanel>
+                    <ListBox x:Name="StreamList" Grid.Row="2"
+                             ItemsSource="{Binding Streams}" SelectionChanged="Stream_SelectionChanged"
+                             ItemContainerStyle="{StaticResource SmvStreamItem}"
+                             Background="Transparent" BorderThickness="0"
+                             Padding="0,2,3,0" HorizontalContentAlignment="Stretch"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="4"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding SvId}" FontSize="11.6"
+                                               FontWeight="SemiBold" Foreground="{StaticResource Ink}"
+                                               TextTrimming="CharacterEllipsis" ToolTip="{Binding SvId}"/>
+                                    <Ellipse Grid.Column="1" Width="7" Height="7" VerticalAlignment="Center" Margin="6,0,1,0" ToolTip="Publisher continuity">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Fill" Value="#22A76F"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasCoherentWindow}" Value="False">
+                                                        <Setter Property="Fill" Value="#D99A0B"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
+                                    <TextBlock Grid.Row="2" Grid.ColumnSpan="2"
+                                               Text="{Binding AppId, StringFormat=APPID 0x{0:X4}}"
+                                               FontSize="10" Foreground="{StaticResource Muted}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <Border Grid.Row="4" Padding="8,9" Background="#F6F9FF"
+                            BorderBrush="{StaticResource BorderSubtle}" BorderThickness="1"
+                            CornerRadius="8">
+                        <StackPanel>
+                            <TextBlock Text="PUBLISHER" FontSize="9"
+                                       FontWeight="SemiBold" Foreground="{StaticResource Muted}"
+                                       Margin="0,0,0,4"/>
+                            <TextBlock Text="{Binding StreamDetail}" FontSize="10"
+                                       Foreground="{StaticResource Ink}" TextWrapping="Wrap"
+                                       ToolTip="{Binding StreamTechnicalDetail}" MaxHeight="95"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- Retain DigSubAnalyzer plotting implementation, restyle only its visual surface. -->
+            <Border Grid.Column="2" Style="{StaticResource SvPane}" Padding="9">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="7"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="7"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid Margin="2,2,2,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Waveforms" Style="{StaticResource SvHeading}"
+                                   ToolTip="{Binding WaveformStatus}"/>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Background="{Binding SyncBackground}" CornerRadius="8"
+                                    Padding="8,3" Margin="0,0,9,0">
+                                <Border.ToolTip>
+                                    <ToolTip MaxWidth="330" Padding="9,7">
+                                        <TextBlock MaxWidth="310" TextWrapping="Wrap"
+                                            Text="{Binding PlacementTarget.DataContext.SyncDetail,
+                                                RelativeSource={RelativeSource AncestorType={x:Type ToolTip}}}"/>
+                                    </ToolTip>
+                                </Border.ToolTip>
+                                <TextBlock Text="{Binding SyncLabel}" Foreground="{Binding SyncForeground}"
+                                           FontSize="10.5" FontWeight="SemiBold"/>
+                            </Border>
+                            <TextBlock Text="{Binding TimeAxisCaption}" ToolTip="{Binding TimeAxisCaption}"
+                                       Style="{StaticResource SvCaption}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
+                    <WrapPanel Grid.Row="2" VerticalAlignment="Center" Margin="2,0,0,0">
+                        <TextBlock Text="Show" Style="{StaticResource SvCaption}"
+                                   VerticalAlignment="Center" Margin="0,0,5,0"/>
+                        <ComboBox x:Name="ShowModeCombo" Style="{StaticResource ModernComboBox}"
+                                  Width="95" Height="30" MinHeight="30" Padding="7,2" FontSize="10.7"
+                                  SelectedIndex="0" SelectionChanged="WaveformOptionsChanged">
+                            <ComboBoxItem Content="Both"/>
+                            <ComboBoxItem Content="Group A"/>
+                            <ComboBoxItem Content="Group B"/>
+                        </ComboBox>
+                        <TextBlock Text="Layout" Style="{StaticResource SvCaption}"
+                                   VerticalAlignment="Center" Margin="11,0,5,0"/>
+                        <ComboBox x:Name="LayoutModeCombo" Style="{StaticResource ModernComboBox}"
+                                  Width="94" Height="30" MinHeight="30" Padding="7,2" FontSize="10.7"
+                                  SelectedIndex="0" SelectionChanged="WaveformOptionsChanged">
+                            <ComboBoxItem Content="Overlay"/>
+                            <ComboBoxItem Content="Stacked"/>
+                        </ComboBox>
+                        <TextBlock Text="Scale" Style="{StaticResource SvCaption}"
+                                   VerticalAlignment="Center" Margin="11,0,5,0"/>
+                        <ComboBox x:Name="ScaleModeCombo" Style="{StaticResource ModernComboBox}"
+                                  Width="125" Height="30" MinHeight="30" Padding="7,2" FontSize="10.7"
+                                  SelectedIndex="0" SelectionChanged="WaveformOptionsChanged">
+                            <ComboBoxItem Content="Auto Peak Hold"/>
+                            <ComboBoxItem Content="Auto"/>
+                        </ComboBox>
+                    </WrapPanel>
+                    <dig:WaveformPanelControl x:Name="WaveformView" Grid.Row="4"
+                            Snapshot="{Binding CurrentWaveform}" StreamKey="{Binding CurrentStreamKey}"
+                            IsStreamLive="{Binding IsLiveSnapshot}" TimebaseMode="2 cycles"
+                            VoltageScale="Auto Peak Hold" CurrentScale="Auto Peak Hold"
+                            ShowMode="Both" LayoutMode="Overlay" MarkersEnabled="True"/>
+                    <!-- Diagnostic evidence lives on the heading hover, not duplicated
+                         below the active waveform on every snapshot. -->
+                    <TextBlock Grid.Row="5" Text="{Binding WaveformStatus}"
+                               Visibility="Collapsed" ToolTip="{Binding WaveformStatus}"/>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Column="4">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" MinHeight="235"/>
+                    <RowDefinition Height="8"/>
+                    <!-- Measurement sizes to its actual four fixed channel rows.
+                         All released height expands the phasor, including in RAW
+                         where the whole Power card is Collapsed. -->
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Border Grid.Row="0" Style="{StaticResource SvPane}" Padding="9">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="5"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Grid Margin="2,2,2,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Phasors" Style="{StaticResource SvHeading}"/>
+                            <TextBlock Grid.Column="2" Text="{Binding PhaseReferenceText}"
+                                       Style="{StaticResource SvCaption}" Margin="12,0,0,0"
+                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        </Grid>
+                        <dig:PhasorDiagramControl x:Name="PhasorView" Grid.Row="2"
+                                ItemsSource="{Binding CurrentPhasors}"
+                                IsStreamLive="{Binding IsLiveSnapshot}"
+                                ToolTip="Voltage/current (or RAW A/B) arrows use separate magnitude scales. Full measurement precision is shown below."/>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="2" Style="{StaticResource SvPane}" Padding="9">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="6"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="5"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="3"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid Margin="2,2,2,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Measurements" Style="{StaticResource SvHeading}"/>
+                            <!-- RMS and angle already identify their columns. -->
+                        </Grid>
+                        <!-- The two views filter the same eight immutable measurement rows.
+                             RAW group titles are presentation-only, not verified U/I metadata. -->
+                        <Grid Grid.Row="2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid Grid.Column="0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="4"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="{Binding VoltageGroupHeading}" FontSize="11.5"
+                                           FontWeight="SemiBold" Foreground="#31567F" Margin="5,0,0,0"
+                                           ToolTip="{Binding UnitStatus}" TextTrimming="CharacterEllipsis"/>
+                                <DataGrid x:Name="SmvVoltageMeasurementsGrid" Grid.Row="2"
+                                          ItemsSource="{Binding VoltageMeasurements}" IsReadOnly="True"
+                                          AutoGenerateColumns="False" HeadersVisibility="Column"
+                                          Style="{StaticResource SmvMeasurementGrid}"
+                                          ColumnHeaderStyle="{StaticResource SmvMeasurementHeader}"
+                                          CellStyle="{StaticResource SmvMeasurementCell}"
+                                          RowStyle="{StaticResource SmvMeasurementRow}"
+                                          RowBackground="#F8FBFF" AlternatingRowBackground="#EDF5FF"
+                                          Background="#F8FBFF" AlternationCount="2"
+                                          FontSize="12.5" RowHeight="36" ColumnHeaderHeight="29"
+                                          BorderThickness="0" GridLinesVisibility="None"
+                                          CanUserResizeColumns="False" CanUserSortColumns="False"
+                                          SelectionUnit="FullRow" EnableRowVirtualization="True"
+                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                          ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="Channel" Width="*">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <Ellipse Style="{StaticResource SmvChannelDot}"
+                                                                 VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                                        <TextBlock Text="{Binding DisplayName}"
+                                                                   Foreground="{StaticResource Ink}" FontSize="12.5"
+                                                                   ToolTip="{Binding Label}" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="RMS" Binding="{Binding RmsText}"
+                                                            Width="1.85*" ElementStyle="{StaticResource SmvRmsValueText}"/>
+                                        <DataGridTextColumn Header="Angle" Binding="{Binding AngleText}"
+                                                            Width="1.10*" ElementStyle="{StaticResource SmvNumberText}"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                            <Grid Grid.Column="2">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="4"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="{Binding CurrentGroupHeading}" FontSize="11.5"
+                                           FontWeight="SemiBold" Foreground="#31567F" Margin="5,0,0,0"
+                                           ToolTip="{Binding UnitStatus}" TextTrimming="CharacterEllipsis"/>
+                                <DataGrid x:Name="SmvCurrentMeasurementsGrid" Grid.Row="2"
+                                          ItemsSource="{Binding CurrentMeasurements}" IsReadOnly="True"
+                                          AutoGenerateColumns="False" HeadersVisibility="Column"
+                                          Style="{StaticResource SmvMeasurementGrid}"
+                                          ColumnHeaderStyle="{StaticResource SmvMeasurementHeader}"
+                                          CellStyle="{StaticResource SmvMeasurementCell}"
+                                          RowStyle="{StaticResource SmvMeasurementRow}"
+                                          RowBackground="#F8FBFF" AlternatingRowBackground="#EDF5FF"
+                                          Background="#F8FBFF" AlternationCount="2"
+                                          FontSize="12.5" RowHeight="36" ColumnHeaderHeight="29"
+                                          BorderThickness="0" GridLinesVisibility="None"
+                                          CanUserResizeColumns="False" CanUserSortColumns="False"
+                                          SelectionUnit="FullRow" EnableRowVirtualization="True"
+                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                          ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="Channel" Width="*">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <Ellipse Style="{StaticResource SmvChannelDot}"
+                                                                 VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                                        <TextBlock Text="{Binding DisplayName}"
+                                                                   Foreground="{StaticResource Ink}" FontSize="12.5"
+                                                                   ToolTip="{Binding Label}" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="RMS" Binding="{Binding RmsText}"
+                                                            Width="1.85*" ElementStyle="{StaticResource SmvRmsValueText}"/>
+                                        <DataGridTextColumn Header="Angle" Binding="{Binding AngleText}"
+                                                            Width="1.10*" ElementStyle="{StaticResource SmvNumberText}"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </Grid>
+                        <!-- Power values share one reserved row; do not place status
+                             in an undefined grid row or expand over waveform/table. -->
+                        <Border Grid.Row="4" Visibility="{Binding PowerVisibility}"
+                                Background="#F3F8FF" BorderBrush="#D6E5F7"
+                                BorderThickness="1" CornerRadius="6" Padding="8,5"
+                                ToolTip="{Binding PowerDetails}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="4"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="3φ Power" FontSize="10.5"
+                                               FontWeight="SemiBold" Foreground="#234E80"
+                                               ToolTip="{Binding PowerStatus}"/>
+                                    <!-- Computation methodology is available on hover.
+                                         Do not duplicate it beside the 3φ title. -->
+                                </Grid>
+                                <!-- Four equal-width instrument readouts, aligned
+                                     on a common baseline; no nested horizontal
+                                     StackPanels competing for their columns. -->
+                                <Grid Grid.Row="2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid Grid.Column="0" Margin="2,0,7,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="P" Foreground="#617D9A" FontSize="9.2"/>
+                                        <TextBlock Grid.Row="1" Text="{Binding PowerP}" Foreground="#183A65"
+                                                   FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                    <Grid Grid.Column="1" Margin="7,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="Q₁" Foreground="#617D9A" FontSize="9.2"/>
+                                        <TextBlock Grid.Row="1" Text="{Binding PowerQ}" Foreground="#183A65"
+                                                   FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                    <Grid Grid.Column="2" Margin="7,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="S" Foreground="#617D9A" FontSize="9.2"/>
+                                        <TextBlock Grid.Row="1" Text="{Binding PowerS}" Foreground="#183A65"
+                                                   FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                    <Grid Grid.Column="3" Margin="7,0,2,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="PF" Foreground="#617D9A" FontSize="9.2"/>
+                                        <TextBlock Grid.Row="1" Text="{Binding PowerPf}" Foreground="#183A65"
+                                                   FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                </Grid>
+                            </Grid>
+                        </Border>
+                        <!-- Full profile/scale details remain available on
+                             both group-heading tooltips, not as permanent noise. -->
+                        <TextBlock Grid.Row="6" Text="{Binding UnitStatus}" Visibility="Collapsed"
+                                   ToolTip="{Binding UnitStatus}"/>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <Border Grid.Row="2" Grid.ColumnSpan="5" CornerRadius="8"
+                    Background="#EEF5FF" BorderBrush="#D2E3FA"
+                    BorderThickness="1" Padding="9,6">
+                <DockPanel>
+                    <Ellipse Width="7" Height="7" Fill="#16A34A" VerticalAlignment="Center"
+                             Margin="0,0,8,0" DockPanel.Dock="Left"/>
+                    <TextBlock Text="{Binding CaptureBrief}" FontSize="10.5"
+                               Foreground="#425F85" TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding CaptureStatus}"/>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

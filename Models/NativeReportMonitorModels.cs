@@ -1,3 +1,6 @@
+using AR.Iec61850.Mms;
+using ArIED61850Tester.Protocol.Mms;
+
 namespace ArIED61850Tester.Models;
 
 public sealed class NativeReportMonitorStartResult
@@ -29,6 +32,21 @@ public sealed class NativeReportMonitorStartResult
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 }
 
+/// <summary>
+/// Immutable per-association RCB activation result for the operator's diagnostics.
+/// These flags are ARIEC write-step outcomes, not RCB readback, Report traffic,
+/// or certification that the IED delivered every configured DataSet member.
+/// </summary>
+public sealed record Iec61850RcbActivationEvidence
+{
+    public string Rcb { get; init; } = string.Empty;
+    public string DataSet { get; init; } = string.Empty;
+    public bool SetupSucceeded { get; init; }
+    public bool? RptEnaWriteAccepted { get; init; }
+    public bool? GiWriteAccepted { get; init; }
+    public DateTimeOffset? ActivationReturnedAtUtc { get; init; }
+}
+
 public sealed class NativeReportMonitorSliceResult
 {
     public string PlanId { get; init; } = string.Empty;
@@ -38,6 +56,10 @@ public sealed class NativeReportMonitorSliceResult
     public string Message { get; init; } = string.Empty;
     public IReadOnlyList<NativeReportFrameMetadata> ReportFrames { get; init; } = Array.Empty<NativeReportFrameMetadata>();
     public IReadOnlyList<NativeReportValueUpdate> Updates { get; init; } = Array.Empty<NativeReportValueUpdate>();
+    // Ingress-only decoded wire evidence for the Browser; never changes
+    // process acquisition, RCB configuration, GI, or report point projection.
+    public IReadOnlyList<NativeBrowserReportRawEvidence> BrowserRawEvidence { get; init; } =
+        Array.Empty<NativeBrowserReportRawEvidence>();
     public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 }
 
@@ -97,3 +119,8 @@ public sealed class NativeReportValueUpdate
     public string ReportTimestamp { get; init; } = string.Empty;
     public DateTimeOffset UpdatedAt { get; init; }
 }
+
+public sealed record NativeBrowserReportRawEvidence(
+    string CarrierReference, string FunctionalConstraint,
+    MmsQualityEvidence? QualityBits = null,
+    Iec61850UtcTimeEvidence? TimeBits = null);

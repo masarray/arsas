@@ -52,7 +52,9 @@ public sealed class P0Build1888RecoveryRegressionTests
 
         Assert.Contains("device.HasDiscoveryCache = true", recovery, StringComparison.Ordinal);
         Assert.Contains("_pendingSharedStaticSelectionAssignments", shared, StringComparison.Ordinal);
-        Assert.Contains("ApplyStaticDataSetSelection(device);", shared, StringComparison.Ordinal);
+        Assert.Contains("private async Task ApplyStaticDataSetSelection(Iec61850MonitorDevice device)", shared, StringComparison.Ordinal);
+        Assert.Contains("Iec61850StaticDataSetAuthoritySelection.Build(device)", shared, StringComparison.Ordinal);
+        Assert.Contains("signal.IsSelected = authoritativeSignals.Contains(signal)", shared, StringComparison.Ordinal);
         Assert.Contains("ApplyStaticDataSetSelection(device);", append, StringComparison.Ordinal);
         Assert.Contains("Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device)", shared, StringComparison.Ordinal);
 

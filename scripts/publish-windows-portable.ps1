@@ -6,7 +6,8 @@ param(
     [string]$EngineProject = "",
     [string]$NpcapProject = "",
     [string]$ArdIrecBridgePath = "",
-    [string]$ArdIrecSource = ""
+    [string]$ArdIrecSource = "",
+    [string]$EngineValidationLockPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -43,6 +44,32 @@ if (-not (Test-Path $NpcapProject)) {
 }
 if ($SingleFile -and -not $SelfContained) {
     throw "The public portable build must be self-contained so it can run without an installed .NET runtime."
+}
+
+# Explicit non-promotion override, valid only for an isolated CI field-trial.
+$trialLockArguments = @()
+if (-not [string]::IsNullOrWhiteSpace($EngineValidationLockPath)) {
+    if ($env:GITHUB_ACTIONS -ne "true" -or $env:ARSAS_NONPROMOTION_ENGINE_TRIAL -ne "true") {
+        throw "Alternate engine lock forbidden outside CI-only nonpromotion trial."
+    }
+    $approved = Get-Content (Join-Path $root 'engines\ARIEC61850.lock.json') -Raw | ConvertFrom-Json
+    $tempLock = [System.IO.Path]::GetFullPath($EngineValidationLockPath)
+    if (-not (Test-Path -LiteralPath $tempLock -PathType Leaf) -or
+        $tempLock.StartsWith($root + [System.IO.Path]::DirectorySeparatorChar,
+            [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Trial validator lock must be outside source and must exist."
+    }
+    $trial = Get-Content -LiteralPath $tempLock -Raw | ConvertFrom-Json
+    $actual = (& git -C (Split-Path -Parent $EngineProject) rev-parse HEAD).Trim().ToLowerInvariant()
+    if ($trial.nonPromotableTrial -ne $true -or
+        [string]$trial.approvedBaselineCommit -cne [string]$approved.commit -or
+        [string]$trial.commit -cne $actual -or
+        $actual -ceq [string]$approved.commit -or
+        $actual -cnotmatch '^[0-9a-f]{40}$') {
+        throw "Trial lock / exact engine / approved baseline mismatch."
+    }
+    $trialLockArguments = @("-p:ArIec61850LockPath=$tempLock")
+    Write-Host "NONRELEASE exact engine $actual; production source lock unchanged."
 }
 
 $normalizedVersion = $Version.Trim()
@@ -100,7 +127,8 @@ New-Item -ItemType Directory -Path $publishDir -Force | Out-Null
 Write-Host "==> Restoring ARSAS"
 dotnet restore $project `
     -p:ArIec61850Project="$EngineProject" `
-    -p:ArIec61850NpcapProject="$NpcapProject"
+    -p:ArIec61850NpcapProject="$NpcapProject" `
+    @trialLockArguments
 if ($LASTEXITCODE -ne 0) {
     throw "dotnet restore failed with exit code $LASTEXITCODE."
 }
@@ -128,6 +156,7 @@ $publishArguments = @(
     "-p:ArdIrecBridgeRequired=true",
     "-o", $publishDir
 )
+$publishArguments += $trialLockArguments
 
 if ($SingleFile) {
     # WPF and packet-capture dependencies use reflection, content files and native loading.

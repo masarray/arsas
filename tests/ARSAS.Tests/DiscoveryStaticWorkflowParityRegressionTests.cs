@@ -51,7 +51,9 @@ public sealed class DiscoveryStaticWorkflowParityRegressionTests
         var discoveryFlow = source[start..end];
 
         Assert.Contains("var discoveredDataSetCount = device.LiveDiscoveryModel?.DataSets.Count ?? 0;", discoveryFlow, StringComparison.Ordinal);
-        Assert.Contains("device.SignalCount > 0 || discoveredDataSetCount > 0", discoveryFlow, StringComparison.Ordinal);
+        Assert.Contains("device.SignalCount > 0 ||", discoveryFlow, StringComparison.Ordinal);
+        Assert.Contains("discoveredDataSetCount > 0 || discoveredLdCount > 0", discoveryFlow,
+            StringComparison.Ordinal);
         Assert.Contains("await OpenIedWorkspaceActionsAsync(device);", discoveryFlow, StringComparison.Ordinal);
         Assert.DoesNotContain("await OpenSignalSelectionWizardAsync(device, restoredCount);", discoveryFlow, StringComparison.Ordinal);
     }
@@ -225,7 +227,10 @@ public sealed class DiscoveryStaticWorkflowParityRegressionTests
         var shared = Read("MainWindow.SharedSclWorkspace.cs");
 
         Assert.Contains("new SclSignalSelectionModeWindow(1, device)", quickActions, StringComparison.Ordinal);
-        Assert.Contains("if (dialog.UseStaticDataSet)", quickActions, StringComparison.Ordinal);
+        Assert.Contains("if (dialog.Selection == IedWorkspaceTaskChoice.StaticDataSet)",
+            quickActions, StringComparison.Ordinal);
+        Assert.Contains("if (dialog.Selection == IedWorkspaceTaskChoice.BrowseIed)",
+            quickActions, StringComparison.Ordinal);
         Assert.Contains("ApplyStaticDataSetSelection(device)", quickActions, StringComparison.Ordinal);
         Assert.Contains("Iec61850MonitoringModeRegistry.UseStaticDataSetReportOnly(device)", shared, StringComparison.Ordinal);
         Assert.Contains("cyclic MMS process polling and dynamic DataSet writes remain disabled", shared, StringComparison.Ordinal);

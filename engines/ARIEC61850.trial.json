@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "repository": "masarray/ARIEC61850",
+  "commit": "24aae4698026f3a5cf7a35225c5d8000018af3e4",
+  "runMode": "fast-dev-nonpromotion",
+  "scope": "command-read",
+  "purpose": "IEC 61850 Ed2 live typed DPC/BSC NameList recovery across prefixed and renamed LN identities. No executable release authority."
+}

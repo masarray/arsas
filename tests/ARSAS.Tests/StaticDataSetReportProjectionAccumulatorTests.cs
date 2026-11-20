@@ -149,6 +149,79 @@ public sealed class StaticDataSetReportProjectionAccumulatorTests
     }
 
     [Fact]
+    public void StaticReportHotPath_ReusesMembershipSnapshotInsteadOfAllocatingPerFrame()
+    {
+        // Test source contracts must be portable across git LF and Windows CRLF.
+        var source = File.ReadAllText(FindRepoFile("Services/Iec61850MonitorRuntime.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        Assert.Contains("session.StaticProjectionPoints = staticDataSetReportOnly", source);
+        Assert.Contains("session.StaticReportProjection.Prepare(", source);
+        Assert.Contains("session.StaticReportProjection.ClearPrepared();", source);
+        Assert.Contains("session.StaticProjectionPoints,\n                        sourceUpdate)", source);
+        Assert.Contains("session.StaticProjectionPoints = [];", source);
+        Assert.DoesNotContain("session.Points.Values.ToArray(),\n                        sourceUpdate)", source);
+    }
+
+    [Fact]
+    public void PreparedStaticReportIndex_UsesExactMembershipAndResetsLeafEvidence()
+    {
+        const string parent = "IEDLD0/I_MHAI1.ThdA";
+        var model = Model(DataObject(parent, "ThdA",
+            Attribute(parent + ".phsA.cVal.mag.f", "phsA.cVal.mag.f"),
+            Attribute(parent + ".phsB.cVal.mag.f", "phsB.cVal.mag.f"),
+            Attribute(parent + ".phsC.cVal.mag.f", "phsC.cVal.mag.f")));
+        var points = new[] { Point(parent) };
+        var projection = new StaticDataSetReportProjectionAccumulator();
+        projection.Prepare(model, points);
+
+        Assert.Empty(projection.Project(model, points,
+            Update(parent + ".phsA.instCVal.mag.f", "999")));
+        Assert.Empty(projection.Project(model, points,
+            Update(parent + ".phsA.cVal.mag.f", "1")));
+        Assert.Empty(projection.Project(model, points,
+            Update(parent + ".phsB.cVal.mag.f", "2")));
+        var aggregate = Assert.Single(projection.Project(model, points,
+            Update(parent + ".phsC.cVal.mag.f", "3")));
+        Assert.Equal("A=1, B=2, C=3", aggregate.Value);
+        Assert.Equal(parent, aggregate.Reference);
+
+        // A new MMS association cannot inherit previous partial GI leaves.
+        projection.Reset();
+        Assert.Empty(projection.Project(model, points,
+            Update(parent + ".phsC.cVal.mag.f", "4")));
+        projection.ClearPrepared();
+        projection.Reset();
+        Assert.Empty(projection.Project(model, points,
+            Update(parent + ".phsA.cVal.mag.f", "5")));
+        Assert.Empty(projection.Project(model, points,
+            Update(parent + ".phsB.cVal.mag.f", "6")));
+        var nonIndexed = Assert.Single(projection.Project(model, points,
+            Update(parent + ".phsC.cVal.mag.f", "7")));
+        Assert.Equal("A=5, B=6, C=7", nonIndexed.Value);
+    }
+
+    [Fact]
+    public void PreparedStaticReportIndex_DuplicateParentAndOverdeepLeafFailClosed()
+    {
+        const string parent = "IEDLD0/I_MHAI1.ThdA";
+        const string leaf = parent + ".phsA.cVal.mag.f";
+        var model = Model(DataObject(parent, "ThdA",
+            Attribute(leaf, "phsA.cVal.mag.f")));
+        // A malformed selection containing two claims for one aggregate
+        // must not turn a descendant into an unverified independent value.
+        var duplicated = new[] { Point(parent), Point(parent) };
+        var index = new StaticDataSetReportProjectionAccumulator();
+        index.Prepare(model, duplicated);
+        Assert.Empty(index.Project(model, duplicated, Update(leaf, "42")));
+
+        var normal = new[] { Point(parent) };
+        index.Reset();
+        index.Prepare(model, normal);
+        var suspicious = parent + string.Concat(Enumerable.Repeat(".x", 35));
+        Assert.Empty(index.Project(model, normal, Update(suspicious, "777")));
+    }
+
+    [Fact]
     public void RuntimeSource_StaticMode_UsesSchemaSafeReportAuthority_AndNoMmsFallback()
     {
         var source = File.ReadAllText(FindRepoFile("Services/Iec61850MonitorRuntime.cs"));
@@ -161,13 +234,17 @@ public sealed class StaticDataSetReportProjectionAccumulatorTests
     }
 
     [Fact]
-    public void IpWizard_DoesNotRunEditableAddressBindingOnEveryKeystroke()
+    public void IpWizard_DoesNotWritePreferencesOrBindWholeAddressOnEveryOctetKeystroke()
     {
         var xaml = File.ReadAllText(FindRepoFile("IpConnectWizardWindow.xaml"));
-
-        Assert.Contains("IsTextSearchEnabled=\"False\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("RelayIpAddress, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=LostFocus", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("RelayIpAddress, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=PropertyChanged", xaml, StringComparison.Ordinal);
+        var code = File.ReadAllText(FindRepoFile("IpConnectWizardWindow.xaml.cs"));
+        Assert.Contains("x:Name=\"Octet1Box\"", xaml);
+        Assert.Contains("x:Name=\"Octet4Box\"", xaml);
+        Assert.Contains("UpdateSourceTrigger=LostFocus", xaml);
+        Assert.DoesNotContain("RelayIpAddress, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=PropertyChanged", xaml);
+        Assert.Contains("DataObject.AddPastingHandler", code);
+        Assert.Contains("if (_rememberDiscoveryEndpoint)", code);
+        Assert.DoesNotContain("RecordLastDiscoveryEndpoint", code[..code.IndexOf("private void Connect_Click", StringComparison.Ordinal)]);
     }
 
     private static NativeReportValueUpdate Update(string reference, string value)

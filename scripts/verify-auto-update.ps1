@@ -36,6 +36,22 @@ if ($service -notmatch 'TimeSpan\.FromHours\(12\)') {
 if ($coordinator -notmatch 'TimeSpan\.FromSeconds\(15\)') {
     throw "The updater must remain delayed and non-blocking after startup."
 }
+if ($coordinator -notmatch 'BackgroundReviewInterval' -or
+    $coordinator -notmatch 'DownloadInstallerAsync' -or
+    $coordinator -notmatch 'prompt.Show\(\)' -or
+    $coordinator -match 'ShowDialog\(\)') {
+    throw "Updater must review periodically, auto-prefetch verified bytes and notify modelessly."
+}
+if ($service -notmatch 'LaunchInstallerAsync' -or
+    $service -notmatch 'SourceCommit' -or
+    $service -notmatch 'SchemaVersion != 1') {
+    throw "Updater provenance and before-launch digest verification must remain mandatory."
+}
+if ($prompt -notmatch '_service.Dispose\(\)' -or
+    $prompt -notmatch 'LaunchInstallerAsync') {
+    throw "Updater prompt must own the verifier lifecycle and recheck before installing."
+}
+
 if ($coordinator -notmatch 'catch \(Exception exception\)') {
     throw "Update availability failures must remain isolated from application startup."
 }

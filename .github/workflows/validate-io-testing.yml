@@ -65,6 +65,7 @@ jobs:
           PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_MERGE_SHA: ${{ github.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
           ENGINE_SHA: ${{ steps.engine.outputs.commit }}
         run: |
           set -euo pipefail
@@ -75,6 +76,7 @@ jobs:
             --head-sha "$PR_HEAD_SHA" \
             --merge-sha "$PR_MERGE_SHA" \
             --engine-sha "$ENGINE_SHA" \
+            --pr-title "$PR_TITLE" \
             --wait-seconds 960 \
             --allow-in-progress-artifact \
             --require-test-substring IoTest \

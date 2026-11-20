@@ -141,9 +141,9 @@
                         </Rectangle.Fill>
                     </Rectangle>
                     <TextBlock Canvas.Left="50.6" Canvas.Top="20.2" Text="ARSAS"
-                               Foreground="White" FontFamily="Segoe UI" FontSize="11.5" FontWeight="Bold"/>
+                               Foreground="White" FontFamily="{StaticResource AppFontFamily}" FontSize="11.5" FontWeight="Bold"/>
                     <TextBlock Canvas.Left="50.5" Canvas.Top="33.5" Text="IED"
-                               Foreground="{TemplateBinding Foreground}" FontFamily="Segoe UI" FontSize="4.5"
+                               Foreground="{TemplateBinding Foreground}" FontFamily="{StaticResource AppFontFamily}" FontSize="4.5"
                                FontWeight="SemiBold" Opacity="0.55"/>
 
                     <!-- Large display -->

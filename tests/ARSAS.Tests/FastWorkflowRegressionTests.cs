@@ -30,7 +30,7 @@ public sealed class FastWorkflowRegressionTests
         Assert.DoesNotContain("Fast IEC 61850 Control", mainView, StringComparison.Ordinal);
         Assert.DoesNotContain("Operate only the validated control objects selected for this IED.", mainView, StringComparison.Ordinal);
         Assert.DoesNotContain("Click=\"RefreshCommandValues_Click\"", mainView, StringComparison.Ordinal);
-        Assert.Contains("SelectedDevice.CommandSignals", mainView, StringComparison.Ordinal);
+        Assert.Contains("SelectedDevice.OperableCommandSignals", mainView, StringComparison.Ordinal);
     }
 
     [Fact]

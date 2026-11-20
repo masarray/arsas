@@ -164,6 +164,69 @@ try {
     $wrongP10Pin.commit = ('f' * 40)
     Assert-Rejects $wrongP10Pin 'physical-tested'
 
+    # P0-C must never become an implicit arbitrary engine pin or a
+    # physically qualified release simply because its source compiles.
+    $wrongTypedReadSha = New-TrackedP10Fixture
+    $wrongTypedReadSha.p0CTypedReadTrial.exactCommit = ('f' * 40)
+    Assert-Rejects $wrongTypedReadSha 'physical-tested'
+
+    $wrongTypedReadParent = New-TrackedP10Fixture
+    $wrongTypedReadParent.p0CTypedReadTrial.baseEngineCommit = ('f' * 40)
+    Assert-Rejects $wrongTypedReadParent 'physical-tested'
+
+    $wrongTypedReadCi = New-TrackedP10Fixture
+    $wrongTypedReadCi.p0CTypedReadTrial.engineCiRun = 0
+    Assert-Rejects $wrongTypedReadCi 'physical-tested'
+
+    $wrongTypedReadInvoke = New-TrackedP10Fixture
+    $wrongTypedReadInvoke.p0CTypedReadTrial.strictInvokeId = $false
+    Assert-Rejects $wrongTypedReadInvoke 'physical-tested'
+
+    $wrongTypedReadOrdinal = New-TrackedP10Fixture
+    $wrongTypedReadOrdinal.p0CTypedReadTrial.strictAccessOrdinal = $false
+    Assert-Rejects $wrongTypedReadOrdinal 'physical-tested'
+
+    $wrongTypedReadPhysical = New-TrackedP10Fixture
+    $wrongTypedReadPhysical.p0CTypedReadTrial.mainlinePromotionForbidden = $false
+    Assert-Rejects $wrongTypedReadPhysical 'physical-tested'
+
+    foreach ($field in @('physicalQualificationRequired', 'mainlinePromotionForbidden',
+                         'controlChecksUnchanged', 'controlTimeoutsUnchanged', 'preservesTypedReadAuthority')) {
+        $invalidSuccessor = New-TrackedP10Fixture
+        $invalidSuccessor.controlReportIsolationTrial.$field = $false
+        Assert-Rejects $invalidSuccessor 'physical-tested'
+    }
+    foreach ($field in @('baseEngineCommit', 'exactCommit')) {
+        $invalidSuccessor = New-TrackedP10Fixture
+        $invalidSuccessor.controlReportIsolationTrial.$field = ('f' * 40)
+        Assert-Rejects $invalidSuccessor 'physical-tested'
+    }
+
+    # Candidate staging SHA must be exact, fail-closed and NEVER conflated
+    # with physically accepted baseline. Invalid metadata cannot unlock it.
+    foreach ($field in @('typedStatusReadRequired',
+                         'sameDataObjectFeedbackRequired',
+                         'ctlModelAndOperShapeRequired',
+                         'sbowEnhancedSafetyRequired',
+                         'noAutomaticOperate',
+                         'physicalQualificationRequired',
+                         'mainlinePromotionForbidden')) {
+        $invalidTyped = New-TrackedP10Fixture
+        $invalidTyped.globalTypedControlStageTrial.$field = $false
+        Assert-Rejects $invalidTyped 'physical-tested'
+    }
+    $wrongStageSha = New-TrackedP10Fixture
+    $wrongStageSha.globalTypedControlStageTrial.exactCommit = ('e' * 40)
+    Assert-Rejects $wrongStageSha 'physical-tested'
+
+    $wrongStageCi = New-TrackedP10Fixture
+    $wrongStageCi.globalTypedControlStageTrial.engineCiRun = 0
+    Assert-Rejects $wrongStageCi 'physical-tested'
+
+    $wrongStageParent = New-TrackedP10Fixture
+    $wrongStageParent.globalTypedControlStageTrial.baseEngineCommit = ('f' * 40)
+    Assert-Rejects $wrongStageParent 'physical-tested'
+
     Write-Host "CI-P1 immutable engine resolver: $checks synthetic cases PASS."
 }
 finally {

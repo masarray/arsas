@@ -99,4 +99,7 @@ public partial class GooseSubscriberLiteView : UserControl
 
     private void ClearCapture_Click(object sender, RoutedEventArgs e)
         => RaiseEvent(new RoutedEventArgs(ClearRequestedEvent, this));
+
+    private void ShowAllPublishers_Click(object sender, RoutedEventArgs e)
+        => GooseEventScope.SelectedIndex = 1;
 }

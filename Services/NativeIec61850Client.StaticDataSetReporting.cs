@@ -73,32 +73,57 @@ public sealed partial class NativeIec61850Client
         // local canonical coverage -> targeted live RCB reconciliation -> exact-target JIT
         // availability. Full discovery and application-side indexed-family fabrication are
         // intentionally excluded from Static DataSet acquisition.
-        var smart = await _session.PrepareCanonicalStaticAcquisitionSmartAsync(
-                canonicalModel,
-                selections,
-                directory: null,
-                reconciliationOptions: new ArMms.MmsCanonicalStaticLiveReconciliationOptions
-                {
-                    MaxDomains = 16,
-                    MaxVariableNamesPerDomain = 20000,
-                    MaxNameListPages = 64,
-                    MaxConcurrentDomains = 4,
-                    UnknownPeerMaxConcurrentDomains = 2,
-                    MaxReportControlCandidates = 64
-                },
-                acquisitionOptions: new ArMms.MmsCanonicalStaticAcquisitionProbeOptions
-                {
-                    MaxExactTargets = 64,
-                    ReadDataSetDirectories = true,
-                    CallerOwnedRcbReferences = callerOwnedRcbReferences
-                },
-                cancellationToken)
-            .ConfigureAwait(false);
+        // Keep structural Smart Discovery's validated 64-page freeze intact.
+        // Only a selected and unresolved static RCB may trigger one additional
+        // read-only scoped pass after the initial page guard was exhausted.
+        async Task<ArMms.MmsCanonicalStaticSmartPreparationResult> PrepareAsync(int pageBudget)
+            => await _session.PrepareCanonicalStaticAcquisitionSmartAsync(
+                    canonicalModel,
+                    selections,
+                    directory: null,
+                    reconciliationOptions: new ArMms.MmsCanonicalStaticLiveReconciliationOptions
+                    {
+                        MaxDomains = 16,
+                        MaxVariableNamesPerDomain = 20000,
+                        MaxNameListPages = pageBudget,
+                        MaxConcurrentDomains = 4,
+                        UnknownPeerMaxConcurrentDomains = 2,
+                        MaxReportControlCandidates = 64,
+                        MaxCandidatePagesPerInvocation = 8
+                    },
+                    acquisitionOptions: new ArMms.MmsCanonicalStaticAcquisitionProbeOptions
+                    {
+                        MaxExactTargets = 64,
+                        MaxExactTargetPagesPerInvocation = 8,
+                        ReadDataSetDirectories = true,
+                        CallerOwnedRcbReferences = callerOwnedRcbReferences
+                    },
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        var smart = await PrepareAsync(pageBudget: 64).ConfigureAwait(false);
+        var expandedInventory = StaticReportEvidencePolicy.ShouldExpandTargetedNameList(
+            associationReady: _session.IsMmsInitiated,
+            reconciliationPartial:
+                smart.Reconciliation.Status == ArMms.MmsCanonicalStaticLiveReconciliationStatus.Partial,
+            unresolvedSelectedSegments: smart.Acquisition.Plan.UnresolvedSegmentCount,
+            reconciliationWarnings: smart.Reconciliation.Warnings);
+        if (expandedInventory)
+        {
+            // One finite second pass, no polling or repeated GI/RptEna:
+            // PrepareCanonicalStaticAcquisitionSmartAsync is read-only.
+            smart = await PrepareAsync(pageBudget: 192).ConfigureAwait(false);
+            if (!_session.IsMmsInitiated)
+                return StaticPlanningUnavailable(points,
+                    "MMS association changed during bounded targeted RCB reconciliation.");
+        }
 
         var warnings = smart.Reconciliation.Warnings
             .Concat(smart.Acquisition.Warnings)
             .Distinct(StringComparer.Ordinal)
             .ToList();
+        if (expandedInventory)
+            warnings.Add("Selected static RCB target remained unresolved after a truncated 64-page NamedVariable chain; a single read-only 192-page scoped retry was attempted. RCB activation still requires exact live verification.");
 
         var availability = smart.Acquisition.Availability;
         if (availability is null)

@@ -1,3 +1,5 @@
+using System.Xml.Linq;
+
 namespace ARSAS.Tests;
 
 public sealed class ProductionFatEngineeringTabRegressionTests
@@ -47,12 +49,25 @@ public sealed class ProductionFatEngineeringTabRegressionTests
         var productionSource = File.ReadAllText(FindRepoFile("MainWindow.ProductionFatTab.cs"));
         var repoRoot = FindRepoRoot();
 
-        Assert.Contains("x:Name=\"NavNativeFatButton\" Grid.Column=\"6\" Content=\"FAT\" Tag=\"6\" Click=\"NavButton_Click\" Style=\"{StaticResource SegmentedNavButton}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Grid.ColumnSpan=\"7\"", xaml, StringComparison.Ordinal);
+        // Navigation identity is unchanged; glyph and caption are children now.
+        var document = XDocument.Parse(xaml);
+        XNamespace p = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var fatButton = Assert.Single(document.Descendants(p + "Button"),
+            button => (string?)button.Attribute(x + "Name") == "NavNativeFatButton");
+        Assert.Equal("6", (string?)fatButton.Attribute("Grid.Column"));
+        Assert.Equal("6", (string?)fatButton.Attribute("Tag"));
+        Assert.Equal("NavButton_Click", (string?)fatButton.Attribute("Click"));
+        Assert.Equal("{StaticResource SegmentedNavButton}", (string?)fatButton.Attribute("Style"));
+        Assert.Contains(fatButton.Descendants(p + "TextBlock"),
+            label => (string?)label.Attribute("Text") == "Signal Testing");
+        Assert.Contains(fatButton.Descendants(p + "Path"),
+            path => (string?)path.Attribute("Data") == "{StaticResource OperatorFatIcon}");
+        Assert.Contains("Grid.ColumnSpan=\"8\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"NativeFatTab\" Header=\"FAT\"", xaml, StringComparison.Ordinal);
 
-        Assert.Contains("Math.Clamp(index, 0, NativeFatWorkspaceIndex)", mainSource, StringComparison.Ordinal);
-        Assert.Contains("var cellWidth = contentWidth / 7d", mainSource, StringComparison.Ordinal);
+        Assert.Contains("EngineeringNavigationRoute.TabForButton(index)", mainSource, StringComparison.Ordinal);
+        Assert.Contains("var cellWidth = contentWidth / 8d", mainSource, StringComparison.Ordinal);
         Assert.Contains("NavNativeFatButton", mainSource, StringComparison.Ordinal);
 
         Assert.Contains("private const int NativeFatWorkspaceIndex = 6", bridgeSource, StringComparison.Ordinal);

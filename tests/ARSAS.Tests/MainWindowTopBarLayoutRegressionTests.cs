@@ -3,28 +3,29 @@ namespace ARSAS.Tests;
 public sealed class MainWindowTopBarLayoutRegressionTests
 {
     [Fact]
-    public void NavigationLayout_UsesResponsiveWidthsAndConsistentSevenDestinationGeometry()
+    public void NavigationLayout_UsesResponsiveWidthsAndConsistentEightDestinationGeometry()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.NavigationLayoutFix.cs"));
 
-        Assert.Contains("WideNavWidth = 990d", source, StringComparison.Ordinal);
-        Assert.Contains("MediumNavWidth = 900d", source, StringComparison.Ordinal);
-        Assert.Contains("CompactNavWidth = 720d", source, StringComparison.Ordinal);
-        Assert.Contains("\"IEC 61850 Explorer\"", source, StringComparison.Ordinal);
-        Assert.Contains("\"Alarm\"", source, StringComparison.Ordinal);
+        Assert.Contains("WideNavWidth = 1150d", source, StringComparison.Ordinal);
+        Assert.Contains("MediumNavWidth = 1010d", source, StringComparison.Ordinal);
+        Assert.Contains("CompactNavWidth = 842d", source, StringComparison.Ordinal);
+        Assert.Contains("\"Device Explorer\"", source, StringComparison.Ordinal);
+        Assert.Contains("\"Annunciator\"", source, StringComparison.Ordinal);
         Assert.DoesNotContain("\"Alarm Annunciator\"", source, StringComparison.Ordinal);
-        Assert.Contains("\"GOOSE Subscriber\"", source, StringComparison.Ordinal);
+        Assert.Contains("\"GOOSE Sniff\"", source, StringComparison.Ordinal);
         Assert.Contains("NavNativeFatButton", source, StringComparison.Ordinal);
+        Assert.Contains("NavIedBrowserButton", source, StringComparison.Ordinal);
         Assert.Contains("var labels = wide ? FullLabels : CompactLabels", source, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void SelectionPill_IsDerivedFromActualSevenCellNavWidth_NotFixed150Pixels()
+    public void SelectionPill_IsDerivedFromActualEightCellNavWidth_NotFixed150Pixels()
     {
         var source = File.ReadAllText(FindRepoFile("MainWindow.NavigationLayoutFix.cs"));
 
-        Assert.Contains("var cellWidth = contentWidth / 7d", source, StringComparison.Ordinal);
-        Assert.Contains("Math.Clamp(tabs.SelectedIndex, 0, 6) * cellWidth", source, StringComparison.Ordinal);
+        Assert.Contains("var cellWidth = contentWidth / 8d", source, StringComparison.Ordinal);
+        Assert.Contains("EngineeringNavigationRoute.ButtonForTab(tabs.SelectedIndex) * cellWidth", source, StringComparison.Ordinal);
         Assert.Contains("pill.Width = Math.Max(1d, cellWidth - 2d)", source, StringComparison.Ordinal);
         Assert.Contains("FindName(\"WorkflowPillTranslate\") as TranslateTransform", source, StringComparison.Ordinal);
         Assert.Contains("pill.RenderTransform is TransformGroup", source, StringComparison.Ordinal);
@@ -56,7 +57,7 @@ public sealed class MainWindowTopBarLayoutRegressionTests
         var source = File.ReadAllText(FindRepoFile("MainWindow.NavigationLayoutFix.cs"));
         var xaml = File.ReadAllText(FindRepoFile("MainWindow.xaml"));
 
-        Assert.Contains("if (index < labels.Length)", source, StringComparison.Ordinal);
+        Assert.Contains("if (index != 7 && index < labels.Length)", source, StringComparison.Ordinal);
         Assert.Contains("NavDiagnosticsButton", source, StringComparison.Ordinal);
         Assert.Contains("DiagnosticsAlertVisibility", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("button.Content = labels[index];\n            button.MinHeight", source, StringComparison.Ordinal);
