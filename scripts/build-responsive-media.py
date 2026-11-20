@@ -24,7 +24,11 @@ def generate(source: Path, target_dir: Path) -> dict[str, Any]:
     variants: list[tuple[int, Path]] = []
     with Image.open(source) as image:
         original_width, original_height = image.size
-        for width in WIDTHS:
+        # An authentic dialog crop may be narrower than the standard 480px preset.
+        # Still create one smaller candidate so the source image participates in
+        # the same srcset/sizes and CI contract without upscaling its pixels.
+        widths = WIDTHS if original_width > WIDTHS[0] else (max(160, round(original_width * 0.75)),)
+        for width in widths:
             if width >= original_width:
                 continue
             height = max(1, round(original_height * width / original_width))

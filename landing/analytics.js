@@ -52,7 +52,9 @@
 
   const classifyDownload = href => {
     if (href.endsWith('/ARSAS-Windows-x64-Setup.exe')) return ['download_installer', 'ARSAS-Windows-x64-Setup.exe'];
-    if (href.endsWith('/ARSAS-Windows-x64-Portable.zip')) return ['download_portable', 'ARSAS-Windows-x64-Portable.zip'];
+    if (href.endsWith('/ARSAS-Windows-x64-Portable.exe')) return ['download_portable', 'ARSAS-Windows-x64-Portable.exe'];
+    // Historical tagged ZIP links remain classifiable but never masquerade as latest stable.
+    if (/\/releases\/download\/v\d+\.\d+\.\d+\/ARSAS-Windows-x64-Portable\.zip(?:[?#].*)?$/.test(href)) return ['download_portable_legacy', 'ARSAS-Windows-x64-Portable.zip'];
     if (href.endsWith('/ARSAS-Windows-x64-SHA256SUMS.txt')) return ['download_checksums', 'ARSAS-Windows-x64-SHA256SUMS.txt'];
     return null;
   };

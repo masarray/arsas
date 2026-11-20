@@ -15,6 +15,7 @@ The current source version is recorded in [VERSION](../VERSION); the latest publ
 | [SCL export](SCL_EXPORT.md) | Live-discovery and source-backed SCL export, including the 1.6.37 logical ReportControl versus runtime RCB-instance boundary. |
 | [COMTRADE viewer integration](COMTRADE_VIEWER_INTEGRATION.md) | Native ArdIrec bridge, in-process cursor/Phasor/Harmonics/Locus analysis, packaging, and presentation-only easing contract. |
 | [Windows releases](WINDOWS_RELEASES.md) | Installer and portable single-EXE packaging, exact release gates, checksums, SBOM, provenance, attestations, and publication boundary. |
+| [Historical release milestones](RELEASE_MILESTONES_ARCHIVE.md) | Version-scoped notes moved out of the beginner README without deleting technical history. |
 | [GOOSE Subscriber](GOOSE_SUBSCRIBER.md) | Read-only Npcap capture, ARIEC61850 GOOSE decoding, SCL/live-discovery DataSet binding, ordered `allData` leaf semantics, diagnostics, and field validation. |
 | [Validation checklist](VALIDATION_CHECKLIST.md) | Discovery, reporting, monitoring, recovery, evidence, and control acceptance checks. |
 | [UI validation](UI_VALIDATION.md) | Windows scaling, keyboard workflow, accessibility, multi-IED, and command-panel checks. |

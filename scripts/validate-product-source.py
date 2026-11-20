@@ -141,9 +141,22 @@ def validate_release(errors: list[str]) -> None:
     if not isinstance(installer, dict) or installer.get("name") != "ARSAS-Windows-x64-Setup.exe" or not re.fullmatch(r"[0-9a-fA-F]{64}", str(installer.get("sha256", ""))):
         errors.append("latest.json installer evidence is invalid")
     portable = evidence.get("portable")
-    portable_names = {"ARSAS-Windows-x64-Portable.zip", "ARSAS-Windows-x64-Portable.exe"}
-    if not isinstance(portable, dict) or portable.get("name") not in portable_names or not re.fullmatch(r"[0-9a-fA-F]{64}", str(portable.get("sha256", ""))):
-        errors.append("latest.json portable evidence is invalid")
+    # Modern stable distribution is a real single EXE. Legacy ZIPs are permitted
+    # only for older historical tags; do not silently regress the current channel.
+    stable_parts = (tuple(int(part) for part in version.split("."))
+                    if re.fullmatch(r"\d+\.\d+\.\d+", version) else (0, 0, 0))
+    expected_portable = (
+        "ARSAS-Windows-x64-Portable.exe" if stable_parts >= (1, 6, 42)
+        else "ARSAS-Windows-x64-Portable.zip"
+    )
+    expected_portable_url = (
+        "https://github.com/masarray/arsas/releases/latest/download/" + expected_portable
+    )
+    if (not isinstance(portable, dict)
+            or portable.get("name") != expected_portable
+            or portable.get("url") != expected_portable_url
+            or not re.fullmatch(r"[0-9a-fA-F]{64}", str(portable.get("sha256", "")))):
+        errors.append(f"latest.json portable must match the {expected_portable} stable release contract")
     if not isinstance(evidence.get("checksums"), dict): errors.append("latest.json checksum evidence is missing")
     signing = evidence.get("codeSigning")
     note_signing = notes.get("codeSigning")
@@ -444,8 +457,12 @@ def main() -> int:
         if value not in footer: errors.append(f"footer missing {value}")
     root_html = [path.name for path in LANDING.glob("*.html") if not VERIFICATION.fullmatch(path.name)]
     if root_html: errors.append("legacy HTML outside templates: " + ", ".join(sorted(root_html)))
-    for required in ("device-evidence.json", "adoption.css", "guide-filter.js", "demo.js", "latest.json", "release-notes.json", "robots.txt", "assets/social-card.png", "assets/screenshots/arsas-ied-explorer-command-v1.6.40.webp", "assets/screenshots/arsas-quick-start-choose-source-v1.6.40.webp", "assets/screenshots/arsas-quick-start-discover-ip-v1.6.40.webp", "assets/screenshots/arsas-quick-start-monitor-control-v1.6.40.webp"):
+    for required in ("device-evidence.json", "adoption.css", "guide-filter.js", "demo.js", "latest.json", "release-notes.json", "robots.txt", "assets/social-card.png", "assets/screenshots/arsas-ied-explorer-command-v1.6.40.webp", "assets/screenshots/arsas-quick-start-choose-source-v1.6.40.webp", "assets/screenshots/arsas-quick-start-discover-ip-v1.6.40.webp", "assets/screenshots/arsas-quick-start-monitor-control-v1.6.40.webp", "assets/screenshots/arsas-add-ied-connect-dialog-v1.6.42.webp"):
         if not (LANDING / required).is_file(): errors.append(f"missing landing source {required}")
+    for capture in ("ied-browser", "event-logs", "signal-testing", "fat-report-preview", "smv", "goose", "annunciator", "diagnostics"):
+        for fmt in ("png", "webp"):
+            expected = LANDING / f"assets/screenshots/arsas-{capture}-v1.6.42.{fmt}"
+            if not expected.is_file(): errors.append(f"missing current v1.6.42 original/optimized screenshot: {expected}")
     for font_name in FONT_FILES:
         if not (FONT_DIR / font_name).is_file():
             errors.append(f"missing bundled Inter asset Assets/Fonts/{font_name}")

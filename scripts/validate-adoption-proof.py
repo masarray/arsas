@@ -502,8 +502,11 @@ def main() -> int:
 
     for name in ("demo.html", "demo-arsas.html"):
         text = read(TEMPLATES / name, errors)
-        if text.count("data-demo-step") != 7 or text.count("data-demo-panel") != 7:
-            errors.append(f"{name}: expected seven guided demo steps and panels")
+        if text.count("data-demo-step") != 8 or text.count("data-demo-panel") != 8:
+            errors.append(f"{name}: expected eight genuine v1.6.42 guided demo steps and panels")
+        for screen in ("ied-browser", "event-logs", "signal-testing", "fat-report-preview", "smv", "goose", "annunciator", "diagnostics"):
+            if f"assets/screenshots/arsas-{screen}-v1.6.42.webp" not in text or f"assets/screenshots/arsas-{screen}-v1.6.42.png" not in text:
+                errors.append(f"{name}: v1.6.42 screenshot and original PNG missing from demo: {screen}")
         if "demo.js" not in text or text.count("assets/screenshots/") < 9:
             errors.append(f"{name}: guided demo must use the real screenshot set and controller")
         if "time-to-value claim" not in text and "klaim waktu" not in text:

@@ -24,13 +24,13 @@
     "Release workflow #40151975055 passed with 2,987/2,987 application tests, Windows installer and portable smoke tests, SHA-256, SPDX 2.3 SBOM, provenance and attestations.",
     "Observed operator diagnostic: 5/5 monitoring endpoints, 183/183 initial selected values, 14/14 static RCB paths with ingress; successful targeted SG7_BCU and GR_X_7SX85 ctlModel readback and SBO Enhanced operations.",
     "Download links target the latest stable GitHub Release assets; checksum values and source identity correspond to the exact tagged v1.6.42 binaries.",
-    "Archived v1.6.40 screenshots are historical illustrations, not representations of the latest interface."
+    "Eight actual ARSAS v1.6.42 Windows screenshots, supplied by the operator, are available as original full-resolution PNG and optimized WebP across the site. Images demonstrate UI only, not physical R7/R10 certification."
   ],
   "improvementsId": [
     "Workflow release #40151975055 sukses: 2.987/2.987 tes aplikasi, smoke test installer dan portable Windows, SHA-256, SPDX 2.3 SBOM, provenance, serta attestation.",
     "Diagnostik operator: 5/5 endpoint monitoring, 183/183 nilai awal, 14/14 jalur RCB statis menerima report; Write/readback ctlModel dan SBO Enhanced berhasil pada target SG7_BCU serta GR_X_7SX85 yang diuji.",
     "Link unduhan mengarah ke aset GitHub Latest Stable; checksum dan identitas source sesuai binary v1.6.42 bertag.",
-    "Screenshot v1.6.40 adalah ilustrasi arsip, bukan tampilan antarmuka terbaru."
+    "Delapan screenshot asli ARSAS v1.6.42 dari operator tersedia sebagai PNG resolusi penuh dan WebP optimal di website. Gambar hanya menunjukkan UI, bukan sertifikasi fisik R7/R10."
   ],
   "knownLimitations": [
     "The October 25 operator capture observed 432 report frames, 38 continuity findings and 9 IED-reported BufOvfl notices. These are not 38 proven lost events, but lossless buffered SOE is NOT established.",
@@ -54,13 +54,13 @@
     "detailId": "Installer Windows dan portable EXE publik saat ini belum memiliki commercial Authenticode publisher signature. Verifikasi nilai SHA-256 yang dipublikasikan sebelum digunakan. Karena itu peringatan SmartScreen masih mungkin muncul dan status ini tidak disembunyikan dari user."
   },
   "screenshot": {
-    "src": "assets/screenshots/arsas-ied-explorer-command-v1.6.40.webp",
-    "width": 1920,
-    "height": 1032,
-    "alt": "ARSAS v1.6.40 archived IED workspace screenshot (not the v1.6.42 interface)",
-    "altId": "Screenshot arsip workspace IED ARSAS v1.6.40 (bukan tampilan v1.6.42)",
-    "caption": "Historical v1.6.40 interface reference. Download v1.6.42 to see the updated IED Browser, typed Write controls and SV/SMV viewer.",
-    "captionId": "Referensi antarmuka lama v1.6.40. Unduh v1.6.42 untuk IED Browser, kontrol Write bertipe, dan viewer SV/SMV terbaru."
+    "src": "assets/screenshots/arsas-fat-report-preview-v1.6.42.webp",
+    "width": 1862,
+    "height": 951,
+    "alt": "Actual ARSAS v1.6.42 Windows FAT Evidence PDF Report Preview, showing partially completed tests",
+    "altId": "Screenshot nyata ARSAS v1.6.42 Windows: pratinjau PDF evidence FAT dengan beberapa pengujian belum lengkap",
+    "caption": "Actual v1.6.42 operator capture. The PDF preview shows 11 selected signals with 4 complete evidence records. This is application evidence, not universal relay acceptance.",
+    "captionId": "Screenshot nyata operator v1.6.42. Pratinjau PDF memuat 11 sinyal terpilih dan 4 evidence lengkap. Ini bukti fungsi aplikasi, bukan penerimaan semua jenis relay."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
   "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.42"

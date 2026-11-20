@@ -35,6 +35,16 @@ jobs:
             exit 1
           fi
           version="${tag#v}"
+          # This additive backfill extracts a historical ZIP to produce a file-level SBOM.
+          # Modern public releases (v1.6.42+) ship a portable single EXE. They require
+          # the canonical release-windows.yml provenance/SBOM flow; never claim that
+          # the EXE is an extractable archive or silently substitute historical bytes.
+          python - "$version" <<'PY'
+          import sys
+          version = tuple(map(int, sys.argv[1].split(".")[:3]))
+          if version >= (1, 6, 42):
+              raise SystemExit("Single-EXE stable release: use the canonical release SBOM/provenance workflow; legacy ZIP backfill is not applicable.")
+          PY
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 

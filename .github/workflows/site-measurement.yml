@@ -22,6 +22,7 @@ on:
       - "scripts/inject-site-measurement.py"
       - "scripts/validate-site-measurement.py"
       - "scripts/check-site-health.py"
+      - "scripts/test-public-browser-qa.py"
       - "scripts/check-measurement-readiness.py"
       - "scripts/build-site-measurement-report.py"
       - "scripts/validate-measurement-report.py"
@@ -38,6 +39,7 @@ on:
       - "scripts/inject-site-measurement.py"
       - "scripts/validate-site-measurement.py"
       - "scripts/check-site-health.py"
+      - "scripts/test-public-browser-qa.py"
       - "scripts/check-measurement-readiness.py"
       - "scripts/build-site-measurement-report.py"
       - "scripts/validate-measurement-report.py"
@@ -69,8 +71,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install offline report dependency
-        run: python -m pip install --disable-pip-version-check --quiet requests
+      - name: Install measurement and browser QA dependencies
+        run: |
+          python -m pip install --disable-pip-version-check --quiet requests "playwright==1.56.0"
+          python -m playwright install --with-deps chromium
 
       - name: Prepare deterministic stable release evidence
         shell: bash
@@ -109,6 +113,9 @@ jobs:
         id: local_health
         continue-on-error: true
         run: python scripts/check-site-health.py --site _site --output _measurement
+
+      - name: Exercise real Chromium bilingual and mobile navigation QA
+        run: python scripts/test-public-browser-qa.py --site _site --output _measurement/browser-qa
 
       - name: Exercise disabled readiness state
         env:

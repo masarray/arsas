@@ -1,16 +1,16 @@
 # Tracked asset provenance register
 
-Status: **inventory complete for the named Git snapshot; origin/rights and visual-similarity review remain open**.
+Status: **81 tracked binary asset paths inventoried for 25 October 2026; origin/rights, sanitization and visual-similarity reviews remain distinct from binary identity checks**.
 
 This register supports the [independent implementation and provenance policy](INDEPENDENT_IMPLEMENTATION_AND_PROVENANCE.md), [clean-room policy](CLEAN_ROOM_AND_INTEROPERABILITY_POLICY.md), and [third-party notices](../THIRD_PARTY_NOTICES.md). It does **not** certify originality, license clearance, or freedom from resemblance to unrelated products.
 
 ## Audited snapshot
 
-- Repository: `masarray/arsas`; tracked recursive Git tree at `b953612b535445095c808f164bebfaa4bbcbb203` (2026-09-25).
-- Full recursive tree response: not truncated; 1,030 tracked blobs.
-- Extension inventory: 65 `.png`, `.jpg`/`.jpeg`, `.webp`, `.ico`, `.svg`, `.ttf`, `.otf`, `.woff2` or `.gif` blobs.
+- Repository: `masarray/arsas`; historical baseline `b953612b535445095c808f164bebfaa4bbcbb203` (2026-09-25), updated asset inventory including v1.6.42 operator screenshots at branch commit `45838496e5dd289b42fbb731a6cafd8cd3547c32` (2026-10-25).
+- Historic recursive tree response: not truncated; 1,030 tracked entries in the original snapshot. The live CI gate independently compares all currently tracked asset blobs against this revised manifest.
+- Current extension inventory: **81** tracked `.png`, `.jpg`/`.jpeg`, `.webp`, `.ico`, `.svg`, `.ttf`, `.otf`, `.woff2` or `.gif` asset paths, including 8 authentic v1.6.42 operator PNG originals and 8 optimized WebP derivatives.
 - This is a *path and Git-blob metadata inventory*, not an image-content, source-license, hidden-metadata, or legal review. The separately maintained source-clean gate scans tracked paths and supported text contents; it does not establish binary-image provenance.
-- The machine-readable [per-file asset manifest](asset-provenance-manifest.json) records all 65 tracked asset paths, their Git blob SHA, byte size, exact-duplicate relationship and explicit review status. There are 42 unique asset blobs; 23 duplicate groups are byte-for-byte deployments of the same Git blob at two paths.
+- The machine-readable [per-file asset manifest](asset-provenance-manifest.json) records all **81** tracked asset paths, Git blob SHA, size, duplicate relationships and review status. There are **58 distinct Git blobs**. The 16 new screenshots are unique identities; existing 23 exact-duplicate relationships are preserved.
 - CI validates that every tracked asset in this extension scope is represented and that its blob SHA still matches the manifest. Changing or adding an asset therefore requires an explicit provenance-manifest update rather than silently entering the tree.
 - Inter v4.1 font provenance was separately checked against the official upstream release identity plus independent public package/hash records. This establishes technical byte provenance for the four bundled static faces; it is not a legal-clearance or originality opinion.
 
@@ -20,9 +20,17 @@ This register supports the [independent implementation and provenance policy](IN
 | Application artwork | 8 | Other visual files under `Assets/`, including icons, relay fascia and social image | Contributor/creator, source, license or own-work declaration and generation history need a separately recorded review for each distinct work. |
 | Application screenshots | 25 | `Assets/screenshot/` | Verify capture comes from ARSAS, was generated with synthetic/sanitized data, and contains no confidential or unrelated-product image. Filename alone is not proof. |
 | Website artwork | 4 | `landing/assets/` outside screenshots | Review original source and distribution rights; where Git blobs match an application asset, share its review record rather than claiming independent creation. |
-| Website screenshots | 24 | `landing/assets/screenshots/` | Review capture and sanitization; associate identical Git blobs with application screenshot records. |
+| Website screenshots | 40 | `landing/assets/screenshots/` | Eight original PNG captures supplied and approved for publication by the operator (2026-10-25) plus eight derived WebP files; independent field-site data sanitization review is not asserted. Older captures retain their historical labels. |
 
 The snapshot contains **23 groups of exact matching Git blob IDs** across app and website asset paths. Matching blob IDs prove byte-for-byte identity in that Git tree; they do not prove rights, authorship, or visual independence. The reference artwork and screenshot categories are intentionally counted by *tracked path*, not deduplicated distinct works.
+
+
+## October 25, 2026 operator screenshot provenance
+
+- Eight captures from the publicly published **ARSAS v1.6.42 Windows application** were provided directly by the operator for website use: IED Browser, Event Logs, Signal Testing, FAT PDF preview, SMV, GOOSE Subscriber, Alarm Annunciator, and Diagnostics.
+- The **original PNG image bytes** are preserved under `landing/assets/screenshots/arsas-*-v1.6.42.png` and the SHA-identifiable Git blobs are recorded in the manifest. Matching full-resolution WebP files were derived without image compositing at quality 86 using Pillow, with original aspect ratios preserved.
+- The files include sample device names and private-network IP addresses as captured. Public-upload approval is based on the contributor's explicit request; that does **not** represent an independent customer-information, equipment-location, or copyright clearance audit.
+- The capture demonstrates UI and bounded operator testing, not R7/R10 physical acceptance, IEC 61850 certification or lossless buffered SOE. The previous v1.6.40 screenshots are retained for SCL/COMTRADE and historic setup screens where no newer capture was provided.
 
 ## Specific review queue
 

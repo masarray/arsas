@@ -45,6 +45,11 @@ jobs:
               raise SystemExit('Missing publication request fields: ' + ', '.join(missing))
           if not re.fullmatch(r'\d+\.\d+\.\d+', str(request['version'])):
               raise SystemExit('Publication request version is invalid')
+          # This historical artifact publisher expects a portable ZIP. Modern stable
+          # releases require the exact tested single EXE with SBOM/provenance from
+          # release-windows.yml. Prevent any newer release from silently reverting.
+          if tuple(map(int, request['version'].split('.'))) >= (1, 6, 42):
+              raise SystemExit('Modern single-EXE release must use release-windows.yml; legacy ZIP publisher refuses this version')
           if notes.get('version') != request['version']:
               raise SystemExit('Release notes version does not match publication request')
           signing = notes.get('codeSigning', {})
