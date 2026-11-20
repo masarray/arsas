@@ -18,10 +18,10 @@ public static class StaticReportEvidencePolicy
                 "Unavailable / no RCB in open SCL",
                 "The opened SCL has no matching ReportControl. Live MMS may differ; do not assume the relay lacks an RCB.")
             : new(
-                "NO RCB OBSERVED IN LIVE DISCOVERY (UNVERIFIED)",
-                "Static DataSet: no verified live RCB",
-                "Unverified / no live RCB evidence",
-                "Live enumeration may be partial on large MMS domains. Do not claim the IED lacks a configured RCB; no cyclic MMS process polling is authorized.");
+                "NO VERIFIED LIVE RCB→DATASET BINDING (UNVERIFIED)",
+                "Static DataSet: no verified live RCB/DataSet binding",
+                "Unverified / live RCB binding incomplete",
+                "Observed RCB instances may still lack a live-read DatSet binding; live enumeration may be partial on large MMS domains. This does not prove the IED has no RCB or cannot report; no cyclic MMS process polling is authorized.");
 
     /// <summary>
     /// User-facing coverage text never says a DataSet is report-ready merely
@@ -38,10 +38,10 @@ public static class StaticReportEvidencePolicy
         if (represented == 0)
             return hasOpenedSclDesign
                 ? $"{dataSetCount} DataSet(s) · no RCB in open SCL"
-                : $"{dataSetCount} DataSet(s) · live RCB not yet verified";
+                : $"{dataSetCount} DataSet(s) · live RCB/DataSet binding unverified";
 
         var source = hasOpenedSclDesign ? "SCL-configured" : "live-observed";
-        return $"{represented}/{dataSetCount} DataSet(s) with {source} RCB · actual reporting unverified";
+        return $"{represented}/{dataSetCount} DataSet(s) with {source} RCB/DataSet binding · Report ingress unverified";
     }
 
     /// <summary>

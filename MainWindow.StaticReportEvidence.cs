@@ -38,6 +38,18 @@ public partial class MainWindow
         }
 
         var reports = model.ReportControls.ToArray();
+        var verifiedBindingCount = reports.Count(report =>
+            !string.IsNullOrWhiteSpace(report.DataSetReference));
+        var sourceLabel = device.SclWorkspace?.DesignModel is not null
+            ? "open SCL RCB definitions" : "live-observed RCB instances";
+        // Complete name discovery and completed bounded enrichment are not
+        // equivalent to fully read RCB DatSet bindings. Separate these facts.
+        AddLog("INFO", device.Name,
+            $"Static DataSet RCB mapping evidence: {verifiedBindingCount}/{reports.Length} " +
+            $"{sourceLabel} with nonempty DataSet reference; the remainder is " +
+            "unverified, not necessarily unconfigured. RptEna and actual Report " +
+            "ingress must be established independently.");
+
         var unobservedDataSets = new List<string>();
         foreach (var dataSet in model.DataSets)
         {
@@ -50,8 +62,15 @@ public partial class MainWindow
                 continue;
             }
 
-            var reportSummary = string.Join(", ", matchingReports.Select(report =>
-                $"{report.Reference} ({(report.Buffered ? "BRCB" : "URCB")})"));
+            // Indexed client-slot families can produce hundreds of RCB rows;
+            // summarize representative exact observed names in Event Logs.
+            var representative = matchingReports.Length <= 3
+                ? matchingReports
+                : new[] { matchingReports[0], matchingReports[1], matchingReports[^1] };
+            var reportSummary = string.Join(", ", representative.Select(report =>
+                $"{report.Reference} ({(report.Buffered ? "BRCB" : "URCB")})")) +
+                (matchingReports.Length > 3
+                    ? $" (+{matchingReports.Length - 3} indexed candidate(s))" : string.Empty);
             AddLog("INFO", device.Name,
                 $"Static DataSet feasibility: {dataSet.Reference} · members={dataSet.Members.Count} · configured RCB={reportSummary}.");
         }

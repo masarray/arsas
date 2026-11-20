@@ -8,10 +8,11 @@ public sealed class StaticReportEvidenceRecoveryTests
     public void PartialLiveMmsInventoryCannotProveTheIedHasNoConfiguredRcb()
     {
         var value = StaticReportEvidencePolicy.ClassifyMissingRcb(false);
-        Assert.Contains("UNVERIFIED", value.Label);
+        Assert.Contains("NO VERIFIED LIVE RCB→DATASET BINDING", value.Label);
         Assert.Contains("Unverified", value.PointStatus);
         Assert.DoesNotContain("Unavailable", value.PointStatus);
         Assert.Contains("may be partial", value.Explanation);
+        Assert.Contains("does not prove", value.Explanation);
     }
 
     [Fact]
@@ -26,10 +27,10 @@ public sealed class StaticReportEvidenceRecoveryTests
 
     [Theory]
     [InlineData(0, 0, false, "No static DataSets")]
-    [InlineData(39, 0, false, "39 DataSet(s) · live RCB not yet verified")]
+    [InlineData(39, 0, false, "39 DataSet(s) · live RCB/DataSet binding unverified")]
     [InlineData(39, 0, true, "39 DataSet(s) · no RCB in open SCL")]
-    [InlineData(39, 3, false, "3/39 DataSet(s) with live-observed RCB · actual reporting unverified")]
-    [InlineData(39, 35, true, "35/39 DataSet(s) with SCL-configured RCB · actual reporting unverified")]
+    [InlineData(39, 3, false, "3/39 DataSet(s) with live-observed RCB/DataSet binding · Report ingress unverified")]
+    [InlineData(39, 35, true, "35/39 DataSet(s) with SCL-configured RCB/DataSet binding · Report ingress unverified")]
     public void QuickStartCoverage_DoesNotClaimIncompleteInventoryIsReportReady(
         int total, int reportBound, bool openedScl, string expected)
         => Assert.Equal(expected,
@@ -49,6 +50,17 @@ public sealed class StaticReportEvidenceRecoveryTests
             : new[] { "Target domain 'LD0' NamedVariable enumeration is partial: name limit 20000 reached." };
         Assert.Equal(expected, StaticReportEvidencePolicy.ShouldExpandTargetedNameList(
             association, partial, unresolved, warnings));
+    }
+
+    [Fact]
+    public void DiagnosticLog_DistinguishesObservedInstancesFromVerifiedDataSetBindings()
+    {
+        var source = File.ReadAllText(FindSource("MainWindow.StaticReportEvidence.cs"));
+        Assert.Contains("verifiedBindingCount", source);
+        Assert.Contains("nonempty DataSet reference", source);
+        Assert.Contains("unverified, not necessarily unconfigured", source);
+        Assert.Contains("indexed candidate(s)", source);
+        Assert.DoesNotContain("NO CONFIGURED RCB.", source);
     }
 
     [Fact]
