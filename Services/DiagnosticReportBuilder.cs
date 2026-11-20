@@ -324,8 +324,19 @@ internal static class DiagnosticReportBuilder
         builder.AppendLine("  Interpretation : display completeness only; Unknown q does not mean missing value, and RCB setup or first report does not prove every selected member is live.");
         foreach (var group in image.Groups.Take(12))
             builder.AppendLine($"  DataSet/RCB     : {group.DataSetReference} | {group.RcbReference} | visible={group.ValueVisible}/{group.Selected}, pending={group.ValuePending}, qNotSupplied={group.QualityNotSupplied}");
+        if (image.Groups.Count > 12)
+            builder.AppendLine($"  DataSet/RCB list: shown=12/{image.Groups.Count}; remaining groups omitted from initial-image detail only");
         foreach (var point in image.PendingPoints.Take(12))
-            builder.AppendLine($"  Awaiting value  : {point.Reference} | RCB={point.RcbReference} | status={point.Status} | reason={point.Reason}");
+        {
+            // This is the UI's current display token, NOT a decoded raw MMS
+            // value. A legitimate enum/string "Unknown" must not be presented
+            // as proof that the IED sent no value.
+            var token = (point.DisplayValueToken ?? string.Empty)
+                .Replace('\r', ' ').Replace('\n', ' ');
+            if (token.Length > 80)
+                token = token[..80] + "…";
+            builder.AppendLine($"  Awaiting value  : {point.Reference} | RCB={point.RcbReference} | displayToken={token} | status={point.Status} | reason={point.Reason}");
+        }
         if (image.PendingPoints.Count > 12)
             builder.AppendLine($"  Additional pending: {image.PendingPoints.Count - 12} (showing first 12; never inferred unavailable)");
     }
@@ -343,9 +354,11 @@ internal static class DiagnosticReportBuilder
         IReadOnlyList<Iec61850RcbActivationEvidence>? activations = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        var selected = points.ToArray();
+        var totalGroups = StaticDataSetInitialImageDiagnostic.Evaluate(selected).Groups.Count;
         var groups = StaticDataSetRcbImageTriage.Evaluate(
-            points, continuity, maxGroups: 16, activations: activations);
-        builder.AppendLine($"Static RCB traffic : shown={groups.Count}, " +
+            selected, continuity, maxGroups: 64, activations: activations);
+        builder.AppendLine($"Static RCB traffic : shown={groups.Count}/{totalGroups}, " +
             $"routed={groups.Count(group => group.HasActualReportFrames)}, " +
             $"noRoutedFrames={groups.Count(group => !group.HasActualReportFrames)}");
         builder.AppendLine("  Attribution     : one exact DataSet/RCB per row; zero routed frames " +

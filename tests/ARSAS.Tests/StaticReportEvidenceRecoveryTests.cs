@@ -1,4 +1,5 @@
 using ArIED61850Tester.Services;
+using ArIED61850Tester.Models;
 
 namespace ARSAS.Tests;
 
@@ -61,6 +62,43 @@ public sealed class StaticReportEvidenceRecoveryTests
         Assert.Contains("unverified, not necessarily unconfigured", source);
         Assert.Contains("indexed candidate(s)", source);
         Assert.DoesNotContain("NO CONFIGURED RCB.", source);
+    }
+
+    [Fact]
+    public void ReportProofWindow_BeginsAfterLastCompletedRcbActivation()
+    {
+        var started = DateTimeOffset.Parse("2026-11-20T11:01:37Z");
+        var now = started.AddSeconds(3);
+        var evidence = Enumerable.Range(1, 33).Select(index =>
+            new Iec61850RcbActivationEvidence
+            {
+                Rcb = "LD0/LLN0.BR.rpt" + index,
+                SetupSucceeded = true,
+                ActivationReturnedAtUtc = started.AddMilliseconds(index * 95)
+            }).ToArray();
+
+        var deadline = StaticReportEvidencePolicy.ReportProofDeadline(
+            started, now.AddMilliseconds(300), TimeSpan.FromSeconds(3),
+            evidence);
+
+        Assert.Equal(started.AddMilliseconds(32 * 95).AddSeconds(3), deadline);
+    }
+
+    [Fact]
+    public void ReportProofWindow_FutureAndStaleActivationCannotExtendDeadline()
+    {
+        var started = DateTimeOffset.Parse("2026-11-20T11:01:37Z");
+        var now = started.AddSeconds(3);
+        var evidence = new[]
+        {
+            new Iec61850RcbActivationEvidence { ActivationReturnedAtUtc = started.AddMinutes(-1) },
+            new Iec61850RcbActivationEvidence { ActivationReturnedAtUtc = now.AddMinutes(1) }
+        };
+        var deadline = StaticReportEvidencePolicy.ReportProofDeadline(
+            started, now, TimeSpan.FromSeconds(3), evidence);
+        Assert.Equal(started.AddSeconds(3), deadline);
+        Assert.Equal(deadline, StaticReportEvidencePolicy.ReportProofDeadline(
+            started, now, TimeSpan.FromSeconds(3), []));
     }
 
     [Fact]

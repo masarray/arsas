@@ -1,3 +1,5 @@
+using ArIED61850Tester.Models;
+
 namespace ArIED61850Tester.Services;
 
 /// <summary>
@@ -52,6 +54,35 @@ public static class StaticReportEvidencePolicy
     /// No retry for healthy RCBs, name-limit exhaustion, other MMS faults,
     /// or a lost association. The caller is responsible for one-shot execution.
     /// </summary>
+    /// <summary>
+    /// An initial static Report observation window must begin no earlier than
+    /// the latest already-completed RCB setup. With many serial activations,
+    /// starting at the UI monitor click can end before the final RCB is armed.
+    /// This is a diagnostic deadline only. It never triggers any MMS request,
+    /// repeat GI, or fallback poll. Future/stale timestamps cannot extend it.
+    /// </summary>
+    public static DateTimeOffset ReportProofDeadline(
+        DateTimeOffset monitorStartedUtc,
+        DateTimeOffset observedNowUtc,
+        TimeSpan proofWindow,
+        IReadOnlyList<Iec61850RcbActivationEvidence> activations)
+    {
+        ArgumentNullException.ThrowIfNull(activations);
+        if (proofWindow < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(proofWindow));
+
+        var latest = monitorStartedUtc;
+        foreach (var activation in activations)
+        {
+            if (activation.ActivationReturnedAtUtc is not { } completed ||
+                completed < monitorStartedUtc || completed > observedNowUtc)
+                continue;
+            if (completed > latest)
+                latest = completed;
+        }
+        return latest.Add(proofWindow);
+    }
+
     public static bool ShouldExpandTargetedNameList(
         bool associationReady,
         bool reconciliationPartial,

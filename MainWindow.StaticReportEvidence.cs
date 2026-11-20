@@ -13,10 +13,22 @@ public partial class MainWindow
     private void LogStaticRcbImageTriage(Iec61850MonitorDevice device)
     {
         var groups = ArIED61850Tester.Services.StaticDataSetRcbImageTriage.Evaluate(
-            device.Points, device.ReportContinuityEvidence, maxGroups: 16);
-        foreach (var group in groups)
-            AddLog(group.Pending > 0 || !group.HasActualReportFrames ? "WARN" : "INFO",
-                device.Name,
+            device.Points, device.ReportContinuityEvidence, maxGroups: 64,
+            activations: device.RcbActivationEvidence);
+        var routed = groups.Count(group => group.HasActualReportFrames);
+        var missing = groups.Count - routed;
+        var valuePending = groups.Sum(group => group.Pending);
+        AddLog(missing > 0 || valuePending > 0 ? "WARN" : "INFO",
+            device.Name,
+            $"Static DataSet RCB evidence: inspected={groups.Count} (max 64), " +
+            $"routed={routed}, noRoutedFrames={missing}, valuePending={valuePending}. " +
+            "Report ingress, RCB setup and displayed values are separate facts.");
+        // Keep ordinary event logs concise even when 33+ independent RCBs
+        // run in parallel. Copy Diagnostic retains per-RCB detail for all
+        // groups in this bounded diagnostic snapshot.
+        foreach (var group in groups.Where(group =>
+                     group.Pending > 0 || !group.HasActualReportFrames).Take(8))
+            AddLog("WARN", device.Name,
                 "Static DataSet RCB evidence: " + group.Summary +
                 " (display completeness and actual stream traffic are separate facts).");
     }

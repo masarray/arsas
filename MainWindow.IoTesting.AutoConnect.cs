@@ -496,7 +496,7 @@ public partial class MainWindow
         Iec61850MonitorDevice device,
         TimeSpan proofWindow)
     {
-        var startedUtc = DateTime.UtcNow;
+        var startedUtc = DateTimeOffset.UtcNow;
         // A single A01 frame is NOT proof that B01, D01 and I01 have also
         // delivered their initial GI image. Keep one bounded observation
         // window for all four RCBs before logging their individual truth.
@@ -509,9 +509,21 @@ public partial class MainWindow
                 proofWindow,
                 _applicationCancellation.Token).ConfigureAwait(true);
 
-            var remaining = proofWindow - (DateTime.UtcNow - startedUtc);
+            // Complete the initial bounded window, then give RCBs armed
+            // during that window their own full proof interval. The P9 field
+            // setup armed 33 RCBs almost at the original deadline, causing
+            // a misleading no-traffic warning just before real GI ingress.
+            var remaining = startedUtc.Add(proofWindow) - DateTimeOffset.UtcNow;
             if (remaining > TimeSpan.Zero)
                 await Task.Delay(remaining, _applicationCancellation.Token)
+                    .ConfigureAwait(true);
+
+            var postActivationDeadline = Services.StaticReportEvidencePolicy.ReportProofDeadline(
+                startedUtc, DateTimeOffset.UtcNow, proofWindow,
+                device.RcbActivationEvidence);
+            var postActivationRemaining = postActivationDeadline - DateTimeOffset.UtcNow;
+            if (postActivationRemaining > TimeSpan.Zero)
+                await Task.Delay(postActivationRemaining, _applicationCancellation.Token)
                     .ConfigureAwait(true);
 
             if (!device.IsMonitoring ||
@@ -528,7 +540,8 @@ public partial class MainWindow
             // The UI pulse can be false (e.g. event lost at monitor startup)
             // even after all seven RCBs delivered genuine InformationReports.
             var exactRcbRows = ArIED61850Tester.Services.StaticDataSetRcbImageTriage.Evaluate(
-                device.Points, device.ReportContinuityEvidence, maxGroups: 16);
+                device.Points, device.ReportContinuityEvidence, maxGroups: 64,
+                activations: device.RcbActivationEvidence);
             var routedRcbs = exactRcbRows.Count(row => row.HasActualReportFrames);
             if (routedRcbs > 0)
             {
@@ -538,7 +551,7 @@ public partial class MainWindow
                 AddLog(
                     "INFO",
                     device.Name,
-                    $"Static DataSet report evidence: actual InformationReport traffic observed within {proofWindow.TotalSeconds:0.#} s; " +
+                    $"Static DataSet report evidence: actual InformationReport traffic observed after the bounded {proofWindow.TotalSeconds:0.#} s post-activation proof window; " +
                     $"exact routed RCBs={routedRcbs}/{exactRcbRows.Count}; report-backed runtime point(s)={reportPoints}. " +
                     "Each RCB remains independently verified by its own frames; zero-frame peers are not assumed healthy.");
                 return;
@@ -547,7 +560,7 @@ public partial class MainWindow
             AddLog(
                 "WARN",
                 device.Name,
-                $"Static DataSet report evidence: no exact routed RCB InformationReport traffic was observed within {proofWindow.TotalSeconds:0.#} s " +
+                $"Static DataSet report evidence: no exact routed RCB InformationReport traffic was observed after the bounded {proofWindow.TotalSeconds:0.#} s post-activation proof window " +
                 $"(uiPulse={trafficObserved && device.HasReportStream}, configuredGroups={exactRcbRows.Count}). " +
                 "Activation remains armed/report-pending; lack of exact routed ingress is not proof of IED silence and ARSAS will NOT switch process values to cyclic MMS polling.");
             MarkDiagnosticAlert();

@@ -22,7 +22,8 @@ internal static class StaticDataSetInitialImageDiagnostic
         string DataSetReference,
         string RcbReference,
         string Status,
-        string Reason);
+        string Reason,
+        string DisplayValueToken);
 
     internal sealed record Snapshot(
         int Selected,
@@ -74,7 +75,8 @@ internal static class StaticDataSetInitialImageDiagnostic
                 point.DataSetReference,
                 point.ReportControlReference,
                 point.Status,
-                point.Reason))
+                point.Reason,
+                point.Value))
             .ToArray();
 
         return new Snapshot(rows.Length, visible, rows.Length - visible,
