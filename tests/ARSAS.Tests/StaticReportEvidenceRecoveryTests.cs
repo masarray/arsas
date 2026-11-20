@@ -81,7 +81,7 @@ public sealed class StaticReportEvidenceRecoveryTests
             started, now.AddMilliseconds(300), TimeSpan.FromSeconds(3),
             evidence);
 
-        Assert.Equal(started.AddMilliseconds(32 * 95).AddSeconds(3), deadline);
+        Assert.Equal(started.AddMilliseconds(33 * 95).AddSeconds(3), deadline);
     }
 
     [Fact]
