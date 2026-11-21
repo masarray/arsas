@@ -16,9 +16,9 @@ public static class Iec61850EventOriginPolicy
             tokens.Any(x => x.Equals(longName, StringComparison.OrdinalIgnoreCase) ||
                             x.Equals(shortName, StringComparison.OrdinalIgnoreCase));
 
-        // Buffered reports are not necessarily replayed historical events.
-        // Only a separate verified continuity/replay proof may request Buffer.
-        if (verifiedBufferedReplay) return "Buffer";
+        // Delivery origin is independent of the IEC cause of report generation.
+        // The legacy flag is retained for source compatibility; EventLabel
+        // renders Buffer separately and preserves Data change / GI / integrity.
         if (IsPolling(acquisition)) return "Poll";
         // GI and integrity are snapshots, never spontaneous merely because
         // another optional trigger accompanies them.
