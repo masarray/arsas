@@ -3214,7 +3214,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         try
         {
             var csv = new StringBuilder();
-            csv.AppendLine("Sequence,DeviceTimestamp,IED,IP,Signal,Value,PreviousValue,Transition,Quality,Event,Acquisition,Stream,RawAcquisition,RawReason,ReportId,RCBReference,IECTelegram");
+            csv.AppendLine("Sequence,DeviceTimestamp,IED,IP,Signal,Value,PreviousValue,Transition,Quality,Event,Acquisition,Stream,RawAcquisition,RawReason,ReportId,RCBReference,IECTelegram,DeliveryOrigin,OriginEvidence,EntryID,ReportTimeOfEntry,ReportReceiveUtc,SqNum,SubSqNum,ConfRev,OptFlds,BufferOverflow");
             foreach (var entry in Events.OrderBy(item => item.Sequence))
             {
                 csv.AppendLine(string.Join(',', new[]
@@ -3235,7 +3235,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     Csv(entry.Reason),
                     Csv(entry.ReportId),
                     Csv(entry.ReportControlReference),
-                    Csv(entry.IecTelegram)
+                    Csv(entry.IecTelegram),
+                    Csv(entry.DeliveryOrigin),
+                    Csv(entry.ReplayEvidence),
+                    Csv(entry.ReportFrame?.EntryIdHex ?? ""),
+                    Csv(entry.ReportFrame?.ReportTimestamp ?? ""),
+                    Csv(entry.ReportFrame?.ReceivedAt.ToString("O") ?? ""),
+                    Csv(entry.ReportFrame?.SequenceNumber?.ToString(CultureInfo.InvariantCulture) ?? ""),
+                    Csv(entry.ReportFrame?.SubSequenceNumber?.ToString(CultureInfo.InvariantCulture) ?? ""),
+                    Csv(entry.ReportFrame?.ConfRev?.ToString(CultureInfo.InvariantCulture) ?? ""),
+                    Csv(entry.ReportFrame?.OptFldsRawHex ?? ""),
+                    Csv(entry.ReportFrame?.BufferOverflow?.ToString() ?? "")
                 }));
             }
             File.WriteAllText(dialog.FileName, csv.ToString(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
