@@ -4,6 +4,15 @@ Notable public changes to ARSAS are recorded here. Application releases must ide
 
 ## Unreleased
 
+## 1.6.46 — 2026-11-21 — Stable release candidate (Windows x64)
+
+- **Smart Updater first-download reliability:** fixed a Windows-exclusive `.part` handle that was still open when installer SHA-256 verification attempted to read it. The download stream now closes before independent size/hash verification and final package rename; rejected packages never become installable.
+- **Updater regression coverage:** tests now exercise a real first-time 1.1 MB simulated HTTPS download, verified cache reuse without another fetch, and wrong-SHA rejection with removal of incomplete `.part` files.
+- **Preserved existing smart updater behavior:** 15-second post-startup idle delay, hourly background review with 12-hour network throttle, verified installer prefetch, modeless user notification and explicit consent before installation. Stable/RC updater cache separation and deferred reminders remain in place.
+- **Release scope:** no changes to IEC 61850 reporting, IED commands, RCB/PurgeBuf behavior, ARIEC61850 or ArdIrec engine pins, or manually installed Windows code-signing status. Installer and portable packages must independently pass exact-source Windows release validation before public publication.
+
+[Updater correction PR #789](https://github.com/masarray/arsas/pull/789) · [Publication authority](https://github.com/masarray/arsas/actions/workflows/release-windows.yml) · [Release notes](docs/RELEASE_v1.6.46.md)
+
 ## 1.6.45 — 2026-11-21 — Public Stable (Windows x64)
 
 - **Event Logs:** Excel-like extended **full-row** selection with drag and Shift+click, clear selected-row feedback, right-click Copy, Ctrl+C, and bounded selected-row TSV export. Prevent event-detail drawer reflow from disrupting multi-row selection and context menus.
