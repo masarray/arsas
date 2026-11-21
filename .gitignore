@@ -413,3 +413,14 @@ dist/
 build/
 .vite/
 .cache/
+
+# OS/editor garbage and rejected local patches (not source fixtures)
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.bak
+*.orig
+*.rej
+*.swp
+*.swo
+*.stackdump
