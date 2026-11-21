@@ -21,11 +21,47 @@ public sealed partial class Iec61850MonitorRuntime
             .ConfigureAwait(false);
     }
 
-    public async Task<BrowserMmsWriteOutcome> WriteBrowserConfigurationAsync(
+    public Task<BrowserMmsWriteOutcome> WriteBrowserConfigurationAsync(
         string deviceId, LiveIedModelDiscoveryDocument model, long association,
         IedBrowserWriteRow target, MmsDataValue desired, CancellationToken cancellationToken)
     {
         var session = CurrentBrowserWriteSession(deviceId, model, association, target);
+        return RunAdmittedBrowserWriteAsync(
+            deviceId, model, association, session,
+            target.Reference, target.FunctionalConstraint,
+            "OPERATOR_BROWSER_MMS_WRITE",
+            token => session.Client.WriteBrowserConfigurationAsync(
+                target.Reference, target.FunctionalConstraint, desired, token),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Only this explicit IED Browser action may request PurgeBuf.
+    /// Recovery, RCB monitoring, GI, and generic DA Write never call it.
+    /// </summary>
+    public Task<BrowserMmsWriteOutcome> WriteBrowserPurgeBufAsync(
+        string deviceId, LiveIedModelDiscoveryDocument model, long association,
+        string rcbReference, bool explicitOperatorConfirmation,
+        CancellationToken cancellationToken)
+    {
+        if (!explicitOperatorConfirmation)
+            throw new InvalidOperationException(
+                "PurgeBuf requires an explicit operator-confirmed IED Browser action.");
+        var session = CurrentBrowserPurgeSession(
+            deviceId, model, association, rcbReference, out var exactReference);
+        return RunAdmittedBrowserWriteAsync(
+            deviceId, model, association, session, exactReference, "BR",
+            "OPERATOR_BROWSER_PURGEBUF_WRITE",
+            token => session.Client.WriteBrowserPurgeBufAsync(exactReference, token),
+            cancellationToken);
+    }
+
+    private async Task<BrowserMmsWriteOutcome> RunAdmittedBrowserWriteAsync(
+        string deviceId, LiveIedModelDiscoveryDocument model, long association,
+        DeviceSession session, string reference, string fc, string operation,
+        Func<CancellationToken, Task<BrowserMmsWriteOutcome>> action,
+        CancellationToken cancellationToken)
+    {
         if (!Iec61850ControlFlightAdmission.TryEnter(
                 ref session.ControlCommandActive, ref session.ControlFlightQuarantined))
             throw new InvalidOperationException(
@@ -36,10 +72,9 @@ public sealed partial class Iec61850MonitorRuntime
         try
         {
             Log("WARN", session.Device.Name,
-                "OPERATOR_BROWSER_MMS_WRITE: " + target.Reference + " [" +
-                target.FunctionalConstraint + "]; explicit operator confirmation; at most one Write.");
-            native = session.Client.WriteBrowserConfigurationAsync(
-                target.Reference, target.FunctionalConstraint, desired, lifetime.Token);
+                operation + ": " + reference + " [" + fc +
+                "]; explicit operator confirmation; at most one Write.");
+            native = action(lifetime.Token);
             var result = await Iec61850ControlFlightAdmission.WaitForNativeAsync(
                 native, ControlFlightDeadline, cancellationToken,
                 () => Iec61850ControlFlightAdmission.Quarantine(ref session.ControlFlightQuarantined),
@@ -52,10 +87,11 @@ public sealed partial class Iec61850MonitorRuntime
                 throw new InvalidOperationException(
                     "MMS association/model changed; this Write outcome cannot be attributed to the new session.");
             Log(result.Succeeded ? "INFO" : "WARN", session.Device.Name,
-                "BROWSER_MMS_WRITE_RESULT: " + target.Reference +
+                operation + "_RESULT: " + reference +
                 "; accepted=" + result.WriteAccepted +
                 "; noChange=" + result.NoChange +
-                "; readbackVerified=" + result.ReadbackVerified + "; " + result.Detail);
+                "; readbackVerified=" + result.ReadbackVerified +
+                "; " + result.Detail);
             return result;
         }
         finally
@@ -63,7 +99,7 @@ public sealed partial class Iec61850MonitorRuntime
             if (native is { IsCompleted: false })
             {
                 Iec61850ControlFlightAdmission.Quarantine(ref session.ControlFlightQuarantined);
-                // Never free admission while the native MMS request may still be in flight.
+                // Do not free admission while a native MMS Write could be in flight.
                 _ = ObserveBrowserWriteCompletionAsync(native, lifetime, session);
             }
             else
@@ -72,6 +108,33 @@ public sealed partial class Iec61850MonitorRuntime
                 lifetime.Dispose();
             }
         }
+    }
+
+    private DeviceSession CurrentBrowserPurgeSession(
+        string deviceId, LiveIedModelDiscoveryDocument model, long association,
+        string rcbReference, out string exactRcbReference)
+    {
+        if (!_sessions.TryGetValue(deviceId, out var session) ||
+            !session.Client.IsConnected || !session.Device.IsConnected ||
+            session.Device.IsDemo || session.Device.IsBusy ||
+            session.Device.IsMonitoring || session.Device.LiveValues.IsOffline ||
+            session.ControlLifetimeCancellation.IsCancellationRequested ||
+            !ReferenceEquals(session.Device.LiveDiscoveryModel, model) ||
+            session.Device.LiveValues.Association != association ||
+            !BrowserPurgeBufPolicy.TryResolve(model, rcbReference,
+                out exactRcbReference))
+            throw new InvalidOperationException(
+                "Manual PurgeBuf requires one exact current live BRCB, an idle association and stopped ARSAS monitoring.");
+
+        // C# out parameters must not escape into a lambda, and the frozen
+        // identity is also the authority for this admission decision.
+        var exact = exactRcbReference;
+        if (GetActiveBrowserRcbReferences(deviceId).Any(active =>
+                BrowserPurgeBufPolicy.SameExactBrcbReference(active, exact)))
+            throw new InvalidOperationException(
+                "PurgeBuf is blocked while this RCB has an ARSAS reporting subscription.");
+
+        return session;
     }
 
     private static async Task ObserveBrowserWriteCompletionAsync(

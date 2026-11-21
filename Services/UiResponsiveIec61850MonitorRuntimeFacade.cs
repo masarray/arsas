@@ -98,6 +98,17 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
             token => _inner.WriteBrowserConfigurationAsync(
                 deviceId, model, association, target, desired, token));
 
+    // Manual destructive BRCB operation: one explicit operator action,
+    // same per-device queue/admission and native MMS association as Browser Write.
+    public Task<BrowserMmsWriteOutcome> WriteBrowserPurgeBufAsync(
+        string deviceId, AR.Iec61850.Discovery.LiveIedModelDiscoveryDocument model,
+        long association, string rcbReference, bool explicitOperatorConfirmation,
+        CancellationToken cancellationToken)
+        => RunDeviceOperationAsync(deviceId, cancellationToken,
+            token => _inner.WriteBrowserPurgeBufAsync(
+                deviceId, model, association, rcbReference,
+                explicitOperatorConfirmation, token), rejectIfBusy: true);
+
     public Task<IedBrowserNativeWritePreview> PreviewBrowserDataAttributeWriteAsync(
         Iec61850MonitorDevice device,
         AR.Iec61850.Mms.MmsObjectReference reference,

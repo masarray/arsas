@@ -1,4 +1,5 @@
 using AR.Iec61850.Mms;
+using ArIED61850Tester.Models;
 
 namespace ArIED61850Tester.Services;
 
@@ -77,6 +78,71 @@ public sealed partial class NativeIec61850Client
             return new BrowserMmsWriteOutcome(true, matches, false, beforeText, afterText,
                 matches ? "Confirmed-Write accepted and typed MMS readback verified." :
                     "Write accepted but readback mismatch. Do not retry automatically.");
+        }, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Explicit operator-only BRCB PurgeBuf. Does not reserve, reconfigure,
+    /// enable, disable, poll process values, or retry after an uncertain ACK.
+    /// A readback of FALSE verifies the command's self-reset, NOT the amount
+    /// of history that was discarded.
+    /// </summary>
+    public async Task<BrowserMmsWriteOutcome> WriteBrowserPurgeBufAsync(
+        string rcbReference, CancellationToken cancellationToken)
+    {
+        if (!IsConnected || _liveModel is null ||
+            !BrowserPurgeBufPolicy.TryResolve(_liveModel, rcbReference, out var exact))
+            throw new InvalidOperationException(
+                "Current native MMS association has no exact verified buffered RCB identity.");
+
+        var enabledTarget = MmsObjectReference.FromIec61850Reference(
+            exact + ".RptEna", "BR");
+        var purgeTarget = MmsObjectReference.FromIec61850Reference(
+            exact + ".PurgeBuf", "BR");
+
+        return await RunMmsOperationAsync(async () =>
+        {
+            // Never try to purge a reporting-enabled BRCB. A foreign SAS
+            // reservation may also refuse Write; that refusal is final.
+            var enabled = await _session.ReadSingleVariableAsync(
+                enabledTarget, cancellationToken).ConfigureAwait(false);
+            if (!enabled.IsSuccess || enabled.Value?.Kind != MmsDataKind.Boolean ||
+                enabled.Value.Value is not bool isEnabled)
+                return new BrowserMmsWriteOutcome(false, false, false, "", "",
+                    "Live BR.RptEna Boolean pre-read failed; no PurgeBuf Write sent.");
+            if (isEnabled)
+                return new BrowserMmsWriteOutcome(false, false, false, "RptEna=true", "",
+                    "BRCB reporting is enabled. PurgeBuf denied without changing RptEna.");
+
+            var before = await _session.ReadSingleVariableAsync(
+                purgeTarget, cancellationToken).ConfigureAwait(false);
+            if (!before.IsSuccess || before.Value?.Kind != MmsDataKind.Boolean ||
+                before.Value.Value is not bool wasSet || wasSet)
+                return new BrowserMmsWriteOutcome(false, false, false, "", "",
+                    "Live BR.PurgeBuf Boolean pre-read failed or already TRUE; no Write sent.");
+
+            cancellationToken.ThrowIfCancellationRequested();
+            var sent = await _session.WriteSingleVariableAsync(
+                purgeTarget, MmsDataValue.Boolean(true), cancellationToken)
+                .ConfigureAwait(false);
+            if (!sent.IsSuccess || sent.AccessResults.Count != 1 ||
+                !sent.AccessResults[0].IsSuccess)
+                return new BrowserMmsWriteOutcome(false, false, false, "false", "",
+                    "PurgeBuf MMS Write not acknowledged: " + sent.Message +
+                    ". No automatic retry; verify manually before another action.");
+
+            var after = await _session.ReadSingleVariableAsync(
+                purgeTarget, cancellationToken).ConfigureAwait(false);
+            if (!after.IsSuccess || after.Value?.Kind != MmsDataKind.Boolean ||
+                after.Value.Value is not bool reset)
+                return new BrowserMmsWriteOutcome(true, false, false, "false", "",
+                    "PurgeBuf Write ACK received; self-reset readback unavailable. Never retry automatically.");
+
+            return new BrowserMmsWriteOutcome(true, !reset, false, "false",
+                reset ? "true" : "false",
+                reset
+                    ? "PurgeBuf Write ACK received but command still TRUE; outcome unresolved. No automatic retry."
+                    : "PurgeBuf Write ACK received; BR.PurgeBuf returned FALSE (self-reset verified). Historical buffer contents cannot be reconstructed.");
         }, cancellationToken).ConfigureAwait(false);
     }
 
