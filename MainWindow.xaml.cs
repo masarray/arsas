@@ -1707,7 +1707,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             "same-IED control flight already active or quarantined; no Operate requested.");
         SetStatus($"{device.Name}: {signal.Name} — command not sent; {reason}.");
         ShowControlShout(Iec61850ControlShout.FromLocalRejection(reason));
+        RecordUnsentDockControl(device, signal, signal.ControlPendingValue, reason);
         return true;
+    }
+
+    // One audit authority in the runtime; the UI only supplies its local
+    // rejection reason and original requested checks. This does not dispatch
+    // an Operate and never manufactures report/process feedback.
+    private void RecordUnsentDockControl(
+        Iec61850MonitorDevice? device, SignalDefinition signal,
+        string? requestedValue, string reason)
+    {
+        if (device is null) return;
+        _runtime.RecordUnsentOperatorControl(
+            device.DeviceId, signal, requestedValue ?? string.Empty, reason,
+            signal.ControlInterlockCheck, signal.ControlSynchroCheck,
+            signal.ControlTestMode);
     }
 
     private async void ControlStageAction_Click(object sender, RoutedEventArgs e)
@@ -1798,6 +1813,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             signal.ControlLastResult = $"Confirmation rejected: {rejectionReason}.";
             AddLog("WARN", device?.Name ?? "IED",
                 $"Confirm rejected: {signal.ObjectReference}; reason={rejectionReason}.");
+            RecordUnsentDockControl(device, signal, signal.ControlPendingValue, rejectionReason);
             SetStatus($"{device?.Name ?? "IED"}: {signal.Name} confirmation rejected — {rejectionReason}.");
             ShowControlShout(Iec61850ControlShout.FromLocalRejection(rejectionReason));
             return;
@@ -1814,10 +1830,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
 
         var action = signal.ControlPendingAction;
+        var requestedValue = signal.ControlPendingValue;
         signal.ClearControlConfirmation();
         var device = _signalOwners.TryGetValue(signal, out var owner) ? owner : SelectedDevice;
         AddLog("INFO", device?.Name ?? "IED",
             $"Control confirmation cancelled: {signal.ObjectReference}; action={action}.");
+        RecordUnsentDockControl(device, signal, requestedValue,
+            "Operator cancelled confirmation before MMS dispatch.");
         SetStatus($"{device?.Name ?? "IED"}: {signal.Name} {action} cancelled before dispatch.");
     }
 
@@ -1848,6 +1867,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             signal.ControlLastResult = $"Command rejected: {rejectionReason}.";
             AddLog("WARN", device?.Name ?? "IED",
                 $"Direct control rejected: {signal.ObjectReference}; reason={rejectionReason}.");
+            RecordUnsentDockControl(device, signal, requestedValue, rejectionReason);
             SetStatus($"{device?.Name ?? "IED"}: {signal.Name} command rejected — {rejectionReason}.");
             ShowControlShout(Iec61850ControlShout.FromLocalRejection(rejectionReason));
             return;
