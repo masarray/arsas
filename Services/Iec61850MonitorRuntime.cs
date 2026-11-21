@@ -2075,10 +2075,16 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
             ProcessReportHealth(session, plan, slice);
             // One immutable verdict per actual frame; every member and projected
             // SOE row uses the same reference, never a value/time based join.
-            var reportOrigins = new Dictionary<NativeReportFrameMetadata, Iec61850ReportDeliveryEvidence>();
-            foreach (var frame in slice.ReportFrames)
-                reportOrigins[frame] = session.ReplayTracker.Classify(
-                    frame, session.BrowserObservationAssociation);
+            // Empty monitor slices are common: do not allocate one dictionary
+            // for every 3 ms receive window when there are zero report frames.
+            Dictionary<NativeReportFrameMetadata, Iec61850ReportDeliveryEvidence>? reportOrigins =
+                slice.ReportFrames.Count == 0 ? null :
+                new Dictionary<NativeReportFrameMetadata, Iec61850ReportDeliveryEvidence>(
+                    slice.ReportFrames.Count);
+            if (reportOrigins is not null)
+                foreach (var frame in slice.ReportFrames)
+                    reportOrigins[frame] = session.ReplayTracker.Classify(
+                        frame, session.BrowserObservationAssociation);
             if (slice.ReportFrames.Count > 0 || slice.Updates.Count > 0)
                 RecordSuccessfulIo(session);
 
@@ -2294,6 +2300,7 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                         ? plan.ReportControlReference : update.ReportControlReference,
                     reportFrame: update.ReportFrame,
                     reportDelivery: update.ReportFrame is { } eventFrame &&
+                                    reportOrigins is not null &&
                                     reportOrigins.TryGetValue(eventFrame, out var origin)
                         ? origin : Iec61850ReportDeliveryEvidence.Unknown);
 
