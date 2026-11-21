@@ -115,7 +115,8 @@ public sealed class M217QRcbFocusedStateTests
             "BR", "C0100149", "", "", "MMS Read",
             verifiedStringWireKind: MmsDataKind.OctetString,
             declaredDataType: "OctetString"));
-        Assert.False(ledger.TryGet(ownerRef, "BR", out _));
+        Assert.True(ledger.TryGet(ownerRef, "BR", out var stale));
+        Assert.True(stale.IsStale); // Audit history remains visible, not current proof.
         var reconnect = ledger.BeginAssociation();
         Assert.NotEqual(association, reconnect);
         Assert.False(ledger.TryGet(ownerRef, "BR", out _));
