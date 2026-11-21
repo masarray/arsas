@@ -38,8 +38,14 @@ public static class Iec61850ControlAuditPolicy
             ? result.PositiveTermination ? "positive" : "negative" : "not evidenced";
         var feedback = result.FeedbackConfirmed
             ? "confirmed " + result.FeedbackValue : "not confirmed";
+        var classified = result.IsSuccess ? string.Empty
+            : Iec61850ControlFailureReason.Explain(result) is { } failure
+                ? $"; reason={failure.Summary}; confidence={failure.Confidence}; " +
+                  $"reasonEvidence={failure.Evidence}; operatorChecks={failure.Checks}"
+                : string.Empty;
         return $"MMS={steps}; termination={termination}; feedback={feedback}; " +
                $"completion={result.CompletionState}; controlError={result.ControlError}; " +
-               $"addCause={result.AddCause}; stage={result.Stage}; detail={result.Message}";
+               $"addCause={result.AddCause}; stage={result.Stage}; detail={result.Message}" +
+               classified;
     }
 }
