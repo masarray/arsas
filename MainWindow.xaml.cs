@@ -166,6 +166,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     public MainWindow()
     {
         InitializeComponent();
+        // Event Log is in a deferred tab; set up shared Copy before its first
+        // right-click, independently of Loaded event ordering.
+        GridClipboardBehavior.Attach(EventLogGrid);
         // Expand onto wide desktops, but never start off-screen or force
         // maximization. This is initial sizing only; user resizing wins.
         var workArea = SystemParameters.WorkArea;

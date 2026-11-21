@@ -111,8 +111,7 @@ public sealed class EngineeringGridClipboardBehaviorTests
         var grids = doc.Descendants(wpf + "DataGrid").ToArray();
         foreach (var name in new[]
         {
-            "ExplorerLiveValuesGrid", "GlobalLiveGrid", "EventLogGrid",
-            "EventDetailsGrid"
+            "ExplorerLiveValuesGrid", "GlobalLiveGrid", "EventDetailsGrid"
         })
         {
             var grid = Assert.Single(grids, g =>
@@ -150,6 +149,42 @@ public sealed class EngineeringGridClipboardBehaviorTests
                 "{Binding SnapshotChannels}"), col =>
             Assert.Equal("True", (string?)col.Attribute(
                 ux + "GridClipboardBehavior.ExcelCells")));
+    }
+
+    [Fact]
+    public void EventLogUsesExtendedFullRowsWithCopyAttachedBeforeLoaded()
+    {
+        var doc = XDocument.Load(FindSource("MainWindow.xaml"));
+        XNamespace wpf = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XNamespace ux = "clr-namespace:ArIED61850Tester";
+        var eventGrid = Assert.Single(doc.Descendants(wpf + "DataGrid"),
+            grid => (string?)grid.Attribute(x + "Name") == "EventLogGrid");
+        Assert.Equal("Extended", (string?)eventGrid.Attribute("SelectionMode"));
+        Assert.Equal("FullRow", (string?)eventGrid.Attribute("SelectionUnit"));
+        Assert.Null(eventGrid.Attribute(ux + "GridClipboardBehavior.ExcelCells"));
+        Assert.Contains("GridClipboardBehavior.Attach(EventLogGrid);",
+            File.ReadAllText(FindSource("MainWindow.xaml.cs")));
+
+        RunSta(() =>
+        {
+            GridClipboardBehavior.Install();
+            var grid = new DataGrid
+            {
+                IsReadOnly = true,
+                SelectionMode = DataGridSelectionMode.Extended,
+                SelectionUnit = DataGridSelectionUnit.FullRow
+            };
+            GridClipboardBehavior.Attach(grid);
+            var menu = Assert.IsType<ContextMenu>(grid.ContextMenu);
+            Assert.Equal(6, menu.Items.Count);
+            Assert.Equal("Copy cell value", Assert.IsType<MenuItem>(menu.Items[0]).Header);
+            Assert.Equal("Copy selected full rows", Assert.IsType<MenuItem>(menu.Items[3]).Header);
+            grid.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, grid));
+            Assert.Same(menu, grid.ContextMenu);
+            Assert.Equal(DataGridSelectionMode.Extended, grid.SelectionMode);
+            Assert.Equal(DataGridSelectionUnit.FullRow, grid.SelectionUnit);
+        });
     }
 
     [Fact]
@@ -196,6 +231,8 @@ public sealed class EngineeringGridClipboardBehaviorTests
         Assert.Contains("EventLogGrid_PreviewMouseLeftButtonUp", xaml);
         Assert.Contains("EventLogGrid_CurrentCellChanged", xaml);
         Assert.Contains("Mouse.LeftButton == MouseButtonState.Released", code);
+        Assert.Contains("Mouse.RightButton == MouseButtonState.Released", code);
+        Assert.Contains("EventLogGrid.SelectedItems.Count > 1", code);
         Assert.Contains("DispatcherPriority.Background", code);
         Assert.Contains("EventLogGrid.CurrentCell.Item as Iec61850EventEntry", code);
     }
