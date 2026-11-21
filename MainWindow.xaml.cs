@@ -3289,7 +3289,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         try
         {
             var csv = new StringBuilder();
-            csv.AppendLine("Sequence,DeviceTimestamp,IED,IP,Signal,Value,PreviousValue,Transition,Quality,Event,Acquisition,Stream,RawAcquisition,RawReason,ReportId,RCBReference,IECTelegram,EntryID,ReportTimeOfEntry,ReportReceiveUtc,SqNum,SubSqNum,ConfRev,OptFlds,BufferOverflow");
+            csv.AppendLine("Sequence,DeviceTimestamp,IED,IP,Signal,Value,PreviousValue,Transition,Quality,Event,Acquisition,Stream,RawAcquisition,RawReason,ReportId,RCBReference,IECTelegram,EntryID,ReportTimeOfEntry,ReportReceiveUtc,SqNum,SubSqNum,ConfRev,OptFlds,BufferOverflow,EventKind,TimeOrigin,EventTime,ControlOutcome,RequestedChecks,ControlOrigin,CompletionState,ControlError,AddCause,ControlFeedback,ControlEvidence,ClientEventUTC");
             foreach (var entry in Events.OrderBy(item => item.Sequence))
             {
                 csv.AppendLine(string.Join(',', new[]
@@ -3318,7 +3318,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     Csv(entry.ReportFrame?.SubSequenceNumber?.ToString(CultureInfo.InvariantCulture) ?? ""),
                     Csv(entry.ReportFrame?.ConfRev?.ToString(CultureInfo.InvariantCulture) ?? ""),
                     Csv(entry.ReportFrame?.OptFldsRawHex ?? ""),
-                    Csv(entry.ReportFrame?.BufferOverflow?.ToString() ?? "")
+                    Csv(entry.ReportFrame?.BufferOverflow?.ToString() ?? ""),
+                    Csv(entry.EventKind),
+                    Csv(entry.TimestampOrigin),
+                    Csv(entry.EventTimestamp),
+                    Csv(entry.ControlOutcome),
+                    Csv(entry.ControlChecks),
+                    Csv(entry.ControlOrigin),
+                    Csv(entry.ControlCompletionState),
+                    Csv(entry.ControlError),
+                    Csv(entry.ControlAddCause),
+                    Csv(entry.ControlFeedback),
+                    Csv(entry.ControlEvidence),
+                    Csv(entry.ClientEventUtc?.ToString("O") ?? "")
                 }));
             }
             File.WriteAllText(dialog.FileName, csv.ToString(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
