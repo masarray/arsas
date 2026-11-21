@@ -227,6 +227,34 @@ try {
     $wrongStageParent.globalTypedControlStageTrial.baseEngineCommit = ('f' * 40)
     Assert-Rejects $wrongStageParent 'physical-tested'
 
+    # SG7 P9 production integration is exactly SHA-bound and DOES NOT
+    # replace earlier typed-control/physical SCL lineage proof.
+    foreach ($field in @('cyclicMmsProcessPollingForbidden',
+                         'automaticRcbMutationForbidden',
+                         'noAutomaticGiRetry',
+                         'currentCombinedPhysicalRetestRequired',
+                         'losslessSoeNotClaimed',
+                         'reportedBrcbBufferOverflow')) {
+        $wrongP9Safety = New-TrackedP10Fixture
+        $wrongP9Safety.p9Sg7FourRcbIntegrationCandidate[$field] = $false
+        Assert-Rejects $wrongP9Safety 'physical-tested'
+    }
+    foreach ($field in @('exactCommit', 'baselineEngineCommit',
+                         'arsasFieldTrialSourceCommit')) {
+        $wrongP9Origin = New-TrackedP10Fixture
+        $wrongP9Origin.p9Sg7FourRcbIntegrationCandidate[$field] = ('f' * 40)
+        Assert-Rejects $wrongP9Origin 'physical-tested'
+    }
+    foreach ($field in @('engineCiRun', 'arsasFieldTrialRun',
+                         'fieldObservedReportBackedValues',
+                         'fieldSelectedSignalCount',
+                         'fieldIndependentlyRoutedRcbCount',
+                         'fieldObservedReportFrames')) {
+        $wrongP9Proof = New-TrackedP10Fixture
+        $wrongP9Proof.p9Sg7FourRcbIntegrationCandidate[$field] = 0
+        Assert-Rejects $wrongP9Proof 'physical-tested'
+    }
+
     Write-Host "CI-P1 immutable engine resolver: $checks synthetic cases PASS."
 }
 finally {
