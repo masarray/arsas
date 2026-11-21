@@ -72,7 +72,14 @@ public static class GridClipboardBehavior
         }
 
         grid.PreviewKeyDown += GridKeyDown;
-        if (grid.ContextMenu is not null) return; // Preserve specialized actions.
+        if (grid.ContextMenu is not null) return;
+        // Keyboard context menus must follow the CURRENT cell, not an earlier
+        // right-click retained across a change in keyboard focus.
+        grid.PreviewMouseLeftButtonDown += (_, _) =>
+        {
+            state.HitColumn = null;
+            state.HitItem = null;
+        }; // Preserve specialized actions.
 
         grid.PreviewMouseRightButtonDown += (_, mouse) =>
         {
@@ -274,6 +281,7 @@ public static class GridClipboardBehavior
             }
         };
         if (list.ContextMenu is not null) return;
+        list.PreviewMouseLeftButtonDown += (_, _) => state.HitRow = null;
         list.PreviewMouseRightButtonDown += (_, mouse) =>
         {
             state.HitRow = Ancestor<ListViewItem>(mouse.OriginalSource as DependencyObject)
