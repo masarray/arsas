@@ -98,6 +98,11 @@ public sealed class P9SoeControlAuditTests
             StringComparison.OrdinalIgnoreCase);
         Assert.Equal("Control not sent", Iec61850ControlAuditPolicy.Outcome(
             new Iec61850ControlCommandResult { CompletionState = "NotSent" }));
+        Assert.Equal("Control unverified", Iec61850ControlAuditPolicy.Outcome(
+            new Iec61850ControlCommandResult
+            {
+                CompletionState = "NotSent", RequestHex = "actual-outbound-wire-bytes"
+            }));
         Assert.Equal("Control accepted", Iec61850ControlAuditPolicy.Outcome(
             new Iec61850ControlCommandResult { ServiceAccepted = true, IsSuccess = true }));
         Assert.Equal("Control unverified", Iec61850ControlAuditPolicy.Outcome(
