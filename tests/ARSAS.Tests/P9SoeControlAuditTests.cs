@@ -161,5 +161,7 @@ public sealed class P9SoeControlAuditTests
         Assert.Contains("if (!eventEntry.IsControlEvent)", ui);
         Assert.Contains("Binding=\"{Binding EventTimestamp}\"", xaml);
         Assert.Contains("Csv(entry.ControlEvidence)", ui);
+        Assert.Contains("if (result.FeedbackConfirmed &&", ui);
+        Assert.Contains("RecordUnsentDockControl(device, signal", ui);
     }
 }
