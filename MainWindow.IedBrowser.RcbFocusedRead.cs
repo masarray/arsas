@@ -22,7 +22,7 @@ public partial class MainWindow
             QueueIedBrowserReportUnitRead(row);
             return;
         }
-        // Only the currently visible RCB and its four exact read-only
+        // Only the currently visible RCB and its three family-specific read-only
         // attribute names; never Read All or operate a device.
         var association = device.LiveValues.Association;
         var key = IedBrowserFocusedAdmission.PageKey(row.Key, null) + "|RCB";
