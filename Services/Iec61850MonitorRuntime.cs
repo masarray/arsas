@@ -75,6 +75,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         public HashSet<string> AmbiguousReportReferenceKeys { get; } = new(StringComparer.OrdinalIgnoreCase);
         public PriorityQueue<string, long> PollQueue { get; } = new();
         public Dictionary<string, Iec61850ReportContinuityState> ReportStreams { get; } = new(StringComparer.OrdinalIgnoreCase);
+        // Report-origin diagnostics only; never mutates the RCB or schedules reads.
+        public Iec61850ReportDeliveryTracker ReplayTracker { get; } = new();
         // Active association only: exact ARIEC write-step outcomes for each
         // planned RCB. Cleared wherever ReportStreams is cleared.
         public Dictionary<string, NativeReportMonitorStartResult> ReportActivationByPlanId { get; } =
@@ -579,7 +581,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
             }
 
             device.IsConnected = true;
-            session.BrowserObservationAssociation = device.LiveValues.Association;
+            session.BrowserObservationAssociation = session.Device.LiveValues.Association;
+            session.ReplayTracker.OnAssociated(session.BrowserObservationAssociation, DateTimeOffset.UtcNow);
             device.LastDiagnosticSnapshot = session.Client.CaptureDiagnosticSnapshot("ACSE/MMS associated");
             device.Status = "MMS associated";
             device.Detail = "Association ready. Scanning the live MMS schema, DataSets, and Report Control Blocks.";
@@ -847,7 +850,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                 4));
 
             device.IsConnected = true;
-            session.BrowserObservationAssociation = device.LiveValues.Association;
+            session.BrowserObservationAssociation = session.Device.LiveValues.Association;
+            session.ReplayTracker.OnAssociated(session.BrowserObservationAssociation, DateTimeOffset.UtcNow);
             if (connectionPath == Iec61850ConnectionPath.SclAssisted)
                 Log("INFO", device.Name,
                     $"SCL initial MMS scalar evidence reused in the shared per-IED ledger: {PublishTrustedSclInitialEvidence(session)}.");
@@ -1085,7 +1089,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
 
         device.IsMonitoring = true;
         device.IsConnected = true;
-        session.BrowserObservationAssociation = device.LiveValues.Association;
+        session.BrowserObservationAssociation = session.Device.LiveValues.Association;
+        session.ReplayTracker.OnAssociated(session.BrowserObservationAssociation, DateTimeOffset.UtcNow);
         // Static report-only may reuse genuine initial scalar MMS Read evidence
         // already held by this association. Never issue implicit MMS requests
         // or mistake a previous Report for current RCB traffic.
@@ -2068,6 +2073,12 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                 cancellationToken).ConfigureAwait(false);
 
             ProcessReportHealth(session, plan, slice);
+            // One immutable verdict per actual frame; every member and projected
+            // SOE row uses the same reference, never a value/time based join.
+            var reportOrigins = new Dictionary<NativeReportFrameMetadata, Iec61850ReportDeliveryEvidence>();
+            foreach (var frame in slice.ReportFrames)
+                reportOrigins[frame] = session.ReplayTracker.Classify(
+                    frame, session.BrowserObservationAssociation);
             if (slice.ReportFrames.Count > 0 || slice.Updates.Count > 0)
                 RecordSuccessfulIo(session);
 
@@ -2280,7 +2291,15 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                     hasProcessValue: update.HasValue,
                     reportId: update.ReportId,
                     reportControlReference: string.IsNullOrWhiteSpace(update.ReportControlReference)
-                        ? plan.ReportControlReference : update.ReportControlReference);
+                        ? plan.ReportControlReference : update.ReportControlReference,
+                    reportFrame: update.ReportFrame,
+                    reportDelivery: update.ReportFrame is { } eventFrame &&
+                                    reportOrigins.TryGetValue(eventFrame, out var origin)
+                        ? origin : Iec61850ReportDeliveryEvidence.Unknown);
+
+                if (update.HasValue)
+                    session.ReplayTracker.RecordAccepted(
+                        update.ReportFrame, session.BrowserObservationAssociation);
 
                 // A routed, schema-safe process value is the data-plane proof. RptEna,
                 // GI, raw/unrouted frames, rejected values, or stale associations
@@ -2902,7 +2921,9 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         bool trustReportEdge,
         bool hasProcessValue = true,
         string? reportId = null,
-        string? reportControlReference = null)
+        string? reportControlReference = null,
+        NativeReportFrameMetadata? reportFrame = null,
+        Iec61850ReportDeliveryEvidence? reportDelivery = null)
     {
         var state = session.States[point.PointKey];
         var hadValue = state.HasValue;
@@ -3015,6 +3036,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
             Reason = reason,
             ReportId = trustReportEdge ? reportId ?? string.Empty : string.Empty,
             ReportControlReference = trustReportEdge ? reportControlReference ?? string.Empty : string.Empty,
+            ReportFrame = trustReportEdge ? reportFrame : null,
+            DeliveryEvidence = trustReportEdge ? reportDelivery : null,
             RoutedReportControlReferences = state.RoutedReportControlReferences
                 .OrderBy(reference => reference, StringComparer.OrdinalIgnoreCase).ToArray()
         };
@@ -3293,6 +3316,7 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         session.NextHealthProbeUtc = session.RecoveryWarmupUntilUtc;
         session.Device.IsConnected = true;
         session.BrowserObservationAssociation = session.Device.LiveValues.Association;
+        session.ReplayTracker.OnAssociated(session.BrowserObservationAssociation, DateTimeOffset.UtcNow);
         PublishTrustedSclInitialEvidence(session);
         session.Device.Status = "Monitoring";
         session.Device.AcquisitionMode = session.StaticDataSetReportOnly
@@ -3434,6 +3458,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         // credit a future planning attempt after transport loss.
         session.CurrentStaticParityAttemptId = Guid.Empty;
         var wasConnected = session.Device.IsConnected;
+        if (wasConnected)
+            session.ReplayTracker.OnDisconnected(DateTimeOffset.UtcNow);
         // A new MMS association has new RCB ownership; report names observed
         // on the *old* socket cannot be credited to the recovered session.
         if (wasConnected)
