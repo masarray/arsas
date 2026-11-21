@@ -22,7 +22,7 @@ public partial class MainWindow
             QueueIedBrowserReportUnitRead(row);
             return;
         }
-        // Only the currently visible RCB and its three verified read-only
+        // Only the currently visible RCB and its four exact read-only
         // attribute names; never Read All or operate a device.
         var association = device.LiveValues.Association;
         var key = IedBrowserFocusedAdmission.PageKey(row.Key, null) + "|RCB";
@@ -65,7 +65,10 @@ public partial class MainWindow
                         result.Target.Reference, result.Target.FunctionalConstraint,
                         scalar, result.Quality, result.DeviceTimestamp, "MMS Read",
                         result.UtcTimeEvidence, result.QualityEvidence,
-                        typedBoolean: result.TypedBoolean);
+                        typedBoolean: result.TypedBoolean,
+                        verifiedStringWireKind: result.VerifiedStringWireKind,
+                        declaredDataType: result.Target.DataType,
+                        readWireShapeEvidence: result.WireShapeEvidence);
                 });
                 _iedBrowserLastLiveVersion = -1;
                 RefreshIedBrowserVisibleValues();
