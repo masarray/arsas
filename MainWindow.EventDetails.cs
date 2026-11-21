@@ -64,13 +64,13 @@ public partial class MainWindow
 
         EventDetailsSubtitle.Text = $"{entry.DeviceName} · {entry.EventLabel} · #{entry.Sequence}";
         static string Show(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value.Trim();
-        EventDetailsGrid.ItemsSource = new[]
+        var details = new List<RcbInspectionProperty>
         {
             new RcbInspectionProperty("IED", Show(entry.DeviceName), "Event snapshot"),
             new RcbInspectionProperty("Signal", Show(entry.IecReference), "Event snapshot"),
             new RcbInspectionProperty("Event", entry.EventLabel, "Operator event category"),
             new RcbInspectionProperty("Before → after", $"{entry.OldValue} → {entry.NewValue}", "Event snapshot"),
-            new RcbInspectionProperty("Timestamp", Show(entry.DeviceTimestamp), "Event snapshot"),
+            new RcbInspectionProperty("Timestamp", Show(entry.EventTimestamp), entry.TimestampOrigin),
             new RcbInspectionProperty("Quality", Show(entry.Quality), "Event snapshot"),
             new RcbInspectionProperty("Raw Reason", Show(entry.Reason), "Original event reason"),
             new RcbInspectionProperty("ReasonForInclusion", Show(entry.Reason),
@@ -91,6 +91,24 @@ public partial class MainWindow
             new RcbInspectionProperty("OptFlds", Show(entry.ReportFrame?.OptFldsRawHex), "Original decoded option bits"),
             new RcbInspectionProperty("Buffer overflow", entry.ReportFrame?.BufferOverflow?.ToString() ?? "—", "Independent potential-history-loss warning")
         };
+        if (entry.IsControlEvent)
+        {
+            details.AddRange(new[]
+            {
+                new RcbInspectionProperty("Audit kind", "Operator control", "Not an RCB data-change or measured IED event"),
+                new RcbInspectionProperty("Outcome", entry.ControlOutcome, "Exact native service + termination + feedback classification"),
+                new RcbInspectionProperty("Requested", entry.NewValue, "Requested command value, not assumed process state"),
+                new RcbInspectionProperty("Feedback", Show(entry.ControlFeedback), "Independent observed process feedback only when confirmed"),
+                new RcbInspectionProperty("Checks requested", entry.ControlChecks, "Interlock, synchro, Test request flags; not proofs of IED acceptance"),
+                new RcbInspectionProperty("Origin", entry.ControlOrigin, "Client-origin category / originator"),
+                new RcbInspectionProperty("Control error", Show(entry.ControlError), "Native control error, not guessed"),
+                new RcbInspectionProperty("Additional cause", Show(entry.ControlAddCause), "IED addCause when supplied; no inferred interlock/authority"),
+                new RcbInspectionProperty("Completion", Show(entry.ControlCompletionState), "Native control completion"),
+                new RcbInspectionProperty("ctlNum", Show(entry.ControlFlightSequence), "Native command number"),
+                new RcbInspectionProperty("Wire evidence", entry.ControlEvidence, "Ordered native MMS steps, termination and feedback")
+            });
+        }
+        EventDetailsGrid.ItemsSource = details;
         _eventDrawerCurrentEntry = entry;
         EventDrawerColumn.Width = new GridLength(370);
         EventDetailsDrawer.Visibility = Visibility.Visible;
