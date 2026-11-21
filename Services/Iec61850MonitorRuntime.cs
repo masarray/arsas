@@ -1444,6 +1444,20 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
             throw new TimeoutException(
                 "Native control canceled without a proven wire outcome. Verify actual IED state and reconnect.");
         }
+        catch (OperationCanceledException)
+        {
+            PublishControlAudit(session, request, "Control unverified", null,
+                "IED association replaced or stopped during control; actual MMS/IED outcome is unverified.");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Non-protocol faults are never evidence of a negative response.
+            // Native flight may have written to the IED before this surfaced.
+            PublishControlAudit(session, request, "Control unverified", null,
+                "Native control failed without a proven terminal wire result: " + ex.GetType().Name);
+            throw;
+        }
         finally
         {
             if (nativeFlight is { IsCompleted: false })
