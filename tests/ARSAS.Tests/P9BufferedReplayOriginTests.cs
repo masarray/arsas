@@ -338,7 +338,9 @@ public sealed class P9BufferedReplayOriginTests
         Assert.Equal("Unknown", tracker.Classify(HistoricalBrcb(giReason: true), 503).Label);
         Assert.Equal("Unknown", tracker.Classify(HistoricalBrcb(integrityReason: true), 503).Label);
         Assert.Equal("Unknown", tracker.Classify(HistoricalBrcb(giReason: null), 503).Label);
-        Assert.Equal("Unknown", tracker.Classify(HistoricalBrcb(timeSeconds: 2), 503).Label);
+        // A timely TimeOfEntry after the new association is a live report,
+        // not a historical replay. No old-cursor prerequisite is needed for Live.
+        Assert.Equal("Live", tracker.Classify(HistoricalBrcb(timeSeconds: 2), 503).Label);
     }
 
     [Fact]
