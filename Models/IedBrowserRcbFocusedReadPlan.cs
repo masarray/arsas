@@ -23,11 +23,16 @@ public static class IedBrowserRcbFocusedReadPlan
         // Explicit FC name is part of the RCB's observed object identity.
         if (!wire.Contains("." + fc + ".", StringComparison.Ordinal))
             return [];
+        // IEC 61850 BRCBs expose ResvTms, while URCBs expose Resv.
+        // Reading both on every RCB wastes the bounded focused-read budget
+        // (some IEDs time out on unsupported leaves) and can starve Owner.
         return
         [
             new IedBrowserReadTarget(wire + ".RptEna", fc, "Boolean"),
-            new IedBrowserReadTarget(wire + ".Resv", fc, "Boolean"),
-            new IedBrowserReadTarget(wire + ".ResvTms", fc, "UInt32")
+            new IedBrowserReadTarget(wire + ".Owner", fc, "OctetString"),
+            selected.Buffered
+                ? new IedBrowserReadTarget(wire + ".ResvTms", fc, "UInt32")
+                : new IedBrowserReadTarget(wire + ".Resv", fc, "Boolean")
         ];
     }
 }

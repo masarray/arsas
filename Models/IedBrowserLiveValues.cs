@@ -14,7 +14,8 @@ public sealed record IedBrowserObservedValue(
     MmsQualityEvidence? QualityBits = null,
     Iec61850UtcTimeEvidence? TimeBits = null,
     bool? TypedBoolean = null,
-    string ReadWireShapeEvidence = "");
+    string ReadWireShapeEvidence = "",
+    MmsDataKind? VerifiedReadWireKind = null);
 
 internal sealed record IedBrowserObservationChannels(
     IedBrowserObservedValue? Report = null,
@@ -264,7 +265,8 @@ public sealed class IedBrowserLiveValues
                 ReadWireShapeEvidence: source == "MMS Read" &&
                     !string.IsNullOrWhiteSpace(readWireShapeEvidence)
                         ? readWireShapeEvidence[..Math.Min(192, readWireShapeEvidence.Length)]
-                        : "");
+                        : "",
+                VerifiedReadWireKind: source == "MMS Read" ? verifiedStringWireKind : null);
             _values[key] = isReport
                 ? channels with { Report = observed }
                 : channels with { Read = observed };

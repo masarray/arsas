@@ -41,6 +41,7 @@ public sealed class M214RcbDiscoveryStateProjectionTests
             Assert.Contains("exact read-only RCB check", field.Source,
                 StringComparison.OrdinalIgnoreCase);
         }
+        Assert.Equal("Not verified", Property(evidence, true, "Owner").Value);
         Assert.Contains("no current MMS state check", evidence.Summary(true));
     }
 
@@ -51,6 +52,7 @@ public sealed class M214RcbDiscoveryStateProjectionTests
         Assert.Equal("—", Property(saved, false, "Enabled / RptEna").Value);
         Assert.Equal("—", Property(saved, false, "Reservation").Value);
         Assert.Equal("—", Property(saved, false, "Reserve time (s)").Value);
+        Assert.Equal("—", Property(saved, false, "Owner").Value);
 
         var fromScl = RcbInspectionEvidence.FromSource("Rpt01", null);
         Assert.Equal("Not verified", Property(fromScl, true, "Enabled / RptEna").Value);
@@ -82,6 +84,26 @@ public sealed class M214RcbDiscoveryStateProjectionTests
         Assert.Equal("true", field.Value);
         Assert.Equal("Read-only MMS availability snapshot", field.Source);
         Assert.Equal("—", Property(checkedState, false, "Enabled / RptEna").Value);
+    }
+
+    [Fact]
+    public void ExplicitRcbCheckFormatsKnownOwnerButNeverInfersUnknownOrOffline()
+    {
+        var checkedState = RcbInspectionEvidence.FromDiscovery(
+            Discovery(), new MmsRcbAvailabilitySnapshot
+            {
+                Owner = "C0100149",
+                EnabledState = "true"
+            });
+        Assert.Equal("192.16.1.73 (x'C0100149')",
+            Property(checkedState, true, "Owner").Value);
+        Assert.Equal("Read-only MMS availability snapshot",
+            Property(checkedState, true, "Owner").Source);
+        Assert.Equal("—", Property(checkedState, false, "Owner").Value);
+
+        var unknown = RcbInspectionEvidence.FromDiscovery(
+            Discovery(), new MmsRcbAvailabilitySnapshot { Owner = "[]" });
+        Assert.Equal("Not verified", Property(unknown, true, "Owner").Value);
     }
 
     [Fact]

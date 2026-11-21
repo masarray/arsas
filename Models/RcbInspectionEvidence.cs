@@ -99,7 +99,7 @@ public sealed class RcbInspectionEvidence
             StateField("Enabled / RptEna", live?.Enabled, Model.Enabled, connected, source),
             StateField("Reservation", live?.Reservation, Model.Reservation, connected, source),
             StateField("Reserve time (s)", live?.ReserveTime, Model.ReserveTime, connected, source),
-            Field("Owner", live?.Owner, string.Empty, source),
+            OwnerField(live?.Owner, connected, source),
             Field("Trigger options", live?.TriggerOptions, Model.TriggerOptions, source),
             Field("Optional fields", live?.OptionalFields, Model.OptionalFields, source),
             Field("Buffer time (ms)", live?.BufferTime, Model.BufferTime, source),
@@ -136,10 +136,77 @@ public sealed class RcbInspectionEvidence
                !text.Equals("Unavailable", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static RcbInspectionProperty OwnerField(
+        string? rawOwner, bool connected, string liveSource)
+    {
+        if (!connected)
+            return new("Owner", "—", "Offline; no live MMS state");
+        var verified = IedBrowserRcbOwnerDisplay.FormatCheckedSnapshot(rawOwner);
+        return verified.Length > 0
+            ? new("Owner", verified, liveSource)
+            : new("Owner", "Not verified",
+                "No current read-only MMS Owner observation; unsupported or unreadable Owner is not inferred");
+    }
+
     private RcbInspectionProperty Field(string name, string? live, string? model, string liveSource)
         => !string.IsNullOrWhiteSpace(live)
             ? new(name, live.Trim(), liveSource)
             : new(name, Show(model), string.IsNullOrWhiteSpace(model) ? "Unavailable" : ModelSource);
 
     private static string Show(string? text) => string.IsNullOrWhiteSpace(text) ? "—" : text.Trim();
+}
+
+
+/// <summary>
+/// Read-only Owner display for the selected, exact RCB. The live Browser path
+/// accepts only verified MMS OCTET STRING bytes. A separate explicit availability
+/// check already supplies raw engine-derived Owner metadata. Neither source
+/// identifies the client process or authorizes an RCB reservation/write.
+/// </summary>
+public static class IedBrowserRcbOwnerDisplay
+{
+    public static bool TryFormatVerifiedOctet(
+        string? rawHex, MmsDataKind? verifiedKind, out string display)
+    {
+        display = string.Empty;
+        if (verifiedKind != MmsDataKind.OctetString ||
+            !TryCanonicalHex(rawHex, out var hex))
+            return false;
+        display = DisplayHex(hex);
+        return true;
+    }
+
+    public static string FormatCheckedSnapshot(string? rawOwner)
+        => TryCanonicalHex(rawOwner, out var hex)
+            ? DisplayHex(hex)
+            : string.Empty;
+
+    private static string DisplayHex(string hex)
+    {
+        // IEC Owner may contain a 4-byte IPv4 or 16-byte IPv6 address.
+        // Unknown sizes remain original exact wire bytes, never an inferred IP.
+        return MmsRcbOwnerIdentity.TryDecodeIpAddress(hex, out var ip) &&
+               ip is not null
+            ? $"{ip} (x'{hex}')"
+            : $"x'{hex}'";
+    }
+
+    private static bool TryCanonicalHex(string? value, out string hex)
+    {
+        hex = (value ?? string.Empty).Trim();
+        // Normalize IEC diagnostic x'...' octet notation to the engine's raw hex.
+        if (hex.StartsWith("x'", StringComparison.OrdinalIgnoreCase) &&
+            hex.EndsWith("'", StringComparison.Ordinal))
+            hex = hex[2..^1];
+        if (hex.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            hex = hex[2..];
+        if (hex.Length is < 2 or > 128 || (hex.Length & 1) != 0 ||
+            !hex.All(Uri.IsHexDigit))
+        {
+            hex = string.Empty;
+            return false;
+        }
+        hex = hex.ToUpperInvariant();
+        return true;
+    }
 }
