@@ -1,36 +1,36 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.44",
-  "title": "Clearer buffered SOE reporting",
-  "titleId": "Pelaporan SOE buffer lebih jelas",
-  "summary": "ARSAS 1.6.44 makes historical IEC 61850 BRCB events easier to distinguish from live changes and integrity reports. It also hardens reconnect handling and protects retained IED buffer history. Field-checked on SG7_BCU; complete SOE recovery is not claimed.",
-  "summaryId": "ARSAS 1.6.44 membantu membedakan event historis BRCB IEC 61850 dari perubahan live dan laporan integrity. Reconnect lebih andal dan riwayat buffer IED tetap terlindungi. Sudah diuji pada SG7_BCU; kelengkapan seluruh SOE belum diklaim.",
+  "version": "1.6.45",
+  "title": "Easier IED investigation and exact field copy",
+  "titleId": "Investigasi IED lebih mudah dengan salin field yang tepat",
+  "summary": "ARSAS 1.6.45 streamlines IEC 61850 engineering inspection: copy precise RCB and model properties in IED Browser, select and export multiple Event Log rows with familiar Excel-like gestures, and reuse Copy across engineering grids. This observational UI update leaves IEC protocol and control behavior unchanged.",
+  "summaryId": "ARSAS 1.6.45 mempermudah investigasi IEC 61850: salin nilai RCB dan properti model yang tepat di IED Browser, pilih dan salin banyak baris Event Logs seperti Excel, serta gunakan Copy pada berbagai grid engineering. Perubahan UI observasional ini tidak mengubah protokol IEC atau perilaku kontrol.",
   "highlights": [
-    "Historical BRCB reports can be shown as “Buffer event” when wire EntryID, report reason and six-byte MMS BinaryTime support the classification.",
-    "Event Log keeps Buffer event, Data change and Integrity clearly separated instead of presenting every report as a live change.",
-    "Reconnect safeguards avoid overlapping monitor starts and stale or duplicated live-value rows.",
-    "Accepted EntryIDs cannot be reclassified as fresh buffered events after reconnect.",
-    "SG7_BCU field retest showed 77/77 live values, report ingress on 4/4 RCBs, 337 decoded frames and verified buffered classification on BrcbA01/BrcbB01."
+    "IED Browser: right-click any visible property such as Report ID, RCB Name, DataSet reference or Control Block reference to copy its exact displayed value.",
+    "IED Browser: copy the field/object name, name + value, or all visible properties, while preserving the correct clicked-row identity after refresh.",
+    "Event Log: select contiguous full event rows by mouse drag or Shift+click; copy ranges via context menu or Ctrl+C.",
+    "Event Log: selection does not unexpectedly expand the event inspector during right-click or multi-row gestures.",
+    "Shared clipboard support remains available in Device Explorer, Live Values, Command Grid and other engineering tables."
   ],
   "highlightsId": [
-    "Report historis BRCB dapat ditampilkan sebagai “Buffer event” jika EntryID, reason dan MMS BinaryTime 6-byte mendukung klasifikasinya.",
-    "Event Log membedakan Buffer event, Data change dan Integrity sehingga report historis tidak disamakan dengan perubahan live.",
-    "Reconnect lebih aman dari monitor Start yang bertumpuk dan baris nilai live yang usang atau ganda.",
-    "EntryID yang sudah diterima tidak dapat diklasifikasikan ulang sebagai event buffer baru saat reconnect.",
-    "Retest SG7_BCU menunjukkan 77/77 nilai live, report dari 4/4 RCB, 337 frame terdekode, serta klasifikasi buffer yang terbukti pada BrcbA01/BrcbB01."
+    "IED Browser: klik kanan properti seperti Report ID, RCB Name, DataSet reference, atau Control Block reference untuk menyalin nilai tampilannya secara persis.",
+    "IED Browser: salin nama field/objek, pasangan nama + nilai, atau seluruh properti terlihat tanpa mengambil baris yang salah setelah refresh.",
+    "Event Logs: pilih beberapa baris event dengan click-drag atau Shift+click; salin melalui menu klik kanan atau Ctrl+C.",
+    "Event Logs: pemilihan banyak baris dan klik kanan tidak membuka panel detail secara tiba-tiba.",
+    "Copy bersama tetap tersedia pada Device Explorer, Live Values, Command Grid, dan tabel engineering lainnya."
   ],
   "improvements": [
-    "Automatic BRCB monitoring preserves device history: no background PurgeBuf, destructive buffer reset or forced takeover of occupied RCBs.",
-    "Manual PurgeBuf is available only through the guarded IED Browser workflow with stopped monitoring, a suitable idle BRCB and explicit typed confirmation.",
-    "Report metadata retains original EntryID, TimeOfEntry, reason and ConfRev for traceable event interpretation.",
-    "Installer and portable single EXE are distributed from the same v1.6.44 release with published SHA-256 checksums, SPDX SBOM and provenance."
+    "The clipboard adapter is shared, bounded and read-only: no IEC MMS Read, Write, RCB takeover or Control action is triggered by a Copy operation.",
+    "Keyboard Ctrl+C and right-click target selection are consistent while WPF row virtualization and focused engineering-object selection remain intact.",
+    "User-accepted Windows pointer/keyboard workflows were reconciled through PRs #782, #783 and #784; canonical Windows and installer release gates passed for v1.6.45.",
+    "The public installer and portable single EXE share exact tagged source identity and published SHA-256 checksums, SPDX SBOM and provenance."
   ],
   "improvementsId": [
-    "Monitoring BRCB otomatis menjaga riwayat perangkat: tanpa PurgeBuf di belakang layar, reset buffer destruktif atau mengambil alih RCB yang sedang dipakai.",
-    "PurgeBuf manual hanya tersedia melalui IED Browser dengan monitoring berhenti, BRCB idle yang sesuai dan konfirmasi ketik secara eksplisit.",
-    "Metadata report mempertahankan EntryID, TimeOfEntry, reason dan ConfRev asli agar interpretasi event dapat ditelusuri.",
-    "Installer dan portable single EXE tersedia dari rilis v1.6.44 yang sama beserta checksum SHA-256, SPDX SBOM dan provenance."
+    "Adapter clipboard tetap bersama, berbatas, dan hanya baca: operasi Copy tidak memicu MMS Read, Write, pengambilalihan RCB, atau Control.",
+    "Ctrl+C dan pilihan target klik kanan konsisten tanpa merusak virtualisasi WPF maupun pilihan objek engineering.",
+    "Pengujian mouse/keyboard yang telah diterima pengguna direkonsiliasi melalui PR #782, #783 dan #784; build Windows dan installer v1.6.45 lulus gate resmi.",
+    "Installer dan portable single EXE publik berasal dari source bertag yang sama dengan SHA-256, SPDX SBOM, dan provenance terpublikasi."
   ],
   "knownLimitations": [
     "The SG7_BCU trace also recorded 4 BufOvfl indications and 28 SqNum discontinuities. These are not verified lost-event counts; lossless buffered SOE is not established.",
@@ -59,9 +59,9 @@
     "height": 951,
     "alt": "ARSAS Engineering and FAT workspace reference screenshot captured on v1.6.42",
     "altId": "Referensi screenshot workspace Engineering dan FAT ARSAS dari v1.6.42",
-    "caption": "Application workspace captured in v1.6.42. The v1.6.44 release includes reporting and reconnect improvements verified separately.",
-    "captionId": "Tampilan aplikasi direkam pada v1.6.42. Rilis v1.6.44 membawa perbaikan reporting dan reconnect yang divalidasi terpisah."
+    "caption": "Engineering/FAT workspace reference screenshot from v1.6.42. The v1.6.45 release focuses on separate clipboard and Event Log selection improvements.",
+    "captionId": "Screenshot referensi workspace Engineering/FAT berasal dari v1.6.42. Rilis v1.6.45 berfokus pada perbaikan clipboard dan seleksi Event Logs yang divalidasi terpisah."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.44"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.45"
 }
