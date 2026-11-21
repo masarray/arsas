@@ -276,7 +276,8 @@ internal static class GridClipboardBehavior
         var menu = new ContextMenu();
         menu.Items.Add(Item("Copy value", () =>
         {
-            if (state.HitRow ?? list.SelectedItem as IedBrowserDetailRow is { } row)
+            var row = state.HitRow ?? list.SelectedItem as IedBrowserDetailRow;
+            if (row is not null)
                 SetClipboard(list, row.Value);
         }));
         menu.Items.Add(Item("Copy name and value", () =>
