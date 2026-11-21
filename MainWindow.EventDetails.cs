@@ -16,14 +16,16 @@ public partial class MainWindow
     private void EventLogGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (ReferenceEquals(sender, EventLogGrid) &&
-            Mouse.LeftButton == MouseButtonState.Released)
+            Mouse.LeftButton == MouseButtonState.Released &&
+            Mouse.RightButton == MouseButtonState.Released)
             ShowCurrentEventDetails();
     }
 
     private void EventLogGrid_CurrentCellChanged(object? sender, EventArgs e)
     {
         if (ReferenceEquals(sender, EventLogGrid) &&
-            Mouse.LeftButton == MouseButtonState.Released)
+            Mouse.LeftButton == MouseButtonState.Released &&
+            Mouse.RightButton == MouseButtonState.Released)
             ShowCurrentEventDetails();
     }
 
@@ -44,6 +46,10 @@ public partial class MainWindow
     private void ShowCurrentEventDetails()
     {
         if (EventDetailsDrawer is null) return;
+        // Never resize a closed drawer as part of a multi-row copy gesture.
+        if (EventLogGrid.SelectedItems.Count > 1 &&
+            EventDetailsDrawer.Visibility != Visibility.Visible)
+            return;
         var entry = EventLogGrid.CurrentCell.IsValid
             ? EventLogGrid.CurrentCell.Item as Iec61850EventEntry
             : EventLogGrid.SelectedItem as Iec61850EventEntry;

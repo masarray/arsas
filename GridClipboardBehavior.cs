@@ -56,9 +56,16 @@ public static class GridClipboardBehavior
 
     private static void GridLoaded(object sender, RoutedEventArgs e)
     {
-        if (sender is not DataGrid grid || !ReferenceEquals(e.OriginalSource, grid) ||
-            Grids.TryGetValue(grid, out _))
-            return;
+        if (sender is DataGrid grid && ReferenceEquals(e.OriginalSource, grid))
+            Attach(grid);
+    }
+
+    // Pre-load initialization for grids hosted by deferred tabs. The global
+    // Loaded path shares this exact idempotent behavior and weak lifetime.
+    public static void Attach(DataGrid grid)
+    {
+        ArgumentNullException.ThrowIfNull(grid);
+        if (Grids.TryGetValue(grid, out _)) return;
 
         var state = new GridState();
         Grids.Add(grid, state);
@@ -297,8 +304,11 @@ public static class GridClipboardBehavior
             // Excel-style blocks. Row mode explicitly expands to full columns.
             var selected = new Dictionary<object, HashSet<DataGridColumn>>(
                 ReferenceEqualityComparer.Instance);
-            if (mode is "selection" or "selection-headers")
+            if ((mode is "selection" or "selection-headers") &&
+                grid.SelectionUnit != DataGridSelectionUnit.FullRow)
             {
+                // Full-row selection is WPF-owned via SelectedItems; walking
+                // all selected cells would multiply work by column count.
                 foreach (var cell in grid.SelectedCells)
                 {
                     if (!cell.IsValid || cell.Item is null) continue;

@@ -1145,7 +1145,7 @@
                                   PreviewKeyDown="EventLogGrid_PreviewKeyDown"
                                   PreviewMouseLeftButtonUp="EventLogGrid_PreviewMouseLeftButtonUp"
                                   CurrentCellChanged="EventLogGrid_CurrentCellChanged"
-                                  IsReadOnly="True" ux:GridClipboardBehavior.ExcelCells="True"
+                                  IsReadOnly="True" SelectionMode="Extended" SelectionUnit="FullRow"
                                   Style="{StaticResource ModernDataGrid}"
                                   FrozenColumnCount="4" EnableRowVirtualization="True" EnableColumnVirtualization="True"
                                   VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"

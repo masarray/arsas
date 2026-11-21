@@ -16,17 +16,23 @@ background synchronization, or window ownership changes.
 - **Inspection / spreadsheet grids**: explicit
   `ux:GridClipboardBehavior.ExcelCells="True"` sets WPF Extended +
   CellOrRowHeader with visible, calm blue selected-cell highlighting. Enabled
-  on Explorer Live Values, Global Live Values, **Event Log**, SOE details,
-  diagnostics, GOOSE leaves and SV measurement tables. Built-in WPF cell
-  drag and Shift+click produce contiguous rectangular selections.
+  on Explorer Live Values, Global Live Values, SOE details, diagnostics,
+  GOOSE leaves and SV measurement tables. Built-in WPF cell drag and
+  Shift+click produce contiguous rectangular selections.
+- **Event Log**: explicit Extended + FullRow makes Shift+click and drag
+  select complete event rows, not cell fragments. Its shared Copy adapter
+  attaches during MainWindow initialization (before deferred TabItem Loaded).
+  A second global Loaded event does not duplicate the menu, and full-row
+  clipboard copies inspect SelectedItems rather than every selected cell.
 - **Navigation / command / write grids**: retain Single / FullRow (or their
   existing contract). This includes Command Dock, IED tree, IED files, RCB
   selector, FAT point table, batch write, Fault Records and GOOSE publisher
   identity. They ALL have Copy, including `IsReadOnly=False`; only the
   *clipboard* capability is shared, never the selection mode.
-- Event Log details reflect the **current event cell** after a mouse drag
-  finishes; the drawer never changes width during a selection drag. Keyboard
-  navigation remains supported, and Escape still closes the drawer.
+- Event Log details reflect the current event after a single-row gesture
+  finishes; right-click selection never opens the drawer. A multi-row range
+  does not open a previously closed drawer or shift the selection viewport.
+  Keyboard navigation and Escape remain supported.
 - The IED Browser property viewer is a custom `ListView`, not DataGrid.
   Its existing Copy Value / Name+Value / Visible Properties and Owner
   information actions remain unchanged; Browser selection still governs
@@ -78,7 +84,9 @@ provenance overlays, RCB takeover, PurgeBuf or protocol mutation.
 - All editable + read-only DataGrids install context Copy once, retaining
   their original selection/editor semantics and existing contextual actions.
 - Every non-action template column exports real visual data.
-- Event and Value Viewer: click-and-drag rectangle, Shift+click range,
+- Event Log: click-drag / Shift+click full event rows, then right-click
+  Copy or Ctrl+C to Notepad/Excel; selected rows remain highlighted.
+- Value Viewer: click-drag / Shift+click rectangular cell ranges,
   Ctrl+C to Notepad/Excel; blue selection remains legible.
 - Command Dock: right-click Copy Cell/Selected Rows/Table, then verify the
   same signal, flags and controls are unchanged.
