@@ -52,7 +52,13 @@ public sealed partial class Iec61850MonitorRuntime
         return RunAdmittedBrowserWriteAsync(
             deviceId, model, association, session, exactReference, "BR",
             "OPERATOR_BROWSER_PURGEBUF_WRITE",
-            token => session.Client.WriteBrowserPurgeBufAsync(exactReference, token),
+            token =>
+            {
+                // Conservatively invalidate before the first native MMS call;
+                // a timeout or uncertain ACK must not retain stale replay proof.
+                session.ReplayTracker.InvalidateForManualPurge(exactReference);
+                return session.Client.WriteBrowserPurgeBufAsync(exactReference, token);
+            },
             cancellationToken);
     }
 

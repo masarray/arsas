@@ -411,6 +411,30 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             };
         }
 
+        // BRCB history is owned by the SAS/IED, not this protocol tester.
+        // ARIEC dynamic setup writes DatSet/TrgOps/OptFlds; on a BRCB these
+        // may implicitly purge buffered events. Never issue such writes from
+        // automatic start/reconnect. URCB dynamic setup stays independent.
+        if (ArIED61850Tester.Models.BrowserPurgeBufPolicy.RejectAutomaticBufferedMutation(
+                subscription.ReportControl?.Buffered == true,
+                subscription.Mode == ArMms.MmsReportSubscriptionPlanMode.DynamicDataSet,
+                subscription.ReportControl?.FunctionalConstraint,
+                subscription.ReportControl?.Reference))
+        {
+            LastErrorMessage =
+                "Automatic dynamic BRCB setup blocked: DatSet/TrgOps/OptFlds writes may purge SOE history. " +
+                "Use a compatible static BRCB or a separately authorized URCB.";
+            return new NativeReportMonitorStartResult
+            {
+                IsSuccess = false,
+                PlanId = plan.PlanId,
+                Message = LastErrorMessage,
+                SubscriptionSummary = subscription.Summary,
+                MemberCount = subscription.Members.Count,
+                Warnings = subscription.Warnings.Concat(new[] { LastErrorMessage }).ToArray()
+            };
+        }
+
         var coveredReferences = ExtractSubscriptionMemberReferences(subscription.Members);
 
         var start = await RunMmsOperationAsync(

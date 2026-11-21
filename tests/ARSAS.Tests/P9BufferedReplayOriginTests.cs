@@ -142,6 +142,42 @@ public sealed class P9BufferedReplayOriginTests
     }
 
     [Fact]
+    public void ManualPurgeRevokesOnlyTargetBrcbOldCursorAndLaterCanRecover()
+    {
+        const string other = "SG7_BCU/LLN0$BR$BrcbB01";
+        var tracker = new Iec61850ReportDeliveryTracker();
+        tracker.OnAssociated(101, Start);
+        tracker.RecordAccepted(Frame(10, 11, "0101"), 101);
+        tracker.RecordAccepted(Frame(10, 11, "0201", rcb: other), 101);
+        tracker.OnDisconnected(Start.AddSeconds(30));
+        tracker.OnAssociated(102, Start.AddSeconds(70));
+        Assert.Equal("Buffer", tracker.Classify(Frame(40, 73, "0102"), 102).Label);
+        Assert.Equal("Buffer", tracker.Classify(Frame(40, 73, "0202", rcb: other), 102).Label);
+
+        tracker.InvalidateForManualPurge("SG7_BCU/LLN0.BR.BrcbA01");
+        Assert.Equal("Unknown", tracker.Classify(Frame(40, 73, "0102"), 102).Label);
+        Assert.Equal("Buffer", tracker.Classify(Frame(40, 73, "0202", rcb: other), 102).Label);
+
+        tracker.RecordAccepted(Frame(85, 86, "0301"), 102);
+        tracker.OnDisconnected(Start.AddSeconds(100));
+        tracker.OnAssociated(103, Start.AddSeconds(140));
+        Assert.Equal("Buffer", tracker.Classify(Frame(120, 144, "0302"), 103).Label);
+    }
+
+    [Fact]
+    public void UnknownManualPurgeTargetFailsClosed()
+    {
+        var tracker = new Iec61850ReportDeliveryTracker();
+        tracker.OnAssociated(11, Start);
+        tracker.RecordAccepted(Frame(10, 11, "01"), 11);
+        tracker.OnDisconnected(Start.AddSeconds(30));
+        tracker.OnAssociated(12, Start.AddSeconds(70));
+        Assert.Equal("Buffer", tracker.Classify(Frame(40, 73, "02"), 12).Label);
+        tracker.InvalidateForManualPurge("not-an-exact-RCB");
+        Assert.Equal("Unknown", tracker.Classify(Frame(40, 73, "02"), 12).Label);
+        tracker.InvalidateForManualPurge(null);
+    }
+    [Fact]
     public void ColdStartCannotCertifyHistoricalReplayEvenWithEntryId()
     {
         var tracker = new Iec61850ReportDeliveryTracker();

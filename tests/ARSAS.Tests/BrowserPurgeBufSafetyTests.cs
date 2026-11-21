@@ -100,6 +100,9 @@ public sealed class BrowserPurgeBufSafetyTests
         Assert.Contains("purgeTarget, MmsDataValue.Boolean(true)", client);
         Assert.Contains("WriteBrowserPurgeBufAsync(", runtime);
         Assert.Contains("explicitOperatorConfirmation", runtime);
+        Assert.Contains("session.ReplayTracker.InvalidateForManualPurge(exactReference)", runtime);
+        Assert.Contains("InvalidateForManualPurge(", Source(
+            "Services/Iec61850ReportDeliveryTracker.cs"));
         Assert.Contains("BrowserPurgeBufPolicy.RejectAutomaticBufferedMutation(", normalReporting);
         var automaticStart = normalReporting.Split(
             "public async Task<NativeReportMonitorStartResult> StartReportMonitorAsync(")[1]

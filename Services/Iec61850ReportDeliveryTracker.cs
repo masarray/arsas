@@ -64,6 +64,26 @@ public sealed class Iec61850ReportDeliveryTracker
         }
     }
 
+    /// <summary>
+    /// A manual PurgeBuf attempt invalidates old EntryID sequence evidence even
+    /// when the MMS response is lost. No network access or IED mutation here.
+    /// A verified BR reference invalidates only its own bounded stream;
+    /// an unidentifiable reference fails closed by clearing all cursors.
+    /// </summary>
+    public void InvalidateForManualPurge(string? rcbReference)
+    {
+        if (string.IsNullOrWhiteSpace(rcbReference) ||
+            !BrowserPurgeBufPolicy.SameExactBrcbReference(rcbReference, rcbReference))
+        {
+            _streams.Clear();
+            return;
+        }
+
+        foreach (var key in _streams.Keys
+                     .Where(candidate => BrowserPurgeBufPolicy.SameExactBrcbReference(
+                         candidate, rcbReference)).ToArray())
+            _streams.Remove(key);
+    }
     public Iec61850ReportDeliveryEvidence Classify(
         NativeReportFrameMetadata frame, long association)
     {
