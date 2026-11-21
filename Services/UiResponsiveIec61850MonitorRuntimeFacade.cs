@@ -361,6 +361,14 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     /// </summary>
     private void ForwardEventRaised(Iec61850EventEntry entry)
     {
+        // Operator audit is NOT an RCB process edge and must bypass the
+        // stale-value suppression/freshness fence used only for SOE.
+        if (entry.IsControlEvent)
+        {
+            EventRaised?.Invoke(entry);
+            return;
+        }
+
         var key = CommandFeedbackFenceKey(entry.DeviceId, entry.IecReference);
         var origin = TakePendingEventOrigin(key, entry.NewValue);
         if (!_commandFeedbackFences.TryGetValue(key, out var fence))
