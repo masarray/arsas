@@ -77,6 +77,19 @@ public sealed class P9SoeControlAuditTests
             }
         };
         Assert.Equal("Control confirmed", Iec61850ControlAuditPolicy.Outcome(result));
+        Assert.Equal("Control confirmed", Iec61850ControlAuditPolicy.Outcome(
+            new Iec61850ControlCommandResult
+            {
+                ControlModelText = "Direct Operate · Normal security",
+                ServiceAccepted = true, IsSuccess = true, FeedbackConfirmed = true
+            }));
+        Assert.Equal("Control accepted", Iec61850ControlAuditPolicy.Outcome(
+            new Iec61850ControlCommandResult
+            {
+                ControlModelText = "SBO · Enhanced security",
+                ServiceAccepted = true, IsSuccess = true, FeedbackConfirmed = true,
+                CommandTerminationReceived = false
+            }));
         Assert.Contains("termination=positive", Iec61850ControlAuditPolicy.Evidence(result));
         Assert.Contains("feedback=confirmed Open", Iec61850ControlAuditPolicy.Evidence(result));
     }
