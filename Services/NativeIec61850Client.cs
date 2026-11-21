@@ -525,7 +525,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
             var isIntegrityReport = hasReasonEvidence &&
                 report.Values.Any(value => value.ReasonForInclusion.Contains(
                     "integrity", StringComparer.OrdinalIgnoreCase));
-            frames.Add(new NativeReportFrameMetadata
+            var frame = new NativeReportFrameMetadata
             {
                 ReportControlReference = session.ReportControl.Reference,
                 ReportId = header.ReportId,
@@ -547,7 +547,8 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 EntryIdHex = header.EntryIdHex,
                 ReportTimestamp = header.TimeOfEntry,
                 ReceivedAt = report.ReceivedAt
-            });
+            };
+            frames.Add(frame);
 
             var projection = ProjectReportValue(report);
             warnings.AddRange(projection.Warnings);
@@ -579,6 +580,7 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 SequenceNumber = header.SequenceNumber,
                 ConfRev = header.ConfRev,
                 ReportTimestamp = header.TimeOfEntry,
+                ReportFrame = frame,
                 UpdatedAt = update.UpdatedAt
             }));
         }
