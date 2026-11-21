@@ -1391,31 +1391,63 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void IedPlayAction_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetDeviceFromButton(sender, out var device) || device.IsBusy) return;
-        SelectedDevice = device;
-        if (device.IsDemo)
-        {
-            StartDemoDevice(device);
+        if (!TryGetDeviceFromButton(sender, out var device) || !device.CanPlayAction)
             return;
-        }
 
-        if (!device.IsConnected)
+        // One operator click owns the entire connect -> StartMonitoring handoff.
+        // The fast-connect helper releases IsBusy before the report Start await;
+        // CanPlayAction must never expose that intermediate Connected/NotMonitoring
+        // state as permission for another Play. Stop remains preemptive.
+        device.IsPlayWorkflowCanceled = false;
+        device.IsPlayWorkflowActive = true;
+        try
         {
-            var discoveryWillOpenWizard = !device.HasDiscoveryCache || device.Signals.Count == 0;
-            var connected = device.HasDiscoveryCache && device.Signals.Count > 0
-                ? await ConnectUsingSavedModelAsync(device)
-                : await ConnectAndConfigureDeviceAsync(device, openWizard: discoveryWillOpenWizard);
-            if (!connected || discoveryWillOpenWizard) return;
-        }
+            SelectedDevice = device;
+            if (device.IsDemo)
+            {
+                StartDemoDevice(device);
+                return;
+            }
 
-        if (device.IsMonitoring) return;
-        if (device.SelectedLiveSignalCount == 0)
+            if (!device.IsConnected)
+            {
+                var discoveryWillOpenWizard = !device.HasDiscoveryCache || device.Signals.Count == 0;
+                var connected = device.HasDiscoveryCache && device.Signals.Count > 0
+                    ? await ConnectUsingSavedModelAsync(device)
+                    : await ConnectAndConfigureDeviceAsync(device, openWizard: discoveryWillOpenWizard);
+                // The Stop command may complete during an awaited connect.
+                // Never arm reporting from a superseded Play generation.
+                if (device.IsPlayWorkflowCanceled || device.IsStopping)
+                {
+                    if (device.IsConnected && !device.IsStopping)
+                        await StopDeviceConnectionAsync(device);
+                    return;
+                }
+                if (!connected || discoveryWillOpenWizard)
+                    return;
+            }
+
+            if (device.IsPlayWorkflowCanceled || device.IsStopping || !device.IsConnected)
+                return;
+            if (device.IsMonitoring)
+                return;
+            if (device.SelectedLiveSignalCount == 0)
+            {
+                await OpenSignalSelectionWizardAsync(device);
+                return;
+            }
+
+            await StartDeviceMonitorAsync(device);
+            // A Stop that wins while the report Start was pending must not
+            // leave a late monitoring session running behind the offline UI.
+            if (device.IsPlayWorkflowCanceled && device.IsConnected && !device.IsStopping)
+                await StopDeviceConnectionAsync(device);
+        }
+        finally
         {
-            await OpenSignalSelectionWizardAsync(device);
-            return;
+            device.IsPlayWorkflowActive = false;
+            device.IsPlayWorkflowCanceled = false;
         }
-
-        await StartDeviceMonitorAsync(device);
     }
 
     private async void IedStopAction_Click(object sender, RoutedEventArgs e)
@@ -1423,6 +1455,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // Stop is a preemptive safety lane even while Connect/Start is busy.
         if (!TryGetDeviceFromButton(sender, out var device) || device.IsStopping) return;
         SelectedDevice = device;
+        if (device.IsPlayWorkflowActive)
+            device.IsPlayWorkflowCanceled = true; // Invalidate any awaiting Play continuation.
         if (device.IsReportingProgressActive)
             device.CancelReportingProgress(); // Stop preempts report setup.
         if (device.IsDemo)
@@ -1434,13 +1468,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // One Stop = one complete disconnect. The independent pause-monitor
         // action remains available elsewhere; the IED card never requires
         // a second Stop to release its MMS association.
-        if (device.IsBusy || device.IsConnected || device.IsMonitoring)
+        if (device.IsPlayWorkflowActive || device.IsBusy || device.IsConnected || device.IsMonitoring)
             await StopDeviceConnectionAsync(device);
     }
 
     private async void IedConnectionAction_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetDeviceFromButton(sender, out var device) || device.IsBusy) return;
+        if (!TryGetDeviceFromButton(sender, out var device) || device.IsBusy || device.IsPlayWorkflowActive) return;
         SelectedDevice = device;
 
         if (device.IsConnected)
@@ -1459,7 +1493,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void IedMonitorAction_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetDeviceFromButton(sender, out var device) || device.IsBusy) return;
+        if (!TryGetDeviceFromButton(sender, out var device) || device.IsBusy || device.IsPlayWorkflowActive) return;
         SelectedDevice = device;
 
         if (device.IsMonitoring)
@@ -2544,6 +2578,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 PollingIntervalMs,
                 _applicationCancellation.Token);
 
+            // Stop can preempt the async native start; a completion from the
+            // previous association must never resurrect live rows in WPF.
+            if (device.IsStopping || device.IsPlayWorkflowCanceled ||
+                !device.IsConnected || !device.IsMonitoring)
+                return false;
             device.Points.AddRange(points);
             GlobalPoints.AddRange(points);
             RebuildControlFeedbackIndex(device);

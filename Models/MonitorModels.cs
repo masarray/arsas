@@ -18,6 +18,8 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     private bool _isConnected;
     private bool _isBusy;
     private bool _isStopping;
+    private bool _isPlayWorkflowActive;
+    private bool _isPlayWorkflowCanceled;
     private bool _isMonitoring;
     private bool _isBrowserReading;
     private bool _discoveryProgressActive;
@@ -421,6 +423,30 @@ public sealed class Iec61850MonitorDevice : ObservableObject
         }
     }
 
+    // UI ownership spans the whole Play click (connect + start monitor).
+    // ConnectUsingCachedModelAsync legitimately clears IsBusy before the next
+    // awaited StartMonitoringAsync; without this lease Play becomes clickable
+    // during that gap. This is interaction state, never persisted project state.
+    [JsonIgnore]
+    public bool IsPlayWorkflowActive
+    {
+        get => _isPlayWorkflowActive;
+        set
+        {
+            if (Set(ref _isPlayWorkflowActive, value))
+                RefreshComputed();
+        }
+    }
+
+    // A preemptive Stop invalidates the in-flight Play continuation even after
+    // IsStopping clears. The Play owner resets this on its final completion.
+    [JsonIgnore]
+    public bool IsPlayWorkflowCanceled
+    {
+        get => _isPlayWorkflowCanceled;
+        set => _isPlayWorkflowCanceled = value;
+    }
+
     // Independent read-only association may run while static reporting stays live.
     public bool IsBrowserReading
     {
@@ -694,10 +720,10 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     public bool CanEditSignals => SignalCount > 0 && !IsBusy && !IsReportingProgressActive && !IsMonitoring && !IsDemo;
     public bool CanStartMonitor => IsConnected && SelectedLiveSignalCount > 0 && !IsBusy && !IsReportingProgressActive;
     public bool CanStartOrStopMonitor => !IsBusy && !IsReportingProgressActive && (IsMonitoring || SelectedLiveSignalCount > 0);
-    public bool CanPlayAction => !IsStopping && !IsBusy && !IsReportingProgressActive && (!IsConnected || (!IsMonitoring && SelectedLiveSignalCount > 0));
+    public bool CanPlayAction => !IsPlayWorkflowActive && !IsStopping && !IsBusy && !IsReportingProgressActive && (!IsConnected || (!IsMonitoring && SelectedLiveSignalCount > 0));
     // Stop is intentionally pre-emptive: a hung Connect/Start must not
     // disable the only safe operator exit from an in-flight MMS operation.
-    public bool CanStopAction => !IsStopping && (IsBusy || IsConnected || IsMonitoring || IsReportingProgressActive);
+    public bool CanStopAction => !IsStopping && (IsPlayWorkflowActive || IsBusy || IsConnected || IsMonitoring || IsReportingProgressActive);
     public bool CanRescan => !IsBusy && !IsReportingProgressActive && !IsMonitoring && !IsDemo;
     public bool CanSaveScl => !IsBusy && !IsReportingProgressActive && !IsDemo && (SclWorkspace != null || LiveDiscoveryModel != null);
     public string SaveSclToolTip => SclWorkspace != null
@@ -754,7 +780,9 @@ public sealed class Iec61850MonitorDevice : ObservableObject
     public string ConfigureToolTip => IsMonitoring
         ? $"Stop monitoring {Name} before changing its signal selection"
         : $"Open signal selection wizard for {Name}";
-    public string PlayToolTip => !IsConnected
+    public string PlayToolTip => IsPlayWorkflowActive
+        ? $"Connecting and arming {Name}… Play is locked until complete or failed"
+        : !IsConnected
         ? RequiresEndpointBinding
             ? $"Bind an MMS endpoint for {Name}, then fast-connect from the SCL design model"
             : HasSclDesignModel

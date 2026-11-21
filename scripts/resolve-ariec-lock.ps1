@@ -163,12 +163,10 @@ if ($null -ne $lock.sclAssociationInteroperability) {
             # engine and P0-C provenance stay unchanged, and neither passing
             # CI nor reading a status bit grants a real-world Operate.
             $typedControl = $lock.globalTypedControlStageTrial
-            $typedControlValid = (
+            $typedControlHistoricalValid = (
                 $null -ne $typedControl -and
-                [string]$lock.commit -ceq 'f75e323e9f8443aa20e0a3818a1d5d77255b2c0f' -and
-                [int]$lock.sourcePullRequest -eq 192 -and
                 [string]$typedControl.baseEngineCommit -ceq '9c7cb40364023a7b217e5ec31ab3105ba90142eb' -and
-                [string]$typedControl.exactCommit -ceq [string]$lock.commit -and
+                [string]$typedControl.exactCommit -ceq 'f75e323e9f8443aa20e0a3818a1d5d77255b2c0f' -and
                 [int]$typedControl.enginePullRequest -eq 192 -and
                 [long]$typedControl.engineCiRun -eq 39909260816L -and
                 [string]$typedControl.status -ceq 'engine-ci-success-consumer-trial-not-physical' -and
@@ -181,6 +179,41 @@ if ($null -ne $lock.sclAssociationInteroperability) {
                 [bool]$typedControl.mainlinePromotionForbidden -and
                 [string]$lock.p0CStageObservationTrial.exactCommit -ceq [string]$typedControl.baseEngineCommit
             )
+            $typedControlValid = (
+                $typedControlHistoricalValid -and
+                [string]$lock.commit -ceq [string]$typedControl.exactCommit -and
+                [int]$lock.sourcePullRequest -eq 192
+            )
+
+            # 2026-11-21 SG7 physical P9 trial: 77/77 Report-backed values,
+            # four independently routed RCBs, 129 actual InformationReports.
+            # The staged engine is an exact fast-forward descendant of the
+            # fully guarded typed-control f75e323 ancestry above. Preserve
+            # every older SCL/control check; do NOT infer lossless SOE or
+            # accept a made-up successor SHA simply because CI is green.
+            $p9 = $lock.p9Sg7FourRcbIntegrationCandidate
+            $p9Valid = (
+                $typedControlHistoricalValid -and
+                $null -ne $p9 -and
+                [string]$lock.commit -ceq '24077e48e393ce3dc2cd1409db6e96f27aa1e368' -and
+                [int]$lock.sourcePullRequest -eq 203 -and
+                [string]$p9.baselineEngineCommit -ceq [string]$typedControl.exactCommit -and
+                [string]$p9.exactCommit -ceq [string]$lock.commit -and
+                [string]$p9.status -ceq 'source-and-prior-field-trial-proven-current-combined-release-pending' -and
+                [long]$p9.engineCiRun -eq 44720030989L -and
+                [string]$p9.arsasFieldTrialSourceCommit -ceq 'a3dca3e8483a7a8b1cb8047e7034db75380f8baa' -and
+                [long]$p9.arsasFieldTrialRun -eq 44741754523L -and
+                [int]$p9.fieldObservedReportBackedValues -eq 77 -and
+                [int]$p9.fieldSelectedSignalCount -eq 77 -and
+                [int]$p9.fieldIndependentlyRoutedRcbCount -eq 4 -and
+                [int]$p9.fieldObservedReportFrames -eq 129 -and
+                [bool]$p9.reportedBrcbBufferOverflow -and
+                [bool]$p9.cyclicMmsProcessPollingForbidden -and
+                [bool]$p9.automaticRcbMutationForbidden -and
+                [bool]$p9.noAutomaticGiRetry -and
+                [bool]$p9.currentCombinedPhysicalRetestRequired -and
+                [bool]$p9.losslessSoeNotClaimed
+            )
             $acceptedTrial = (
                 ($trialValid -and [string]$lock.commit -ceq [string]$trial.exactCommit -and [int]$lock.sourcePullRequest -eq 148) -or
                 ($serverAtValid -and [string]$lock.commit -ceq [string]$serverAt.exactCommit -and [int]$lock.sourcePullRequest -eq 153) -or
@@ -191,7 +224,8 @@ if ($null -ne $lock.sclAssociationInteroperability) {
                 $p0AIdentityTrialValid -or
                 $p0BRcbTrialValid -or
                 $p0CTypedReadTrialValid -or
-                $typedControlValid
+                $typedControlValid -or
+                $p9Valid
             )
             if (-not $historicalAnchorValid -or -not $acceptedTrial) {
                 throw 'SCL association physical-tested engine head differs from integration lock.'

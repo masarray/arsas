@@ -196,6 +196,20 @@ jobs:
             }
             Write-Host 'Exact typed-control staging trial accepted for draft CI only; R7/R10 physical acceptance unchanged.'
           }
+          elseif ($lock.commit -ceq '24077e48e393ce3dc2cd1409db6e96f27aa1e368') {
+            # Review the same immutable P9/typed-control/physical SCL proof as
+            # the production resolver. Never waive R7 history to adopt a new SHA.
+            $qualified = & .\ARSAS\scripts\resolve-ariec-lock.ps1 -LockPath .\ARSAS\engines\ARIEC61850.lock.json
+            $p9 = $lock.p9Sg7FourRcbIntegrationCandidate
+            if ([string]$qualified.commit -cne [string]$lock.commit -or
+                [string]$p9.exactCommit -cne [string]$lock.commit -or
+                [int]$lock.sourcePullRequest -ne 203 -or
+                -not [bool]$p9.currentCombinedPhysicalRetestRequired -or
+                -not [bool]$p9.losslessSoeNotClaimed) {
+              throw 'Unverified P9 four-RCB engine cannot replace historical SCL authority.'
+            }
+            Write-Host 'Exact SG7 P9 successor validated for combined CI; historical R7/R10 physical evidence remains separate.'
+          }
           elseif ($lock.commit -eq $convergence.activeStack.engineModelAndScl.head) {
             if ([int]$lock.sourcePullRequest -notin @(134, 135) -or
                 $lock.purpose -notmatch 'R7 physical SCL repair pin') {

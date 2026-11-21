@@ -500,9 +500,21 @@ public sealed class CanonicalLiveSclExportRegressionTests
             typedTrial.GetProperty("baseEngineCommit").GetString());
         Assert.Equal("f75e323e9f8443aa20e0a3818a1d5d77255b2c0f",
             typedTrial.GetProperty("exactCommit").GetString());
+        // Historical typed-control trial remains immutable, while the SG7
+        // P9 integration pin is its exact, independently field-tested successor.
+        var p9 = root.GetProperty("p9Sg7FourRcbIntegrationCandidate");
         Assert.Equal(typedTrial.GetProperty("exactCommit").GetString(),
+            p9.GetProperty("baselineEngineCommit").GetString());
+        Assert.Equal("24077e48e393ce3dc2cd1409db6e96f27aa1e368",
             root.GetProperty("commit").GetString());
-        Assert.Equal(192, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(root.GetProperty("commit").GetString(),
+            p9.GetProperty("exactCommit").GetString());
+        Assert.Equal(203, root.GetProperty("sourcePullRequest").GetInt32());
+        Assert.Equal(77, p9.GetProperty("fieldObservedReportBackedValues").GetInt32());
+        Assert.Equal(4, p9.GetProperty("fieldIndependentlyRoutedRcbCount").GetInt32());
+        Assert.True(p9.GetProperty("reportedBrcbBufferOverflow").GetBoolean());
+        Assert.True(p9.GetProperty("currentCombinedPhysicalRetestRequired").GetBoolean());
+        Assert.True(p9.GetProperty("losslessSoeNotClaimed").GetBoolean());
         Assert.Equal(192, typedTrial.GetProperty("enginePullRequest").GetInt32());
         Assert.Equal(39909260816L, typedTrial.GetProperty("engineCiRun").GetInt64());
         Assert.Equal("engine-ci-success-consumer-trial-not-physical",
