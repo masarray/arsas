@@ -305,6 +305,24 @@ public static class GridClipboardBehavior
         menu.Items.Add(Item("Copy visible properties", () => CopyDetailRows(
             list, list.Items.OfType<IedBrowserDetailRow>()
                 .Where(row => row.Kind == "Property"))));
+        // The Browser P0 contract deliberately forbids long provenance hover
+        // strips. Reveal Owner attribution ONLY on an explicit context action.
+        var ownerInfo = Item("Owner information…", () =>
+        {
+            var row = state.HitRow is { } clicked && list.Items.Contains(clicked)
+                ? clicked : list.SelectedItem as IedBrowserDetailRow;
+            if (row is { Kind: "Property", Name: "Owner" })
+                Inform(list, row.ObservationTooltip);
+        });
+        ownerInfo.Visibility = Visibility.Collapsed;
+        menu.Items.Add(ownerInfo);
+        list.ContextMenuOpening += (_, _) =>
+        {
+            var row = state.HitRow is { } clicked && list.Items.Contains(clicked)
+                ? clicked : list.SelectedItem as IedBrowserDetailRow;
+            ownerInfo.Visibility = row is { Kind: "Property", Name: "Owner" }
+                ? Visibility.Visible : Visibility.Collapsed;
+        };
         list.ContextMenu = menu;
     }
 
