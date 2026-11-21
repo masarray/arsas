@@ -64,8 +64,10 @@ public sealed class BrowserPurgeBufSafetyTests
         var xaml = Source("BrowserRcbPurgeWindow.xaml");
         Assert.Contains("WriteBrowserPurgeBufAsync(", client);
         Assert.Contains("MmsDataValue.Boolean(true)", client);
-        Assert.Contains("ReadSingleVariableAsync(enabledTarget", client);
-        Assert.Contains("WriteSingleVariableAsync(purgeTarget", client);
+        Assert.Contains("var enabled = await _session.ReadSingleVariableAsync(", client);
+        Assert.Contains("enabledTarget, cancellationToken", client);
+        Assert.Contains("var sent = await _session.WriteSingleVariableAsync(", client);
+        Assert.Contains("purgeTarget, MmsDataValue.Boolean(true)", client);
         Assert.Contains("WriteBrowserPurgeBufAsync(", runtime);
         Assert.Contains("explicitOperatorConfirmation", runtime);
         Assert.Contains("BrowserPurgeBufPolicy.RejectAutomaticBufferedMutation(", normalReporting);
