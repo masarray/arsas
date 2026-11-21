@@ -194,6 +194,10 @@ public static class IedBrowserRcbOwnerDisplay
     private static bool TryCanonicalHex(string? value, out string hex)
     {
         hex = (value ?? string.Empty).Trim();
+        // Normalize IEC diagnostic x'...' octet notation to the engine's raw hex.
+        if (hex.StartsWith("x'", StringComparison.OrdinalIgnoreCase) &&
+            hex.EndsWith("'", StringComparison.Ordinal))
+            hex = hex[2..^1];
         if (hex.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
             hex = hex[2..];
         if (hex.Length is < 2 or > 128 || (hex.Length & 1) != 0 ||
