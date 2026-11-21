@@ -80,6 +80,19 @@ public sealed class P9BufferedReplayOriginTests
         Assert.Equal("Unknown", tracker.Classify(Frame(20, 72, "02"), 2).Label);
     }
 
+    [Fact]
+    public void AnUrcbCannotClaimReplayEvenWithAnOldOfflineCursor()
+    {
+        const string urcb = "SG7_BCU/LLN0$RP$UrcbA01";
+        var tracker = new Iec61850ReportDeliveryTracker();
+        tracker.OnAssociated(600, Start);
+        tracker.RecordAccepted(Frame(10, 11, "0101", rcb: urcb), 600);
+        tracker.OnDisconnected(Start.AddSeconds(30));
+        tracker.OnAssociated(601, Start.AddSeconds(70));
+        Assert.Equal("Unknown", tracker.Classify(
+            Frame(40, 73, "0102", rcb: urcb), 601).Label);
+    }
+
     [Theory]
     [InlineData("data-change", "Data change", "Buffer event")]
     [InlineData("quality-change", "Quality", "Buffer event")]
