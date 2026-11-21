@@ -46,6 +46,13 @@ public static class EngineeringClipboardText
 
         foreach (var row in rows)
         {
+            // A malformed clipboard source is not an empty data row.
+            // Refuse it without modifying the destination clipboard.
+            if (row is null)
+            {
+                reason = "Clipboard selection contains an unavailable row.";
+                return false;
+            }
             if (++rowCount > MaxRows || (long)cellCount + headers.Count > MaxCells)
             {
                 reason = "The selection exceeds 3,000 rows or 36,000 cells. Use Export CSV for larger datasets.";
