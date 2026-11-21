@@ -40,6 +40,9 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         public bool ReportMissLogged { get; set; }
         public bool ReportValueRejectedLogged { get; set; }
         public string LastLoggedDegradedQuality { get; set; } = string.Empty;
+        // Fixed-size, per-association SOE history. DataSet overlap can deliver
+        // the same physical edge twice with an older replay between them.
+        public Iec61850SoeRepeatGuard SoeRepeatGuard { get; } = new();
         public int ConsecutiveErrors { get; set; }
     }
 
@@ -3098,6 +3101,17 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
             hadValue, hasProcessValue, trustReportEdge, reportFrame is not null,
             reason, sourceMode);
         if ((!changed && !firstWireDataChange) || !ShouldRecordSequenceOfEvents(point))
+            return;
+
+        // A01 and B01 may describe the exact same breaker edge. Even if a
+        // historical buffered Intermediate arrives between their two Open
+        // reports, publish that physical Open once. A distinct process t,
+        // value, or an unverified/untimestamped source is never discarded.
+        // The raw report, per-RCB continuity and all point updates above
+        // have already been ingested, so no evidence is lost from diagnosis.
+        if (!state.SoeRepeatGuard.Admit(
+                trustReportEdge, reportFrame is not null, reason, sourceMode,
+                deviceTimestamp, display))
             return;
 
         var entry = new Iec61850EventEntry
