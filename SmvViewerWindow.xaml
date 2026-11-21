@@ -1,6 +1,7 @@
 <Window x:Class="ArIED61850Tester.SmvViewerWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ux="clr-namespace:ArIED61850Tester"
         Title="ARSAS · Sampled Values Viewer"
         Width="1460" Height="850" MinWidth="1160" MinHeight="720"
         WindowStartupLocation="CenterOwner"
@@ -231,7 +232,7 @@
                                 <TabControl Grid.Row="2" BorderThickness="0" Background="Transparent"
                                             FontSize="10.5">
                                     <TabItem Header="RMS / phase">
-                                        <DataGrid ItemsSource="{Binding RawVectorRows}"
+                                        <DataGrid ItemsSource="{Binding RawVectorRows}" ux:GridClipboardBehavior.ExcelCells="True"
                                                   AutoGenerateColumns="False" IsReadOnly="True"
                                                   CanUserAddRows="False" CanUserDeleteRows="False"
                                                   EnableRowVirtualization="True"
@@ -247,7 +248,7 @@
                                         </DataGrid>
                                     </TabItem>
                                     <TabItem Header="Raw range">
-                                        <DataGrid ItemsSource="{Binding SnapshotChannels}"
+                                        <DataGrid ItemsSource="{Binding SnapshotChannels}" ux:GridClipboardBehavior.ExcelCells="True"
                                                   AutoGenerateColumns="False" IsReadOnly="True"
                                                   CanUserAddRows="False" CanUserDeleteRows="False"
                                                   EnableRowVirtualization="True"
