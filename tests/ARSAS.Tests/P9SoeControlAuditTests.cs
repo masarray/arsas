@@ -39,6 +39,7 @@ public sealed class P9SoeControlAuditTests
     [InlineData(true, true, "integrity", "2026-11-22 06:00:00.001")]
     [InlineData(true, true, "dchg", "-")]
     [InlineData(true, true, "dchg", "Unknown")]
+    [InlineData(true, true, "dchg", "2026-11-22 06:00:00")]
     public void DoNotSilentlyDeduplicateWithoutExactWireDataChangeAndProcessTime(
         bool report, bool frame, string reason, string timestamp)
     {
