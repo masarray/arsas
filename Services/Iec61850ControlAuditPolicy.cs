@@ -13,7 +13,10 @@ public static class Iec61850ControlAuditPolicy
     {
         ArgumentNullException.ThrowIfNull(result);
         if (result.CompletionState.Equals("NotSent", StringComparison.OrdinalIgnoreCase))
-            return "Control not sent";
+            return !result.ServiceAccepted &&
+                   result.WireSteps.Count == 0 &&
+                   string.IsNullOrWhiteSpace(result.RequestHex)
+                ? "Control not sent" : "Control unverified";
         if (result.WireSteps.Any(step => !step.RequestAccepted) ||
             result.CommandTerminationReceived && !result.PositiveTermination)
             return "Control rejected";
