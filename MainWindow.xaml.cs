@@ -2935,7 +2935,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             // Runtime SOE is authoritative for discrete edges. Re-marking here is a
             // second guard against a later coalesced snapshot hiding the visual flash.
             foreach (var eventEntry in eventBatch)
-                MarkPointRecentlyChanged(eventEntry.PointKey);
+            {
+                // Process SOE highlights observed physical value transitions;
+                // a command request/outcome is an audit, not a synthetic XCBR edge.
+                if (!eventEntry.IsControlEvent)
+                    MarkPointRecentlyChanged(eventEntry.PointKey);
+            }
 
             if (MainTabs.SelectedIndex != 2)
             {
