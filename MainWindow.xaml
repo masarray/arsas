@@ -1152,7 +1152,7 @@
                                   ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="#" Binding="{Binding Sequence}" Width="55"/>
-                                <DataGridTextColumn Header="IED Timestamp" Binding="{Binding DeviceTimestamp}" Width="177"/>
+                                <DataGridTextColumn Header="Event time" Binding="{Binding EventTimestamp}" Width="177" ToolTip="IED process timestamp for SOE; local ARSAS client clock for control audit"/>
                                 <DataGridTextColumn Header="IED" Binding="{Binding DeviceName}" Width="105"/>
                                 <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="155"/>
                                 <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="260"/>
