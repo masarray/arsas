@@ -1,50 +1,50 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.44",
-  "title": "Verified IEC 61850 buffered SOE replay and safer P9 reporting",
-  "titleId": "Replay SOE buffer IEC 61850 terverifikasi dan reporting P9 lebih andal",
-  "summary": "ARSAS 1.6.44 Windows IEC 61850 engineering tester adds verified SG7_BCU BRCB historical replay classification in a single Event column, retained report EntryID/TimeOfEntry diagnostics and guarded operator-only Browser PurgeBuf. Application stable denotes a tested software package, not IEC 61850 certification or proof of lossless SOE.",
-  "summaryId": "ARSAS 1.6.44 tester engineering IEC 61850 Windows kini mengklasifikasikan replay historis BRCB yang teruji pada SG7_BCU melalui satu kolom Event, menjaga diagnostik EntryID/TimeOfEntry dan PurgeBuf manual yang dibatasi izin operator. Stable adalah rilis software yang diuji, bukan sertifikasi IEC 61850 atau bukti seluruh SOE tanpa kehilangan.",
+  "version": "1.6.42",
+  "title": "IED Browser, verified controls and improved multi-IED monitoring",
+  "titleId": "IED Browser, kontrol terverifikasi, dan monitoring multi-IED",
+  "summary": "Operator-accepted Windows stable application release: browse Reports, DataSets, Data Model, Files, Setting Groups and GOOSE; monitor IED values with quality and timestamps; verify model-backed Write/readback and tested SBO Enhanced actions. Installer and portable packages are the same tested public v1.6.42 binaries. Stable is a software release channel, not IEC 61850 conformance certification or proof of lossless SOE.",
+  "summaryId": "Rilis aplikasi Windows stabil yang telah diterima operator: jelajahi Reports, DataSets, Data Model, Files, Setting Groups, dan GOOSE; pantau nilai IED beserta quality dan timestamp; lakukan Write/readback berbasis model dan operasi SBO Enhanced yang diuji. Installer dan portable adalah binary publik v1.6.42 yang sama dengan hasil pengujian. Status stable adalah kanal rilis software, bukan sertifikasi IEC 61850 atau bukti SOE lossless.",
   "highlights": [
-    "One clear SOE Event label: Buffer event when historical BRCB replay evidence qualifies; Data change, Integrity and GI remain distinct causes.",
-    "Six-byte IEC MMS BinaryTime TimeOfEntry support validated with SG7_BCU raw report bytes; UTC-Time quality checks remain strict.",
-    "Preserves BRCB buffer history: ARSAS never automatically purges IED buffers. An explicit IED Browser PurgeBuf write is confirmation-gated and identity-checked.",
-    "Safer reconnect and duplicate EntryID handling with bounded per-RCB evidence; repeated DataSet members reuse the accepted frame's cursor.",
-    "Existing 77/77 SG7_BCU live values, 4/4 routed RCB traffic and operator-authorized control testing preserved."
+    "IED Browser navigation: Reports, DataSets, Data Model, Files, Setting Groups and GOOSE, with retained per-IED context and precise name/IP focus.",
+    "Report-first multi-IED monitoring with static DataSet membership, live values, quality, timestamps, RCB ingress and bounded user-interface updates.",
+    "Verified typed ctlModel Write/readback, focused CSWI reinspection and association-scoped, fail-closed SBO Enhanced command handling on tested targets.",
+    "SV/SMV waveform viewer with passive first-received discovery without SCL; GOOSE timeline, SNTP IPv4 presentation and modern cool-blue Windows interface.",
+    "Native COMTRADE analysis through the pinned ArdIrec bridge, with source-verified installer and portable delivery."
   ],
   "highlightsId": [
-    "Kolom Event SOE sederhana: Buffer event untuk replay BRCB historis yang memenuhi bukti; Data change, Integrity, dan GI tetap terpisah.",
-    "TimeOfEntry IEC MMS BinaryTime enam-byte didukung dengan validasi raw report SG7_BCU; pemeriksaan kualitas UTC-Time tetap ketat.",
-    "Riwayat buffer BRCB dijaga: ARSAS tidak pernah melakukan purge otomatis. Write PurgeBuf di IED Browser hanya setelah konfirmasi operator dan validasi identitas.",
-    "Reconnect dan duplikasi EntryID lebih aman dengan bukti per-RCB terbatas; member DataSet berulang menggunakan hasil penerimaan frame yang sama.",
-    "77/77 nilai SG7_BCU, 4/4 jalur RCB, dan pengujian kontrol atas izin operator tetap dipertahankan."
+    "IED Browser: Reports, DataSets, Data Model, Files, Setting Groups, dan GOOSE; konteks tiap IED tetap tersimpan, nama/IP perangkat jelas.",
+    "Monitoring multi-IED berbasis report: anggota DataSet statis, nilai live, quality, timestamp, ingress RCB, dan refresh antarmuka yang terkontrol.",
+    "Write/readback ctlModel bertipe dan terverifikasi, CSWI diperiksa ulang sesudah Write, serta kontrol SBO Enhanced yang dibatasi association dan aman saat verifikasi gagal.",
+    "Viewer gelombang SV/SMV dengan deteksi paket pertama tanpa SCL; timeline GOOSE, tampilan IPv4 SNTP, dan antarmuka Windows cool-blue.",
+    "Analisis COMTRADE native melalui ArdIrec yang dipin, didistribusikan dengan installer dan portable terverifikasi."
   ],
   "improvements": [
-    "SG7_BCU field diagnostic 21 Nov 2026: 77/77 visible live points, four exact routed BRCBs, 337 decoded report frames; A01/B01 replay triage Buffer and Event Log displays Buffer event.",
-    "P9 regression tests preserve original cause versus buffered delivery, reject repeated accepted EntryID as new replay, and protect the single Event label and conservative unknown fallback.",
-    "Optimized accepted report-cursor path: a frame containing many DataSet members needs one wire TimeOfEntry/cursor acceptance per contiguous frame identity, without adding MMS reads or queues.",
-    "Windows release source, native bridge, portable and installer must match the exact approved main SHA and carry verified checksums, provenance and SPDX SBOM."
+    "Release workflow #40151975055 passed with 2,987/2,987 application tests, Windows installer and portable smoke tests, SHA-256, SPDX 2.3 SBOM, provenance and attestations.",
+    "Observed operator diagnostic: 5/5 monitoring endpoints, 183/183 initial selected values, 14/14 static RCB paths with ingress; successful targeted SG7_BCU and GR_X_7SX85 ctlModel readback and SBO Enhanced operations.",
+    "Download links target the latest stable GitHub Release assets; checksum values and source identity correspond to the exact tagged v1.6.42 binaries.",
+    "Eight actual ARSAS v1.6.42 Windows screenshots, supplied by the operator, are available as original full-resolution PNG and optimized WebP across the site. Images demonstrate UI only, not physical R7/R10 certification."
   ],
   "improvementsId": [
-    "Diagnostik lapangan SG7_BCU 21 November 2026: 77/77 nilai terlihat, empat BRCB menerima report, 337 frame didekode; replay A01/B01 terklasifikasi Buffer dan kolom Event menampilkan Buffer event.",
-    "Tes regresi P9 memisahkan cause asli dari pengiriman buffer, menolak EntryID yang sudah diterima agar tidak dianggap replay baru, dan menjaga label Event sederhana serta fallback konservatif.",
-    "Jalur penerimaan cursor report dioptimasi: satu frame berisi banyak member DataSet hanya membutuhkan satu penerimaan TimeOfEntry/cursor per identitas frame berurutan, tanpa tambahan MMS atau antrean.",
-    "Sumber rilis Windows, native bridge, portable dan installer wajib cocok dengan SHA main yang disetujui, checksum, provenance dan SPDX SBOM terverifikasi."
+    "Workflow release #40151975055 sukses: 2.987/2.987 tes aplikasi, smoke test installer dan portable Windows, SHA-256, SPDX 2.3 SBOM, provenance, serta attestation.",
+    "Diagnostik operator: 5/5 endpoint monitoring, 183/183 nilai awal, 14/14 jalur RCB statis menerima report; Write/readback ctlModel dan SBO Enhanced berhasil pada target SG7_BCU serta GR_X_7SX85 yang diuji.",
+    "Link unduhan mengarah ke aset GitHub Latest Stable; checksum dan identitas source sesuai binary v1.6.42 bertag.",
+    "Delapan screenshot asli ARSAS v1.6.42 dari operator tersedia sebagai PNG resolusi penuh dan WebP optimal di website. Gambar hanya menunjukkan UI, bukan sertifikasi fisik R7/R10."
   ],
   "knownLimitations": [
-    "The SG7_BCU 21 Nov 2026 diagnostic reported four IED BufOvfl notices and 28 SqNum discontinuities across 337 frames. These are not proven lost SOEs; lossless replay completeness is NOT certified.",
-    "SG7_BCU replay field observation applied to the preceding P9 core; the final performance/deduplication change is regression-tested but still requires exact-build independent device retest. Some test endpoints may be local simulators.",
-    "Six-byte IEC MMS BinaryTime does not carry a clock quality flag; the 2-minute historical guard is a conservative classification, not independently certified IED time synchronization.",
-    "The ARIEC61850 engine remains pinned to a code-trial revision (PR #192). Physical multi-vendor R7/R10 acceptance and trusted SCL/IID parity are not claimed by software stable.",
-    "Windows x64 only; binaries are not commercially Authenticode-signed. Active IED controls and manual PurgeBuf require explicit authorization and safe FAT procedures."
+    "The October 25 operator capture observed 432 report frames, 38 continuity findings and 9 IED-reported BufOvfl notices. These are not 38 proven lost events, but lossless buffered SOE is NOT established.",
+    "Physical R7/R10 authority, buffered replay/EntryID and reconnect verification, SCL/IID parity, SV on-wire parity and broader device acceptance remain incomplete. Some monitored endpoints may be same-host simulators.",
+    "The ARIEC61850 engine is pinned to a code-trial revision (PR #192); application stable release does not certify this engine or universal IEC 61850 interoperability.",
+    "Windows x64 only. Installer and portable executables are not commercially Authenticode-signed; verify their SHA-256 and follow Windows security policy.",
+    "Raw-Ethernet GOOSE/SV capture requires approved Npcap, suitable network visibility and permissions. Active IED control must follow an authorized safe test procedure."
   ],
   "knownLimitationsId": [
-    "Diagnostik SG7_BCU 21 November 2026 mencatat empat indikator BufOvfl dan 28 diskontinuitas SqNum dari 337 frame. Ini bukan bukti event hilang; kelengkapan SOE buffer tanpa kehilangan BELUM tersertifikasi.",
-    "Pengujian lapangan replay SG7_BCU memakai inti P9 sebelumnya; optimasi/deduplikasi terbaru telah lolos regresi tetapi masih memerlukan retest pada build identik. Sebagian endpoint uji dapat berupa simulator lokal.",
-    "IEC MMS BinaryTime enam-byte tidak membawa flag kualitas clock; batas historis dua menit adalah klasifikasi konservatif, bukan sertifikasi sinkronisasi waktu IED.",
-    "Engine ARIEC61850 tetap pin revisi code-trial (PR #192). Stable software bukan klaim interoperabilitas multi-vendor R7/R10 atau paritas SCL/IID tersertifikasi.",
-    "Hanya Windows x64; binary belum Authenticode-signed secara komersial. Kontrol IED dan PurgeBuf manual memerlukan izin serta prosedur FAT yang aman."
+    "Capture operator 25 Oktober mencatat 432 frame report, 38 temuan kontinuitas, dan 9 indikasi BufOvfl dari IED. Itu bukan bukti 38 event hilang, tetapi SOE buffered lossless BELUM dibuktikan.",
+    "Kualifikasi fisik R7/R10, replay/EntryID dan reconnect, paritas SCL/IID, SV on-wire, serta penerimaan lintas perangkat belum lengkap. Sebagian endpoint mungkin simulator lokal.",
+    "Engine ARIEC61850 tetap pada revisi code-trial (PR #192); stable aplikasi bukan sertifikasi engine atau jaminan interoperabilitas IEC 61850 universal.",
+    "Hanya Windows x64. Installer dan portable belum ditandatangani Authenticode komersial; periksa SHA-256 dan ikuti kebijakan keamanan Windows.",
+    "Capture raw-Ethernet GOOSE/SV membutuhkan Npcap yang disetujui, visibility jaringan, dan permission sesuai. Kontrol IED aktif wajib melalui prosedur pengujian yang sah dan aman."
   ],
   "codeSigning": {
     "status": "unsigned",
@@ -63,5 +63,5 @@
     "captionId": "Screenshot nyata operator v1.6.42. Pratinjau PDF memuat 11 sinyal terpilih dan 4 evidence lengkap. Ini bukti fungsi aplikasi, bukan penerimaan semua jenis relay."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.44"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.42"
 }
