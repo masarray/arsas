@@ -144,3 +144,54 @@ public sealed class RcbInspectionEvidence
 
     private static string Show(string? text) => string.IsNullOrWhiteSpace(text) ? "—" : text.Trim();
 }
+
+
+/// <summary>
+/// Read-only Owner display for the selected, exact RCB. The live Browser path
+/// accepts only verified MMS OCTET STRING bytes. A separate explicit availability
+/// check already supplies raw engine-derived Owner metadata. Neither source
+/// identifies the client process or authorizes an RCB reservation/write.
+/// </summary>
+public static class IedBrowserRcbOwnerDisplay
+{
+    public static bool TryFormatVerifiedOctet(
+        string? rawHex, MmsDataKind? verifiedKind, out string display)
+    {
+        display = string.Empty;
+        if (verifiedKind != MmsDataKind.OctetString ||
+            !TryCanonicalHex(rawHex, out var hex))
+            return false;
+        display = DisplayHex(hex);
+        return true;
+    }
+
+    public static string FormatCheckedSnapshot(string? rawOwner)
+        => TryCanonicalHex(rawOwner, out var hex)
+            ? DisplayHex(hex)
+            : string.Empty;
+
+    private static string DisplayHex(string hex)
+    {
+        // IEC Owner may contain a 4-byte IPv4 or 16-byte IPv6 address.
+        // Unknown sizes remain original exact wire bytes, never an inferred IP.
+        return MmsRcbOwnerIdentity.TryDecodeIpAddress(hex, out var ip) &&
+               ip is not null
+            ? $"{ip} (x'{hex}')"
+            : $"x'{hex}'";
+    }
+
+    private static bool TryCanonicalHex(string? value, out string hex)
+    {
+        hex = (value ?? string.Empty).Trim();
+        if (hex.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            hex = hex[2..];
+        if (hex.Length is < 2 or > 128 || (hex.Length & 1) != 0 ||
+            !hex.All(Uri.IsHexDigit))
+        {
+            hex = string.Empty;
+            return false;
+        }
+        hex = hex.ToUpperInvariant();
+        return true;
+    }
+}
