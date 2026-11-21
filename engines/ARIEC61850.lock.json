@@ -348,6 +348,25 @@
     "physicalLatencyQualificationRequired": true,
     "mainlinePromotionForbidden": true
   },
+  "p9Sg7FourRcbIntegrationCandidate": {
+    "status": "source-and-prior-field-trial-proven-current-combined-release-pending",
+    "baselineEngineCommit": "f75e323e9f8443aa20e0a3818a1d5d77255b2c0f",
+    "exactCommit": "24077e48e393ce3dc2cd1409db6e96f27aa1e368",
+    "enginePullRequests": [198, 199, 200, 203],
+    "engineCiRun": 44720030989,
+    "arsasFieldTrialSourceCommit": "a3dca3e8483a7a8b1cb8047e7034db75380f8baa",
+    "arsasFieldTrialRun": 44741754523,
+    "fieldObservedReportBackedValues": 77,
+    "fieldSelectedSignalCount": 77,
+    "fieldIndependentlyRoutedRcbCount": 4,
+    "fieldObservedReportFrames": 129,
+    "reportedBrcbBufferOverflow": true,
+    "cyclicMmsProcessPollingForbidden": true,
+    "automaticRcbMutationForbidden": true,
+    "noAutomaticGiRetry": true,
+    "currentCombinedPhysicalRetestRequired": true,
+    "losslessSoeNotClaimed": true
+  },
   "globalTypedControlStageTrial": {
     "status": "engine-ci-success-consumer-trial-not-physical",
     "baseEngineCommit": "9c7cb40364023a7b217e5ec31ab3105ba90142eb",
