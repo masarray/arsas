@@ -89,6 +89,25 @@ public sealed class M217QRcbFocusedStateTests
             IedBrowserRcbOwnerDisplay.FormatCheckedSnapshot("C0100149"));
     }
 
+    [Fact]
+    public void OwnerTooltipDoesNotMisidentifyDeviceEndpointAsMmsClient()
+    {
+        var sameEndpoint = IedBrowserRcbOwnerDisplay.ExplainIdentity(
+            "C0100149", "192.16.1.73");
+        Assert.Contains("matches this IED endpoint", sameEndpoint);
+        Assert.Contains("does not identify the client application", sameEndpoint);
+
+        var otherEndpoint = IedBrowserRcbOwnerDisplay.ExplainIdentity(
+            "C0100149", "192.16.1.5");
+        Assert.Contains("192.16.1.73", otherEndpoint);
+        Assert.Contains("cannot be identified", otherEndpoint);
+
+        var opaque = IedBrowserRcbOwnerDisplay.ExplainIdentity(
+            "010203040506", "192.16.1.73");
+        Assert.Contains("not a standard IP", opaque);
+        Assert.DoesNotContain("matches this IED", opaque);
+    }
+
     [Theory]
     [InlineData("C0100149", null)]
     [InlineData("C0100149", MmsDataKind.VisibleString)]

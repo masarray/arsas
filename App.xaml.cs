@@ -65,6 +65,7 @@ public partial class App : Application
             new RoutedEventHandler(AppWindow_Loaded), handledEventsToo: true);
 
         GridUxBehavior.Install();
+        GridClipboardBehavior.Install();
         P2InteractionBehavior.Install();
         FaultRecordUxBehavior.Install();
         // G2 commissioning remains an explicit engineering action. Ctrl+Shift+Q opens

@@ -1479,6 +1479,7 @@ public partial class MainWindow
         // A focused read-only MMS RCB attribute is admitted to the SAME
         // association-bound scalar ledger as Data Model / DataSets. Received
         // reports do not prove the current RptEna or reservation state.
+        string? verifiedOwnerRaw = null;
         var focusedRcbTargets = IedBrowserRcbFocusedReadPlan.Build(
             device.LiveDiscoveryModel, rcb);
         foreach (var (name, field) in new[]
@@ -1503,11 +1504,22 @@ public partial class MainWindow
                     Put(name, actual.Value, "Verified MMS RCB field · current association");
                 else if (IedBrowserRcbOwnerDisplay.TryFormatVerifiedOctet(
                              actual.Value, actual.VerifiedReadWireKind, out var owner))
+                {
+                    verifiedOwnerRaw = actual.Value;
                     Put(name, owner, "Verified MMS Owner OCTET STRING · current association");
+                }
                 else
                     Put(name, "Not verified", "Owner was not a verified MMS OCTET STRING");
             }
         }
+
+        // Attribution is explanatory only. In particular, a server may return
+        // its OWN endpoint as Owner: this cannot identify a controlling client.
+        if (device.IsConnected && fields.TryGetValue("Owner", out var ownerField) &&
+            ownerField.Value is not ("—" or "Not verified"))
+            ownerField.ObservationTooltip = IedBrowserRcbOwnerDisplay.ExplainIdentity(
+                verifiedOwnerRaw ?? rcb.Inspection.ReadOnlyCheck?.Owner,
+                device.IpAddress);
 
         // Association-scoped immutable metadata, never a synthetic report,
         // reservation state, RptEna, GI, or a newly opened MMS association.
