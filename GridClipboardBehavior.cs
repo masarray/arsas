@@ -18,7 +18,7 @@ namespace ArIED61850Tester;
 /// property ListView without changing its navigation and write-selection logic.
 /// Does not run on telemetry refresh, allocate row visuals, or touch IEC sessions.
 /// </summary>
-internal static class GridClipboardBehavior
+public static class GridClipboardBehavior
 {
     public static readonly DependencyProperty ExcelCellsProperty =
         DependencyProperty.RegisterAttached("ExcelCells", typeof(bool),
