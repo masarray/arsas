@@ -59,7 +59,8 @@ env:
 jobs:
   quality:
     name: Validate measurement, privacy and internal links
-    runs-on: ubuntu-latest
+    # Playwright 1.56 Chromium is not supported on ubuntu-26.04.
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v7
