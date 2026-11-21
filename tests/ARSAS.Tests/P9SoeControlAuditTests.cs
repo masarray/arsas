@@ -116,7 +116,7 @@ public sealed class P9SoeControlAuditTests
             SourceMode = "Operator control",
             ControlOutcome = "Control confirmed",
             NewValue = "Open [01]",
-            Quality = "n/a",
+            Quality = "-",
         };
         Assert.True(entry.IsControlEvent);
         Assert.Equal("Control confirmed", entry.EventLabel);
@@ -124,6 +124,7 @@ public sealed class P9SoeControlAuditTests
         Assert.Equal("Control", entry.ReportChannel);
         Assert.Equal("ARSAS client clock (local)", entry.TimestampOrigin);
         Assert.Equal("-", entry.DeviceTimestamp);
+        Assert.Equal(Iec61850QualityPresentation.Unknown, entry.QualityTone);
         Assert.StartsWith("Request ", entry.EventValue);
         Assert.NotEqual("-", entry.EventTimestamp);
         Assert.Empty(entry.RoutedReportControlReferences);
