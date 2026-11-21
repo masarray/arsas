@@ -74,6 +74,13 @@ public sealed class Iec61850MonitorRuntime : IAsyncDisposable
     public event Action<Iec61850PointSnapshot>? PointUpdated;
     public event Action<Iec61850EventEntry>? EventRaised;
 
+    public void RecordUnsentOperatorControl(
+        string deviceId, SignalDefinition signal, string requestedValue,
+        string reason, bool interlockCheck, bool synchroCheck, bool testMode)
+        => _inner.RecordUnsentOperatorControl(
+            deviceId, signal, requestedValue, reason,
+            interlockCheck, synchroCheck, testMode);
+
     public IReadOnlySet<string> GetActiveBrowserRcbReferences(string deviceId)
         => _inner.GetActiveBrowserRcbReferences(deviceId);
 
