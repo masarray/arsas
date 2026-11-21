@@ -205,7 +205,7 @@ def token_values(
     # Pin the actual public download to the immutable tagged release, not
     # /releases/latest/download, which could change before this site's evidence.
     tag = str(evidence["tag"])
-    if not re.fullmatch(r"v\\d+\\.\\d+\\.\\d+", tag):
+    if not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
         raise SystemExit("Cannot render downloads for an invalid stable release tag")
     base = f"https://github.com/masarray/arsas/releases/download/{tag}"
     files = (installer, portable, evidence["checksums"])
