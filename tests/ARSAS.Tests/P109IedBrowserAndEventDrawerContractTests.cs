@@ -66,7 +66,7 @@ public sealed class P109IedBrowserAndEventDrawerContractTests
         Assert.Equal("Poll", Iec61850EventOriginPolicy.Cause("dchg", "MMS Polling"));
         Assert.Equal("State change", Iec61850EventOriginPolicy.Cause("", "Static DataSet: StaticBrcb"));
         Assert.Equal("Data change", Iec61850EventOriginPolicy.Cause("dchg", "BRCB", false));
-        Assert.Equal("Buffer", Iec61850EventOriginPolicy.Cause("dchg", "BRCB", true));
+        Assert.Equal("Data change", Iec61850EventOriginPolicy.Cause("dchg", "BRCB", true));
     }
 
     [Fact]
@@ -79,7 +79,9 @@ public sealed class P109IedBrowserAndEventDrawerContractTests
         Assert.Contains("TimeSpan.FromSeconds(18)", code);
         Assert.Contains("HideEventDetails()", code);
         Assert.Contains("EntryID", code);
-        Assert.Contains("— (not captured)", code);
+        Assert.DoesNotContain("— (not captured)", code);
+        Assert.Contains("entry.ReportFrame?.EntryIdHex", code);
+        Assert.Contains("entry.DeliveryOrigin", code);
         Assert.Contains("Raw Reason", code);
         Assert.Contains("ReasonForInclusion", code);
         Assert.DoesNotContain("Header=\"Raw Reason\"", xaml);
