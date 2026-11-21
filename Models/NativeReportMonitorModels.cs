@@ -118,6 +118,9 @@ public sealed class NativeReportValueUpdate
     public ulong? ConfRev { get; init; }
     public string ReportTimestamp { get; init; } = string.Empty;
     public DateTimeOffset UpdatedAt { get; init; }
+    // Exact object instance of the decoded InformationReport that generated
+    // this member, not a join guessed from timestamps or RptID.
+    public NativeReportFrameMetadata? ReportFrame { get; init; }
 }
 
 public sealed record NativeBrowserReportRawEvidence(
