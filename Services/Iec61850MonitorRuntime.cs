@@ -77,6 +77,12 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         public Dictionary<string, Iec61850ReportContinuityState> ReportStreams { get; } = new(StringComparer.OrdinalIgnoreCase);
         // Report-origin diagnostics only; never mutates the RCB or schedules reads.
         public Iec61850ReportDeliveryTracker ReplayTracker { get; init; } = new();
+        // At most one decoded non-GI report diagnostic per RCB/association,
+        // plus the first actual buffered replay. No per-frame logging/allocations.
+        public HashSet<string> ReplayTriageRcbs { get; } =
+            new(StringComparer.OrdinalIgnoreCase);
+        public HashSet<string> ProvenReplayRcbs { get; } =
+            new(StringComparer.OrdinalIgnoreCase);
         // Active association only: exact ARIEC write-step outcomes for each
         // planned RCB. Cleared wherever ReportStreams is cleared.
         public Dictionary<string, NativeReportMonitorStartResult> ReportActivationByPlanId { get; } =
@@ -1045,6 +1051,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         session.AmbiguousReportReferenceKeys.Clear();
         session.PollQueue.Clear();
         session.ReportStreams.Clear();
+        session.ReplayTriageRcbs.Clear();
+        session.ProvenReplayRcbs.Clear();
         session.ReportActivationByPlanId.Clear();
         session.ContinuityProcessUpdatesSeen = 0;
         session.ContinuityUntrackedStreams = 0;
@@ -2116,8 +2124,35 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                     slice.ReportFrames.Count);
             if (reportOrigins is not null)
                 foreach (var frame in slice.ReportFrames)
-                    reportOrigins[frame] = session.ReplayTracker.Classify(
+                {
+                    var verdict = session.ReplayTracker.Classify(
                         frame, session.BrowserObservationAssociation);
+                    reportOrigins[frame] = verdict;
+                    // A bounded exact-RCB trace exposes why a genuine wire
+                    // report did/didn't qualify. Never alter IEC traffic.
+                    if (frame.OptFldsEntryId == true &&
+                        frame.GeneralInterrogationReasonSeen == false &&
+                        frame.IntegrityReasonSeen == false &&
+                        session.ReplayTriageRcbs.Count < 8 &&
+                        session.ReplayTriageRcbs.Add(frame.ReportControlReference))
+                    {
+                        Log("INFO", session.Device.Name,
+                            $"BRCB_REPLAY_TRIAGE: RCB={frame.ReportControlReference}; " +
+                            $"EntryID={frame.EntryIdHex}; TimeOfEntry={frame.ReportTimestamp}; " +
+                            $"ReceivedUtc={frame.ReceivedAt:O}; " +
+                            $"association={session.BrowserObservationAssociation}; " +
+                            $"OptFlds={frame.OptFldsRawHex}; ConfRev={frame.ConfRev}; " +
+                            $"BufOvfl={frame.BufferOverflow}; verdict={verdict.Label}. " +
+                            "Report TimeOfEntry is NOT the process-value timestamp.");
+                    }
+                    if (string.Equals(verdict.Label, "Buffer", StringComparison.Ordinal) &&
+                        session.ProvenReplayRcbs.Count < 8 &&
+                        session.ProvenReplayRcbs.Add(frame.ReportControlReference))
+                        Log("INFO", session.Device.Name,
+                            $"BRCB_REPLAY_PROVEN: RCB={frame.ReportControlReference}; " +
+                            $"EntryID={frame.EntryIdHex}; TimeOfEntry={frame.ReportTimestamp}. " +
+                            verdict.Basis);
+                }
             if (slice.ReportFrames.Count > 0 || slice.Updates.Count > 0)
                 RecordSuccessfulIo(session);
 
@@ -3334,6 +3369,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         session.ActiveReportPlanOrder.Clear();
         session.PointPlanIds.Clear();
         session.ReportStreams.Clear();
+        session.ReplayTriageRcbs.Clear();
+        session.ProvenReplayRcbs.Clear();
         session.ReportActivationByPlanId.Clear();
         session.ContinuityProcessUpdatesSeen = 0;
         session.ContinuityUntrackedStreams = 0;
@@ -3673,6 +3710,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         session.StaticReportProjection.Reset();
         session.PollQueue.Clear();
         session.ReportStreams.Clear();
+        session.ReplayTriageRcbs.Clear();
+        session.ProvenReplayRcbs.Clear();
         session.ReportActivationByPlanId.Clear();
         session.ContinuityProcessUpdatesSeen = 0;
         session.ContinuityUntrackedStreams = 0;

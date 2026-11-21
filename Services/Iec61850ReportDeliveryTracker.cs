@@ -97,6 +97,23 @@ public sealed class Iec61850ReportDeliveryTracker
         if (received < _associatedAtUtc)
             return Iec61850ReportDeliveryEvidence.Unknown;
 
+        // Historical BRCB backlog is not restricted to an offline interval
+        // previously observed by this client. An IED can retain real buffered
+        // entries from BEFORE the very first ARSAS connection. Require decoded
+        // wire EntryID + reason bits, a synchronized IEC TimeOfEntry, an exact
+        // BR RCB, and the report's ORIGINAL creation time preceding ACSE/MMS
+        // association. The process timestamp and mere BRCB naming are NEVER proof.
+        // Reject GI/integrity and last-accepted cursor duplicates explicitly.
+        // This does not write EntryID, ResvTms, PurgeBuf or any RCB attribute.
+        if (IsProvenHistoricalBrcbFrame(frame, timeOfEntry, received))
+        {
+            return new Iec61850ReportDeliveryEvidence(
+                "Buffer",
+                "Decoded BRCB EntryID and synchronized wire TimeOfEntry prove that " +
+                "this non-GI/non-integrity report existed before this MMS association. " +
+                "It is historical BRCB delivery, even without an earlier client cursor.");
+        }
+
         if (_reconnected && _disconnectedAtUtc is { } disconnected &&
             _streams.TryGetValue(frame.ReportControlReference, out var old) &&
             old.OfflineClockTrusted &&
@@ -126,6 +143,127 @@ public sealed class Iec61850ReportDeliveryTracker
         }
 
         return Iec61850ReportDeliveryEvidence.Unknown;
+    }
+
+    private bool IsProvenHistoricalBrcbFrame(
+        NativeReportFrameMetadata frame, DateTimeOffset timeOfEntry,
+        DateTimeOffset received)
+    {
+        // For historical classification we must have the quality byte, not
+        // merely an ISO string with unknown synchronization provenance.
+        if (!frame.ReportControlReference.Replace('
+    /// It must be called AFTER the runtime has accepted that update.
+    /// </summary>
+    public void RecordAccepted(NativeReportFrameMetadata? frame, long association)
+    {
+        if (frame is null || association == 0 || association != _association ||
+            string.IsNullOrWhiteSpace(frame.ReportControlReference) ||
+            frame.ReceivedAt == default)
+            return;
+        if (!_streams.TryGetValue(frame.ReportControlReference, out var state))
+        {
+            if (_streams.Count >= MaxStreams)
+                return;
+            state = new Stream();
+            _streams.Add(frame.ReportControlReference, state);
+        }
+
+        if (frame.ConfRev.HasValue && state.LastConfRev.HasValue &&
+            frame.ConfRev != state.LastConfRev)
+        {
+            // A different dataset/configuration invalidates the old cursor.
+            state.OfflineCursor = "";
+            state.TrustedOnlineClock = false;
+            state.OfflineClockTrusted = false;
+        }
+        state.LastConfRev = frame.ConfRev;
+        if (frame.EntryIdHex.Length is > 0 and <= MaxEntryIdChars)
+            state.LastAcceptedEntryId = frame.EntryIdHex;
+
+        if (TryWireTime(frame.ReportTimestamp, out var time) &&
+            time >= _associatedAtUtc + BoundaryGuard &&
+            Math.Abs((frame.ReceivedAt.ToUniversalTime() - time).TotalSeconds) <=
+                LiveReceiveWindow.TotalSeconds)
+            state.TrustedOnlineClock = true;
+    }
+
+    private static bool TryWireTime(string? value, out DateTimeOffset result)
+    {
+        result = default;
+        var text = value?.Trim();
+        if (string.IsNullOrWhiteSpace(text) || text.Length > 100)
+            return false;
+
+        // ARIEC61850 MmsDataValueRenderer emits full-precision IEC UTC-Time
+        // as "yyyy-MM-dd HH:mm:ss.fffffff UTC (q=0xNN)". Quality is part
+        // of the evidence: 0x40 = clockFailure, 0x20 = not synchronized.
+        // 0x80 is leapSecondsKnown and is not a clock-failure indicator.
+        var qualityStart = text.LastIndexOf(" (q=0x", StringComparison.OrdinalIgnoreCase);
+        if (qualityStart >= 0)
+        {
+            if (!text.EndsWith(')') ||
+                !byte.TryParse(text[(qualityStart + " (q=0x".Length)..^1], NumberStyles.HexNumber,
+                    CultureInfo.InvariantCulture, out var quality) ||
+                (quality & 0x60) != 0)
+                return false;
+            text = text[..qualityStart].TrimEnd();
+        }
+
+        if (text.EndsWith(" UTC", StringComparison.OrdinalIgnoreCase))
+        {
+            var utc = text[..^4];
+            return DateTimeOffset.TryParseExact(utc,
+                new[] { "yyyy-MM-dd HH:mm:ss.fffffff", "yyyy-MM-dd HH:mm:ss.fffff" },
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out result);
+        }
+
+        // Strictly no local-time conversion: an unknown offset is UTC only
+        // because the decoded IEC 61850 field itself is named TimeOfEntry UTC.
+        return DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out result);
+    }
+}
+
+public sealed record Iec61850ReportDeliveryEvidence(string Label, string Basis)
+{
+    public static Iec61850ReportDeliveryEvidence Unknown { get; } =
+        new("Unknown", "Wire delivery origin not independently proven.");
+}
+, '.').Contains(
+                ".BR.", StringComparison.OrdinalIgnoreCase) ||
+            frame.OptFldsEntryId != true ||
+            frame.OptFldsReasonForInclusion != true ||
+            frame.GeneralInterrogationReasonSeen != false ||
+            frame.IntegrityReasonSeen != false ||
+            !HasExplicitWireTimeQuality(frame.ReportTimestamp) ||
+            !IsValidEntryIdHex(frame.EntryIdHex) ||
+            timeOfEntry >= _associatedAtUtc - BoundaryGuard ||
+            timeOfEntry > received)
+            return false;
+
+        // The same accepted EntryID is retransmission of an already observed
+        // cursor, NOT evidence of another historical event.
+        return !_streams.TryGetValue(frame.ReportControlReference, out var old) ||
+               !frame.EntryIdHex.Equals(old.LastAcceptedEntryId,
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsValidEntryIdHex(string? hex) =>
+        !string.IsNullOrEmpty(hex) &&
+        hex.Length <= MaxEntryIdChars && hex.Length % 2 == 0 &&
+        hex.All(Uri.IsHexDigit);
+
+    private static bool HasExplicitWireTimeQuality(string? wireTime)
+    {
+        if (string.IsNullOrWhiteSpace(wireTime)) return false;
+        var qualityStart = wireTime.LastIndexOf(" (q=0x",
+            StringComparison.OrdinalIgnoreCase);
+        if (qualityStart < 0 || !wireTime.EndsWith(')')) return false;
+        return byte.TryParse(wireTime[(qualityStart + " (q=0x".Length)..^1],
+                   NumberStyles.HexNumber, CultureInfo.InvariantCulture,
+                   out var quality) && (quality & 0x60) == 0;
     }
 
     /// <summary>

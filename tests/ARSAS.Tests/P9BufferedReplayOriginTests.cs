@@ -256,6 +256,78 @@ public sealed class P9BufferedReplayOriginTests
         Assert.Contains("_monitorStartFlights.TryRemove(device.DeviceId, out _)", fat);
         Assert.Contains("!ReferenceEquals(activePoint, point)", ui);
     }
+    private static NativeReportFrameMetadata HistoricalBrcb(
+        string rcb = Rcb, string quality = "80", string entryId = "00010002",
+        bool? hasEntryId = true, bool? hasReason = true,
+        bool? giReason = false, bool? integrityReason = false,
+        int timeSeconds = -60) => new()
+    {
+        ReportControlReference = rcb,
+        DataSetReference = "SG7_BCU/LLN0$dsEvents",
+        ReportId = "Rpt_0",
+        EntryIdHex = entryId,
+        ConfRev = 3,
+        OptFldsRawHex = "7F",
+        OptFldsEntryId = hasEntryId,
+        OptFldsReasonForInclusion = hasReason,
+        GeneralInterrogationReasonSeen = giReason,
+        IntegrityReasonSeen = integrityReason,
+        ReportTimestamp = Start.AddSeconds(timeSeconds).ToString(
+            "yyyy-MM-dd HH:mm:ss.fffffff",
+            System.Globalization.CultureInfo.InvariantCulture) + $" UTC (q=0x{quality})",
+        ReceivedAt = Start.AddSeconds(3)
+    };
+
+    [Fact]
+    public void SynchronizedHistoricalBrcbBacklogIsDetectedOnColdAttach()
+    {
+        var tracker = new Iec61850ReportDeliveryTracker();
+        tracker.OnAssociated(501, Start);
+        // This event was generated BEFORE ARSAS ever connected. It is still
+        // buffered delivery when wire EntryID/TimeOfEntry/OptFlds prove it.
+        var historical = HistoricalBrcb(timeSeconds: -86400);
+        Assert.Equal("Buffer", tracker.Classify(historical, 501).Label);
+        var eventEntry = new Iec61850EventEntry
+        {
+            Reason = "data-change",
+            SourceMode = "Static DataSet: StaticBrcb",
+            ReportFrame = historical,
+            DeliveryEvidence = tracker.Classify(historical, 501)
+        };
+        Assert.Equal("Buffer event", eventEntry.EventLabel);
+        tracker.RecordAccepted(historical, 501);
+        // An identical EntryID is retransmission, not another replay event.
+        Assert.Equal("Unknown", tracker.Classify(historical, 501).Label);
+    }
+
+    [Theory]
+    [InlineData("20")] // clockNotSynchronized
+    [InlineData("40")] // clockFailure
+    [InlineData("60")]
+    public void UnsynchronizedHistoricalTimeIsNotReplayProof(string quality)
+    {
+        var tracker = new Iec61850ReportDeliveryTracker();
+        tracker.OnAssociated(502, Start);
+        Assert.Equal("Unknown", tracker.Classify(HistoricalBrcb(quality: quality), 502).Label);
+    }
+
+    [Fact]
+    public void HistoricalBrcbRequiresExactWireEntryIdAndChangeReasonEvidence()
+    {
+        var tracker = new Iec61850ReportDeliveryTracker();
+        tracker.OnAssociated(503, Start);
+        Assert.Equal("Unknown", tracker.Classify(HistoricalBrcb(
+            rcb: "SG7_BCU/LLN0$RP$UrcbA01"), 503).Label);
+        Assert.Equal("Unknown", tracker.Classify(HistoricalBrcb(entryId: ""), 503).Label);
+        Assert.Equal("Unknown", tracker.Classify(HistoricalBrcb(entryId: "XZY"), 503).Label);
+        Assert.Equal("Unknown", tracker.Classify(HistoricalBrcb(hasEntryId: false), 503).Label);
+        Assert.Equal("Unknown", tracker.Classify(HistoricalBrcb(hasReason: false), 503).Label);
+        Assert.Equal("Unknown", tracker.Classify(HistoricalBrcb(giReason: true), 503).Label);
+        Assert.Equal("Unknown", tracker.Classify(HistoricalBrcb(integrityReason: true), 503).Label);
+        Assert.Equal("Unknown", tracker.Classify(HistoricalBrcb(giReason: null), 503).Label);
+        Assert.Equal("Unknown", tracker.Classify(HistoricalBrcb(timeSeconds: 2), 503).Label);
+    }
+
     [Fact]
     public void ColdStartCannotCertifyHistoricalReplayEvenWithEntryId()
     {
