@@ -1375,6 +1375,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         {
             Log("WARN", session.Device.Name,
                 $"CONTROL_LOCAL_BUSY: {request.Signal.ObjectReference}; no additional MMS Operate was sent.");
+            PublishControlAudit(session, request, "Control not sent", null,
+                "Local admission rejected: another operation owns the exact control object; no additional MMS Operate sent.");
             throw new InvalidOperationException("Command already in progress for this IEC 61850 control object. No new MMS Operate was sent.");
         }
 
@@ -1387,6 +1389,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
             _activeControlTargets.TryRemove(targetKey, out _);
             Log("WARN", session.Device.Name,
                 $"CONTROL_IED_SINGLE_FLIGHT: rejected {request.Signal.ObjectReference}; another control is active or its wire outcome is unresolved; Operate NOT SENT.");
+            PublishControlAudit(session, request, "Control not sent", null,
+                "Local single-flight/uncertain-wire gate refused another Operate; no new MMS control request sent.");
             throw new InvalidOperationException(
                 "Another command is active or its wire outcome is unresolved on this IED. No MMS Operate was sent. Reconnect and verify actual status before retrying.");
         }
@@ -1410,6 +1414,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         {
             Log("ERROR", session.Device.Name,
                 $"CONTROL_OUTCOME_UNKNOWN_TIMEOUT: {request.Signal.ObjectReference}; deadline={ControlFlightDeadline.TotalSeconds:0}s; nativeCompleted={nativeFlight?.IsCompleted}; no further commands on this MMS association. Actual IED position must be checked before reconnect.");
+            PublishControlAudit(session, request, "Control unverified", null,
+                "Control timeout: native MMS result unknown; association quarantined; verify IED position. Do not blindly retry.");
             throw new TimeoutException(
                 "Control exceeded the end-to-end deadline. The MMS wire outcome is UNKNOWN, not necessarily rejected. This association is quarantined; verify process state and reconnect before any further Operate.");
         }
@@ -1420,6 +1426,10 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                 Log("WARN", session.Device.Name,
                     $"CONTROL_CANCEL_OUTCOME_UNKNOWN: {request.Signal.ObjectReference}; native flight not completed; association quarantined.");
             }
+            PublishControlAudit(session, request,
+                nativeFlight is null ? "Control not sent" : "Control unverified", null,
+                nativeFlight is null ? "Cancelled before native dispatch was started." :
+                    "Control cancelled with native flight started; final MMS/IED outcome unverified.");
             throw;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested &&
@@ -1429,6 +1439,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
             // positive NotSent evidence; the engine may have issued a Write.
             Log("ERROR", session.Device.Name,
                 $"CONTROL_NATIVE_CANCEL_OUTCOME_UNKNOWN: {request.Signal.ObjectReference}; native task canceled without a terminal wire result; association quarantined.");
+            PublishControlAudit(session, request, "Control unverified", null,
+                "Native control cancelled after dispatch; wire outcome unknown; verify IED position.");
             throw new TimeoutException(
                 "Native control canceled without a proven wire outcome. Verify actual IED state and reconnect.");
         }
@@ -1545,6 +1557,9 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                     $"CONTROL_WIRE_RESPONSE: {request.Signal.ObjectReference}; responseHEX={result.ResponseHex}");
         }
 
+        PublishControlAudit(session, request,
+            Iec61850ControlAuditPolicy.Outcome(result), result,
+            "Completed native MMS control; compare ordered wire response, termination and independent process feedback.");
         return result;
     }
 
