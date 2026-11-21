@@ -2506,6 +2506,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async Task<bool> StartDeviceMonitorAsync(Iec61850MonitorDevice device, bool navigateToExplorer = true)
     {
+        // A second Play can arrive after the first async Start already returned.
+        // Reopening an active RCB would replace live rows and disturb buffered replay.
+        // Explicit signal-selection reconfiguration stops the monitor beforehand.
+        if (device.IsMonitoring)
+            return true;
         if (!_monitorStartFlights.TryAdd(device.DeviceId, 0))
         {
             AddLog("INFO", device.Name,
