@@ -26,7 +26,7 @@ The current source version is recorded in [VERSION](../VERSION); the latest publ
 | Document | Purpose |
 |---|---|
 | [IO List FAT Evidence Testing](IO_LIST_FAT_EVIDENCE.md) | Dedicated one-IED FAT workspace, exact `TestPointId` mapping, ordered transition evidence, durable journal, `.xlsx`, native `.pdf`, and `.arsas` output. |
-| [Phase progress](../NEXT_PHASE_PROGRESS.md) | Historical signal-selection behavior and validation records. |
+| [Phase progress](checkpoints/NEXT_PHASE_PROGRESS.md) | Historical signal-selection behavior and validation records. |\n| [Accepted SMV checkpoint](checkpoints/HANDOFF_ARSAS_SMV_TAB_ACCEPTED_CHECKPOINT_2026-10-24.md) | Historic operator-accepted SMV baseline, preserved for engineering traceability. |
 | [Connection diagnostic audit](audits/CONNECTION_DIAGNOSTIC_AUDIT.md) | Example route and connection-failure reasoning. |
 | [Changelog](../CHANGELOG.md) | Public application, documentation, website, and release history. |
 
@@ -34,7 +34,7 @@ The current source version is recorded in [VERSION](../VERSION); the latest publ
 
 | Document | Purpose |
 |---|---|
-| [ARIEC61850 Smart Control integration](../ARIEC61850_SMART_CONTROL_INTEGRATION.md) | Application-to-engine control service integration. |
+| [ARIEC61850 Smart Control integration](engineering/ARIEC61850_SMART_CONTROL_INTEGRATION.md) | Application-to-engine control service integration. |\n| [Historical control-service overhaul](engineering/ARIEC61850_CONTROL_OVERHAUL.md) | Original engine requirements retained as provenance, not current protocol readiness evidence. |
 | [Smart Control feedback audit](audits/SMART_CONTROL_FEEDBACK_AUDIT.md) | Control completion, feedback mapping, and evidence boundaries. |
 | [Close feedback event verification](close-feedback-event-verification.md) | Event-driven feedback confirmation workflow. |
 
