@@ -1,4 +1,5 @@
 using System.Globalization;
+using AR.Iec61850.Mms;
 using ArIED61850Tester.Models;
 
 namespace ArIED61850Tester.Services;
@@ -32,6 +33,10 @@ public sealed class Iec61850ReportDeliveryTracker
 
     private static readonly TimeSpan BoundaryGuard = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan LiveReceiveWindow = TimeSpan.FromSeconds(30);
+    // IEC 61850 TimeOfEntry may be six-byte MMS BinaryTime (no UTC quality
+    // byte). Require a materially historical age on cold attach instead of
+    // falsely claiming q=0x quality that BinaryTime does not carry.
+    private static readonly TimeSpan BinaryTimeHistoricalGuard = TimeSpan.FromMinutes(2);
     private const int MaxStreams = 64;
     private const int MaxEntryIdChars = 128;
 
@@ -105,9 +110,13 @@ public sealed class Iec61850ReportDeliveryTracker
         if (IsProvenHistoricalBrcbFrame(frame, timeOfEntry, received))
             return new Iec61850ReportDeliveryEvidence(
                 "Buffer",
-                "Synchronized wire TimeOfEntry predates the MMS association; " +
-                "decoded BRCB EntryID and non-GI/non-integrity reasons prove " +
-                "historical buffered delivery, without an earlier ARSAS cursor.");
+                HasExplicitWireTimeQuality(frame.ReportTimestamp)
+                    ? "IEC UTC-Time with healthy quality flags predates association; " +
+                      "decoded BRCB EntryID and non-GI/non-integrity reasons corroborate replay."
+                    : "Six-byte IEC MMS BinaryTime TimeOfEntry predates association by at least " +
+                      "two minutes; exact raw bytes, BRCB EntryID and reason bits corroborate " +
+                      "historical replay. BinaryTime has NO clock-quality flag; device clock " +
+                      "synchronization is not independently certified.");
 
         if (IsBufferedRcbReference(frame.ReportControlReference) &&
             _reconnected && _disconnectedAtUtc is { } disconnected &&
@@ -145,15 +154,20 @@ public sealed class Iec61850ReportDeliveryTracker
         NativeReportFrameMetadata frame, DateTimeOffset timeOfEntry,
         DateTimeOffset received)
     {
-        // Historical proof is stricter than offline continuity. A bare ISO
-        // timestamp without the decoded IEC UTC clock-quality byte cannot
-        // establish sufficient synchronization with the client clock.
+        // A bare ISO timestamp cannot certify historical replay. Accept a
+        // synchronized IEC UTC-Time (q=0xNN) OR the *canonical* six-byte IEC
+        // MMS BinaryTime that the pinned ARIEC engine renders, but require
+        // a larger time guard for BinaryTime because it has no clock-quality
+        // flags. The binary bytes are checked against the rendered UTC time.
         if (!IsBufferedRcbReference(frame.ReportControlReference) ||
             frame.OptFldsEntryId != true ||
             frame.OptFldsReasonForInclusion != true ||
             frame.GeneralInterrogationReasonSeen != false ||
             frame.IntegrityReasonSeen != false ||
-            !HasExplicitWireTimeQuality(frame.ReportTimestamp) ||
+            !(HasExplicitWireTimeQuality(frame.ReportTimestamp) ||
+              (TryCanonicalSixByteBinaryTime(frame.ReportTimestamp, out var binaryUtc) &&
+               binaryUtc == timeOfEntry &&
+               _associatedAtUtc - binaryUtc >= BinaryTimeHistoricalGuard)) ||
             !IsValidEntryIdHex(frame.EntryIdHex) ||
             timeOfEntry >= _associatedAtUtc - BoundaryGuard ||
             timeOfEntry > received)
@@ -184,6 +198,40 @@ public sealed class Iec61850ReportDeliveryTracker
         return byte.TryParse(wireTime[(qualityStart + " (q=0x".Length)..^1],
                    NumberStyles.HexNumber, CultureInfo.InvariantCulture,
                    out var quality) && (quality & 0x60) == 0;
+    }
+
+    /// <summary>
+    /// Validate exactly the six-byte BinaryTime encoding emitted by ARIEC's
+    /// MmsBinaryTime renderer. Four-byte time-of-day has no absolute date and
+    /// is deliberately excluded from historical BRCB classification.
+    /// </summary>
+    private static bool TryCanonicalSixByteBinaryTime(
+        string? displayed, out DateTimeOffset utc)
+    {
+        utc = default;
+        var text = displayed?.Trim();
+        if (string.IsNullOrWhiteSpace(text) || !text.EndsWith(')'))
+            return false;
+        const string marker = " (binary-time=";
+        var start = text.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (start <= 0) return false;
+        var hex = text[(start + marker.Length)..^1];
+        if (hex.Length != 12 || !hex.All(Uri.IsHexDigit))
+            return false;
+        var bytes = Convert.FromHexString(hex);
+        // IEC BinaryTime's first four bytes are milliseconds since midnight.
+        // Reject invalid out-of-day values rather than normalizing them.
+        var milliseconds = ((uint)bytes[0] << 24) |
+                           ((uint)bytes[1] << 16) |
+                           ((uint)bytes[2] << 8) | bytes[3];
+        if (milliseconds >= 86_400_000u) return false;
+        var decoded = MmsBinaryTime.FromBytes(bytes);
+        if (decoded.UtcValue is not { } decodedUtc ||
+            !string.Equals(text, decoded.ToDisplayString(),
+                StringComparison.Ordinal))
+            return false;
+        utc = decodedUtc.ToUniversalTime();
+        return true;
     }
 
     /// <summary>
@@ -244,6 +292,11 @@ public sealed class Iec61850ReportDeliveryTracker
                 return false;
             text = text[..qualityStart].TrimEnd();
         }
+
+        // The actual SG7_BCU report uses "UTC (binary-time=XXXXXX)".
+        // This MUST be decoded before the ordinary IEC UTC-Time parser.
+        if (text.Contains("(binary-time=", StringComparison.OrdinalIgnoreCase))
+            return TryCanonicalSixByteBinaryTime(text, out result);
 
         if (text.EndsWith(" UTC", StringComparison.OrdinalIgnoreCase))
         {

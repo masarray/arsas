@@ -343,6 +343,99 @@ public sealed class P9BufferedReplayOriginTests
         Assert.Equal("Live", tracker.Classify(HistoricalBrcb(timeSeconds: 2), 503).Label);
     }
 
+    // Real byte-for-byte TimeOfEntry evidence from SG7_BCU FAT diagnostics,
+    // not a synthetic IEC UTC-Time with quality bits the IED never supplied.
+    [Theory]
+    [InlineData("SG7_BCU/LLN0$BR$BrcbA01",
+        "2026-11-20 12:40:03.582 UTC (binary-time=02B7DAFE3D30)",
+        "0000000000000002", "3300")]
+    [InlineData("SG7_BCU/LLN0$BR$BrcbB01",
+        "2026-11-21 03:48:49.933 UTC (binary-time=00D1808D3D31)",
+        "000000000000007F", "7F00")]
+    public void Sg7ActualSixByteBinaryTimeDetectsHistoricalBrcbReplay(
+        string rcb, string wireTime, string entryId, string optFlds)
+    {
+        var associated = new DateTimeOffset(2026, 11, 21, 4, 16, 53, TimeSpan.Zero);
+        var tracker = new Iec61850ReportDeliveryTracker();
+        tracker.OnAssociated(700, associated);
+        var frame = new NativeReportFrameMetadata
+        {
+            ReportControlReference = rcb,
+            ReportId = "Rpt_0",
+            DataSetReference = "SG7_BCUMaster/LLN0$TT6DataSet3",
+            EntryIdHex = entryId,
+            OptFldsRawHex = optFlds,
+            OptFldsEntryId = true,
+            OptFldsReasonForInclusion = true,
+            GeneralInterrogationReasonSeen = false,
+            IntegrityReasonSeen = false,
+            ReportTimestamp = wireTime,
+            ReceivedAt = associated.AddSeconds(5)
+        };
+        var evidence = tracker.Classify(frame, 700);
+        Assert.Equal("Buffer", evidence.Label);
+        Assert.Contains("BinaryTime", evidence.Basis);
+        var entry = new Iec61850EventEntry
+        {
+            Reason = "data-change",
+            SourceMode = "Static DataSet: StaticBrcb",
+            ReportFrame = frame,
+            DeliveryEvidence = evidence
+        };
+        Assert.Equal("Buffer event", entry.EventLabel);
+    }
+
+    [Fact]
+    public void BinaryTimeRejectsMalformedBytesAbsentAbsoluteDateAndClockSkew()
+    {
+        var start = new DateTimeOffset(2026, 11, 21, 4, 16, 53, TimeSpan.Zero);
+        var tracker = new Iec61850ReportDeliveryTracker();
+        tracker.OnAssociated(701, start);
+        string Label(string wire)
+        {
+            var frame = new NativeReportFrameMetadata
+            {
+                ReportControlReference = Rcb,
+                EntryIdHex = "00000001",
+                OptFldsEntryId = true,
+                OptFldsReasonForInclusion = true,
+                GeneralInterrogationReasonSeen = false,
+                IntegrityReasonSeen = false,
+                ReportTimestamp = wire,
+                ReceivedAt = start.AddSeconds(6)
+            };
+            return tracker.Classify(frame, 701).Label;
+        }
+        Assert.Equal("Unknown", Label(
+            "2026-11-20 12:40:03.582 UTC (binary-time=02B7DAFE3D3F)"));
+        Assert.Equal("Unknown", Label(
+            "2026-11-20 12:40:03.582 UTC (binary-time=02B7DAFE)"));
+        Assert.Equal("Unknown", Label(
+            "time-of-day=12:40:03.582 (binary-time=02B7DAFE)"));
+        Assert.Equal("Unknown", Label(
+            "2026-11-21 04:16:00.000 UTC (binary-time=00F9F8C73D31)"));
+    }
+
+    [Fact]
+    public void BinaryTimeHistoricalIntegrityIsNotReclassifiedAsBuffer()
+    {
+        var start = new DateTimeOffset(2026, 11, 21, 4, 16, 53, TimeSpan.Zero);
+        var tracker = new Iec61850ReportDeliveryTracker();
+        tracker.OnAssociated(702, start);
+        var frame = new NativeReportFrameMetadata
+        {
+            ReportControlReference = Rcb,
+            EntryIdHex = "00000002",
+            OptFldsEntryId = true,
+            OptFldsReasonForInclusion = true,
+            GeneralInterrogationReasonSeen = false,
+            IntegrityReasonSeen = true,
+            ReportTimestamp = "2026-11-20 12:40:03.582 UTC (binary-time=02B7DAFE3D30)",
+            ReceivedAt = start.AddSeconds(6)
+        };
+        Assert.Equal("Unknown", tracker.Classify(frame, 702).Label);
+    }
+
     [Fact]
     public void ColdStartCannotCertifyHistoricalReplayEvenWithEntryId()
     {
