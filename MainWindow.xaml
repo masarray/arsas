@@ -660,8 +660,8 @@
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="Signal" Binding="{Binding ExplorerSignalName}" Width="1.05*" MinWidth="145"/>
                                             <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="1.55*" MinWidth="205"/>
-                                            <DataGridTemplateColumn Header="Value" Width="0.8*" MinWidth="125" CellTemplate="{StaticResource ProcessValueBadgeTemplate}"/>
-                                            <DataGridTemplateColumn Header="Alarm" Width="72" MinWidth="68">
+                                            <DataGridTemplateColumn Header="Value" Width="0.8*" MinWidth="125" CellTemplate="{StaticResource ProcessValueBadgeTemplate}" ClipboardContentBinding="{Binding DisplayValue}"/>
+                                            <DataGridTemplateColumn Header="Alarm" Width="72" MinWidth="68" ClipboardContentBinding="{Binding IsAnnunciatorSelected}">
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <CheckBox IsChecked="{Binding IsAnnunciatorSelected, Mode=OneWay}"
@@ -673,7 +673,7 @@
                                                     </DataTemplate>
                                                 </DataGridTemplateColumn.CellTemplate>
                                             </DataGridTemplateColumn>
-                                            <DataGridTemplateColumn Header="Quality" Width="0.72*" MinWidth="105">
+                                            <DataGridTemplateColumn Header="Quality" Width="0.72*" MinWidth="105" ClipboardContentBinding="{Binding Quality}">
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -1092,8 +1092,8 @@
                                 <DataGridTextColumn Header="IED" Binding="{Binding DeviceName}" Width="120"/>
                                 <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="195"/>
                                 <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="320"/>
-                                <DataGridTemplateColumn Header="Value" Width="125" CellTemplate="{StaticResource ProcessValueBadgeTemplate}"/>
-                                <DataGridTemplateColumn Header="Quality" Width="155">
+                                <DataGridTemplateColumn Header="Value" Width="125" CellTemplate="{StaticResource ProcessValueBadgeTemplate}" ClipboardContentBinding="{Binding DisplayValue}"/>
+                                <DataGridTemplateColumn Header="Quality" Width="155" ClipboardContentBinding="{Binding Quality}">
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
                                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -1149,7 +1149,7 @@
                                 <DataGridTextColumn Header="IED" Binding="{Binding DeviceName}" Width="105"/>
                                 <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="155"/>
                                 <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="260"/>
-                                <DataGridTemplateColumn Header="Value" Width="130" CellTemplate="{StaticResource ProcessValueBadgeTemplate}" ClipboardContentBinding="{Binding NewValue}"/>
+                                <DataGridTemplateColumn Header="Value" Width="130" CellTemplate="{StaticResource ProcessValueBadgeTemplate}" ClipboardContentBinding="{Binding DisplayValue}"/>
                                 <DataGridTemplateColumn Header="Quality" Width="110" CellTemplate="{StaticResource EventQualityBadgeTemplate}" ClipboardContentBinding="{Binding Quality}"/>
                                 <DataGridTextColumn Header="Event" Binding="{Binding EventLabel}" Width="124" MinWidth="120" IsReadOnly="True"/>
                                 <DataGridTextColumn Header="Acquisition" Binding="{Binding AcquisitionShort}" ElementStyle="{StaticResource RcbAcquisitionTextStyle}" Width="*" MinWidth="145" IsReadOnly="True"/>
@@ -2208,7 +2208,7 @@
                                         </Style>
                                     </DataGrid.CellStyle>
                                     <DataGrid.Columns>
-                                        <DataGridTemplateColumn Header="Objects" Width="*">
+                                        <DataGridTemplateColumn Header="Objects" Width="*" ClipboardContentBinding="{Binding Title}">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
                                                     <Grid VerticalAlignment="Center">
@@ -2456,7 +2456,7 @@
                                         </Style>
                                     </DataGrid.CellStyle>
                                     <DataGrid.Columns>
-                                        <DataGridTemplateColumn Header="Filename" Width="*" MinWidth="185">
+                                        <DataGridTemplateColumn Header="Filename" Width="*" MinWidth="185" ClipboardContentBinding="{Binding Name}">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
                                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
