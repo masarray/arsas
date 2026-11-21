@@ -37,7 +37,7 @@ public static class EngineeringClipboardText
         var builder = new StringBuilder(Math.Min(4096, MaxCharacters));
         var rowCount = 0;
         var cellCount = 0;
-        if (includeHeaders && !AppendRow(builder, headers, headers.Count))
+        if (includeHeaders && !AppendRow(builder, headers, headers.Count, prependNewline: false))
         {
             reason = "Clipboard data exceeds the safe size limit.";
             return false;
@@ -50,7 +50,8 @@ public static class EngineeringClipboardText
                 reason = "The selection exceeds 3,000 rows or 36,000 cells. Use Export CSV for larger datasets.";
                 return false;
             }
-            if (row.Count != headers.Count || !AppendRow(builder, row, headers.Count))
+            if (row.Count != headers.Count ||
+                !AppendRow(builder, row, headers.Count, prependNewline: includeHeaders || rowCount > 1))
             {
                 reason = row.Count != headers.Count
                     ? "Clipboard columns changed while preparing the selection."
@@ -69,9 +70,12 @@ public static class EngineeringClipboardText
         return true;
     }
 
-    private static bool AppendRow(StringBuilder builder, IReadOnlyList<string?> fields, int count)
+    private static bool AppendRow(StringBuilder builder, IReadOnlyList<string?> fields,
+        int count, bool prependNewline)
     {
-        if (builder.Length > 0) builder.Append("\r\n");
+        // Do not infer a previous row from StringBuilder.Length: a valid all-empty
+        // first row has zero characters yet MUST retain its row separator.
+        if (prependNewline) builder.Append("\r\n");
         for (var i = 0; i < count; i++)
         {
             if (i > 0) builder.Append('\t');
@@ -81,6 +85,9 @@ public static class EngineeringClipboardText
             // names/labels to paste literally rather than execute.
             if (LooksLikeFormula(value))
                 value = "'" + value;
+            // Bound work before formatting untrusted or very large diagnostics.
+            if (value.Length > MaxCharacters - builder.Length - 4)
+                return false;
             var quoted = value.IndexOfAny(['\t', '\r', '\n', '"']) >= 0;
             if (quoted) builder.Append('"');
             builder.Append(quoted ? value.Replace("\"", "\"\"") : value);
