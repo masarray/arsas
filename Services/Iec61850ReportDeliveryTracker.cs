@@ -145,9 +145,43 @@ public sealed class Iec61850ReportDeliveryTracker
             state.TrustedOnlineClock = true;
     }
 
-    private static bool TryWireTime(string value, out DateTimeOffset result)
-        => DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture,
+    private static bool TryWireTime(string? value, out DateTimeOffset result)
+    {
+        result = default;
+        var text = value?.Trim();
+        if (string.IsNullOrWhiteSpace(text) || text.Length > 100)
+            return false;
+
+        // ARIEC61850 MmsDataValueRenderer emits full-precision IEC UTC-Time
+        // as "yyyy-MM-dd HH:mm:ss.fffffff UTC (q=0xNN)". Quality is part
+        // of the evidence: 0x40 = clockFailure, 0x20 = not synchronized.
+        // 0x80 is leapSecondsKnown and is not a clock-failure indicator.
+        var qualityStart = text.LastIndexOf(" (q=0x", StringComparison.OrdinalIgnoreCase);
+        if (qualityStart >= 0)
+        {
+            if (!text.EndsWith(')') ||
+                !byte.TryParse(text[(qualityStart + 7)..^1], NumberStyles.HexNumber,
+                    CultureInfo.InvariantCulture, out var quality) ||
+                (quality & 0x60) != 0)
+                return false;
+            text = text[..qualityStart].TrimEnd();
+        }
+
+        if (text.EndsWith(" UTC", StringComparison.OrdinalIgnoreCase))
+        {
+            var utc = text[..^4];
+            return DateTimeOffset.TryParseExact(utc,
+                new[] { "yyyy-MM-dd HH:mm:ss.fffffff", "yyyy-MM-dd HH:mm:ss.fffff" },
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out result);
+        }
+
+        // Strictly no local-time conversion: an unknown offset is UTC only
+        // because the decoded IEC 61850 field itself is named TimeOfEntry UTC.
+        return DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture,
             DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out result);
+    }
 }
 
 public sealed record Iec61850ReportDeliveryEvidence(string Label, string Basis)
