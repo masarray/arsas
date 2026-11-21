@@ -24,6 +24,18 @@ public sealed class Iec61850SoeRepeatGuard
         bool routedReport, bool wireFrame, string? reason, string? sourceMode,
         string? processTimestamp, string? newValue)
     {
+        // Do not collapse a fast Open/Close/Open sequence when the IED only
+        // reports seconds precision. Duplicate identity requires at least a
+        // millisecond-resolved process timestamp, as in SG7's wire-derived t.
+        var stamp = processTimestamp?.Trim() ?? string.Empty;
+        var decimalAt = stamp.IndexOf('.');
+        var hasMillisecondResolution = decimalAt >= 0 &&
+            decimalAt + 3 < stamp.Length &&
+            char.IsDigit(stamp[decimalAt + 1]) &&
+            char.IsDigit(stamp[decimalAt + 2]) &&
+            char.IsDigit(stamp[decimalAt + 3]);
+        if (!hasMillisecondResolution)
+            return true;
         if (!routedReport || !wireFrame ||
             Iec61850EventOriginPolicy.Cause(reason, sourceMode) != "Data change" ||
             string.IsNullOrWhiteSpace(processTimestamp) ||
