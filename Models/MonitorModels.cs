@@ -1287,6 +1287,18 @@ public sealed class Iec61850EventEntry
     // Assigned only from future independently proven buffered replay evidence.
     // BRCB membership or receipt of a buffered report does not prove replay.
     public bool VerifiedBufferedReplay { get; init; }
+    // Null for polling/snapshot and for synthetic aggregate values that
+    // cannot be tied to one real MMS InformationReport.
+    public NativeReportFrameMetadata? ReportFrame { get; init; }
+    public Iec61850ReportDeliveryEvidence? DeliveryEvidence { get; init; }
+    public string DeliveryOrigin => VerifiedBufferedReplay ? "Buffer" :
+        DeliveryEvidence?.Label ?? "Unknown";
+    public string ReplayEvidence => DeliveryEvidence?.Basis ??
+        "No independent replay evidence is available.";
+    // The Event column highlights buffered delivery without replacing the
+    // original IEC ReasonForInclusion / cause.
+    public string EventLabel => DeliveryOrigin == "Buffer"
+        ? $"Buffer · {EventCause}" : EventCause;
     // Operator labels are deliberately short. Full source evidence remains
     // available in the export and the native report diagnostics.
     public string EventCause => Iec61850EventOriginPolicy.Cause(Reason, SourceMode, VerifiedBufferedReplay);
