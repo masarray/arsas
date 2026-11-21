@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Xml.Linq;
 using AR.Iec61850.Discovery;
 using ArIED61850Tester.Models;
 using Xunit;
@@ -61,6 +62,14 @@ public sealed class BrowserPurgeBufSafetyTests
         bool buffered, bool dynamicPlan, bool expected)
         => Assert.Equal(expected,
             BrowserPurgeBufPolicy.RejectAutomaticBufferedMutation(buffered, dynamicPlan));
+
+    [Fact]
+    public void ManualPurgeWindowUsesRealWpfClosingEvent()
+    {
+        var xaml = XDocument.Parse(Source("BrowserRcbPurgeWindow.xaml"));
+        Assert.Equal("Window_Closing", (string?)xaml.Root?.Attribute("Closing"));
+        Assert.Null(xaml.Root?.Attribute("Window_Closing"));
+    }
 
     [Fact]
     public void PurgeIsOnlyExplicitUiActionAndNeverGenericOrAutomatic()

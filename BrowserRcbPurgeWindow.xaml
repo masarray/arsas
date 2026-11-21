@@ -4,7 +4,7 @@
         Title="BRCB PurgeBuf · Manual MMS Write"
         Width="520" Height="328" MinWidth="520" MinHeight="328"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
-        Window_Closing="Window_Closing" Background="#F8FAFC">
+        Closing="Window_Closing" Background="#F8FAFC">
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
