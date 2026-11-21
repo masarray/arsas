@@ -89,6 +89,15 @@ public sealed class EngineeringClipboardTextTests
     }
 
     [Fact]
+    public void EmptyFirstSelectedRowStillPreservesExcelBlockRowSeparation()
+    {
+        Assert.True(EngineeringClipboardText.TryBuild(
+            ["Value"], [Row(""), Row("connected")],
+            false, out var text, out var reason), reason);
+        Assert.Equal("\r\nconnected", text);
+    }
+
+    [Fact]
     public void AChangedColumnCountRejectsInconsistentSnapshot()
     {
         Assert.False(EngineeringClipboardText.TryBuild(
