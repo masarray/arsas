@@ -1290,15 +1290,22 @@ public sealed class Iec61850EventEntry
     // Null for polling/snapshot and for synthetic aggregate values that
     // cannot be tied to one real MMS InformationReport.
     public NativeReportFrameMetadata? ReportFrame { get; init; }
+    // The wire origin classification is retained only as diagnostic evidence.
+    // The operator sees one Event column, not a second classification axis.
     public Iec61850ReportDeliveryEvidence? DeliveryEvidence { get; init; }
-    public string DeliveryOrigin => VerifiedBufferedReplay ? "Buffer" :
-        DeliveryEvidence?.Label ?? "Unknown";
-    public string ReplayEvidence => DeliveryEvidence?.Basis ??
-        "No independent replay evidence is available.";
-    // The Event column highlights buffered delivery without replacing the
-    // original IEC ReasonForInclusion / cause.
-    public string EventLabel => DeliveryOrigin == "Buffer"
-        ? $"Buffer · {EventCause}" : EventCause;
+    public string EventLabel
+    {
+        get
+        {
+            var cause = EventCause;
+            var buffered = VerifiedBufferedReplay ||
+                string.Equals(DeliveryEvidence?.Label, "Buffer", StringComparison.Ordinal);
+            // GI and integrity describe deliberate report refreshes. Do not
+            // hide them behind a buffered-transport label.
+            return buffered && cause is not ("GI" or "Integrity" or "Poll")
+                ? "Buffer event" : cause;
+        }
+    }
     // Operator labels are deliberately short. Full source evidence remains
     // available in the export and the native report diagnostics.
     public string EventCause => Iec61850EventOriginPolicy.Cause(Reason, SourceMode, VerifiedBufferedReplay);

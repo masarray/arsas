@@ -81,7 +81,9 @@ public sealed class P109IedBrowserAndEventDrawerContractTests
         Assert.Contains("EntryID", code);
         Assert.DoesNotContain("— (not captured)", code);
         Assert.Contains("entry.ReportFrame?.EntryIdHex", code);
-        Assert.Contains("entry.DeliveryOrigin", code);
+        Assert.DoesNotContain("entry.DeliveryOrigin", code);
+        Assert.DoesNotContain("entry.ReplayEvidence", code);
+        Assert.Contains("entry.EventLabel", code);
         Assert.Contains("Raw Reason", code);
         Assert.Contains("ReasonForInclusion", code);
         Assert.DoesNotContain("Header=\"Raw Reason\"", xaml);

@@ -33,6 +33,7 @@ public sealed class P109YEventProvenanceTests
             Reason = "data-change"
         };
         Assert.Equal("Data change", plainBrcb.EventCause);
+        Assert.Equal("Data change", plainBrcb.EventLabel);
         var verified = new Iec61850EventEntry
         {
             SourceMode = plainBrcb.SourceMode,
@@ -40,8 +41,7 @@ public sealed class P109YEventProvenanceTests
             VerifiedBufferedReplay = true
         };
         Assert.Equal("Data change", verified.EventCause);
-        Assert.Equal("Buffer · Data change", verified.EventLabel);
-        Assert.Equal("Buffer", verified.DeliveryOrigin);
+        Assert.Equal("Buffer event", verified.EventLabel);
         Assert.Equal("Poll", Iec61850EventOriginPolicy.Cause("dchg", "MMS Polling"));
     }
 
@@ -227,11 +227,14 @@ public sealed class P109YEventProvenanceTests
         var visible = xaml[eventStart..eventEnd];
 
         Assert.Contains("Header=\"Event\" Binding=\"{Binding EventLabel}\"", visible);
-        Assert.Contains("Header=\"Origin\" Binding=\"{Binding DeliveryOrigin}\"", visible);
+        Assert.DoesNotContain("Header=\"Origin\"", visible);
         Assert.Contains("Header=\"Acquisition\" Binding=\"{Binding AcquisitionShort}\"", visible);
         Assert.DoesNotContain("Header=\"Stream\"", visible);
         Assert.DoesNotContain("Header=\"Raw Reason\"", visible);
-        Assert.Contains("Csv(entry.EventCause)", code);
+        Assert.Contains("Csv(entry.EventLabel)", code);
+        Assert.DoesNotContain("Csv(entry.DeliveryOrigin)", code);
+        Assert.DoesNotContain("Csv(entry.ReplayEvidence)", code);
+        Assert.DoesNotContain(",DeliveryOrigin,", code);
         Assert.Contains("Csv(entry.AcquisitionShort)", code);
         Assert.Contains("Csv(entry.ReportChannel)", code);
         Assert.Contains("Csv(entry.SourceMode)", code);

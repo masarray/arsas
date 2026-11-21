@@ -26,9 +26,7 @@ public partial class MainWindow
         {
             new RcbInspectionProperty("IED", Show(entry.DeviceName), "Event snapshot"),
             new RcbInspectionProperty("Signal", Show(entry.IecReference), "Event snapshot"),
-            new RcbInspectionProperty("Cause", entry.EventCause, "IEC ReasonForInclusion"),
-            new RcbInspectionProperty("Origin", entry.DeliveryOrigin, "Independent delivery classification"),
-            new RcbInspectionProperty("Origin evidence", entry.ReplayEvidence, "Conservative receive-time classifier"),
+            new RcbInspectionProperty("Event", entry.EventLabel, "Operator event category"),
             new RcbInspectionProperty("Before → after", $"{entry.OldValue} → {entry.NewValue}", "Event snapshot"),
             new RcbInspectionProperty("Timestamp", Show(entry.DeviceTimestamp), "Event snapshot"),
             new RcbInspectionProperty("Quality", Show(entry.Quality), "Event snapshot"),

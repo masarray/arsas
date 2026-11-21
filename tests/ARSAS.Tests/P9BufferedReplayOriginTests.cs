@@ -81,10 +81,13 @@ public sealed class P9BufferedReplayOriginTests
     }
 
     [Theory]
-    [InlineData("data-change", "Data change")]
-    [InlineData("general-interrogation", "GI")]
-    [InlineData("integrity", "Integrity")]
-    public void CauseRemainsIndependentFromReplayOrigin(string reason, string expected)
+    [InlineData("data-change", "Data change", "Buffer event")]
+    [InlineData("quality-change", "Quality", "Buffer event")]
+    [InlineData("data-update", "Data update", "Buffer event")]
+    [InlineData("general-interrogation", "GI", "GI")]
+    [InlineData("integrity", "Integrity", "Integrity")]
+    public void DisplayEventPreservesIntentionalReportCauses(
+        string reason, string expectedCause, string expectedLabel)
     {
         var e = new Iec61850EventEntry
         {
@@ -93,10 +96,25 @@ public sealed class P9BufferedReplayOriginTests
             DeliveryEvidence = new Iec61850ReportDeliveryEvidence("Buffer", "Offline interval"),
             ReportFrame = Frame(40, 73, "0102")
         };
-        Assert.Equal(expected, e.EventCause);
-        Assert.Equal("Buffer", e.DeliveryOrigin);
-        Assert.Equal("Buffer · " + expected, e.EventLabel);
+        Assert.Equal(expectedCause, e.EventCause);
+        Assert.Equal(expectedLabel, e.EventLabel);
         Assert.Equal("0102", e.ReportFrame?.EntryIdHex);
+    }
+
+    [Theory]
+    [InlineData("Unknown")]
+    [InlineData("Live")]
+    public void UncertainOriginNeverLeaksToUserFacingEvent(string internalLabel)
+    {
+        var entry = new Iec61850EventEntry
+        {
+            Reason = "data-change",
+            SourceMode = "Static DataSet: StaticBrcb",
+            DeliveryEvidence = new Iec61850ReportDeliveryEvidence(internalLabel, "Diagnostics only")
+        };
+        Assert.Equal("Data change", entry.EventLabel);
+        Assert.DoesNotContain("Unknown", entry.EventLabel, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Origin", entry.EventLabel, StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory]
