@@ -417,7 +417,9 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
         // automatic start/reconnect. URCB dynamic setup stays independent.
         if (ArIED61850Tester.Models.BrowserPurgeBufPolicy.RejectAutomaticBufferedMutation(
                 subscription.ReportControl?.Buffered == true,
-                subscription.Mode == ArMms.MmsReportSubscriptionPlanMode.DynamicDataSet))
+                subscription.Mode == ArMms.MmsReportSubscriptionPlanMode.DynamicDataSet,
+                subscription.ReportControl?.FunctionalConstraint,
+                subscription.ReportControl?.Reference))
         {
             LastErrorMessage =
                 "Automatic dynamic BRCB setup blocked: DatSet/TrgOps/OptFlds writes may purge SOE history. " +

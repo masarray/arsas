@@ -63,6 +63,18 @@ public sealed class BrowserPurgeBufSafetyTests
         => Assert.Equal(expected,
             BrowserPurgeBufPolicy.RejectAutomaticBufferedMutation(buffered, dynamicPlan));
 
+    [Theory]
+    [InlineData(false, true, "BR", "LD0/LLN0.RP.urcb01", true)]
+    [InlineData(false, true, "RP", "LD0/LLN0.BR.brc01", true)]
+    [InlineData(false, true, "RP", "LD0/LLN0.RP.urcb01", false)]
+    [InlineData(false, false, "BR", "LD0/LLN0.BR.brc01", false)]
+    public void ContradictoryLiveRcbTypeCannotBypassHistoryProtection(
+        bool advertisedBuffered, bool dynamicPlan, string fc,
+        string reference, bool mustBlock)
+        => Assert.Equal(mustBlock,
+            BrowserPurgeBufPolicy.RejectAutomaticBufferedMutation(
+                advertisedBuffered, dynamicPlan, fc, reference));
+
     [Fact]
     public void ManualPurgeWindowUsesRealWpfClosingEvent()
     {

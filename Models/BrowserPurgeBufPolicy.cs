@@ -66,6 +66,16 @@ public static class BrowserPurgeBufPolicy
         return true;
     }
 
-    public static bool RejectAutomaticBufferedMutation(bool isBuffered, bool isDynamicPlan)
-        => isBuffered && isDynamicPlan;
+    /// <summary>
+    /// Never trust only an inferred Buffered flag. A contradictory candidate
+    /// reporting FC=BR or carrying a BR wire identity must ALSO be protected
+    /// from automatic dynamic DatSet/TrgOps/OptFlds mutation.
+    /// </summary>
+    public static bool RejectAutomaticBufferedMutation(
+        bool isBuffered, bool isDynamicPlan,
+        string? functionalConstraint = null, string? rcbReference = null)
+        => isDynamicPlan &&
+           (isBuffered ||
+            string.Equals(functionalConstraint, "BR", StringComparison.OrdinalIgnoreCase) ||
+            SameExactBrcbReference(rcbReference, rcbReference));
 }
