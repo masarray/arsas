@@ -317,6 +317,11 @@ public static class GridClipboardBehavior
             // each displayed column, even after sorting/filtering.
             if (mode == "rows" || selected.Count == 0)
             {
+                if (grid.SelectedItems.Count > EngineeringClipboardText.MaxRows)
+                {
+                    Inform(grid, "More than 3,000 selected rows. Use Export CSV for large tables.");
+                    return;
+                }
                 foreach (var item in grid.SelectedItems.Cast<object>())
                     selected[item] = new HashSet<DataGridColumn>(columns);
                 if (mode == "rows" && selected.Count == 0)
@@ -327,10 +332,9 @@ public static class GridClipboardBehavior
             if (selected.Count == 0 && grid.CurrentCell.IsValid)
             {
                 var cell = grid.CurrentCell;
-                selected[cell.Item] = new HashSet<DataGridColumn>
-                {
-                    cell.Column
-                };
+                selected[cell.Item] = mode == "rows"
+                    ? new HashSet<DataGridColumn>(columns)
+                    : new HashSet<DataGridColumn> { cell.Column };
             }
             if (selected.Count == 0) return;
             if (mode is "selection" or "selection-headers")
