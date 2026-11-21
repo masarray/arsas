@@ -76,7 +76,7 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         public PriorityQueue<string, long> PollQueue { get; } = new();
         public Dictionary<string, Iec61850ReportContinuityState> ReportStreams { get; } = new(StringComparer.OrdinalIgnoreCase);
         // Report-origin diagnostics only; never mutates the RCB or schedules reads.
-        public Iec61850ReportDeliveryTracker ReplayTracker { get; } = new();
+        public Iec61850ReportDeliveryTracker ReplayTracker { get; init; } = new();
         // Active association only: exact ARIEC write-step outcomes for each
         // planned RCB. Cleared wherever ReportStreams is cleared.
         public Dictionary<string, NativeReportMonitorStartResult> ReportActivationByPlanId { get; } =
@@ -120,6 +120,32 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         public Guid CurrentStaticParityAttemptId { get; set; }
     }
 
+    // An explicit operator Disconnect disposes DeviceSession. Preserve ONLY
+    // bounded report replay evidence across that transition for the same
+    // in-memory IED and endpoint; never persist it to disk or borrow another IED's.
+    // A weak-key lease prevents removed devices from accumulating in the runtime.
+    private sealed class ReplayTrackerLease
+    {
+        public string Endpoint { get; set; } = string.Empty;
+        public Iec61850ReportDeliveryTracker Tracker { get; set; } = new();
+    }
+
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<
+        Iec61850MonitorDevice, ReplayTrackerLease> _replayTrackerLeases = new();
+
+    private Iec61850ReportDeliveryTracker ReplayTrackerForDevice(Iec61850MonitorDevice device)
+    {
+        var lease = _replayTrackerLeases.GetValue(device, static _ => new ReplayTrackerLease());
+        var endpoint = device.IpAddress.Trim() + ":" + device.Port.ToString(CultureInfo.InvariantCulture);
+        lock (lease)
+        {
+            if (lease.Endpoint.Length > 0 &&
+                !string.Equals(lease.Endpoint, endpoint, StringComparison.OrdinalIgnoreCase))
+                lease.Tracker = new Iec61850ReportDeliveryTracker();
+            lease.Endpoint = endpoint;
+            return lease.Tracker;
+        }
+    }
     private readonly ConcurrentDictionary<string, DeviceSession> _sessions = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, byte> _activeControlTargets = new(StringComparer.OrdinalIgnoreCase);
     private long _eventSequence;
@@ -556,7 +582,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         var session = new DeviceSession
         {
             Device = device,
-            Client = new NativeIec61850Client()
+            Client = new NativeIec61850Client(),
+            ReplayTracker = ReplayTrackerForDevice(device)
         };
         _sessions[device.DeviceId] = session;
 
@@ -798,7 +825,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         var session = new DeviceSession
         {
             Device = device,
-            Client = new NativeIec61850Client()
+            Client = new NativeIec61850Client(),
+            ReplayTracker = ReplayTrackerForDevice(device)
         };
         _sessions[device.DeviceId] = session;
 
@@ -1589,6 +1617,11 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         {
             Log("WARN", session.Device.Name, $"Monitor stop cleanup: {ex.GetType().Name}: {ex.Message}");
         }
+        // Freeze the last accepted per-RCB cursor AFTER the monitor receive loop
+        // has drained. A subsequent explicit Play/fast-connect creates a fresh
+        // session object but must not erase the offline replay evidence.
+        if (session.Device.IsConnected)
+            session.ReplayTracker.OnDisconnected(DateTimeOffset.UtcNow);
         try
         {
             await DisposeClientForReconnectAsync(
@@ -3022,7 +3055,14 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         // Initial images, GI/integrity refreshes with unchanged state, formatting-only
         // differences, quality-only updates, and continuously changing analog values
         // stay out of SOE.
-        if (!changed || !ShouldRecordSequenceOfEvents(point))
+        // The first report after a reconnect may itself be a genuine IEC
+        // data-change notification. An empty local baseline must not discard
+        // its SOE record; retain OldValue='-' rather than inventing the state.
+        // GI/integrity and mere BRCB/BufOvfl reception are never admitted.
+        var firstWireDataChange = Iec61850EventOriginPolicy.FirstDataChangeCanStartSoe(
+            hadValue, hasProcessValue, trustReportEdge, reportFrame is not null,
+            reason, sourceMode);
+        if ((!changed && !firstWireDataChange) || !ShouldRecordSequenceOfEvents(point))
             return;
 
         var entry = new Iec61850EventEntry

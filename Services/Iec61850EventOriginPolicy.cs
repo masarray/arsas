@@ -36,6 +36,17 @@ public static class Iec61850EventOriginPolicy
         return "State change";
     }
 
+    /// <summary>
+    /// An explicit wire data-change notification is an SOE event even when
+    /// this client has not yet observed an initial process image. It does NOT
+    /// authorize a synthetic edge for GI, integrity, raw BufOvfl or polling.
+    /// </summary>
+    public static bool FirstDataChangeCanStartSoe(
+        bool hadValue, bool hasProcessValue, bool routedReport, bool hasWireFrame,
+        string? reportReason, string? acquisition)
+        => !hadValue && hasProcessValue && routedReport && hasWireFrame &&
+           string.Equals(Cause(reportReason, acquisition), "Data change",
+               StringComparison.Ordinal);
     // UI Acquisition means the actual RCB that routed this report, NOT
     // IEC ReportId (RptID). RptID can legitimately be "Rpt_0" while
     // the configured BRCB object is named "brcb01".

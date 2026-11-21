@@ -19,7 +19,26 @@ public partial class MainWindow
     {
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(acquisitionSignals);
+        if (!_monitorStartFlights.TryAdd(device.DeviceId, 0))
+        {
+            AddLog("INFO", device.Name,
+                "FAT monitor Start deferred: another start owns this device.");
+            return false;
+        }
+        try
+        {
+            return await StartIoFatDeviceMonitorCoreAsync(device, acquisitionSignals);
+        }
+        finally
+        {
+            _monitorStartFlights.TryRemove(device.DeviceId, out _);
+        }
+    }
 
+    private async Task<bool> StartIoFatDeviceMonitorCoreAsync(
+        Iec61850MonitorDevice device,
+        IReadOnlyCollection<SignalDefinition> acquisitionSignals)
+    {
         // Engineering and FAT are two views of the same SCL workspace. Remember the
         // operator's explicit Static DataSet intent independently of any transient monitor
         // stop/restart that FAT performs while preparing its evidence scope.

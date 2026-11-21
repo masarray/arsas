@@ -178,6 +178,85 @@ public sealed class P9BufferedReplayOriginTests
         tracker.InvalidateForManualPurge(null);
     }
     [Fact]
+    public void ExplicitReconnectReusesBoundedTrackerForSameDeviceAndFencesEndpointChanges()
+    {
+        using var _ = new System.IO.MemoryStream(); // no native MMS session needed
+        var runtime = new Iec61850MonitorRuntime();
+        var device = new Iec61850MonitorDevice {
+            IpAddress = "192.16.1.73", Port = 102
+        };
+        var method = typeof(Iec61850MonitorRuntime).GetMethod(
+            "ReplayTrackerForDevice",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        Iec61850ReportDeliveryTracker Read() =>
+            Assert.IsType<Iec61850ReportDeliveryTracker>(
+                method!.Invoke(runtime, new object[] { device }));
+
+        var before = Read();
+        before.OnAssociated(91, Start);
+        before.RecordAccepted(Frame(10, 11, "01"), 91);
+        before.OnDisconnected(Start.AddSeconds(30));
+        var after = Read();
+        Assert.Same(before, after);
+        after.OnAssociated(92, Start.AddSeconds(70));
+        Assert.Equal("Buffer", after.Classify(Frame(40, 73, "02"), 92).Label);
+
+        device.IpAddress = "192.16.1.74";
+        var changedEndpoint = Read();
+        Assert.NotSame(after, changedEndpoint);
+        changedEndpoint.OnAssociated(93, Start.AddSeconds(140));
+        Assert.Equal("Unknown", changedEndpoint.Classify(Frame(120, 143, "03"), 93).Label);
+    }
+
+    [Theory]
+    [InlineData("data-change", true)]
+    [InlineData("dchg", true)]
+    [InlineData("integrity", false)]
+    [InlineData("general-interrogation", false)]
+    [InlineData("data-change, integrity", false)]
+    [InlineData("quality-change", false)]
+    [InlineData("", false)]
+    public void FirstWireChangeMustNotBeDiscardedAsInitialImage(string reason, bool expected)
+    {
+        Assert.Equal(expected, Iec61850EventOriginPolicy.FirstDataChangeCanStartSoe(
+            hadValue: false, hasProcessValue: true, routedReport: true,
+            hasWireFrame: true, reason, "Static DataSet: StaticBrcb"));
+        Assert.False(Iec61850EventOriginPolicy.FirstDataChangeCanStartSoe(
+            hadValue: false, hasProcessValue: true, routedReport: false,
+            hasWireFrame: true, reason, "Static DataSet: StaticBrcb"));
+        Assert.False(Iec61850EventOriginPolicy.FirstDataChangeCanStartSoe(
+            hadValue: false, hasProcessValue: true, routedReport: true,
+            hasWireFrame: false, reason, "Static DataSet: StaticBrcb"));
+        Assert.False(Iec61850EventOriginPolicy.FirstDataChangeCanStartSoe(
+            hadValue: true, hasProcessValue: true, routedReport: true,
+            hasWireFrame: true, reason, "Static DataSet: StaticBrcb"));
+    }
+
+    [Fact]
+    public void BothEngineeringAndFatStartsHavePerDeviceAdmissionAndRelease()
+    {
+        string Source(string file)
+        {
+            var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+            while (dir is not null)
+            {
+                var path = System.IO.Path.Combine(dir.FullName, file);
+                if (System.IO.File.Exists(path))
+                    return System.IO.File.ReadAllText(path);
+                dir = dir.Parent;
+            }
+            throw new System.IO.FileNotFoundException(file);
+        }
+        var ui = Source("MainWindow.xaml.cs");
+        var fat = Source("MainWindow.IoTesting.MultiIedMonitor.cs");
+        Assert.Contains("_monitorStartFlights.TryAdd(device.DeviceId, 0)", ui);
+        Assert.Contains("_monitorStartFlights.TryRemove(device.DeviceId, out _)", ui);
+        Assert.Contains("_monitorStartFlights.TryAdd(device.DeviceId, 0)", fat);
+        Assert.Contains("_monitorStartFlights.TryRemove(device.DeviceId, out _)", fat);
+        Assert.Contains("!ReferenceEquals(activePoint, point)", ui);
+    }
+    [Fact]
     public void ColdStartCannotCertifyHistoricalReplayEvenWithEntryId()
     {
         var tracker = new Iec61850ReportDeliveryTracker();

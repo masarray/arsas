@@ -42,6 +42,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly Dictionary<string, IedBrowserReadBindingIndex> _canonicalSignalProjections =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Iec61850MonitorPoint> _pointIndex = new(StringComparer.OrdinalIgnoreCase);
+    // A single physical IED must never start two asynchronous monitor
+    // generations concurrently: stale completions caused 77+77 live rows
+    // on SG7_BCU after fast reconnect, and raced RCB setup/teardown.
+    private readonly ConcurrentDictionary<string, byte> _monitorStartFlights =
+        new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentQueue<Iec61850EventEntry> _pendingEvents = new();
     private readonly ConcurrentQueue<DiagnosticEntry> _pendingDiagnostics = new();
     private readonly Dictionary<string, DateTime> _reportPulseUntil = new(StringComparer.OrdinalIgnoreCase);
@@ -2501,6 +2506,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async Task<bool> StartDeviceMonitorAsync(Iec61850MonitorDevice device, bool navigateToExplorer = true)
     {
+        if (!_monitorStartFlights.TryAdd(device.DeviceId, 0))
+        {
+            AddLog("INFO", device.Name,
+                "Duplicate monitor Start ignored while one start is already in flight.");
+            return false;
+        }
         try
         {
             device.HasReportStream = false;
@@ -2558,6 +2569,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             SetStatus($"{device.Name}: monitor start failed. Diagnostics is marked with !.");
             MarkDiagnosticAlert();
             return false;
+        }
+        finally
+        {
+            _monitorStartFlights.TryRemove(device.DeviceId, out _);
         }
     }
 
@@ -2774,6 +2789,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             processedPoints++;
             var snapshot = pending.Snapshot;
             var point = snapshot.Point;
+            // A completed older Start must not repaint a newer same-device
+            // point object. Before registration, allow valid first snapshots.
+            if (_pointIndex.TryGetValue(point.PointKey, out var activePoint) &&
+                !ReferenceEquals(activePoint, point))
+                continue;
             if (!deviceOwners.TryGetValue(point.DeviceId, out var observedOwner) ||
                 !string.Equals(observedOwner.DeviceId, point.DeviceId,
                     StringComparison.OrdinalIgnoreCase))
