@@ -437,6 +437,48 @@ public sealed class P9BufferedReplayOriginTests
     }
 
     [Fact]
+    public void RepeatedAcceptedMembersOfOneFramePreserveOfflineReplayCursor()
+    {
+        // Real SG7_BCU reporting fans out a single InformationReport to
+        // dozens of selected values. Only the first schema-accepted member
+        // should need an EntryID/TimeOfEntry cursor update.
+        var tracker = new Iec61850ReportDeliveryTracker();
+        tracker.OnAssociated(811, Start);
+        var frame = Frame(10, 11, "0101");
+        for (var member = 0; member < 56; member++)
+            tracker.RecordAccepted(frame, 811);
+
+        tracker.OnDisconnected(Start.AddSeconds(30));
+        tracker.OnAssociated(812, Start.AddSeconds(70));
+        var replay = Frame(40, 73, "0102");
+        Assert.Equal("Buffer", tracker.Classify(replay, 812).Label);
+
+        for (var member = 0; member < 56; member++)
+            tracker.RecordAccepted(replay, 812);
+        Assert.Equal("Unknown", tracker.Classify(replay, 812).Label);
+        Assert.Equal("Live", tracker.Classify(Frame(85, 86, "0103"), 812).Label);
+    }
+
+    [Fact]
+    public void RepeatedFrameFastPathIsExplicitAndAssociationScoped()
+    {
+        // A lightweight source contract prevents accidentally reintroducing
+        // one BinaryTime decode per DataSet member into the hot path.
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !System.IO.File.Exists(
+                   System.IO.Path.Combine(dir.FullName,
+                       "Services/Iec61850ReportDeliveryTracker.cs")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+        var source = System.IO.File.ReadAllText(
+            System.IO.Path.Combine(dir!.FullName,
+                "Services/Iec61850ReportDeliveryTracker.cs"));
+        Assert.Contains("ReferenceEquals(state.LastAcceptedFrame, frame)", source);
+        Assert.Contains("stream.LastAcceptedFrame = null;", source);
+        Assert.Contains("state.LastAcceptedFrame = frame;", source);
+    }
+
+    [Fact]
     public void ColdStartCannotCertifyHistoricalReplayEvenWithEntryId()
     {
         var tracker = new Iec61850ReportDeliveryTracker();

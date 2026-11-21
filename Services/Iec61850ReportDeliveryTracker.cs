@@ -16,6 +16,11 @@ public sealed class Iec61850ReportDeliveryTracker
         public string LastAcceptedEntryId { get; set; } = "";
         public ulong? LastConfRev { get; set; }
         public bool TrustedOnlineClock { get; set; }
+        // A decoded InformationReport frame fans out to many DataSet members.
+        // RecordAccepted is called once per schema-accepted value; retain the
+        // last frame identity so the same TimeOfEntry is decoded only once.
+        // A single retained reference per bounded RCB stream, not a frame cache.
+        public NativeReportFrameMetadata? LastAcceptedFrame { get; set; }
 
         // Frozen at disconnect. Updates accepted on the new association must
         // never overwrite the evidence used to judge the offline interval.
@@ -47,6 +52,10 @@ public sealed class Iec61850ReportDeliveryTracker
         _association = association;
         _associatedAtUtc = connectedAtUtc.ToUniversalTime();
         _reconnected = _disconnectedAtUtc.HasValue;
+        // A new association must never reuse the previous association's
+        // per-frame fast path, even when old EntryID continuity is retained.
+        foreach (var stream in _streams.Values)
+            stream.LastAcceptedFrame = null;
     }
 
     public void OnDisconnected(DateTimeOffset disconnectedAtUtc)
@@ -252,6 +261,12 @@ public sealed class Iec61850ReportDeliveryTracker
             _streams.Add(frame.ReportControlReference, state);
         }
 
+        // One report frame may hydrate dozens of scalar values. These
+        // repeated callbacks have already passed schema admission; updating
+        // the same cursor and parsing the same TimeOfEntry adds no evidence.
+        if (ReferenceEquals(state.LastAcceptedFrame, frame))
+            return;
+
         if (frame.ConfRev.HasValue && state.LastConfRev.HasValue &&
             frame.ConfRev != state.LastConfRev)
         {
@@ -269,6 +284,7 @@ public sealed class Iec61850ReportDeliveryTracker
             Math.Abs((frame.ReceivedAt.ToUniversalTime() - time).TotalSeconds) <=
                 LiveReceiveWindow.TotalSeconds)
             state.TrustedOnlineClock = true;
+        state.LastAcceptedFrame = frame;
     }
 
     private static bool TryWireTime(string? value, out DateTimeOffset result)
