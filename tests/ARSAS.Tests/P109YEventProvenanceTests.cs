@@ -226,7 +226,8 @@ public sealed class P109YEventProvenanceTests
         Assert.True(eventStart >= 0 && eventEnd > eventStart);
         var visible = xaml[eventStart..eventEnd];
 
-        Assert.Contains("Header=\"Event\" Binding=\"{Binding EventCause}\"", visible);
+        Assert.Contains("Header=\"Event\" Binding=\"{Binding EventLabel}\"", visible);
+        Assert.Contains("Header=\"Origin\" Binding=\"{Binding DeliveryOrigin}\"", visible);
         Assert.Contains("Header=\"Acquisition\" Binding=\"{Binding AcquisitionShort}\"", visible);
         Assert.DoesNotContain("Header=\"Stream\"", visible);
         Assert.DoesNotContain("Header=\"Raw Reason\"", visible);
