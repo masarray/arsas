@@ -21,7 +21,6 @@ on:
       - "MainWindow.IedBrowser*.cs"
       - "Scl*.cs"
       - "scripts/verify-ci-canonical-reuse.py"
-      - ".github/workflows/smart-discovery-post-merge-production.yml"
   workflow_dispatch:
 
 permissions:
