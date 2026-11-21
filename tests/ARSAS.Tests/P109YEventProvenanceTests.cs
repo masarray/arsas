@@ -39,7 +39,9 @@ public sealed class P109YEventProvenanceTests
             Reason = plainBrcb.Reason,
             VerifiedBufferedReplay = true
         };
-        Assert.Equal("Buffer", verified.EventCause);
+        Assert.Equal("Data change", verified.EventCause);
+        Assert.Equal("Buffer · Data change", verified.EventLabel);
+        Assert.Equal("Buffer", verified.DeliveryOrigin);
         Assert.Equal("Poll", Iec61850EventOriginPolicy.Cause("dchg", "MMS Polling"));
     }
 
