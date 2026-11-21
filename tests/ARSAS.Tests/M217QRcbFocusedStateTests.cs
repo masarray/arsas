@@ -74,7 +74,7 @@ public sealed class M217QRcbFocusedStateTests
     }
 
     [Fact]
-    public void VerifiedOwnerOctetDisplaysExactIedScoutIpv4Bytes()
+    public void VerifiedOwnerOctetDisplaysExactFieldIpv4Bytes()
     {
         Assert.True(IedBrowserRcbOwnerDisplay.TryFormatVerifiedOctet(
             "C0100149", MmsDataKind.OctetString, out var display));
