@@ -196,7 +196,7 @@ public sealed class EngineeringGridClipboardBehaviorTests
         Assert.Contains("FrameworkElement.LoadedEvent", code);
         Assert.Contains("GridClipboardBehavior.Install();",
             File.ReadAllText(FindSource("App.xaml.cs")));
-        Assert.Contains("DataGridColumn.OnCopyingCellClipboardContent", code);
+        Assert.Contains("column.OnCopyingCellClipboardContent(item)", code);
     }
 
     private static string FindSource(string path)
