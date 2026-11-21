@@ -1934,7 +1934,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             if (!string.IsNullOrWhiteSpace(result.ControlModelText))
                 signal.ControlModelText = result.ControlModelText;
-            if (!string.IsNullOrWhiteSpace(result.FeedbackValue) && result.FeedbackValue != "-")
+            // The result can contain an unverified/preflight feedback text
+            // even when the actual Operate/termination path failed. Never
+            // promote that string as an observed physical process state.
+            if (result.FeedbackConfirmed &&
+                !string.IsNullOrWhiteSpace(result.FeedbackValue) &&
+                result.FeedbackValue != "-")
                 signal.ControlCurrentValue = result.FeedbackValue;
 
             signal.ControlLastResult = BuildQuickControlResult(result);
