@@ -23,19 +23,25 @@ internal sealed class AppUpdateService : IDisposable
     private readonly string _stateDirectory;
     private readonly string _statePath;
 
-    public AppUpdateService()
+    public AppUpdateService() : this(handler: null, stateDirectory: null)
+    {
+    }
+
+    // A controlled transport and isolated cache let regression tests exercise the
+    // real download/verification pipeline without reaching public update services.
+    internal AppUpdateService(HttpMessageHandler? handler, string? stateDirectory)
     {
         var assembly = Assembly.GetExecutingAssembly();
         CurrentVersion = assembly.GetName().Version ?? new Version(0, 0, 0, 0);
         var informationalVersion = assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-        _stateDirectory = Path.Combine(
+        _stateDirectory = stateDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             ResolveUpdaterProductDirectory(informationalVersion),
             "Updater");
         _statePath = Path.Combine(_stateDirectory, "state.json");
 
-        _httpClient = new HttpClient(new HttpClientHandler
+        _httpClient = new HttpClient(handler ?? new HttpClientHandler
         {
             AllowAutoRedirect = true,
             AutomaticDecompression = System.Net.DecompressionMethods.All
@@ -137,38 +143,44 @@ internal sealed class AppUpdateService : IDisposable
             response.EnsureSuccessStatusCode();
 
             await using var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-            await using var target = new FileStream(
+            long total = 0;
+            // The .part handle MUST be closed before SHA-256 opens it for
+            // independent reading or File.Move renames it on Windows.
+            // FileShare.None intentionally excludes any concurrent access while writing.
+            await using (var target = new FileStream(
                 partial,
                 FileMode.Create,
                 FileAccess.Write,
                 FileShare.None,
                 128 * 1024,
-                FileOptions.Asynchronous | FileOptions.SequentialScan);
-
-            var buffer = new byte[128 * 1024];
-            long total = 0;
-            var lastReport = Stopwatch.StartNew();
-            while (true)
+                FileOptions.Asynchronous | FileOptions.SequentialScan))
             {
-                var read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
-                if (read == 0)
-                    break;
-
-                await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-                total += read;
-                if (total > manifest.Installer.SizeBytes)
-                    throw new InvalidDataException("Downloaded installer is larger than the verified release manifest.");
-
-                if (lastReport.ElapsedMilliseconds >= 150)
+                var buffer = new byte[128 * 1024];
+                var lastReport = Stopwatch.StartNew();
+                while (true)
                 {
-                    progress?.Report(new UpdateDownloadProgress(total, manifest.Installer.SizeBytes));
-                    lastReport.Restart();
+                    var read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+                    if (read == 0)
+                        break;
+
+                    await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                    total += read;
+                    if (total > manifest.Installer.SizeBytes)
+                        throw new InvalidDataException("Downloaded installer is larger than the verified release manifest.");
+
+                    if (lastReport.ElapsedMilliseconds >= 150)
+                    {
+                        progress?.Report(new UpdateDownloadProgress(total, manifest.Installer.SizeBytes));
+                        lastReport.Restart();
+                    }
                 }
+
+                await target.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            await target.FlushAsync(cancellationToken).ConfigureAwait(false);
+            // An on-disk, fully closed file is the only input to the final hash
+            // verification. No unverified/partially written installer is published.
             progress?.Report(new UpdateDownloadProgress(total, manifest.Installer.SizeBytes));
-
             if (!await VerifyInstallerAsync(partial, manifest.Installer, cancellationToken).ConfigureAwait(false))
                 throw new InvalidDataException("Installer verification failed. The file was not opened.");
 
