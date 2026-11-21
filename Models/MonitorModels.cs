@@ -1293,6 +1293,24 @@ public sealed class Iec61850PointSnapshot
 
 public sealed class Iec61850EventEntry
 {
+    // Process SOE and operator control outcomes share the ONE Events ledger,
+    // but retain distinct evidence/clock domains. Control is NEVER an RCB edge.
+    public string EventKind { get; init; } = "Process";
+    public DateTimeOffset? ClientEventUtc { get; init; }
+    public string ControlOutcome { get; init; } = string.Empty;
+    public string ControlEvidence { get; init; } = string.Empty;
+    public string ControlChecks { get; init; } = string.Empty;
+    public string ControlOrigin { get; init; } = string.Empty;
+    public string ControlError { get; init; } = string.Empty;
+    public string ControlAddCause { get; init; } = string.Empty;
+    public string ControlCompletionState { get; init; } = string.Empty;
+    public string ControlFlightSequence { get; init; } = string.Empty;
+    public string ControlFeedback { get; init; } = string.Empty;
+    public bool IsControlEvent => EventKind == "Control";
+    public string EventTimestamp => IsControlEvent && ClientEventUtc is { } at
+        ? at.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture)
+        : DeviceTimestamp;
+    public string TimestampOrigin => IsControlEvent ? "ARSAS client clock (local)" : "IED process timestamp";
     public long Sequence { get; init; }
     public string DeviceId { get; init; } = string.Empty;
     public string PointKey { get; init; } = string.Empty;
@@ -1325,6 +1343,8 @@ public sealed class Iec61850EventEntry
     {
         get
         {
+            if (IsControlEvent)
+                return string.IsNullOrWhiteSpace(ControlOutcome) ? "Control unverified" : ControlOutcome;
             var cause = EventCause;
             var buffered = VerifiedBufferedReplay ||
                 string.Equals(DeliveryEvidence?.Label, "Buffer", StringComparison.Ordinal);
@@ -1336,14 +1356,18 @@ public sealed class Iec61850EventEntry
     }
     // Operator labels are deliberately short. Full source evidence remains
     // available in the export and the native report diagnostics.
-    public string EventCause => Iec61850EventOriginPolicy.Cause(Reason, SourceMode, VerifiedBufferedReplay);
-    public string AcquisitionShort => Iec61850EventOriginPolicy.Acquisition(
-        ReportId, ReportControlReference, SourceMode, RoutedReportControlReferences);
-    public string ReportChannel => Iec61850EventOriginPolicy.Channel(SourceMode);
+    public string EventCause => IsControlEvent ? EventLabel :
+        Iec61850EventOriginPolicy.Cause(Reason, SourceMode, VerifiedBufferedReplay);
+    public string AcquisitionShort => IsControlEvent
+        ? (ControlOutcome == "Control not sent" ? "Local / not sent" : "MMS control")
+        : Iec61850EventOriginPolicy.Acquisition(
+            ReportId, ReportControlReference, SourceMode, RoutedReportControlReferences);
+    public string ReportChannel => IsControlEvent ? "Control" : Iec61850EventOriginPolicy.Channel(SourceMode);
     public string EdgeType
     {
         get
         {
+            if (IsControlEvent) return "Command request";
             if (TryParseBinaryState(OldValue, out var oldState) &&
                 TryParseBinaryState(NewValue, out var newState) &&
                 oldState != newState)
@@ -1356,7 +1380,9 @@ public sealed class Iec61850EventEntry
     }
 
     public string ChangeText => $"{EdgeType} · {OldValue} → {NewValue}";
-    public string EventValue => string.IsNullOrWhiteSpace(NewValue) ? "-" : NewValue;
+    public string EventValue => IsControlEvent
+        ? "Request " + (string.IsNullOrWhiteSpace(NewValue) ? "—" : NewValue)
+        : string.IsNullOrWhiteSpace(NewValue) ? "-" : NewValue;
     public string DisplayValue => EventValue;
     public string ValueTypeToken => Iec61850ValueStatePresentation.TypeToken(IecDataType);
     public string ValueTone => Iec61850ValueStatePresentation.Classify(EventValue, IecDataType);
