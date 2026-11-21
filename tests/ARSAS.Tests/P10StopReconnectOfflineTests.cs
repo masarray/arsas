@@ -159,6 +159,9 @@ public sealed class P10StopReconnectOfflineTests
         Assert.Contains("point.IsOffline = false;", code);
         Assert.Contains("point.Status = disconnected ?", code);
         Assert.Contains("RemoveDevicePoints(device.DeviceId);", code); // on successful fresh Start
-        Assert.Contains("if (device.IsBusy || device.IsConnected || device.IsMonitoring)", code);
+        // A Play workflow now owns the entire fast-connect -> monitoring Start
+        // handoff. Stop must remain enabled/preemptive even when the helper has
+        // temporarily released IsBusy before the first Report is routed.
+        Assert.Contains("if (device.IsPlayWorkflowActive || device.IsBusy || device.IsConnected || device.IsMonitoring)", code);
     }
 }
