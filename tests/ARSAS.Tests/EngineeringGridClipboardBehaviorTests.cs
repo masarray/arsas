@@ -71,7 +71,7 @@ public sealed class EngineeringGridClipboardBehaviorTests
                 item => (string?)item.Header == "Copy");
             Assert.Equal(6, nested.Items.Count); // five actions and separator
             GridClipboardBehavior.AppendCopyActions(other, custom);
-            Assert.Equal(2, custom.Items.Count); // separator + one submenu
+            Assert.Single(custom.Items); // one copy submenu; never duplicated
 
             var command = new DataGrid
             {
