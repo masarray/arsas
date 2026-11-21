@@ -42,7 +42,7 @@ public sealed class EngineeringClipboardTextTests
     }
 
     [Theory]
-    [InlineData("=HYPERLINK(\"bad\")", "'=HYPERLINK(\"bad\")")]
+    [InlineData("=HYPERLINK(\"bad\")", "\"'=HYPERLINK(\"\"bad\"\")\"")]
     [InlineData("@cell", "'@cell")]
     [InlineData("+RUN", "'+RUN")]
     [InlineData("-RUN", "'-RUN")]
@@ -84,8 +84,16 @@ public sealed class EngineeringClipboardTextTests
             ["Name"], [], true, out none, out _));
         Assert.Empty(none);
         Assert.True(EngineeringClipboardText.TryBuild(
-            ["Name"], [Row(null)], true, out var text, out _));
+            ["Name"], [Row((string?)null)], true, out var text, out _));
         Assert.Equal("Name\r\n", text);
+
+        // In C# a params-array argument Row(null) passes a null row rather
+        // than one empty cell. The formatter must fail closed even then.
+        Assert.False(EngineeringClipboardText.TryBuild(
+            ["Name"], new IReadOnlyList<string?>[] { null! }, true,
+            out none, out var invalidRow));
+        Assert.Empty(none);
+        Assert.Contains("unavailable row", invalidRow);
     }
 
     [Fact]
