@@ -1,9 +1,9 @@
 {
-    "version":  "1.6.45",
-    "tag":  "v1.6.45",
+    "version":  "1.6.46",
+    "tag":  "v1.6.46",
     "channel":  "stable",
-    "publishedAtUtc":  "2026-11-21T13:28:49.9243628Z",
-    "sourceCommit":  "f5c07c3e5d7d918a14c57fc3fa54bc9a52b373ff",
+    "publishedAtUtc":  "2026-11-21T17:23:33.4182539Z",
+    "sourceCommit":  "4908bea8654eaf7ca524e02ef1925f424f4eb9cb",
     "engine":  {
                    "repository":  "masarray/ARIEC61850",
                    "commit":  "f75e323e9f8443aa20e0a3818a1d5d77255b2c0f"
@@ -17,14 +17,14 @@
     "installer":  {
                       "name":  "ARSAS-Windows-x64-Setup.exe",
                       "url":  "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe",
-                      "sha256":  "277f72947120098bed7f523dfe09e9d14260159e34c51908082671f7e81f19c4",
-                      "sizeBytes":  57842360
+                      "sha256":  "f1ae762b8988c0b5ec3a8e8f149882a850ff7ed70d69f474bb10c4acdd6db354",
+                      "sizeBytes":  57841363
                   },
     "portable":  {
                      "name":  "ARSAS-Windows-x64-Portable.exe",
                      "url":  "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.exe",
-                     "sha256":  "ebe9e6a73a283e4d77b8f8713401905d337dba9f7bb1552ebbd37bae029c5b77",
-                     "sizeBytes":  79389799
+                     "sha256":  "44a70345d0da32fc1f6c51c879279133f30ece71304e1d01808ab64a3fd92454",
+                     "sizeBytes":  79389854
                  },
     "checksums":  {
                       "name":  "ARSAS-Windows-x64-SHA256SUMS.txt",
@@ -34,11 +34,11 @@
     "supplyChain":  {
                         "sbomName":  "ARSAS-Windows-x64-SBOM.spdx.json",
                         "sbomUrl":  "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SBOM.spdx.json",
-                        "sbomSha256":  "1fafc1c362782e176efd5bae3bb41d18456b1008d0caa1435e0f681a29222ae8",
+                        "sbomSha256":  "792fa8b5f649b5e350d42e364d01749fef1fad2c12aca996558227d404858607",
                         "sbomSizeBytes":  386050,
                         "provenanceName":  "ARSAS-Windows-x64-PROVENANCE.json",
                         "provenanceUrl":  "https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-PROVENANCE.json",
-                        "provenanceSha256":  "f032274712ae959808dfdf94a8151ed72e53ca8c533e73a3acb0cdd0ee1b5d85",
+                        "provenanceSha256":  "1d5ef2520b5b2fe0c27f90612594faa25c8ab12e7c470dd50cb8beba964396e2",
                         "attestationRepository":  "https://github.com/masarray/arsas/attestations",
                         "attestationWorkflow":  "release-windows.yml"
                     }
