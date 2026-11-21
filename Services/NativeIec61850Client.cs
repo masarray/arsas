@@ -1169,6 +1169,19 @@ public sealed partial class NativeIec61850Client : IIec61850Client, IIec61850Con
                 IedBrowserLiveValues.CanonicalReference(reference),
                 StringComparison.Ordinal))
             projected.VerifiedStringWireKind = raw.Kind;
+        // Owner is an MMS OCTET STRING, not a guessed client name or an
+        // arbitrary eight-character text value. Attach type proof only when
+        // the exact requested leaf carries its own raw wire bytes.
+        if (raw.Kind == ArMms.MmsDataKind.OctetString &&
+            reference.EndsWith(".Owner", StringComparison.Ordinal) &&
+            raw.RawValue.Count is > 0 and <= 64 &&
+            projected.Value is string ownerHex &&
+            string.Equals(ownerHex, Convert.ToHexString(raw.RawValue.ToArray()),
+                StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(projected.SourceReference, reference, StringComparison.Ordinal) &&
+            string.Equals(IedBrowserLiveValues.CanonicalReference(projected.ReadReference),
+                IedBrowserLiveValues.CanonicalReference(reference), StringComparison.Ordinal))
+            projected.VerifiedStringWireKind = ArMms.MmsDataKind.OctetString;
         if ((reference.EndsWith(".q", StringComparison.Ordinal) ||
              reference.EndsWith("$q", StringComparison.Ordinal)) &&
             raw.Kind == ArMms.MmsDataKind.BitString &&
