@@ -29,6 +29,14 @@ public sealed class EngineeringGridClipboardBehaviorTests
             var menu = Assert.IsType<ContextMenu>(grid.ContextMenu);
             Assert.Equal(6, menu.Items.Count); // 5 copy actions plus separator
             Assert.Equal(DataGridClipboardCopyMode.IncludeHeader, grid.ClipboardCopyMode);
+            // The base ARSAS themes draw selected cells transparent; the
+            // opt-in overlay must supply visible selection background.
+            Assert.NotNull(grid.CellStyle);
+            var trigger = Assert.Single(grid.CellStyle.Triggers.OfType<Trigger>(),
+                t => t.Property == DataGridCell.IsSelectedProperty &&
+                     Equals(t.Value, true));
+            Assert.Contains(trigger.Setters.OfType<Setter>(),
+                setter => setter.Property == Control.BackgroundProperty);
 
             grid.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, grid));
             Assert.Same(menu, grid.ContextMenu);
@@ -59,9 +67,21 @@ public sealed class EngineeringGridClipboardBehaviorTests
             other.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, other));
             Assert.Same(custom, other.ContextMenu);
 
-            var command = new DataGrid { IsReadOnly = false };
+            var command = new DataGrid
+            {
+                Name = "EquipmentCommandGrid",
+                IsReadOnly = false,
+                SelectionMode = DataGridSelectionMode.Single,
+                SelectionUnit = DataGridSelectionUnit.FullRow
+            };
             command.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, command));
-            Assert.Null(command.ContextMenu);
+            Assert.NotNull(command.ContextMenu);
+            Assert.Equal(6, command.ContextMenu.Items.Count);
+            Assert.Equal(DataGridSelectionMode.Single, command.SelectionMode);
+            Assert.Equal(DataGridSelectionUnit.FullRow, command.SelectionUnit);
+            Assert.Null(command.CellStyle);
+            command.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, command));
+            Assert.Equal(6, command.ContextMenu.Items.Count);
 
             var browser = new ListView
             {
@@ -85,7 +105,8 @@ public sealed class EngineeringGridClipboardBehaviorTests
         var grids = doc.Descendants(wpf + "DataGrid").ToArray();
         foreach (var name in new[]
         {
-            "ExplorerLiveValuesGrid", "GlobalLiveGrid", "EventDetailsGrid"
+            "ExplorerLiveValuesGrid", "GlobalLiveGrid", "EventLogGrid",
+            "EventDetailsGrid"
         })
         {
             var grid = Assert.Single(grids, g =>
@@ -96,7 +117,7 @@ public sealed class EngineeringGridClipboardBehaviorTests
 
         foreach (var name in new[]
         {
-            "EquipmentCommandGrid", "EventLogGrid", "IedBrowserTreeGrid",
+            "EquipmentCommandGrid", "IedBrowserTreeGrid",
             "IedBrowserFilesGrid"
         })
         {
@@ -123,6 +144,59 @@ public sealed class EngineeringGridClipboardBehaviorTests
                 "{Binding SnapshotChannels}"), col =>
             Assert.Equal("True", (string?)col.Attribute(
                 ux + "GridClipboardBehavior.ExcelCells")));
+    }
+
+    [Fact]
+    public void EventInspectorDoesNotReflowDuringMouseRangeSelection()
+    {
+        var xaml = File.ReadAllText(FindSource("MainWindow.xaml"));
+        var code = File.ReadAllText(FindSource("MainWindow.EventDetails.cs"));
+        Assert.Contains("EventLogGrid_PreviewMouseLeftButtonUp", xaml);
+        Assert.Contains("EventLogGrid_CurrentCellChanged", xaml);
+        Assert.Contains("Mouse.LeftButton == MouseButtonState.Released", code);
+        Assert.Contains("DispatcherPriority.Background", code);
+        Assert.Contains("EventLogGrid.CurrentCell.Item as Iec61850EventEntry", code);
+    }
+
+    [Fact]
+    public void EveryVisualTemplateColumnHasCopyBindingExceptPureCommandButtons()
+    {
+        XNamespace p = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        var files = new[]
+        {
+            "MainWindow.xaml", "BrowserBatchWriteWindow.xaml",
+            "FaultRecordWindow.xaml", "RcbExportFilterWindow.xaml",
+            "SignalSelectionWizardWindow.xaml", "IoListTestingWindow.xaml",
+            "Views/GooseSubscriberView.xaml",
+            "Views/GooseSubscriberLiteView.xaml",
+            "Views/SmvInlineViewer.xaml"
+        };
+        foreach (var file in files)
+        {
+            var doc = XDocument.Load(FindSource(file));
+            foreach (var column in doc.Descendants(p + "DataGridTemplateColumn"))
+            {
+                if (file == "MainWindow.xaml" &&
+                    (string?)column.Attribute("Header") == "Control")
+                    continue; // Live Open/Close etc. are UI actions, not values.
+                Assert.True(column.Attribute("ClipboardContentBinding") is not null ||
+                    column.Element(p + "DataGridTemplateColumn.ClipboardContentBinding") is not null,
+                    file + ": missing ClipboardContentBinding for template " +
+                    ((string?)column.Attribute("Header") ?? "(header template)"));
+            }
+        }
+    }
+
+    [Fact]
+    public void AllWritableGridsRelyOnTheSingleGlobalInstaller()
+    {
+        var code = File.ReadAllText(FindSource("GridClipboardBehavior.cs"));
+        Assert.DoesNotContain("!grid.IsReadOnly", code);
+        Assert.Contains("typeof(DataGrid)", code);
+        Assert.Contains("FrameworkElement.LoadedEvent", code);
+        Assert.Contains("GridClipboardBehavior.Install();",
+            File.ReadAllText(FindSource("App.xaml.cs")));
+        Assert.Contains("DataGridColumn.OnCopyingCellClipboardContent", code);
     }
 
     private static string FindSource(string path)
