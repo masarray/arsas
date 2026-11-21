@@ -120,6 +120,15 @@ def main() -> int:
         item = latest.get(key)
         if not isinstance(item, dict) or item.get("url") != url or not re.fullmatch(r"[0-9a-fA-F]{64}", str(item.get("sha256", ""))): errors.append(f"latest.json {key} evidence is invalid")
     if not isinstance(latest.get("checksums"), dict) or latest["checksums"].get("url") != CHECKSUMS: errors.append("latest.json checksum URL is invalid")
+    # Rendered download actions must be bound to the exact version/bytes advertised.
+    # /releases/latest is intentionally retained in updater metadata, not HTML.
+    release_tag = str(latest.get("tag", ""))
+    pinned_root = f"https://github.com/masarray/arsas/releases/download/{release_tag}"
+    installer_asset = str(latest.get("installer", {}).get("name", ""))
+    portable_asset = str(latest.get("portable", {}).get("name", ""))
+    pinned_installer = f"{pinned_root}/{installer_asset}"
+    pinned_portable = f"{pinned_root}/{portable_asset}"
+    pinned_checksums = f"{pinned_root}/{latest.get('checksums', {}).get('name', '')}"
 
     entry_map = {str(item.get("path") or "index.html"): item for item in entries if isinstance(item, dict)}
     rendered: dict[str, Audit] = {}
@@ -248,6 +257,17 @@ def main() -> int:
         release_text = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
         for value in (stable_source, str(latest.get("tag", "")), "ARSAS-Windows-x64-SBOM.spdx.json", "ARSAS-Windows-x64-PROVENANCE.json", "reproducible build"):
             if value not in release_text: errors.append(f"{page}: missing rendered exact-release trust value {value}")
+    for page in ("index.html", "id.html", "download.html", "unduh.html"):
+        rendered_download = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
+        if f'href="{pinned_installer}"' not in rendered_download:
+            errors.append(f"{page}: installer button is not tied to the exact stable release tag")
+        if f"v{latest.get('version')}" not in rendered_download:
+            errors.append(f"{page}: visible download version is missing")
+    for page in ("download.html", "unduh.html"):
+        rendered_download = (site / page).read_text(encoding="utf-8") if (site / page).is_file() else ""
+        for value in (f'href="{pinned_portable}"', f'href="{pinned_checksums}"', installer_asset, portable_asset):
+            if value not in rendered_download:
+                errors.append(f"{page}: version-pinned download or verified asset name is missing: {value}")
     features_text = (site / "features.html").read_text(encoding="utf-8") if (site / "features.html").is_file() else ""
     for value in ("Six capability domains", "Discover &amp; Model", "Monitor &amp; Events", "Inspect Communications", "Files &amp; Disturbance", "Evidence &amp; Engineering"):
         if value not in features_text: errors.append(f"features.html: missing R5 capability-domain contract value {value}")
@@ -438,7 +458,7 @@ def main() -> int:
     combined = "\n".join((site / name).read_text(encoding="utf-8") for name in expected_pages if (site / name).is_file())
     for value in ('href="http://', 'src="http://', "raw.githubusercontent.com/masarray/arsas/main/Assets/screenshot", '<meta name="keywords"', "fonts.googleapis.com", "fonts.gstatic.com", "rsms.me"):
         if value in combined: errors.append(f"forbidden public value remains: {value}")
-    for value in (INSTALLER, PORTABLE, CHECKSUMS, "Ari Sulistiono", "GPL-3.0-or-later", "learning-center.html", "what-is-iec61850.html", "connect-ied-ip-arsas.html", "io-list-fat-evidence.html", ".arsas"):
+    for value in (pinned_installer, pinned_portable, pinned_checksums, "Ari Sulistiono", "GPL-3.0-or-later", "learning-center.html", "what-is-iec61850.html", "connect-ied-ip-arsas.html", "io-list-fat-evidence.html", ".arsas"):
         if value not in combined: errors.append(f"public site missing trust value {value}")
 
     errors = list(dict.fromkeys(errors))

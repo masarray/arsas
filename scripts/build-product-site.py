@@ -202,6 +202,16 @@ def token_values(
     assert isinstance(installer, dict) and isinstance(portable, dict)
     assert isinstance(signing, dict) and isinstance(screenshot, dict)
     published_iso, published_en, published_id = release_dates(str(evidence["publishedAtUtc"]))
+    # Pin the actual public download to the immutable tagged release, not
+    # /releases/latest/download, which could change before this site's evidence.
+    tag = str(evidence["tag"])
+    if not re.fullmatch(r"v\\d+\\.\\d+\\.\\d+", tag):
+        raise SystemExit("Cannot render downloads for an invalid stable release tag")
+    base = f"https://github.com/masarray/arsas/releases/download/{tag}"
+    files = (installer, portable, evidence["checksums"])
+    for item in files:
+        if not isinstance(item, dict) or not re.fullmatch(r"ARSAS-Windows-x64-[A-Za-z0-9.-]+", str(item.get("name", ""))):
+            raise SystemExit("Cannot render downloads for an unrecognized release asset name")
     return {
         "ARSAS_VERSION": version,
         "PRODUCT_NAME": str(product["name"]),
@@ -211,9 +221,11 @@ def token_values(
         "AUTHOR_NAME": str(author["name"]),
         "AUTHOR_LINKEDIN": str(author["linkedin"]),
         "AUTHOR_GITHUB": str(author["github"]),
-        "INSTALLER_URL": str(downloads["installer"]),
-        "PORTABLE_URL": str(downloads["portable"]),
-        "CHECKSUMS_URL": str(downloads["checksums"]),
+        "INSTALLER_URL": f'{base}/{installer["name"]}',
+        "PORTABLE_URL": f'{base}/{portable["name"]}',
+        "CHECKSUMS_URL": f'{base}/{evidence["checksums"]["name"]}',
+        "INSTALLER_FILE": str(installer["name"]),
+        "PORTABLE_FILE": str(portable["name"]),
         "STABLE_VERSION": str(evidence["version"]),
         "STABLE_TAG": str(evidence["tag"]),
         "STABLE_SOURCE_COMMIT": str(evidence["sourceCommit"]),
