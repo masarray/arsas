@@ -169,6 +169,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // Event Log is in a deferred tab; set up shared Copy before its first
         // right-click, independently of Loaded event ordering.
         GridClipboardBehavior.Attach(EventLogGrid);
+        // IED Browser's details are a virtualized ListView, not a DataGrid.
+        // Ensure its exact-field Copy menu exists before the lazy tab loads.
+        GridClipboardBehavior.AttachIedBrowserDetails(IedBrowserDetailList);
         // Expand onto wide desktops, but never start off-screen or force
         // maximization. This is initial sizing only; user resizing wins.
         var workArea = SystemParameters.WorkArea;

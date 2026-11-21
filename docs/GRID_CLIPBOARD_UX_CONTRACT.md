@@ -34,9 +34,16 @@ background synchronization, or window ownership changes.
   does not open a previously closed drawer or shift the selection viewport.
   Keyboard navigation and Escape remain supported.
 - The IED Browser property viewer is a custom `ListView`, not DataGrid.
-  Its existing Copy Value / Name+Value / Visible Properties and Owner
-  information actions remain unchanged; Browser selection still governs
-  exact-target Read / Write / Control operations.
+  Its existing copy adapter now attaches before the lazy tab's first Loaded
+  event (and remains idempotent). A right-click pins the clicked current row
+  by reference, regardless of `SelectedItem`; stale rows after model refresh
+  cannot be copied. The context menu offers Copy value, Copy field / object
+  name, Copy name and value, and Copy visible properties. Direct RCB object
+  rows copy their displayed RCB name as the primary value, whereas Report ID
+  and Control Block reference properties copy their unmodified displayed
+  values. Menu key / Shift+F10 and Ctrl+C still honor keyboard selection.
+  Owner information remains an explicit action; Browser selection continues
+  to govern exact-target Read / Write / Control operations.
 
 ## Right-click and keyboard
 - Copy cell value (actual clicked cell)
@@ -90,6 +97,11 @@ provenance overlays, RCB takeover, PurgeBuf or protocol mutation.
   Ctrl+C to Notepad/Excel; blue selection remains legible.
 - Command Dock: right-click Copy Cell/Selected Rows/Table, then verify the
   same signal, flags and controls are unchanged.
+- IED Browser detail pane: right-click Report ID / Control Block reference /
+  RCB Name; copy exact field value or field name without changing the focused
+  object. Right-click outside a row must not copy a stale selected field.
+  Reopen after model refresh and verify the new row identity is authoritative.
+  Copy visible properties must remain bounded and observational.
 - Real Windows mouse interaction is a separate QA check; a successful WPF
   unit test is not proof that every desktop theme/driver was exercised.
 - R7/R10 physical IEC interoperability remains an independent qualification
