@@ -126,8 +126,11 @@ public sealed partial class Iec61850MonitorRuntime
             throw new InvalidOperationException(
                 "Manual PurgeBuf requires one exact current live BRCB, an idle association and stopped ARSAS monitoring.");
 
+        // C# out parameters must not escape into a lambda, and the frozen
+        // identity is also the authority for this admission decision.
+        var exact = exactRcbReference;
         if (GetActiveBrowserRcbReferences(deviceId).Any(active =>
-                BrowserPurgeBufPolicy.SameExactBrcbReference(active, exactRcbReference)))
+                BrowserPurgeBufPolicy.SameExactBrcbReference(active, exact)))
             throw new InvalidOperationException(
                 "PurgeBuf is blocked while this RCB has an ARSAS reporting subscription.");
 
