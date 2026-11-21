@@ -1864,7 +1864,6 @@
                             <Border Grid.Column="1" BorderBrush="#E3E8EF" BorderThickness="0,0,0,1" Padding="7,3">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding Value}" FontSize="11.2"
-                                               ToolTip="{Binding ObservationTooltip}"
                                                Foreground="#24364B" TextTrimming="CharacterEllipsis"/>
                                     <Path Data="{StaticResource InvalidQualityWarningGeometry}" Width="12" Height="12"
                                               Stretch="Uniform" Fill="#B97800" Margin="5,0,0,0"
