@@ -181,6 +181,26 @@ public static class IedBrowserRcbOwnerDisplay
             ? DisplayHex(hex)
             : string.Empty;
 
+    /// <summary>
+    /// Describe the decoded address without inferring the claiming program or
+    /// user. A device that reports its own endpoint as Owner is ambiguous:
+    /// association ownership requires a separate, session-bound verification.
+    /// </summary>
+    public static string ExplainIdentity(string? rawOwner, string? iedEndpoint)
+    {
+        if (!TryCanonicalHex(rawOwner, out var hex))
+            return "Owner was not returned as a verified OCTET STRING.";
+        if (!MmsRcbOwnerIdentity.TryDecodeIpAddress(hex, out var ownerIp) ||
+            ownerIp is null)
+            return "IED-reported Owner bytes are not a standard IP address; client application and process are unknown.";
+
+        var reported = ownerIp.ToString();
+        if (System.Net.IPAddress.TryParse(iedEndpoint, out var deviceIp) &&
+            ownerIp.Equals(deviceIp))
+            return $"IED-reported Owner address {reported} matches this IED endpoint. This does not identify the client application or prove who reserved the RCB.";
+        return $"IED-reported Owner address: {reported}. The remote application or user cannot be identified from Owner octets alone; verify the active MMS association.";
+    }
+
     private static string DisplayHex(string hex)
     {
         // IEC Owner may contain a 4-byte IPv4 or 16-byte IPv6 address.
