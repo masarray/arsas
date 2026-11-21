@@ -32,7 +32,7 @@
                   VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                   EnableRowVirtualization="True">
             <DataGrid.Columns>
-                <DataGridTemplateColumn Header=" " Width="36">
+                <DataGridTemplateColumn Header=" " Width="36" ClipboardContentBinding="{Binding Selected}">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <CheckBox IsChecked="{Binding Selected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -44,7 +44,7 @@
                 <DataGridTextColumn Header="Name" Binding="{Binding DisplayName}"
                                     Width="2.15*" MinWidth="150" IsReadOnly="True"/>
                 <DataGridTextColumn Header="FC" Binding="{Binding Fc}" Width="43" IsReadOnly="True"/>
-                <DataGridTemplateColumn Header="Value" Width="2*" MinWidth="155">
+                <DataGridTemplateColumn Header="Value" Width="2*" MinWidth="155" ClipboardContentBinding="{Binding NewValue}">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <Grid>

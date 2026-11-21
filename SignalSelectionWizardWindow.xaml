@@ -411,7 +411,7 @@
                     </Style>
                 </DataGrid.RowStyle>
                 <DataGrid.Columns>
-                    <DataGridTemplateColumn Width="58" CanUserSort="False">
+                    <DataGridTemplateColumn Width="58" CanUserSort="False" ClipboardContentBinding="{Binding IsSelected}">
                         <DataGridTemplateColumn.Header>
                             <Grid Height="74">
                                 <Grid.RowDefinitions>

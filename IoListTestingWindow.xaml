@@ -366,7 +366,7 @@
                               ScrollViewer.HorizontalScrollBarVisibility="Auto"
                               ScrollViewer.VerticalScrollBarVisibility="Auto">
                         <DataGrid.Columns>
-                            <DataGridTemplateColumn Header="TEST" Width="46" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                            <DataGridTemplateColumn Header="TEST" ClipboardContentBinding="{Binding TestEnabled}" Width="46" HeaderStyle="{StaticResource CenteredFatGridHeader}">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <CheckBox IsChecked="{Binding TestEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -375,7 +375,7 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="SIGNAL" Width="1.35*" MinWidth="170" MaxWidth="260">
+                            <DataGridTemplateColumn Header="SIGNAL" ClipboardContentBinding="{Binding SignalName}" Width="1.35*" MinWidth="170" MaxWidth="260">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding SignalName}" Style="{StaticResource FatGridText}"
@@ -383,7 +383,7 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="IEC REFERENCE" Width="2.25*" MinWidth="290" MaxWidth="480">
+                            <DataGridTemplateColumn Header="IEC REFERENCE" ClipboardContentBinding="{Binding ObjectReference}" Width="2.25*" MinWidth="290" MaxWidth="480">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding ObjectReference}" Style="{StaticResource FatGridText}"
@@ -392,7 +392,7 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="LIVE" Width="76" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                            <DataGridTemplateColumn Header="LIVE" ClipboardContentBinding="{Binding LiveBindingText}" Width="76" HeaderStyle="{StaticResource CenteredFatGridHeader}">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock x:Name="LiveText" Text="{Binding LiveBindingText}"
@@ -407,7 +407,7 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="VALUE" Width="72" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                            <DataGridTemplateColumn Header="VALUE" ClipboardContentBinding="{Binding Runtime.CurrentValue}" Width="72" HeaderStyle="{StaticResource CenteredFatGridHeader}">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Runtime.CurrentValue}" Style="{StaticResource FatGridText}"
@@ -415,7 +415,7 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="QUALITY" Width="82" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                            <DataGridTemplateColumn Header="QUALITY" ClipboardContentBinding="{Binding Runtime.CurrentQuality}" Width="82" HeaderStyle="{StaticResource CenteredFatGridHeader}">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Runtime.CurrentQuality}" Style="{StaticResource FatGridText}"
@@ -423,7 +423,7 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="ACQUISITION" Width="122" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                            <DataGridTemplateColumn Header="ACQUISITION" ClipboardContentBinding="{Binding Runtime.CurrentSource}" Width="122" HeaderStyle="{StaticResource CenteredFatGridHeader}">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Runtime.CurrentSource}" Style="{StaticResource FatGridText}"
@@ -432,7 +432,7 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="ON · RELAY TIME" Width="154"
+                            <DataGridTemplateColumn Header="ON · RELAY TIME" ClipboardContentBinding="{Binding Runtime.OnRelayTimestampText}" Width="154"
                                                     HeaderStyle="{StaticResource CenteredFatGridHeader}">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
@@ -443,7 +443,7 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="OFF · RELAY TIME" Width="154"
+                            <DataGridTemplateColumn Header="OFF · RELAY TIME" ClipboardContentBinding="{Binding Runtime.OffRelayTimestampText}" Width="154"
                                                     HeaderStyle="{StaticResource CenteredFatGridHeader}">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
@@ -454,7 +454,7 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="STATUS" Width="108" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                            <DataGridTemplateColumn Header="STATUS" ClipboardContentBinding="{Binding Runtime.StateText}" Width="108" HeaderStyle="{StaticResource CenteredFatGridHeader}">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Runtime.StateText}" Style="{StaticResource FatGridText}"
@@ -463,7 +463,7 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="RESULT" Width="86" HeaderStyle="{StaticResource CenteredFatGridHeader}">
+                            <DataGridTemplateColumn Header="RESULT" ClipboardContentBinding="{Binding Runtime.StatusReason}" Width="86" HeaderStyle="{StaticResource CenteredFatGridHeader}">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock x:Name="FinalResultText" Text="—"

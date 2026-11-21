@@ -253,7 +253,7 @@
                           RowHeaderWidth="0" AlternationCount="1" SnapsToDevicePixels="True"
                           SelectionChanged="FaultRecordsGrid_SelectionChanged">
                     <DataGrid.Columns>
-                        <DataGridTemplateColumn Header="Get" Width="48">
+                        <DataGridTemplateColumn Header="Get" Width="48" ClipboardContentBinding="{Binding IsSelected}">
                             <!-- Restrict the zero-inset alignment to this checkbox column.
                                  Other text headers/cells retain the existing 9px typography inset. -->
                             <DataGridTemplateColumn.HeaderStyle>
@@ -290,7 +290,7 @@
                                             ElementStyle="{StaticResource GridTextStyle}" IsReadOnly="True"/>
                         <DataGridTextColumn Header="Completeness" Binding="{Binding Completeness, Mode=OneWay}" Width="135"
                                             ElementStyle="{StaticResource GridTextStyle}" IsReadOnly="True"/>
-                        <DataGridTemplateColumn Header="Status" Width="126">
+                        <DataGridTemplateColumn Header="Status" Width="126" ClipboardContentBinding="{Binding Status}">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Grid VerticalAlignment="Center">

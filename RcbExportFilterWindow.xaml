@@ -131,7 +131,7 @@
                       CellStyle="{StaticResource RcbDataGridCell}" RowStyle="{StaticResource RcbDataGridRow}"
                       ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <DataGrid.Columns>
-                    <DataGridTemplateColumn Header="SELECT" Width="70">
+                    <DataGridTemplateColumn Header="SELECT" Width="70" ClipboardContentBinding="{Binding IsSelected}">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Grid VerticalAlignment="Stretch">
@@ -144,7 +144,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTemplateColumn Header="REPORT CONTROL BLOCK" Width="2.2*">
+                    <DataGridTemplateColumn Header="REPORT CONTROL BLOCK" Width="2.2*" ClipboardContentBinding="{Binding Reference}">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <StackPanel Margin="12,4,8,3" VerticalAlignment="Center" ToolTip="{Binding Reference}">
@@ -157,7 +157,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTemplateColumn Header="TYPE" Width="1.05*">
+                    <DataGridTemplateColumn Header="TYPE" Width="1.05*" ClipboardContentBinding="{Binding Type}">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <TextBlock Style="{StaticResource RcbCellText}" Text="{Binding Type}"/>
@@ -165,7 +165,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTemplateColumn Header="DATASET" Width="2.15*">
+                    <DataGridTemplateColumn Header="DATASET" Width="2.15*" ClipboardContentBinding="{Binding DataSetName}">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <TextBlock Style="{StaticResource RcbCellText}" Text="{Binding DataSetName}"
@@ -175,7 +175,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTemplateColumn Header="MEMBERS" Width="98">
+                    <DataGridTemplateColumn Header="MEMBERS" Width="98" ClipboardContentBinding="{Binding MemberCountText}">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <TextBlock Style="{StaticResource RcbCellText}" Text="{Binding MemberCountText}"/>
@@ -183,7 +183,7 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTemplateColumn Header="STATUS" Width="82">
+                    <DataGridTemplateColumn Header="STATUS" Width="82" ClipboardContentBinding="{Binding Reason}">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Grid Margin="12,0,8,0" VerticalAlignment="Center" ToolTip="{Binding Reason}">
