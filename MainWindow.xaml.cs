@@ -2979,7 +2979,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             Events.AddRange(eventBatch);
             Events.TrimStart(10000);
             var latest = eventBatch[^1];
-            LastStatusText = $"EVENT {latest.DeviceName} / {latest.SignalName} = {latest.EventValue}";
+            LastStatusText = latest.IsControlEvent
+                ? $"{latest.DeviceName} / {latest.SignalName}: {latest.ControlOutcome}"
+                : $"EVENT {latest.DeviceName} / {latest.SignalName} = {latest.EventValue}";
         }
 
         var diagnosticBatch = new List<DiagnosticEntry>(128);
