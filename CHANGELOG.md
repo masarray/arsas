@@ -4,6 +4,15 @@ Notable public changes to ARSAS are recorded here. Application releases must ide
 
 ## Unreleased
 
+## 1.6.45 — 2026-11-21 — Public Stable (Windows x64)
+
+- **Event Logs:** Excel-like extended **full-row** selection with drag and Shift+click, clear selected-row feedback, right-click Copy, Ctrl+C, and bounded selected-row TSV export. Prevent event-detail drawer reflow from disrupting multi-row selection and context menus.
+- **IED Browser:** right-click **Copy value**, **Copy field / object name**, **Copy name and value**, or **Copy visible properties** for Report ID, RCB name, Control Block reference, DataSet and other observed fields. Copy targets the exact clicked visible row, not stale selection or recycled content. Compact RCB object rows copy the displayed name, not a status token.
+- **Universal engineering grid Copy:** preserve working Value Viewer, Device Explorer, Command Grid, and editable grid clipboard behavior added in #782; existing Read/Write/Control and engineering object selection semantics remain unchanged.
+- **Validation:** Windows full application Build/CTest/packaging CI and user-provided on-workstation mouse/keyboard acceptance for #783 and #784. The existing ARIEC61850 and ArdIrec engine locks are unchanged; no additional claim of physical multi-vendor R7/R10 interoperability, IEC conformance, lossless SOE, or commercial Authenticode signing.
+
+[Event Log PR #783](https://github.com/masarray/arsas/pull/783) · [IED Browser PR #784](https://github.com/masarray/arsas/pull/784) · [Release channel](https://github.com/masarray/arsas/releases)
+
 ## 1.6.44 — 2026-11-21 — Public Stable (Windows x64)
 
 [Published release](https://github.com/masarray/arsas/releases/tag/v1.6.44) · [Field-scoped notes](docs/RELEASE_v1.6.44.md) · source commit `e5dda6a2e0ffc4e4581cdab8d917bea9861a3b8c` · pinned ARIEC61850 engine `f75e323e9f8443aa20e0a3818a1d5d77255b2c0f`.
