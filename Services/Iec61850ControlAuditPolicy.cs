@@ -20,8 +20,15 @@ public static class Iec61850ControlAuditPolicy
         if (result.WireSteps.Any(step => !step.RequestAccepted) ||
             result.CommandTerminationReceived && !result.PositiveTermination)
             return "Control rejected";
-        if (result.FeedbackConfirmed && result.CommandTerminationReceived &&
-            result.PositiveTermination && result.IsSuccess)
+        // Enhanced security requires positive CommandTermination for a
+        // confirmed command. Normal-security Direct/SBO has no required
+        // termination; independently confirmed process feedback and accepted
+        // service remain valid confirmation on that model.
+        var enhanced = result.ControlModelText.Contains(
+            "enhanced", StringComparison.OrdinalIgnoreCase);
+        if (result.IsSuccess && result.ServiceAccepted && result.FeedbackConfirmed &&
+            (!enhanced ||
+             result.CommandTerminationReceived && result.PositiveTermination))
             return "Control confirmed";
         if (result.ServiceAccepted && result.IsSuccess)
             return "Control accepted"; // physical response not independently proven
