@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "repository": "masarray/ARIEC61850",
   "ref": "main",
-  "commit": "f75e323e9f8443aa20e0a3818a1d5d77255b2c0f",
-  "sourcePullRequest": 192,
-  "purpose": "EXPLICIT DRAFT TRIAL ONLY: code-green engine staging #192 typed same-object control semantics. Original P0-C #184 pin retained below; field control and release physical acceptance NOT asserted.",
+  "commit": "24077e48e393ce3dc2cd1409db6e96f27aa1e368",
+  "sourcePullRequest": 203,
+  "purpose": "SG7 P9 integration candidate: reviewed fast-forward descendant of f75e323 (#198/#199/#200/#203). Prior exact ARSAS a3dca3+engine 24077e48 P9 Windows field trial demonstrated 77/77 Report-backed values and 4/4 routed RCBs (129 frames), NOT SOE continuity or new combined-main physical acceptance. Do not publish stable until current-head Windows qualification and user field retest; preserve typed-control ancestry and zero cyclic MMS process polling.",
   "previousTrialPin": {
     "commit": "4467124775d8d9d76f3db194f9fbfd97144767a8",
     "sourcePullRequest": 134,
