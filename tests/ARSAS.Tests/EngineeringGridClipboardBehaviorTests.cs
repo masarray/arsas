@@ -101,6 +101,87 @@ public sealed class EngineeringGridClipboardBehaviorTests
     }
 
     [Fact]
+    public void BrowserDetailCopyMenuIsReadyBeforeLoadedAndPreservesExistingActions()
+    {
+        RunSta(() =>
+        {
+            GridClipboardBehavior.Install();
+            var existing = new ContextMenu
+            {
+                Items = { new MenuItem { Header = "Inspect metadata" } }
+            };
+            var list = new ListView
+            {
+                Name = "IedBrowserDetailList",
+                SelectionMode = SelectionMode.Single,
+                ContextMenu = existing
+            };
+            GridClipboardBehavior.AttachIedBrowserDetails(list);
+            Assert.Same(existing, list.ContextMenu);
+            Assert.Equal("Inspect metadata",
+                Assert.IsType<MenuItem>(existing.Items[0]).Header);
+            Assert.Contains(existing.Items.OfType<MenuItem>(),
+                item => (string?)item.Header == "Copy value");
+            Assert.Contains(existing.Items.OfType<MenuItem>(),
+                item => (string?)item.Header == "Copy field / object name");
+            Assert.Contains(existing.Items.OfType<MenuItem>(),
+                item => (string?)item.Header == "Copy name and value");
+            Assert.Contains(existing.Items.OfType<MenuItem>(),
+                item => (string?)item.Header == "Copy visible properties");
+
+            var count = existing.Items.Count;
+            list.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, list));
+            GridClipboardBehavior.AttachIedBrowserDetails(list);
+            Assert.Equal(count, existing.Items.Count);
+            Assert.Equal(SelectionMode.Single, list.SelectionMode);
+        });
+    }
+
+    [Fact]
+    public void BrowserCopiesExactClickedFieldNotStaleSelectedOrEqualLookingRow()
+    {
+        RunSta(() =>
+        {
+            var list = new ListView { Name = "IedBrowserDetailList" };
+            var reportId = new IedBrowserDetailRow("Property", "Report ID", "RPT_A");
+            var reference = new IedBrowserDetailRow(
+                "Property", "Control Block reference", "IED1LD0/LLN0.BR.brcbA");
+            var stale = new IedBrowserDetailRow("Property", "Report ID", "RPT_A");
+            list.Items.Add(reportId);
+            list.Items.Add(reference);
+            list.SelectedItem = reference;
+
+            Assert.Same(reportId, GridClipboardBehavior.BrowserExactRow(list, reportId));
+            Assert.Null(GridClipboardBehavior.BrowserExactRow(list, stale));
+            Assert.Equal("RPT_A", GridClipboardBehavior.BrowserPrimaryCopyValue(reportId));
+            Assert.Equal("IED1LD0/LLN0.BR.brcbA",
+                GridClipboardBehavior.BrowserPrimaryCopyValue(reference));
+            Assert.Equal("Control Block reference", reference.Name);
+
+            var rcbNode = new IedBrowserTreeRow("rcb/1", "brcbA", "RCB", 1);
+            var rcbItem = new IedBrowserDetailRow("Object", "brcbA", "In use")
+            {
+                NavigateTo = rcbNode
+            };
+            Assert.Equal("brcbA", GridClipboardBehavior.BrowserPrimaryCopyValue(rcbItem));
+            Assert.Equal("In use", rcbItem.Value); // no model mutation
+            Assert.Null(GridClipboardBehavior.BrowserExactRow(list, rcbItem));
+        });
+    }
+
+    [Fact]
+    public void BrowserCopyIsWiredInMainWindowWithoutChangingReadWriteSelection()
+    {
+        var owner = File.ReadAllText(FindSource("MainWindow.xaml.cs"));
+        var behavior = File.ReadAllText(FindSource("GridClipboardBehavior.cs"));
+        Assert.Contains("GridClipboardBehavior.AttachIedBrowserDetails(IedBrowserDetailList);", owner);
+        Assert.Contains("state.HitRow = Ancestor<ListViewItem>", behavior);
+        Assert.Contains("BrowserExactRow(list, state.MenuRow)", behavior);
+        Assert.DoesNotContain("list.SelectedItem = ", behavior);
+        Assert.Contains("list.ContextMenuOpening +=", behavior);
+    }
+
+    [Fact]
     public void DataTablesHaveExcelOptInButActionGridsAndTreeKeepRowSelection()
     {
         var doc = XDocument.Load(FindSource("MainWindow.xaml"));

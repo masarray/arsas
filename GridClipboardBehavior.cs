@@ -39,6 +39,8 @@ public static class GridClipboardBehavior
     private sealed class BrowserState
     {
         public IedBrowserDetailRow? HitRow;
+        public IedBrowserDetailRow? MenuRow;
+        public bool KeyboardContextRequested;
     }
 
     private static readonly ConditionalWeakTable<DataGrid, GridState> Grids = new();
@@ -396,68 +398,128 @@ public static class GridClipboardBehavior
 
     private static void BrowserLoaded(object sender, RoutedEventArgs e)
     {
-        // The IED detail pane is a virtualized ListView, not a DataGrid.
-        if (sender is not ListView { Name: "IedBrowserDetailList" } list ||
-            !ReferenceEquals(e.OriginalSource, list) ||
+        if (sender is ListView { Name: "IedBrowserDetailList" } list &&
+            ReferenceEquals(e.OriginalSource, list))
+            AttachIedBrowserDetails(list);
+    }
+
+    // This ListView lives inside a lazy IED Browser tab. Initialize the same
+    // adapter when MainWindow is constructed, rather than relying on the first
+    // (possibly deferred) Loaded event before a right-click. No row handlers or
+    // extra MMS state stores are created; recycled ListViewItems remain virtual.
+    public static void AttachIedBrowserDetails(ListView list)
+    {
+        ArgumentNullException.ThrowIfNull(list);
+        if (list.Name != "IedBrowserDetailList" ||
             BrowserLists.TryGetValue(list, out _)) return;
 
         var state = new BrowserState();
         BrowserLists.Add(list, state);
         list.PreviewKeyDown += (_, key) =>
         {
-            if (!IsCopyShortcut(key) || InsideTextEditor(key.OriginalSource as DependencyObject))
-                return;
-            if (list.SelectedItem is IedBrowserDetailRow selected)
+            if (IsCopyShortcut(key) &&
+                !InsideTextEditor(key.OriginalSource as DependencyObject))
             {
-                key.Handled = true;
-                SetClipboard(list, selected.Value);
+                if (list.SelectedItem is IedBrowserDetailRow selected)
+                {
+                    key.Handled = true;
+                    SetClipboard(list, BrowserPrimaryCopyValue(selected));
+                }
+                return;
             }
+            // Native keyboard context menu (Menu key / Shift+F10) follows the
+            // focused selection; pointer context menus use only the HIT row.
+            if (key.Key == Key.Apps ||
+                key.Key == Key.F10 && Keyboard.Modifiers == ModifierKeys.Shift)
+                state.KeyboardContextRequested = true;
         };
-        if (list.ContextMenu is not null) return;
-        list.PreviewMouseLeftButtonDown += (_, _) => state.HitRow = null;
+        list.PreviewMouseLeftButtonDown += (_, _) =>
+        {
+            state.HitRow = null;
+            state.MenuRow = null;
+            state.KeyboardContextRequested = false;
+        };
         list.PreviewMouseRightButtonDown += (_, mouse) =>
         {
-            state.HitRow = Ancestor<ListViewItem>(mouse.OriginalSource as DependencyObject)
-                ?.DataContext as IedBrowserDetailRow;
+            state.KeyboardContextRequested = false;
+            state.MenuRow = null;
+            state.HitRow = Ancestor<ListViewItem>(
+                mouse.OriginalSource as DependencyObject)?.DataContext
+                as IedBrowserDetailRow;
         };
-        var menu = new ContextMenu();
-        menu.Items.Add(Item("Copy value", () =>
+
+        // Compose with a pre-existing menu if present. The right pane currently
+        // has no specialist actions, but copying must never replace them.
+        var menu = list.ContextMenu ?? new ContextMenu();
+        if (menu.Items.Count != 0) menu.Items.Add(new Separator());
+        var copyValue = Item("Copy value", () =>
         {
-            var row = state.HitRow is { } clicked && list.Items.Contains(clicked)
-                ? clicked : list.SelectedItem as IedBrowserDetailRow;
-            if (row is not null)
-                SetClipboard(list, row.Value);
-        }));
-        menu.Items.Add(Item("Copy name and value", () =>
+            if (BrowserExactRow(list, state.MenuRow) is { } row)
+                SetClipboard(list, BrowserPrimaryCopyValue(row));
+        });
+        var copyName = Item("Copy field / object name", () =>
         {
-            var row = state.HitRow is { } clicked && list.Items.Contains(clicked)
-                ? clicked : list.SelectedItem as IedBrowserDetailRow;
-            if (row is not null) CopyDetailRows(list, [row]);
-        }));
+            if (BrowserExactRow(list, state.MenuRow) is { } row)
+                SetClipboard(list, row.Name);
+        });
+        var copyPair = Item("Copy name and value", () =>
+        {
+            if (BrowserExactRow(list, state.MenuRow) is { } row)
+                CopyDetailRows(list, [row]);
+        });
+        menu.Items.Add(copyValue);
+        menu.Items.Add(copyName);
+        menu.Items.Add(copyPair);
         menu.Items.Add(new Separator());
         menu.Items.Add(Item("Copy visible properties", () => CopyDetailRows(
             list, list.Items.OfType<IedBrowserDetailRow>()
                 .Where(row => row.Kind == "Property"))));
-        // The Browser P0 contract deliberately forbids long provenance hover
-        // strips. Reveal Owner attribution ONLY on an explicit context action.
+
+        // Owner provenance remains deliberately opt-in and explicit, never
+        // a long hover strip or a claim about the controlling MMS client.
         var ownerInfo = Item("Owner information…", () =>
         {
-            var row = state.HitRow is { } clicked && list.Items.Contains(clicked)
-                ? clicked : list.SelectedItem as IedBrowserDetailRow;
-            if (row is { Kind: "Property", Name: "Owner" })
+            if (BrowserExactRow(list, state.MenuRow) is
+                { Kind: "Property", Name: "Owner" } row)
                 Inform(list, row.ObservationTooltip);
         });
         ownerInfo.Visibility = Visibility.Collapsed;
         menu.Items.Add(ownerInfo);
         list.ContextMenuOpening += (_, _) =>
         {
-            var row = state.HitRow is { } clicked && list.Items.Contains(clicked)
-                ? clicked : list.SelectedItem as IedBrowserDetailRow;
-            ownerInfo.Visibility = row is { Kind: "Property", Name: "Owner" }
-                ? Visibility.Visible : Visibility.Collapsed;
+            // Pin the exact clicked row for the duration of this menu. A
+            // stale SelectedItem from another RCB must never be the copy target.
+            state.MenuRow = BrowserExactRow(list,
+                state.KeyboardContextRequested
+                    ? list.SelectedItem as IedBrowserDetailRow
+                    : state.HitRow);
+            state.KeyboardContextRequested = false;
+            var rowAvailable = state.MenuRow is not null;
+            copyValue.IsEnabled = rowAvailable;
+            copyName.IsEnabled = rowAvailable;
+            copyPair.IsEnabled = rowAvailable;
+            ownerInfo.Visibility = state.MenuRow is
+                { Kind: "Property", Name: "Owner" }
+                    ? Visibility.Visible : Visibility.Collapsed;
         };
         list.ContextMenu = menu;
     }
+
+    // Record value equality is not enough: a model refresh may replace a row
+    // with an equal-looking record from a different IED. Only copy a live
+    // object reference still present in the current Browser viewport.
+    internal static IedBrowserDetailRow? BrowserExactRow(
+        ListView list, IedBrowserDetailRow? candidate)
+        => candidate is not null &&
+           list.Items.Cast<object>().Any(item => ReferenceEquals(item, candidate))
+            ? candidate : null;
+
+    // The compact right-side RCB object displays its NAME, not its internal
+    // StatusText. All property fields (Report ID, Control Block reference,
+    // RCB Name, etc.) copy the exact displayed Value without normalization.
+    internal static string BrowserPrimaryCopyValue(IedBrowserDetailRow row)
+        => row.Kind == "Object" && row.NavigateTo?.Kind == "RCB"
+            ? row.Name : row.Value;
 
     private static void CopyDetailRows(
         ListView list, IEnumerable<IedBrowserDetailRow> details)
