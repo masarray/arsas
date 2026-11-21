@@ -1426,10 +1426,10 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                 Log("WARN", session.Device.Name,
                     $"CONTROL_CANCEL_OUTCOME_UNKNOWN: {request.Signal.ObjectReference}; native flight not completed; association quarantined.");
             }
-            PublishControlAudit(session, request,
-                nativeFlight is null ? "Control not sent" : "Control unverified", null,
-                nativeFlight is null ? "Cancelled before native dispatch was started." :
-                    "Control cancelled with native flight started; final MMS/IED outcome unverified.");
+            // A cancelled await cannot prove the write was never emitted,
+            // even when no Task handle was retained after a synchronous fault.
+            PublishControlAudit(session, request, "Control unverified", null,
+                "Control cancelled without conclusive MMS wire evidence; verify the actual IED status.");
             throw;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested &&
