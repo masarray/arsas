@@ -49,10 +49,7 @@ public static class BrowserPurgeBufPolicy
 
         var candidate = MmsObjectReference.FromIec61850Reference(
             reference + ".PurgeBuf", "BR");
-        var members = candidate.Item.Split('(bool isBuffered, bool isDynamicPlan)
-        => isBuffered && isDynamicPlan;
-}
-);
+        var members = candidate.Item.Split((char)36);
         // Exact LD / LN $ BR $ BRCB $ PurgeBuf, no URCB,
         // guessed suffix, wildcard or nested data attribute.
         if (string.IsNullOrWhiteSpace(candidate.Domain) ||

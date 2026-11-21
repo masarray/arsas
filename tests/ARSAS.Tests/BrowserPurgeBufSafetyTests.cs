@@ -24,12 +24,12 @@ public sealed class BrowserPurgeBufSafetyTests
             "LD0/LLN0.BR.brc01", out var exact));
         Assert.Equal("LD0/LLN0.BR.brc01", exact);
         Assert.True(BrowserPurgeBufPolicy.TryResolve(model,
-            "LD0/LLN0$BR$brc01", out _) == false);
-        Assert.True(BrowserPurgeBufPolicy.TryResolve(model,
-            "LD0/LLN0$BR$brcb01", out var alias));
+            "LD0/LLN0$BR$brc01", out var alias));
         Assert.Equal(exact, alias);
+        Assert.False(BrowserPurgeBufPolicy.TryResolve(model,
+            "LD0/LLN0$BR$brcb01", out _));
         Assert.True(BrowserPurgeBufPolicy.SameExactBrcbReference(
-            "LD0/LLN0.BR.brc01", "LD0/LLN0$BR$brcb01"));
+            "LD0/LLN0.BR.brc01", "LD0/LLN0$BR$brc01"));
         Assert.False(BrowserPurgeBufPolicy.SameExactBrcbReference(
             "LD0/LLN0.BR.brc01", "LD0/LLN0.RP.brc01"));
         Assert.False(BrowserPurgeBufPolicy.TryResolve(model,
@@ -101,9 +101,12 @@ public sealed class BrowserPurgeBufSafetyTests
         Assert.Contains("WriteBrowserPurgeBufAsync(", runtime);
         Assert.Contains("explicitOperatorConfirmation", runtime);
         Assert.Contains("BrowserPurgeBufPolicy.RejectAutomaticBufferedMutation(", normalReporting);
-        Assert.DoesNotContain("PurgeBuf", normalReporting.Split(
+        var automaticStart = normalReporting.Split(
             "public async Task<NativeReportMonitorStartResult> StartReportMonitorAsync(")[1]
-            .Split("public async Task<NativeReportMonitorSliceResult>")[0]);
+            .Split("public async Task<NativeReportMonitorSliceResult>")[0];
+        Assert.Contains("BrowserPurgeBufPolicy.RejectAutomaticBufferedMutation(", automaticStart);
+        Assert.DoesNotContain("WriteBrowserPurgeBufAsync(", automaticStart);
+        Assert.DoesNotContain("\"PurgeBuf\"", automaticStart);
         Assert.Contains("ConfirmationBox.Text, \"PURGE\"", window);
         Assert.Contains("Purge_Click(", window);
         Assert.Contains("BrowserWritableSelectedRcb()", browser);
