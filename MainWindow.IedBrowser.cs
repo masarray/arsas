@@ -1485,7 +1485,8 @@ public partial class MainWindow
         {
             ("Enabled / RptEna", "RptEna"),
             ("Reservation", "Resv"),
-            ("Reserve time (s)", "ResvTms")
+            ("Reserve time (s)", "ResvTms"),
+            ("Owner", "Owner")
         })
         {
             var target = focusedRcbTargets.FirstOrDefault(t =>
@@ -1497,7 +1498,15 @@ public partial class MainWindow
                 !actual.IsStale &&
                 actual.Association == device.LiveValues.Association &&
                 string.Equals(actual.Source, "MMS Read", StringComparison.Ordinal))
-                Put(name, actual.Value, "Verified MMS RCB field · current association");
+            {
+                if (field != "Owner")
+                    Put(name, actual.Value, "Verified MMS RCB field · current association");
+                else if (IedBrowserRcbOwnerDisplay.TryFormatVerifiedOctet(
+                             actual.Value, actual.VerifiedReadWireKind, out var owner))
+                    Put(name, owner, "Verified MMS Owner OCTET STRING · current association");
+                else
+                    Put(name, "Not verified", "Owner was not a verified MMS OCTET STRING");
+            }
         }
 
         // Association-scoped immutable metadata, never a synthetic report,
