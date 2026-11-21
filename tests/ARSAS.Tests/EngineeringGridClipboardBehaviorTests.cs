@@ -63,7 +63,11 @@ public sealed class EngineeringGridClipboardBehaviorTests
             command.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, command));
             Assert.Null(command.ContextMenu);
 
-            var browser = new ListView { Name = "IedBrowserDetailList" };
+            var browser = new ListView
+            {
+                Name = "IedBrowserDetailList",
+                SelectionMode = SelectionMode.Single // matches actual MainWindow XAML
+            };
             browser.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, browser));
             Assert.Equal(SelectionMode.Single, browser.SelectionMode);
             Assert.NotNull(browser.ContextMenu);
