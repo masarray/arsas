@@ -80,6 +80,9 @@ public sealed class M217QRcbFocusedStateTests
             "C0100149", MmsDataKind.OctetString, out var display));
         Assert.Equal("192.16.1.73 (x'C0100149')", display);
         Assert.True(IedBrowserRcbOwnerDisplay.TryFormatVerifiedOctet(
+            "x'C0100149'", MmsDataKind.OctetString, out var diagnostic));
+        Assert.Equal(display, diagnostic);
+        Assert.True(IedBrowserRcbOwnerDisplay.TryFormatVerifiedOctet(
             "010203040506", MmsDataKind.OctetString, out var unknownEncoding));
         Assert.Equal("x'010203040506'", unknownEncoding);
         Assert.Equal("192.16.1.73 (x'C0100149')",
