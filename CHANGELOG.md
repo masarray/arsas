@@ -4,6 +4,20 @@ Notable public changes to ARSAS are recorded here. Application releases must ide
 
 ## Unreleased
 
+## 1.6.44 — 2026-11-21 — Public Stable (Windows x64)
+
+[Published release](https://github.com/masarray/arsas/releases/tag/v1.6.44) · [Field-scoped notes](docs/RELEASE_v1.6.44.md) · source commit `e5dda6a2e0ffc4e4581cdab8d917bea9861a3b8c` · pinned ARIEC61850 engine `f75e323e9f8443aa20e0a3818a1d5d77255b2c0f`.
+
+- **Buffered report history:** decode MMS six-byte BinaryTime and use original BRCB EntryID and reason to distinguish verified `Buffer event` delivery from `Data change` and `Integrity` in the Event Log.
+- **Reconnect safety:** prevent overlapping monitor starts, stale duplicated rows and repeated classification of already accepted EntryIDs; preserve independent per-RCB continuity evidence.
+- **History-preserving RCB handling:** no automatic PurgeBuf or forced takeover of occupied RCBs. A destructive manual PurgeBuf request requires the explicit guarded IED Browser workflow.
+- **Field observation:** SG7_BCU reported 77/77 live values, four reporting BRCBs and 337 decoded frames; BrcbA01/BrcbB01 historical buffer labeling was observed. Four BufOvfl indications and 28 SqNum discontinuities remain unresolved continuity observations, **not confirmed missing-event counts**.
+- **Package:** exact-tag Windows installer, portable single EXE, SHA-256 checksums, SPDX SBOM and provenance. The public application release is not IEC 61850 certification; R7/R10 physical acceptance for the pinned trial engine remains independent.
+
+## 1.6.43 — 2026-11-21 — Previous Public Stable (Windows x64)
+
+[Published release](https://github.com/masarray/arsas/releases/tag/v1.6.43) · [Release notes](docs/RELEASE_v1.6.43.md). Delivered 77/77 SG7_BCU static report-backed values and 4/4 BRCB ingress in field observations, safer first-connect recovery, Smart Updater and verified Windows installation. At this version, historical SOE replay was **not** reliably labeled as buffer delivery; v1.6.44 addresses that specific gap. R7/R10 physical qualification remained incomplete.
+
 ## 1.6.42 — 2026-10-25 — Public Stable (Windows x64)
 
 Operator-accepted application release, [published on GitHub](https://github.com/masarray/arsas/releases/tag/v1.6.42) with source commit `3db2ca98d144ab4b456e8dc1db9af18ad7a948f2`. The existing preview installer/portable assets were promoted to the stable channel **without rebuilding or changing their bytes**. Tested release workflow: [#40151975055](https://github.com/masarray/arsas/actions/runs/40151975055).
