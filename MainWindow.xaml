@@ -1150,7 +1150,8 @@
                                 <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="260"/>
                                 <DataGridTemplateColumn Header="Value" Width="130" CellTemplate="{StaticResource ProcessValueBadgeTemplate}"/>
                                 <DataGridTemplateColumn Header="Quality" Width="110" CellTemplate="{StaticResource EventQualityBadgeTemplate}"/>
-                                <DataGridTextColumn Header="Event" Binding="{Binding EventCause}" Width="124" MinWidth="120" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="Event" Binding="{Binding EventLabel}" Width="155" MinWidth="145" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="Origin" Binding="{Binding DeliveryOrigin}" Width="77" IsReadOnly="True"/>
                                 <DataGridTextColumn Header="Acquisition" Binding="{Binding AcquisitionShort}" ElementStyle="{StaticResource RcbAcquisitionTextStyle}" Width="*" MinWidth="145" IsReadOnly="True"/>
                             </DataGrid.Columns>
                         </DataGrid>
