@@ -196,40 +196,43 @@ jobs:
 
       - name: Update public landing release records
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_STABLE_TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
-          cp _release-sync/published.json landing/latest.json
-          if git diff --quiet -- landing/latest.json landing/release-notes.json; then
+          # Publication truth must not change while this runner is syncing.
+          latest_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          if [ "$latest_tag" != "$EXPECTED_STABLE_TAG" ]; then
+            echo "A newer stable release appeared; refusing to publish stale landing records." >&2
+            exit 1
+          fi
+          git fetch origin main
+          # This checkout may contain CRLF-normalized or generated tracked
+          # evidence that belongs to a DIFFERENT workflow. Rebase/autostash
+          # against it is unsafe. Commit reviewed landing files in an isolated
+          # fresh worktree based on the newest published main instead.
+          clean_tree="$RUNNER_TEMP/arsas-release-landing-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git worktree add --detach "$clean_tree" origin/main
+          cp landing/latest.json "$clean_tree/landing/latest.json"
+          cp landing/release-notes.json "$clean_tree/landing/release-notes.json"
+          git -C "$clean_tree" config user.name "github-actions[bot]"
+          git -C "$clean_tree" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$clean_tree" add -- landing/latest.json landing/release-notes.json
+          staged="$(git -C "$clean_tree" diff --cached --name-only)"
+          if [ -z "$staged" ]; then
             echo "Public landing release records are already synchronized."
           else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add landing/latest.json landing/release-notes.json
-            git commit -m "docs: synchronize ARSAS ${{ steps.version.outputs.version }} release landing"
-            git fetch origin main
-            # The checkout can carry a CRLF-only working-tree difference in
-            # .release/published.json. It is NOT an input/output of this landing
-            # synchronizer. Never let autostash turn that nuisance into a dirty
-            # rebase or silently discard substantive release evidence.
-            if ! git diff --quiet -- .release/published.json; then
-              committed="$(git show HEAD:.release/published.json | tr -d '\r' | sha256sum | cut -d ' ' -f1)"
-              worktree="$(tr -d '\r' < .release/published.json | sha256sum | cut -d ' ' -f1)"
-              if [ "$committed" != "$worktree" ]; then
-                echo "Refusing to discard a real change in .release/published.json" >&2
-                git status --short
-                exit 1
-              fi
-              git restore --worktree -- .release/published.json
-            fi
-            # A release evidence sync must commit exactly the two landing
-            # records. Unexpected other tracked edits are actionable errors.
-            if ! git diff --quiet; then
-              echo "Unexpected dirty tracked files before landing rebase:" >&2
-              git status --short
-              exit 1
-            fi
-            git rebase origin/main
-            git push origin HEAD:main
+            while IFS= read -r file; do
+              case "$file" in
+                landing/latest.json|landing/release-notes.json) ;;
+                *) echo "Unexpected staged release file: $file" >&2; exit 1 ;;
+              esac
+            done <<< "$staged"
+            git -C "$clean_tree" commit -m "docs: synchronize ARSAS ${{ steps.version.outputs.version }} release landing"
+            # Fast-forward only. If main changed concurrently, fail closed and
+            # rerun against the new main; never force-update release metadata.
+            git -C "$clean_tree" push origin HEAD:main
           fi
 
       - name: Update independent release-evidence branch
