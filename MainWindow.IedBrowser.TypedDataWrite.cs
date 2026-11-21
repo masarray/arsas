@@ -119,6 +119,30 @@ public partial class MainWindow
             ? owner : null;
     }
 
+    // A focused RCB is not a generic Data Attribute. The only approved BR
+    // Write is the explicitly confirmed, dedicated PurgeBuf action.
+    private RcbExportRow? BrowserWritableSelectedRcb()
+    {
+        if (SelectedDevice is not { IsConnected: true, IsDemo: false,
+                                   IsBusy: false, IsBrowserReading: false,
+                                   IsMonitoring: false } device ||
+            device.LiveValues.IsOffline || device.LiveDiscoveryModel is null ||
+            _iedBrowserReadOperation is not null ||
+            _iedBrowserNavigation.Current is not
+                { Kind: "RCB", Payload: RcbExportRow { Buffered: true } rcb } ||
+            rcb.IsClientOccupied ||
+            !BrowserPurgeBufPolicy.TryResolve(
+                device.LiveDiscoveryModel, rcb.Reference, out _) ||
+            _runtime.GetActiveBrowserRcbReferences(device.DeviceId).Any(active =>
+                string.Equals(
+                    IedBrowserLiveValues.CanonicalReference(active),
+                    IedBrowserLiveValues.CanonicalReference(rcb.Reference),
+                    StringComparison.Ordinal)))
+            return null;
+
+        return rcb;
+    }
+
     private void RefreshIedBrowserWriteButton()
     {
         if (IedBrowserWriteButton is null || IedBrowserWriteDoButton is null) return;
@@ -129,8 +153,11 @@ public partial class MainWindow
         var ctlModel = BrowserSelectedControlModelSignal();
         var selected = ctlModel is null ? BrowserWritableSelectedAttribute() : null;
         var selectedDo = ctlModel is null && selected is null ? BrowserWritableSelectedDo() : null;
+        var selectedRcb = ctlModel is null && selected is null && selectedDo is null
+            ? BrowserWritableSelectedRcb() : null;
         IedBrowserWriteButton.IsEnabled =
-            ctlModel is not null || selected is not null || selectedDo is not null;
+            ctlModel is not null || selected is not null || selectedDo is not null ||
+            selectedRcb is not null;
         // Keep the Material-pencil + Write visual from XAML intact.
         // Refresh selection changes only Enabled/ToolTip, never Button.Content.
         IedBrowserWriteButton.ToolTip = ctlModel is not null
@@ -139,7 +166,9 @@ public partial class MainWindow
                 ? "Exact DA: inspect live GVA, review old/new and confirm one MMS Write."
                 : selectedDo is not null
                     ? "Exact DO: select changed attributes, inspect and confirm sequential non-atomic Writes."
-                    : "Select an exact CF/SP/DC DA, ctlModel CF leaf or owning DO. CO members use Control.";
+                    : selectedRcb is not null
+                        ? "Exact buffered RCB: manually write PurgeBuf only after typed destructive-action confirmation. Never automatic."
+                        : "Select an exact CF/SP/DC DA, ctlModel CF leaf, owning DO or live BRCB. CO uses Control.";
     }
 
     private void IedBrowserDetailList_SelectionChanged(
@@ -158,10 +187,13 @@ public partial class MainWindow
         var modelSignal = BrowserSelectedControlModelSignal();
         var attribute = modelSignal is null ? BrowserWritableSelectedAttribute() : null;
         var owner = modelSignal is null && attribute is null ? BrowserWritableSelectedDo() : null;
-        if (device is null || (modelSignal is null && attribute is null && owner is null))
+        var purgeRcb = modelSignal is null && attribute is null && owner is null
+            ? BrowserWritableSelectedRcb() : null;
+        if (device is null || (modelSignal is null && attribute is null &&
+                               owner is null && purgeRcb is null))
         {
             IedBrowserSubtitle.Text =
-                "Write requires a current online CF/SP/DC attribute or exact owning DO.";
+                "Write requires a current online CF/SP/DC attribute, owning DO or exact BRCB.";
             RefreshIedBrowserWriteButton();
             return;
         }
@@ -203,6 +235,15 @@ public partial class MainWindow
             if (dialog.AttemptedLeaves.Count > 0)
                 QueueIedBrowserPostWriteRead(device, model, dialog.WriteAssociation,
                     dialog.AttemptedLeaves, dialog.WriteStatus);
+        }
+        else if (purgeRcb is not null && device.LiveDiscoveryModel is { } purgeModel)
+        {
+            var dialog = new BrowserRcbPurgeWindow(
+                _runtime, device, purgeModel, purgeRcb.Reference) { Owner = this };
+            dialog.ShowDialog();
+            IedBrowserSubtitle.Text = dialog.WriteStatus;
+            // No auto retry and no synthetic report. The next operator read
+            // or genuine InformationReport is authoritative.
         }
         RefreshIedBrowserWriteButton();
         // A successful MMS Write is NOT process feedback. An explicit Read or
