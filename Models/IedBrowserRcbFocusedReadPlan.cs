@@ -27,7 +27,8 @@ public static class IedBrowserRcbFocusedReadPlan
         [
             new IedBrowserReadTarget(wire + ".RptEna", fc, "Boolean"),
             new IedBrowserReadTarget(wire + ".Resv", fc, "Boolean"),
-            new IedBrowserReadTarget(wire + ".ResvTms", fc, "UInt32")
+            new IedBrowserReadTarget(wire + ".ResvTms", fc, "UInt32"),
+            new IedBrowserReadTarget(wire + ".Owner", fc, "OctetString")
         ];
     }
 }
