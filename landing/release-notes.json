@@ -1,36 +1,34 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.42",
-  "title": "IED Browser, verified controls and improved multi-IED monitoring",
-  "titleId": "IED Browser, kontrol terverifikasi, dan monitoring multi-IED",
-  "summary": "Operator-accepted Windows stable application release: browse Reports, DataSets, Data Model, Files, Setting Groups and GOOSE; monitor IED values with quality and timestamps; verify model-backed Write/readback and tested SBO Enhanced actions. Installer and portable packages are the same tested public v1.6.42 binaries. Stable is a software release channel, not IEC 61850 conformance certification or proof of lossless SOE.",
-  "summaryId": "Rilis aplikasi Windows stabil yang telah diterima operator: jelajahi Reports, DataSets, Data Model, Files, Setting Groups, dan GOOSE; pantau nilai IED beserta quality dan timestamp; lakukan Write/readback berbasis model dan operasi SBO Enhanced yang diuji. Installer dan portable adalah binary publik v1.6.42 yang sama dengan hasil pengujian. Status stable adalah kanal rilis software, bukan sertifikasi IEC 61850 atau bukti SOE lossless.",
+  "version": "1.6.44",
+  "title": "Stable release improvements",
+  "titleId": "Peningkatan rilis stabil",
+  "summary": "ARSAS 1.6.44 is the latest verified stable Windows release. Package identity, download links, checksums and publication evidence are synchronized automatically from the tagged GitHub Release.",
+  "summaryId": "ARSAS 1.6.44 adalah stable release Windows terverifikasi terbaru. Identitas paket, link download, checksum, dan publication evidence disinkronkan otomatis dari GitHub Release bertag.",
   "highlights": [
-    "IED Browser navigation: Reports, DataSets, Data Model, Files, Setting Groups and GOOSE, with retained per-IED context and precise name/IP focus.",
-    "Report-first multi-IED monitoring with static DataSet membership, live values, quality, timestamps, RCB ingress and bounded user-interface updates.",
-    "Verified typed ctlModel Write/readback, focused CSWI reinspection and association-scoped, fail-closed SBO Enhanced command handling on tested targets.",
-    "SV/SMV waveform viewer with passive first-received discovery without SCL; GOOSE timeline, SNTP IPv4 presentation and modern cool-blue Windows interface.",
-    "Native COMTRADE analysis through the pinned ArdIrec bridge, with source-verified installer and portable delivery."
+    "P9 P0 SG7_BCU: recover historical BRCB SOE classification & reconnect safety",
+    "The verified Windows installer is published as the stable ARSAS 1.6.44 package.",
+    "The portable single EXE is published from the same verified stable release.",
+    "SHA-256 checksums, SPDX SBOM and release provenance are published alongside the Windows binaries."
   ],
   "highlightsId": [
-    "IED Browser: Reports, DataSets, Data Model, Files, Setting Groups, dan GOOSE; konteks tiap IED tetap tersimpan, nama/IP perangkat jelas.",
-    "Monitoring multi-IED berbasis report: anggota DataSet statis, nilai live, quality, timestamp, ingress RCB, dan refresh antarmuka yang terkontrol.",
-    "Write/readback ctlModel bertipe dan terverifikasi, CSWI diperiksa ulang sesudah Write, serta kontrol SBO Enhanced yang dibatasi association dan aman saat verifikasi gagal.",
-    "Viewer gelombang SV/SMV dengan deteksi paket pertama tanpa SCL; timeline GOOSE, tampilan IPv4 SNTP, dan antarmuka Windows cool-blue.",
-    "Analisis COMTRADE native melalui ArdIrec yang dipin, didistribusikan dengan installer dan portable terverifikasi."
+    "Perubahan rilis: P9 P0 SG7_BCU: recover historical BRCB SOE classification & reconnect safety",
+    "Installer Windows terverifikasi dipublikasikan sebagai paket stabil ARSAS 1.6.44.",
+    "Portable single EXE dipublikasikan dari stable release terverifikasi yang sama.",
+    "Checksum SHA-256, SPDX SBOM, dan provenance release dipublikasikan bersama binary Windows."
   ],
   "improvements": [
-    "Release workflow #40151975055 passed with 2,987/2,987 application tests, Windows installer and portable smoke tests, SHA-256, SPDX 2.3 SBOM, provenance and attestations.",
-    "Observed operator diagnostic: 5/5 monitoring endpoints, 183/183 initial selected values, 14/14 static RCB paths with ingress; successful targeted SG7_BCU and GR_X_7SX85 ctlModel readback and SBO Enhanced operations.",
-    "Download links target the latest stable GitHub Release assets; checksum values and source identity correspond to the exact tagged v1.6.42 binaries.",
-    "Eight actual ARSAS v1.6.42 Windows screenshots, supplied by the operator, are available as original full-resolution PNG and optimized WebP across the site. Images demonstrate UI only, not physical R7/R10 certification."
+    "Stable release identity, publish date, package size and SHA-256 are sourced from verified release evidence rather than hand-maintained version text.",
+    "The Windows installer and portable download URLs use GitHub's releases/latest/download endpoints so the public buttons always resolve to the newest stable assets.",
+    "Release notes are synchronized before website deployment, preventing a newer binary release from being blocked by stale landing-page metadata.",
+    "The website deployment is explicitly dispatched after release synchronization so GitHub Actions token commits cannot leave Pages behind the published release."
   ],
   "improvementsId": [
-    "Workflow release #40151975055 sukses: 2.987/2.987 tes aplikasi, smoke test installer dan portable Windows, SHA-256, SPDX 2.3 SBOM, provenance, serta attestation.",
-    "Diagnostik operator: 5/5 endpoint monitoring, 183/183 nilai awal, 14/14 jalur RCB statis menerima report; Write/readback ctlModel dan SBO Enhanced berhasil pada target SG7_BCU serta GR_X_7SX85 yang diuji.",
-    "Link unduhan mengarah ke aset GitHub Latest Stable; checksum dan identitas source sesuai binary v1.6.42 bertag.",
-    "Delapan screenshot asli ARSAS v1.6.42 dari operator tersedia sebagai PNG resolusi penuh dan WebP optimal di website. Gambar hanya menunjukkan UI, bukan sertifikasi fisik R7/R10."
+    "Identitas stable release, tanggal publikasi, ukuran paket, dan SHA-256 diambil dari evidence release terverifikasi, bukan teks versi yang dipelihara manual.",
+    "URL installer Windows dan portable memakai endpoint releases/latest/download GitHub sehingga tombol publik selalu menuju asset stabil terbaru.",
+    "Catatan rilis disinkronkan sebelum deployment website agar binary release baru tidak terblokir metadata landing page yang tertinggal.",
+    "Deployment website dipicu eksplisit setelah sinkronisasi release sehingga commit dari GitHub Actions token tidak membuat Pages tertinggal dari release publik."
   ],
   "knownLimitations": [
     "The October 25 operator capture observed 432 report frames, 38 continuity findings and 9 IED-reported BufOvfl notices. These are not 38 proven lost events, but lossless buffered SOE is NOT established.",
@@ -57,11 +55,11 @@
     "src": "assets/screenshots/arsas-fat-report-preview-v1.6.42.webp",
     "width": 1862,
     "height": 951,
-    "alt": "Actual ARSAS v1.6.42 Windows FAT Evidence PDF Report Preview, showing partially completed tests",
-    "altId": "Screenshot nyata ARSAS v1.6.42 Windows: pratinjau PDF evidence FAT dengan beberapa pengujian belum lengkap",
-    "caption": "Actual v1.6.42 operator capture. The PDF preview shows 11 selected signals with 4 complete evidence records. This is application evidence, not universal relay acceptance.",
-    "captionId": "Screenshot nyata operator v1.6.42. Pratinjau PDF memuat 11 sinyal terpilih dan 4 evidence lengkap. Ini bukti fungsi aplikasi, bukan penerimaan semua jenis relay."
+    "alt": "ARSAS 1.6.44 Engineering and FAT live IEC 61850 workspace",
+    "altId": "Workspace live IEC 61850 Engineering dan FAT ARSAS 1.6.44",
+    "caption": "ARSAS 1.6.44 stable Windows release with verified installer, portable package and release evidence.",
+    "captionId": "Stable release Windows ARSAS 1.6.44 dengan installer, portable package, dan release evidence yang terverifikasi."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.42"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.44"
 }
