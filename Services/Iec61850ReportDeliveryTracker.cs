@@ -134,6 +134,10 @@ public sealed class Iec61850ReportDeliveryTracker
             old.OfflineCursor.Length > 0 &&
             frame.EntryIdHex.Length is > 0 and <= MaxEntryIdChars &&
             !frame.EntryIdHex.Equals(old.OfflineCursor, StringComparison.OrdinalIgnoreCase) &&
+            // Once a replayed EntryID was accepted in this session, its
+            // retransmission cannot be classified as a NEW buffered event.
+            // Keep the frozen offline cursor for later distinct EntryIDs.
+            !frame.EntryIdHex.Equals(old.LastAcceptedEntryId, StringComparison.OrdinalIgnoreCase) &&
             old.OfflineConfRev.HasValue && frame.ConfRev == old.OfflineConfRev &&
             timeOfEntry >= disconnected + BoundaryGuard &&
             timeOfEntry < _associatedAtUtc - BoundaryGuard)
