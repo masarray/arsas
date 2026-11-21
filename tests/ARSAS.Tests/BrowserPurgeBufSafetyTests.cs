@@ -22,6 +22,15 @@ public sealed class BrowserPurgeBufSafetyTests
         Assert.True(BrowserPurgeBufPolicy.TryResolve(model,
             "LD0/LLN0.BR.brc01", out var exact));
         Assert.Equal("LD0/LLN0.BR.brc01", exact);
+        Assert.True(BrowserPurgeBufPolicy.TryResolve(model,
+            "LD0/LLN0$BR$brc01", out _) == false);
+        Assert.True(BrowserPurgeBufPolicy.TryResolve(model,
+            "LD0/LLN0$BR$brcb01", out var alias));
+        Assert.Equal(exact, alias);
+        Assert.True(BrowserPurgeBufPolicy.SameExactBrcbReference(
+            "LD0/LLN0.BR.brc01", "LD0/LLN0$BR$brcb01"));
+        Assert.False(BrowserPurgeBufPolicy.SameExactBrcbReference(
+            "LD0/LLN0.BR.brc01", "LD0/LLN0.RP.brc01"));
         Assert.False(BrowserPurgeBufPolicy.TryResolve(model,
             "LD0/LLN0.BR.brc02", out _));
         Assert.False(BrowserPurgeBufPolicy.TryResolve(model,

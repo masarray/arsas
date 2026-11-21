@@ -134,10 +134,7 @@ public partial class MainWindow
             !BrowserPurgeBufPolicy.TryResolve(
                 device.LiveDiscoveryModel, rcb.Reference, out _) ||
             _runtime.GetActiveBrowserRcbReferences(device.DeviceId).Any(active =>
-                string.Equals(
-                    IedBrowserLiveValues.CanonicalReference(active),
-                    IedBrowserLiveValues.CanonicalReference(rcb.Reference),
-                    StringComparison.Ordinal)))
+                BrowserPurgeBufPolicy.SameExactBrcbReference(active, rcb.Reference)))
             return null;
 
         return rcb;

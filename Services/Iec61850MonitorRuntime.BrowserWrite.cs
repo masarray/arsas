@@ -127,9 +127,7 @@ public sealed partial class Iec61850MonitorRuntime
                 "Manual PurgeBuf requires one exact current live BRCB, an idle association and stopped ARSAS monitoring.");
 
         if (GetActiveBrowserRcbReferences(deviceId).Any(active =>
-                string.Equals(IedBrowserLiveValues.CanonicalReference(active),
-                    IedBrowserLiveValues.CanonicalReference(exactRcbReference),
-                    StringComparison.Ordinal)))
+                BrowserPurgeBufPolicy.SameExactBrcbReference(active, exactRcbReference)))
             throw new InvalidOperationException(
                 "PurgeBuf is blocked while this RCB has an ARSAS reporting subscription.");
 
