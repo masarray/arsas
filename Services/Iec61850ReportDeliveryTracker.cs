@@ -160,7 +160,7 @@ public sealed class Iec61850ReportDeliveryTracker
         if (qualityStart >= 0)
         {
             if (!text.EndsWith(')') ||
-                !byte.TryParse(text[(qualityStart + 7)..^1], NumberStyles.HexNumber,
+                !byte.TryParse(text[(qualityStart + " (q=0x".Length)..^1], NumberStyles.HexNumber,
                     CultureInfo.InvariantCulture, out var quality) ||
                 (quality & 0x60) != 0)
                 return false;
