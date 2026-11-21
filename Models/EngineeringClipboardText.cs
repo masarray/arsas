@@ -12,7 +12,8 @@ public static class EngineeringClipboardText
 {
     public const int MaxRows = 3000;
     public const int MaxCells = 36000;
-    public const int MaxCharacters = 512000;
+    // WPF uses UTF-16 text: 256,000 code units are at most 512,000 bytes.
+    public const int MaxCharacters = 256000;
 
     public static bool TryBuild(
         IReadOnlyList<string> headers,
