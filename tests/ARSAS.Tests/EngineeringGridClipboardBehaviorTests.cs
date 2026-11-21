@@ -2,6 +2,7 @@ using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
+using System.Xml.Linq;
 using ArIED61850Tester;
 
 namespace ARSAS.Tests;
@@ -67,6 +68,69 @@ public sealed class EngineeringGridClipboardBehaviorTests
             Assert.Equal(SelectionMode.Single, browser.SelectionMode);
             Assert.NotNull(browser.ContextMenu);
         });
+    }
+
+    [Fact]
+    public void DataTablesHaveExcelOptInButActionGridsAndTreeKeepRowSelection()
+    {
+        var doc = XDocument.Load(FindSource("MainWindow.xaml"));
+        XNamespace wpf = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XNamespace ux = "clr-namespace:ArIED61850Tester";
+
+        var grids = doc.Descendants(wpf + "DataGrid").ToArray();
+        foreach (var name in new[]
+        {
+            "ExplorerLiveValuesGrid", "GlobalLiveGrid", "EventDetailsGrid"
+        })
+        {
+            var grid = Assert.Single(grids, g =>
+                (string?)g.Attribute(x + "Name") == name);
+            Assert.Equal("True", (string?)grid.Attribute(
+                ux + "GridClipboardBehavior.ExcelCells"));
+        }
+
+        foreach (var name in new[]
+        {
+            "EquipmentCommandGrid", "EventLogGrid", "IedBrowserTreeGrid",
+            "IedBrowserFilesGrid"
+        })
+        {
+            var grid = Assert.Single(grids, g =>
+                (string?)g.Attribute(x + "Name") == name);
+            Assert.Null(grid.Attribute(ux + "GridClipboardBehavior.ExcelCells"));
+        }
+
+        var templates = doc.Descendants(wpf + "DataGridTemplateColumn").ToArray();
+        foreach (var (header, binding) in new[]
+        {
+            ("Value", "{Binding DisplayValue}"),
+            ("Quality", "{Binding Quality}"),
+            ("Objects", "{Binding Title}"),
+            ("Filename", "{Binding Name}")
+        })
+            Assert.Contains(templates, col =>
+                (string?)col.Attribute("Header") == header &&
+                (string?)col.Attribute("ClipboardContentBinding") == binding);
+
+        var smv = XDocument.Load(FindSource("SmvViewerWindow.xaml"));
+        Assert.All(smv.Descendants(wpf + "DataGrid").Where(col =>
+            ((string?)col.Attribute("ItemsSource")) is "{Binding RawVectorRows}" or
+                "{Binding SnapshotChannels}"), col =>
+            Assert.Equal("True", (string?)col.Attribute(
+                ux + "GridClipboardBehavior.ExcelCells")));
+    }
+
+    private static string FindSource(string path)
+    {
+        DirectoryInfo? current = new(AppContext.BaseDirectory);
+        while (current is not null)
+        {
+            var candidate = Path.Combine(current.FullName, path);
+            if (File.Exists(candidate)) return candidate;
+            current = current.Parent;
+        }
+        throw new FileNotFoundException(path);
     }
 
     private static void RunSta(Action action)
