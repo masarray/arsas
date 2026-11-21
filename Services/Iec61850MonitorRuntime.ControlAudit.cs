@@ -53,7 +53,7 @@ public sealed partial class Iec61850MonitorRuntime
             DeviceTimestamp = "-",
             OldValue = "-",
             NewValue = request.ValueText,
-            Quality = "n/a",
+            Quality = "-", // no IEC process quality exists for an operator command
             SourceMode = "Operator control",
             Reason = detail,
             ControlOutcome = outcome,
