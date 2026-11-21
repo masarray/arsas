@@ -99,8 +99,7 @@ public sealed class RcbInspectionEvidence
             StateField("Enabled / RptEna", live?.Enabled, Model.Enabled, connected, source),
             StateField("Reservation", live?.Reservation, Model.Reservation, connected, source),
             StateField("Reserve time (s)", live?.ReserveTime, Model.ReserveTime, connected, source),
-            Field("Owner", IedBrowserRcbOwnerDisplay.FormatCheckedSnapshot(live?.Owner),
-                string.Empty, source),
+            OwnerField(live?.Owner, connected, source),
             Field("Trigger options", live?.TriggerOptions, Model.TriggerOptions, source),
             Field("Optional fields", live?.OptionalFields, Model.OptionalFields, source),
             Field("Buffer time (ms)", live?.BufferTime, Model.BufferTime, source),
@@ -135,6 +134,18 @@ public sealed class RcbInspectionEvidence
                !text.Equals("Unknown", StringComparison.OrdinalIgnoreCase) &&
                !text.Equals("Not read", StringComparison.OrdinalIgnoreCase) &&
                !text.Equals("Unavailable", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static RcbInspectionProperty OwnerField(
+        string? rawOwner, bool connected, string liveSource)
+    {
+        if (!connected)
+            return new("Owner", "—", "Offline; no live MMS state");
+        var verified = IedBrowserRcbOwnerDisplay.FormatCheckedSnapshot(rawOwner);
+        return verified.Length > 0
+            ? new("Owner", verified, liveSource)
+            : new("Owner", "Not verified",
+                "No current read-only MMS Owner observation; unsupported or unreadable Owner is not inferred");
     }
 
     private RcbInspectionProperty Field(string name, string? live, string? model, string liveSource)
