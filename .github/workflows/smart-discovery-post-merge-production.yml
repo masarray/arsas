@@ -4,6 +4,23 @@ on:
   push:
     branches:
       - main
+    # R10 convergence applies to IEC 61850 engine, model/discovery paths and
+    # physical authority changes. Website/copy-only pushes must not claim an
+    # R10 production failure for code they did not touch.
+    paths:
+      - "engines/ARIEC61850.lock.json"
+      - "evidence/interoperability-reference-target.json"
+      - "Services/NativeIec61850Client*.cs"
+      - "Services/Iec61850*.cs"
+      - "Services/*Scl*.cs"
+      - "Services/*SCL*.cs"
+      - "Services/*Discovery*.cs"
+      - "Services/TrustedScl*.cs"
+      - "Models/IedDiscovery*.cs"
+      - "MainWindow.Scl*.cs"
+      - "MainWindow.IedBrowser*.cs"
+      - "Scl*.cs"
+      - "scripts/verify-ci-canonical-reuse.py"
   workflow_dispatch:
 
 permissions:
