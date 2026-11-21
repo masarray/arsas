@@ -67,6 +67,11 @@ public sealed class EngineeringGridClipboardBehaviorTests
             var other = new DataGrid { IsReadOnly = true, ContextMenu = custom };
             other.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, other));
             Assert.Same(custom, other.ContextMenu);
+            var nested = Assert.Single(custom.Items.OfType<MenuItem>(),
+                item => (string?)item.Header == "Copy");
+            Assert.Equal(6, nested.Items.Count); // five actions and separator
+            GridClipboardBehavior.AppendCopyActions(other, custom);
+            Assert.Equal(2, custom.Items.Count); // separator + one submenu
 
             var command = new DataGrid
             {
@@ -145,6 +150,42 @@ public sealed class EngineeringGridClipboardBehaviorTests
                 "{Binding SnapshotChannels}"), col =>
             Assert.Equal("True", (string?)col.Attribute(
                 ux + "GridClipboardBehavior.ExcelCells")));
+    }
+
+    [Fact]
+    public void ExactRowMenuKeepsExistingDownloadAndCopiesPinnedRow()
+    {
+        RunSta(() =>
+        {
+            var grid = new DataGrid { IsReadOnly = true };
+            GridClipboardBehavior.Install();
+            grid.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, grid));
+            var file = new object();
+            var menu = new ContextMenu
+            {
+                Items = { new MenuItem { Header = "Download complete record" } }
+            };
+            GridClipboardBehavior.AppendCopyActions(grid, menu, file);
+            Assert.Equal(3, menu.Items.Count);
+            Assert.Equal("Download complete record",
+                Assert.IsType<MenuItem>(menu.Items[0]).Header);
+            var copy = Assert.IsType<MenuItem>(menu.Items[2]);
+            Assert.Equal("Copy", copy.Header);
+            Assert.Equal(3, copy.Items.Count);
+            Assert.Equal("Copy this row",
+                Assert.IsType<MenuItem>(copy.Items[1]).Header);
+        });
+    }
+
+    [Fact]
+    public void DedicatedFatAndFilesContextMenusKeepSharedCopyActions()
+    {
+        var fat = File.ReadAllText(FindSource("IoListTestingWindow.FatV2Ux.cs"));
+        var files = File.ReadAllText(FindSource("MainWindow.IedBrowser.Files.cs"));
+        Assert.Contains("AppendCopyActions(_fatSignalsGrid, actions)", fat);
+        Assert.Contains("AppendCopyActions(IedBrowserFilesGrid, rowMenu, file)", files);
+        Assert.Contains("ClipboardContentBinding = new Binding(\"Runtime.CurrentValue\")", fat);
+        Assert.Contains("nameof(IoTestPointPlan.Value1Text)", fat);
     }
 
     [Fact]

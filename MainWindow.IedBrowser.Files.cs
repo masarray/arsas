@@ -151,7 +151,12 @@ public partial class MainWindow
                 _iedBrowserFileCatalog?.TryGetRecord(file.RemotePath, out _, out _) == true
         };
         download.Click += IedBrowserFileDownload_Click;
-        e.Row.ContextMenu = new ContextMenu { Items = { download } };
+        var rowMenu = new ContextMenu { Items = { download } };
+        // The row's Download menu shadows the grid-level context menu.
+        // Attach the SAME clipboard adapter using this exact recycled row's
+        // current file identity; never borrow an unrelated SelectedItem.
+        GridClipboardBehavior.AppendCopyActions(IedBrowserFilesGrid, rowMenu, file);
+        e.Row.ContextMenu = rowMenu;
     }
 
     private async void IedBrowserFile_DoubleClick(object sender, MouseButtonEventArgs e)

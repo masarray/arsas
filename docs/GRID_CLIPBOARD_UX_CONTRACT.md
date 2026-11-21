@@ -42,7 +42,11 @@ background synchronization, or window ownership changes.
 All actions are observational. Clicking to copy does not change the selected
 command, checkbox state, binding, interlock/synchrocheck flags, RCB, or IEC
 connection. TextBoxes in editable cells keep normal native text-copy behavior.
-Existing specialized context actions are preserved, not replaced.
+Existing specialized context actions are preserved, not replaced:
+FAT Recapture/Remove and per-file Download menus include a shared Copy
+submenu. Recycled file-row menus bind the clicked row's exact file identity,
+never a stale SelectedItem. FAT V2 runtime-generated columns also define
+clipboard bindings (TEST, LIVE, VALUE 1 and VALUE 2).
 
 ## Data fidelity and performance
 - WPF `DataGridColumn.OnCopyingCellClipboardContent` is the authority, with

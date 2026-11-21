@@ -73,32 +73,75 @@ public static class GridClipboardBehavior
         }
 
         grid.PreviewKeyDown += GridKeyDown;
-        // Keyboard menu requests follow the current cell, never an earlier
-        // right-click target. Do not override existing action menus.
+        // Track mouse hits even when a row or grid supplies an action menu.
+        // A file row's Download action must never shadow its Copy capability.
         grid.PreviewMouseLeftButtonDown += (_, _) =>
         {
             state.HitColumn = null;
             state.HitItem = null;
         };
-        if (grid.ContextMenu is not null) return; // Preserve specialized actions.
-
         grid.PreviewMouseRightButtonDown += (_, mouse) =>
         {
             var cell = Ancestor<DataGridCell>(mouse.OriginalSource as DependencyObject);
             state.HitColumn = cell?.Column;
             state.HitItem = cell?.DataContext;
         };
+        if (grid.ContextMenu is { } existing)
+        {
+            AppendCopyActions(grid, existing);
+            return;
+        }
         var menu = new ContextMenu();
-        menu.Items.Add(Item("Copy cell value", () => CopyGrid(grid, state, "cell")));
-        menu.Items.Add(Item("Copy selected cells / rows", () =>
-            CopyGrid(grid, state, "selection"), "Ctrl+C"));
-        menu.Items.Add(Item("Copy selection with headers", () =>
-            CopyGrid(grid, state, "selection-headers")));
-        menu.Items.Add(Item("Copy selected full rows", () =>
-            CopyGrid(grid, state, "rows")));
-        menu.Items.Add(new Separator());
-        menu.Items.Add(Item("Copy visible table", () => CopyGrid(grid, state, "table")));
+        PopulateCopyMenu(menu, grid, null);
         grid.ContextMenu = menu;
+    }
+
+    // One menu factory for normal grid menus AND pre-existing specialized
+    // menus (FAT Recapture, IED file Download), without replacing actions
+    // or duplicating per-grid copy logic.
+    private static readonly object CopyMenuTag = new();
+
+    public static void AppendCopyActions(
+        DataGrid grid, ContextMenu menu, object? exactRow = null)
+    {
+        ArgumentNullException.ThrowIfNull(grid);
+        ArgumentNullException.ThrowIfNull(menu);
+        if (menu.Items.OfType<MenuItem>().Any(item =>
+                ReferenceEquals(item.Tag, CopyMenuTag)))
+            return;
+        var copy = new MenuItem { Header = "Copy", Tag = CopyMenuTag };
+        PopulateCopyMenu(copy, grid, exactRow);
+        if (menu.Items.Count != 0) menu.Items.Add(new Separator());
+        menu.Items.Add(copy);
+    }
+
+    private static void PopulateCopyMenu(
+        ItemsControl target, DataGrid grid, object? exactRow)
+    {
+        void Execute(string mode)
+        {
+            var state = Grids.TryGetValue(grid, out var installed)
+                ? installed : new GridState();
+            CopyGrid(grid, state, mode, exactRow);
+        }
+
+        target.Items.Add(Item("Copy cell value", () => Execute("cell")));
+        if (exactRow is not null)
+        {
+            // Recycled file-row menus bind an exact observed file identity.
+            // Do not copy a different row merely because SelectedItem moved.
+            target.Items.Add(Item("Copy this row", () => Execute("context-row")));
+            target.Items.Add(Item("Copy visible table", () => Execute("table")));
+            return;
+        }
+        target.Items.Add(Item("Copy selected cells / rows", () =>
+            Execute("selection"), "Ctrl+C"));
+        target.Items.Add(Item("Copy selection with headers", () =>
+            Execute("selection-headers")));
+        target.Items.Add(Item("Copy selected full rows", () =>
+            Execute("rows")));
+        target.Items.Add(new Separator());
+        target.Items.Add(Item("Copy visible table", () => Execute("table")));
     }
 
     // Both ARSAS themes make selected DataGridCells transparent. The WPF
@@ -212,7 +255,8 @@ public static class GridClipboardBehavior
         return Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
     }
 
-    private static void CopyGrid(DataGrid grid, GridState state, string mode)
+    private static void CopyGrid(
+        DataGrid grid, GridState state, string mode, object? exactRow = null)
     {
         var columns = VisibleColumns(grid);
         if (columns.Count == 0) return;
@@ -220,7 +264,7 @@ public static class GridClipboardBehavior
         {
             var cell = grid.CurrentCell;
             var column = state.HitColumn ?? (cell.IsValid ? cell.Column : null);
-            var item = state.HitItem ?? (cell.IsValid ? cell.Item : null);
+            var item = exactRow ?? state.HitItem ?? (cell.IsValid ? cell.Item : null);
             if (column is not null && item is not null &&
                 columns.Contains(column) && grid.Items.Contains(item) &&
                 !ReferenceEquals(item, CollectionView.NewItemPlaceholder))
@@ -238,6 +282,13 @@ public static class GridClipboardBehavior
                 return;
             }
             rows = EnumerateAll(grid, copyColumns);
+        }
+        else if (mode == "context-row")
+        {
+            if (exactRow is null || !grid.Items.Contains(exactRow))
+                return;
+            rows = new[] { (IReadOnlyList<string?>)copyColumns
+                .Select(column => CellValue(column, exactRow)).ToArray() };
         }
         else
         {
@@ -295,7 +346,8 @@ public static class GridClipboardBehavior
         // Standard Ctrl+C is Excel-like: only selected cells, no headers.
         // Named actions provide deliberate header-preserving table copies.
         if (!EngineeringClipboardText.TryBuild(headers, rows,
-                includeHeaders: mode is "table" or "rows" or "selection-headers",
+                includeHeaders: mode is "table" or "rows" or "selection-headers"
+                    or "context-row",
                 out var text, out var failure))
         {
             Inform(grid, failure);
