@@ -1,36 +1,36 @@
 {
   "schemaVersion": 1,
   "product": "ARSAS",
-  "version": "1.6.45",
-  "title": "Easier IED investigation and exact field copy",
-  "titleId": "Investigasi IED lebih mudah dengan salin field yang tepat",
-  "summary": "ARSAS 1.6.45 streamlines IEC 61850 engineering inspection: copy precise RCB and model properties in IED Browser, select and export multiple Event Log rows with familiar Excel-like gestures, and reuse Copy across engineering grids. This observational UI update leaves IEC protocol and control behavior unchanged.",
-  "summaryId": "ARSAS 1.6.45 mempermudah investigasi IEC 61850: salin nilai RCB dan properti model yang tepat di IED Browser, pilih dan salin banyak baris Event Logs seperti Excel, serta gunakan Copy pada berbagai grid engineering. Perubahan UI observasional ini tidak mengubah protokol IEC atau perilaku kontrol.",
+  "version": "1.6.46",
+  "title": "Stable release improvements",
+  "titleId": "Peningkatan rilis stabil",
+  "summary": "ARSAS 1.6.46 is the latest verified stable Windows release. Package identity, download links, checksums and publication evidence are synchronized automatically from the tagged GitHub Release.",
+  "summaryId": "ARSAS 1.6.46 adalah stable release Windows terverifikasi terbaru. Identitas paket, link download, checksum, dan publication evidence disinkronkan otomatis dari GitHub Release bertag.",
   "highlights": [
-    "IED Browser: right-click any visible property such as Report ID, RCB Name, DataSet reference or Control Block reference to copy its exact displayed value.",
-    "IED Browser: copy the field/object name, name + value, or all visible properties, while preserving the correct clicked-row identity after refresh.",
-    "Event Log: select contiguous full event rows by mouse drag or Shift+click; copy ranges via context menu or Ctrl+C.",
-    "Event Log: selection does not unexpectedly expand the event inspector during right-click or multi-row gestures.",
-    "Shared clipboard support remains available in Device Explorer, Live Values, Command Grid and other engineering tables."
+    "Sync published v1.6.45 landing download evidence and bilingual release notes",
+    "Automatically sync landing after stable release and show exact version on downloads",
+    "Repository hygiene: remove obsolete files, archive historical handoffs, protect source",
+    "Fix Smart Updater first-install download and preserve stable/RC cache isolation",
+    "Release v1.6.46: verified Smart Updater first-download repair"
   ],
   "highlightsId": [
-    "IED Browser: klik kanan properti seperti Report ID, RCB Name, DataSet reference, atau Control Block reference untuk menyalin nilai tampilannya secara persis.",
-    "IED Browser: salin nama field/objek, pasangan nama + nilai, atau seluruh properti terlihat tanpa mengambil baris yang salah setelah refresh.",
-    "Event Logs: pilih beberapa baris event dengan click-drag atau Shift+click; salin melalui menu klik kanan atau Ctrl+C.",
-    "Event Logs: pemilihan banyak baris dan klik kanan tidak membuka panel detail secara tiba-tiba.",
-    "Copy bersama tetap tersedia pada Device Explorer, Live Values, Command Grid, dan tabel engineering lainnya."
+    "Perubahan rilis: Sync published v1.6.45 landing download evidence and bilingual release notes",
+    "Perubahan rilis: Automatically sync landing after stable release and show exact version on downloads",
+    "Perubahan rilis: Repository hygiene: remove obsolete files, archive historical handoffs, protect source",
+    "Perubahan rilis: Fix Smart Updater first-install download and preserve stable/RC cache isolation",
+    "Perubahan rilis: Release v1.6.46: verified Smart Updater first-download repair"
   ],
   "improvements": [
-    "The clipboard adapter is shared, bounded and read-only: no IEC MMS Read, Write, RCB takeover or Control action is triggered by a Copy operation.",
-    "Keyboard Ctrl+C and right-click target selection are consistent while WPF row virtualization and focused engineering-object selection remain intact.",
-    "User-accepted Windows pointer/keyboard workflows were reconciled through PRs #782, #783 and #784; canonical Windows and installer release gates passed for v1.6.45.",
-    "The public installer and portable single EXE share exact tagged source identity and published SHA-256 checksums, SPDX SBOM and provenance."
+    "Stable release identity, publish date, package size and SHA-256 are sourced from verified release evidence rather than hand-maintained version text.",
+    "The Windows installer and portable download URLs use GitHub's releases/latest/download endpoints so the public buttons always resolve to the newest stable assets.",
+    "Release notes are synchronized before website deployment, preventing a newer binary release from being blocked by stale landing-page metadata.",
+    "The website deployment is explicitly dispatched after release synchronization so GitHub Actions token commits cannot leave Pages behind the published release."
   ],
   "improvementsId": [
-    "Adapter clipboard tetap bersama, berbatas, dan hanya baca: operasi Copy tidak memicu MMS Read, Write, pengambilalihan RCB, atau Control.",
-    "Ctrl+C dan pilihan target klik kanan konsisten tanpa merusak virtualisasi WPF maupun pilihan objek engineering.",
-    "Pengujian mouse/keyboard yang telah diterima pengguna direkonsiliasi melalui PR #782, #783 dan #784; build Windows dan installer v1.6.45 lulus gate resmi.",
-    "Installer dan portable single EXE publik berasal dari source bertag yang sama dengan SHA-256, SPDX SBOM, dan provenance terpublikasi."
+    "Identitas stable release, tanggal publikasi, ukuran paket, dan SHA-256 diambil dari evidence release terverifikasi, bukan teks versi yang dipelihara manual.",
+    "URL installer Windows dan portable memakai endpoint releases/latest/download GitHub sehingga tombol publik selalu menuju asset stabil terbaru.",
+    "Catatan rilis disinkronkan sebelum deployment website agar binary release baru tidak terblokir metadata landing page yang tertinggal.",
+    "Deployment website dipicu eksplisit setelah sinkronisasi release sehingga commit dari GitHub Actions token tidak membuat Pages tertinggal dari release publik."
   ],
   "knownLimitations": [
     "The SG7_BCU trace also recorded 4 BufOvfl indications and 28 SqNum discontinuities. These are not verified lost-event counts; lossless buffered SOE is not established.",
@@ -57,11 +57,11 @@
     "src": "assets/screenshots/arsas-fat-report-preview-v1.6.42.webp",
     "width": 1862,
     "height": 951,
-    "alt": "ARSAS Engineering and FAT workspace reference screenshot captured on v1.6.42",
-    "altId": "Referensi screenshot workspace Engineering dan FAT ARSAS dari v1.6.42",
-    "caption": "Engineering/FAT workspace reference screenshot from v1.6.42. The v1.6.45 release focuses on separate clipboard and Event Log selection improvements.",
-    "captionId": "Screenshot referensi workspace Engineering/FAT berasal dari v1.6.42. Rilis v1.6.45 berfokus pada perbaikan clipboard dan seleksi Event Logs yang divalidasi terpisah."
+    "alt": "ARSAS 1.6.46 Engineering and FAT live IEC 61850 workspace",
+    "altId": "Workspace live IEC 61850 Engineering dan FAT ARSAS 1.6.46",
+    "caption": "ARSAS 1.6.46 stable Windows release with verified installer, portable package and release evidence.",
+    "captionId": "Stable release Windows ARSAS 1.6.46 dengan installer, portable package, dan release evidence yang terverifikasi."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
-  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.45"
+  "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.46"
 }
