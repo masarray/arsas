@@ -468,7 +468,7 @@
                                           ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                           ScrollViewer.VerticalScrollBarVisibility="Auto">
                                     <DataGrid.Columns>
-                                        <DataGridTemplateColumn Header="Channel" Width="*">
+                                        <DataGridTemplateColumn Header="Channel" Width="*" ClipboardContentBinding="{Binding DisplayName}">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
                                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -513,7 +513,7 @@
                                           ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                           ScrollViewer.VerticalScrollBarVisibility="Auto">
                                     <DataGrid.Columns>
-                                        <DataGridTemplateColumn Header="Channel" Width="*">
+                                        <DataGridTemplateColumn Header="Channel" Width="*" ClipboardContentBinding="{Binding DisplayName}">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
                                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">

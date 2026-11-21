@@ -350,7 +350,7 @@
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Time" Binding="{Binding TimeText}" Width="88"/>
                                 <DataGridTextColumn Header="Δt" Binding="{Binding DeltaText}" Width="72"/>
-                                <DataGridTemplateColumn Header="Event" Width="104">
+                                <DataGridTemplateColumn Header="Event" Width="104" ClipboardContentBinding="{Binding EventText}">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Border x:Name="EventBadge" Background="#EEF4FF" BorderBrush="#C9D9F1"

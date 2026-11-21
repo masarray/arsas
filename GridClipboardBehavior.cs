@@ -13,7 +13,7 @@ using ArIED61850Tester.Models;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// One clipboard behavior for read-only engineering DataGrids, including
+/// One clipboard behavior for all engineering DataGrids, including
 /// virtualized windows. A separate, scoped adapter supports the IED Browser
 /// property ListView without changing its navigation and write-selection logic.
 /// Does not run on telemetry refresh, allocate row visuals, or touch IEC sessions.
@@ -57,7 +57,7 @@ public static class GridClipboardBehavior
     private static void GridLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is not DataGrid grid || !ReferenceEquals(e.OriginalSource, grid) ||
-            !grid.IsReadOnly || Grids.TryGetValue(grid, out _))
+            Grids.TryGetValue(grid, out _))
             return;
 
         var state = new GridState();
@@ -69,35 +69,141 @@ public static class GridClipboardBehavior
             // selecting the exact engineering object, not just a visual cell.
             grid.SelectionMode = DataGridSelectionMode.Extended;
             grid.SelectionUnit = DataGridSelectionUnit.CellOrRowHeader;
+            InstallExcelSelectionVisual(grid);
         }
 
         grid.PreviewKeyDown += GridKeyDown;
-        if (grid.ContextMenu is not null) return;
-        // Keyboard context menus must follow the CURRENT cell, not an earlier
-        // right-click retained across a change in keyboard focus.
+        // Track mouse hits even when a row or grid supplies an action menu.
+        // A file row's Download action must never shadow its Copy capability.
         grid.PreviewMouseLeftButtonDown += (_, _) =>
         {
             state.HitColumn = null;
             state.HitItem = null;
-        }; // Preserve specialized actions.
-
+        };
         grid.PreviewMouseRightButtonDown += (_, mouse) =>
         {
             var cell = Ancestor<DataGridCell>(mouse.OriginalSource as DependencyObject);
             state.HitColumn = cell?.Column;
             state.HitItem = cell?.DataContext;
         };
+        if (grid.ContextMenu is { } existing)
+        {
+            AppendCopyActions(grid, existing);
+            return;
+        }
         var menu = new ContextMenu();
-        menu.Items.Add(Item("Copy cell value", () => CopyGrid(grid, state, "cell")));
-        menu.Items.Add(Item("Copy selected cells / rows", () =>
-            CopyGrid(grid, state, "selection"), "Ctrl+C"));
-        menu.Items.Add(Item("Copy selection with headers", () =>
-            CopyGrid(grid, state, "selection-headers")));
-        menu.Items.Add(Item("Copy selected full rows", () =>
-            CopyGrid(grid, state, "rows")));
-        menu.Items.Add(new Separator());
-        menu.Items.Add(Item("Copy visible table", () => CopyGrid(grid, state, "table")));
+        PopulateCopyMenu(menu, grid, null);
         grid.ContextMenu = menu;
+    }
+
+    // One menu factory for normal grid menus AND pre-existing specialized
+    // menus (FAT Recapture, IED file Download), without replacing actions
+    // or duplicating per-grid copy logic.
+    private static readonly object CopyMenuTag = new();
+
+    public static void AppendCopyActions(
+        DataGrid grid, ContextMenu menu, object? exactRow = null)
+    {
+        ArgumentNullException.ThrowIfNull(grid);
+        ArgumentNullException.ThrowIfNull(menu);
+        if (menu.Items.OfType<MenuItem>().Any(item =>
+                ReferenceEquals(item.Tag, CopyMenuTag)))
+            return;
+        var copy = new MenuItem { Header = "Copy", Tag = CopyMenuTag };
+        PopulateCopyMenu(copy, grid, exactRow);
+        if (menu.Items.Count != 0) menu.Items.Add(new Separator());
+        menu.Items.Add(copy);
+    }
+
+    private static void PopulateCopyMenu(
+        ItemsControl target, DataGrid grid, object? exactRow)
+    {
+        void Execute(string mode)
+        {
+            var state = Grids.TryGetValue(grid, out var installed)
+                ? installed : new GridState();
+            CopyGrid(grid, state, mode, exactRow);
+        }
+
+        target.Items.Add(Item("Copy cell value", () => Execute("cell")));
+        if (exactRow is not null)
+        {
+            // Recycled file-row menus bind an exact observed file identity.
+            // Do not copy a different row merely because SelectedItem moved.
+            target.Items.Add(Item("Copy this row", () => Execute("context-row")));
+            target.Items.Add(Item("Copy visible table", () => Execute("table")));
+            return;
+        }
+        target.Items.Add(Item("Copy selected cells / rows", () =>
+            Execute("selection"), "Ctrl+C"));
+        target.Items.Add(Item("Copy selection with headers", () =>
+            Execute("selection-headers")));
+        target.Items.Add(Item("Copy selected full rows", () =>
+            Execute("rows")));
+        target.Items.Add(new Separator());
+        target.Items.Add(Item("Copy visible table", () => Execute("table")));
+    }
+
+    // Both ARSAS themes make selected DataGridCells transparent. The WPF
+    // selection was present, but users could not SEE Excel-style blocks.
+    // Apply a derived cell style only on explicit spreadsheet grids; command
+    // and identity grids retain their existing row/action styles.
+    private static readonly Brush SelectedCellFill =
+        FrozenBrush(Color.FromRgb(0xD8, 0xE9, 0xFF));
+    private static readonly Brush SelectedCellBorder =
+        FrozenBrush(Color.FromRgb(0x69, 0x9F, 0xDB));
+
+    private static Brush FrozenBrush(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
+
+    private static void InstallExcelSelectionVisual(DataGrid grid)
+    {
+        var baseStyle = grid.CellStyle ??
+            grid.TryFindResource(typeof(DataGridCell)) as Style;
+        var style = new Style(typeof(DataGridCell), baseStyle);
+        var selected = new Trigger
+        {
+            Property = DataGridCell.IsSelectedProperty,
+            Value = true
+        };
+        selected.Setters.Add(new Setter(Control.BackgroundProperty, SelectedCellFill));
+        selected.Setters.Add(new Setter(Control.BorderBrushProperty, SelectedCellBorder));
+        selected.Setters.Add(new Setter(Control.BorderThicknessProperty,
+            new Thickness(1)));
+        style.Triggers.Add(selected);
+        grid.CellStyle = style;
+    }
+
+    private static string ColumnHeader(DataGridColumn column)
+    {
+        if (column.Header is string label) return label;
+        // Filter headers are composite Grids, not string captions. Look only
+        // at the small header logical tree during an operator copy action;
+        // never realize or walk hidden/virtualized data rows.
+        if (column.Header is DependencyObject root)
+        {
+            var queue = new Queue<DependencyObject>();
+            queue.Enqueue(root);
+            for (var inspected = 0; queue.Count != 0 && inspected < 128; inspected++)
+            {
+                var current = queue.Dequeue();
+                if (current is TextBlock block && !string.IsNullOrWhiteSpace(block.Text))
+                    return block.Text.Trim();
+                foreach (var child in LogicalTreeHelper.GetChildren(current)
+                    .OfType<DependencyObject>())
+                    queue.Enqueue(child);
+            }
+        }
+        if (!string.IsNullOrWhiteSpace(column.SortMemberPath))
+            return column.SortMemberPath;
+        if (column is DataGridBoundColumn { Binding: Binding binding } &&
+            !string.IsNullOrWhiteSpace(binding.Path?.Path))
+            return binding.Path.Path.Split('.').Last();
+        return string.Empty;
     }
 
     private static void GridKeyDown(object sender, KeyEventArgs e)
@@ -149,7 +255,8 @@ public static class GridClipboardBehavior
         return Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
     }
 
-    private static void CopyGrid(DataGrid grid, GridState state, string mode)
+    private static void CopyGrid(
+        DataGrid grid, GridState state, string mode, object? exactRow = null)
     {
         var columns = VisibleColumns(grid);
         if (columns.Count == 0) return;
@@ -157,7 +264,7 @@ public static class GridClipboardBehavior
         {
             var cell = grid.CurrentCell;
             var column = state.HitColumn ?? (cell.IsValid ? cell.Column : null);
-            var item = state.HitItem ?? (cell.IsValid ? cell.Item : null);
+            var item = exactRow ?? state.HitItem ?? (cell.IsValid ? cell.Item : null);
             if (column is not null && item is not null &&
                 columns.Contains(column) && grid.Items.Contains(item) &&
                 !ReferenceEquals(item, CollectionView.NewItemPlaceholder))
@@ -169,7 +276,19 @@ public static class GridClipboardBehavior
         IEnumerable<IReadOnlyList<string?>> rows;
         if (mode == "table")
         {
+            if (grid.Items.Count > EngineeringClipboardText.MaxRows)
+            {
+                Inform(grid, "More than 3,000 visible rows. Use Export CSV for large tables.");
+                return;
+            }
             rows = EnumerateAll(grid, copyColumns);
+        }
+        else if (mode == "context-row")
+        {
+            if (exactRow is null || !grid.Items.Contains(exactRow))
+                return;
+            rows = new[] { (IReadOnlyList<string?>)copyColumns
+                .Select(column => CellValue(column, exactRow)).ToArray() };
         }
         else
         {
@@ -198,6 +317,11 @@ public static class GridClipboardBehavior
             // each displayed column, even after sorting/filtering.
             if (mode == "rows" || selected.Count == 0)
             {
+                if (grid.SelectedItems.Count > EngineeringClipboardText.MaxRows)
+                {
+                    Inform(grid, "More than 3,000 selected rows. Use Export CSV for large tables.");
+                    return;
+                }
                 foreach (var item in grid.SelectedItems.Cast<object>())
                     selected[item] = new HashSet<DataGridColumn>(columns);
                 if (mode == "rows" && selected.Count == 0)
@@ -208,10 +332,9 @@ public static class GridClipboardBehavior
             if (selected.Count == 0 && grid.CurrentCell.IsValid)
             {
                 var cell = grid.CurrentCell;
-                selected[cell.Item] = new HashSet<DataGridColumn>
-                {
-                    cell.Column
-                };
+                selected[cell.Item] = mode == "rows"
+                    ? new HashSet<DataGridColumn>(columns)
+                    : new HashSet<DataGridColumn> { cell.Column };
             }
             if (selected.Count == 0) return;
             if (mode is "selection" or "selection-headers")
@@ -223,12 +346,12 @@ public static class GridClipboardBehavior
             rows = EnumerateSelected(grid, copyColumns, selected);
         }
 
-        var headers = copyColumns.Select(column =>
-            column.Header?.ToString() ?? string.Empty).ToArray();
+        var headers = copyColumns.Select(ColumnHeader).ToArray();
         // Standard Ctrl+C is Excel-like: only selected cells, no headers.
         // Named actions provide deliberate header-preserving table copies.
         if (!EngineeringClipboardText.TryBuild(headers, rows,
-                includeHeaders: mode is "table" or "rows" or "selection-headers",
+                includeHeaders: mode is "table" or "rows" or "selection-headers"
+                    or "context-row",
                 out var text, out var failure))
         {
             Inform(grid, failure);

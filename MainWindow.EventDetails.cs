@@ -11,14 +11,50 @@ public partial class MainWindow
 {
     private DispatcherTimer? _eventDrawerAutoHide;
     private bool _eventDrawerHovering;
+    private Iec61850EventEntry? _eventDrawerCurrentEntry;
 
     private void EventLogGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!ReferenceEquals(sender, EventLogGrid) || EventLogGrid.SelectedItem is not Iec61850EventEntry entry)
+        if (ReferenceEquals(sender, EventLogGrid) &&
+            Mouse.LeftButton == MouseButtonState.Released)
+            ShowCurrentEventDetails();
+    }
+
+    private void EventLogGrid_CurrentCellChanged(object? sender, EventArgs e)
+    {
+        if (ReferenceEquals(sender, EventLogGrid) &&
+            Mouse.LeftButton == MouseButtonState.Released)
+            ShowCurrentEventDetails();
+    }
+
+    private void EventLogGrid_PreviewMouseLeftButtonUp(
+        object sender, MouseButtonEventArgs e)
+    {
+        if (!ReferenceEquals(sender, EventLogGrid)) return;
+        // Finish native drag/Shift selection before changing drawer width;
+        // otherwise the grid reflows mid-gesture and breaks range selection.
+        Dispatcher.BeginInvoke(DispatcherPriority.Background,
+            new Action(() =>
+            {
+                if (IsLoaded)
+                    ShowCurrentEventDetails();
+            }));
+    }
+
+    private void ShowCurrentEventDetails()
+    {
+        if (EventDetailsDrawer is null) return;
+        var entry = EventLogGrid.CurrentCell.IsValid
+            ? EventLogGrid.CurrentCell.Item as Iec61850EventEntry
+            : EventLogGrid.SelectedItem as Iec61850EventEntry;
+        if (entry is null)
         {
             HideEventDetails();
             return;
         }
+        if (ReferenceEquals(entry, _eventDrawerCurrentEntry) &&
+            EventDetailsDrawer.Visibility == Visibility.Visible)
+            return;
 
         EventDetailsSubtitle.Text = $"{entry.DeviceName} · {entry.EventLabel} · #{entry.Sequence}";
         static string Show(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value.Trim();
@@ -49,6 +85,7 @@ public partial class MainWindow
             new RcbInspectionProperty("OptFlds", Show(entry.ReportFrame?.OptFldsRawHex), "Original decoded option bits"),
             new RcbInspectionProperty("Buffer overflow", entry.ReportFrame?.BufferOverflow?.ToString() ?? "—", "Independent potential-history-loss warning")
         };
+        _eventDrawerCurrentEntry = entry;
         EventDrawerColumn.Width = new GridLength(370);
         EventDetailsDrawer.Visibility = Visibility.Visible;
         RestartEventDetailsAutoHide();
@@ -95,6 +132,7 @@ public partial class MainWindow
 
     private void HideEventDetails()
     {
+        _eventDrawerCurrentEntry = null;
         _eventDrawerAutoHide?.Stop();
         _eventDrawerHovering = false;
         if (EventDetailsDrawer == null) return;

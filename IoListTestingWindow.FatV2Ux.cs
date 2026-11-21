@@ -47,7 +47,11 @@ public partial class IoListTestingWindow
                 _fatSignalsGrid.SelectionUnit = DataGridSelectionUnit.FullRow;
                 ConfigureFatV2Columns(_fatSignalsGrid);
                 _fatSignalsGrid.PreviewMouseRightButtonDown += FatSignalsGrid_PreviewMouseRightButtonDown;
-                _fatSignalsGrid.ContextMenu = BuildFatContextMenu();
+                // Keep Recapture / Remove and add the shared copy actions,
+                // regardless of whether the global Loaded handler ran first.
+                var actions = BuildFatContextMenu();
+                GridClipboardBehavior.AppendCopyActions(_fatSignalsGrid, actions);
+                _fatSignalsGrid.ContextMenu = actions;
             }
 
             UpdateFatWorkspaceLabels();
@@ -137,6 +141,7 @@ public partial class IoListTestingWindow
         {
             Header = "TEST",
             Width = 48,
+            ClipboardContentBinding = new Binding(nameof(IoTestPointPlan.TestEnabled)),
             CellTemplate = new DataTemplate { VisualTree = enabledFactory }
         });
 
@@ -207,6 +212,7 @@ public partial class IoListTestingWindow
         {
             Header = "LIVE VALUE",
             Width = 104,
+            ClipboardContentBinding = new Binding("Runtime.CurrentValue"),
             CellTemplate = new DataTemplate { VisualTree = panel }
         };
     }
@@ -258,6 +264,9 @@ public partial class IoListTestingWindow
         {
             Header = slot == FatValueSlot.Value1 ? "VALUE 1" : "VALUE 2",
             Width = 142,
+            ClipboardContentBinding = new Binding(slot == FatValueSlot.Value1
+                ? nameof(IoTestPointPlan.Value1Text)
+                : nameof(IoTestPointPlan.Value2Text)),
             CellTemplate = new DataTemplate { VisualTree = panel }
         };
     }

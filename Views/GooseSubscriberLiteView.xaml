@@ -373,7 +373,7 @@
                                 <DataGridTextColumn Header="Time" Binding="{Binding TimeText}" Width="116" MinWidth="106"/>
                                 <DataGridTextColumn Header="IED" Binding="{Binding IedName}" Width="92" MinWidth="75"/>
                                 <DataGridTextColumn Header="GOOSE ID" Binding="{Binding GooseId}" Width="113" MinWidth="98"/>
-                                <DataGridTemplateColumn Header="Event" Width="92">
+                                <DataGridTemplateColumn Header="Event" Width="92" ClipboardContentBinding="{Binding EventText}">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <Border x:Name="Badge" Background="#EEF4FF" BorderBrush="#C9D9F1"
@@ -691,6 +691,7 @@
                                             </DataGridTextColumn.ElementStyle>
                                         </DataGridTextColumn>
                                         <DataGridTemplateColumn Header="Value" Width="153" MinWidth="143"
+                                                                ClipboardContentBinding="{Binding DisplayValue}"
                                                                 CellTemplate="{StaticResource ProcessValueBadgeTemplate}"/>
                                     </DataGrid.Columns>
                                 </DataGrid>
