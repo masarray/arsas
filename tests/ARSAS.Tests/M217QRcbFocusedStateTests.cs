@@ -16,12 +16,12 @@ public sealed class M217QRcbFocusedStateTests
     };
 
     [Fact]
-    public void ReadOnlyRcbFocusContainsFourExactCurrentFieldsWithoutWholeIedSweep()
+    public void ReadOnlyRcbFocusContainsThreeFamilySpecificFieldsWithoutWholeIedSweep()
     {
         var row = new RcbExportRow { Reference = Root, Buffered = false };
         var plan = IedBrowserRcbFocusedReadPlan.Build(Model(), row);
-        Assert.Equal(4, plan.Count);
-        Assert.Equal(new[] { "RptEna", "Resv", "ResvTms", "Owner" },
+        Assert.Equal(3, plan.Count);
+        Assert.Equal(new[] { "RptEna", "Owner", "Resv" },
             plan.Select(x => x.Reference.Split('.').Last()).ToArray());
         Assert.All(plan, x => Assert.Equal("RP", x.FunctionalConstraint));
         Assert.All(plan, x => Assert.StartsWith(Root + ".", x.Reference));
@@ -61,7 +61,9 @@ public sealed class M217QRcbFocusedStateTests
             Reference = selected,
             Buffered = true
         });
-        Assert.Equal(4, plan.Count);
+        Assert.Equal(3, plan.Count);
+        Assert.Equal(new[] { "RptEna", "Owner", "ResvTms" },
+            plan.Select(item => item.Reference.Split('.').Last()).ToArray());
         Assert.All(plan, item =>
         {
             Assert.Equal("BR", item.FunctionalConstraint);
