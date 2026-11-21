@@ -401,6 +401,7 @@ public class SignalDefinition : ObservableObject
     // Only read on an explicit clipboard action. A computed presentation value
     // preserves all three independent operator flags without a parallel cache,
     // an always-live Binding, or mutating an IEC command's control state.
+    [System.Text.Json.Serialization.JsonIgnore]
     public string ControlChecksCopyText =>
         $"Interlock={ControlInterlockCheck}; Sync={ControlSynchroCheck}; Test={ControlTestMode}";
 
