@@ -102,6 +102,27 @@ public sealed class P9SoeControlAuditTests
             new Iec61850ControlCommandResult { ServiceAccepted = true, IsSuccess = true }));
         Assert.Equal("Control unverified", Iec61850ControlAuditPolicy.Outcome(
             new Iec61850ControlCommandResult { ServiceAccepted = true, FeedbackConfirmed = false }));
+
+        // An explicit IED AddCause authorizes a precise reason. A generic
+        // MMS denial does NOT authorize guessing Local/Remote/interlock.
+        var interlocked = new Iec61850ControlCommandResult
+        {
+            Stage = "Operate", AddCause = "blocked-by-interlocking",
+            WireSteps = new[] { new Iec61850ControlWireEvidence
+            { Action = "Operate", RequestAccepted = false } }
+        };
+        Assert.Contains("IED blocked the command by interlocking",
+            Iec61850ControlAuditPolicy.Evidence(interlocked));
+        Assert.Contains("confidence=IEDExplicitAddCause",
+            Iec61850ControlAuditPolicy.Evidence(interlocked));
+        var authority = new Iec61850ControlCommandResult
+        {
+            Stage = "Operate", AddCause = "no-access-authority",
+            WireSteps = new[] { new Iec61850ControlWireEvidence
+            { Action = "Operate", RequestAccepted = false } }
+        };
+        Assert.Contains("insufficient control access authority",
+            Iec61850ControlAuditPolicy.Evidence(authority));
     }
 
     [Fact]
