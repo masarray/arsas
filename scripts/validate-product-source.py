@@ -48,7 +48,8 @@ KNOWN_TOKENS = {
     "ARSAS_VERSION", "PRODUCT_NAME", "CANONICAL_ROOT", "REPOSITORY_URL", "ENGINE_REPOSITORY_URL",
     "AUTHOR_NAME", "AUTHOR_LINKEDIN", "AUTHOR_GITHUB", "INSTALLER_URL", "PORTABLE_URL", "CHECKSUMS_URL",
     "STABLE_VERSION", "STABLE_TAG", "STABLE_SOURCE_COMMIT", "STABLE_PUBLISHED_ISO", "STABLE_PUBLISHED_DATE", "STABLE_PUBLISHED_DATE_ID",
-    "INSTALLER_SIZE", "PORTABLE_SIZE", "INSTALLER_SHA256", "PORTABLE_SHA256", "RELEASE_TITLE",
+    "INSTALLER_SIZE", "PORTABLE_SIZE", "INSTALLER_FILE", "PORTABLE_FILE",
+    "INSTALLER_SHA256", "PORTABLE_SHA256", "RELEASE_TITLE",
     "RELEASE_TITLE_ID", "RELEASE_SUMMARY", "RELEASE_SUMMARY_ID", "RELEASE_HIGHLIGHTS",
     "RELEASE_HIGHLIGHTS_ID", "RELEASE_IMPROVEMENTS", "RELEASE_IMPROVEMENTS_ID", "RELEASE_LIMITATIONS",
     "RELEASE_LIMITATIONS_ID", "SIGNING_STATUS", "SIGNING_LABEL", "SIGNING_LABEL_ID", "SIGNING_DETAIL",
@@ -250,9 +251,9 @@ def main() -> int:
                 if value not in rendered:
                     errors.append(f"{label}: missing search-to-engineering contract value {value}")
             premium_contract = (
-                ("ARSAS is a free Windows", "Start here", "Download for Windows", "Real product evidence")
+                ("ARSAS is a free Windows", "Start here", "Download ARSAS v", "Real product evidence")
                 if path == "" else
-                ("ARSAS adalah tester IEC 61850 Windows gratis", "Mulai di sini", "Unduh untuk Windows", "Evidence produk nyata")
+                ("ARSAS adalah tester IEC 61850 Windows gratis", "Mulai di sini", "Unduh ARSAS v", "Evidence produk nyata")
             )
             for value in premium_contract:
                 if value not in rendered:

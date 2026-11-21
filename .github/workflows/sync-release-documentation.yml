@@ -1,10 +1,16 @@
 name: Synchronize release documentation evidence
 
 on:
+  # A release request is not publication. Only synchronize AFTER the official
+  # package, installer, checksums and release evidence workflow has succeeded.
+  # workflow_run can be triggered by a GITHUB_TOKEN-created workflow run.
+  workflow_run:
+    workflows: ["Release ARSAS Windows packages"]
+    types: [completed]
+    branches: [main]
   push:
     branches: [ main ]
     paths:
-      - ".release/windows.json"
       - ".github/workflows/sync-release-documentation.yml"
   workflow_dispatch:
 
@@ -19,6 +25,13 @@ concurrency:
 jobs:
   synchronize:
     name: Synchronize stable release evidence
+    if: >-
+      ${{
+        github.event_name != 'workflow_run' ||
+        (github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.event == 'push' &&
+         github.event.workflow_run.head_branch == 'main')
+      }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout main with tags
@@ -244,10 +257,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          content="$(base64 -w 0 _release-sync/published.json)"
           api_path="repos/$GITHUB_REPOSITORY/contents/published.json"
-          existing_sha="$(gh api "$api_path?ref=release-evidence" --jq .sha)"
-          body="$(python - "$content" "$existing_sha" <<'PY'
+          existing="$(gh api "$api_path?ref=release-evidence")"
+          existing_sha="$(printf '%s' "$existing" | python -c 'import json,sys;print(json.load(sys.stdin)["sha"])')"
+          printf '%s' "$existing" | python -c 'import json,sys,base64;print(base64.b64decode(json.load(sys.stdin)["content"]).decode("utf-8"),end="")' > _release-sync/existing-evidence.json
+          if cmp -s _release-sync/existing-evidence.json _release-sync/published.json; then
+            echo "Independent updater evidence already matches the published stable release."
+          else
+            content="$(base64 -w 0 _release-sync/published.json)"
+            body="$(python - "$content" "$existing_sha" <<'PY'
           import json, sys
           print(json.dumps({
               "message": "docs: synchronize stable ARSAS release evidence",
@@ -256,8 +274,9 @@ jobs:
               "branch": "release-evidence",
           }))
           PY
-          )"
-          printf '%s' "$body" | gh api --method PUT "$api_path" --input - >/dev/null
+            )"
+            printf '%s' "$body" | gh api --method PUT "$api_path" --input - >/dev/null
+          fi
 
       - name: Dispatch synchronized product website
         env:
