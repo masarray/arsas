@@ -398,6 +398,12 @@ public class SignalDefinition : ObservableObject
         set => Set(ref _controlTestMode, value);
     }
 
+    // Only read on an explicit clipboard action. A computed presentation value
+    // preserves all three independent operator flags without a parallel cache,
+    // an always-live Binding, or mutating an IEC command's control state.
+    public string ControlChecksCopyText =>
+        $"Interlock={ControlInterlockCheck}; Sync={ControlSynchroCheck}; Test={ControlTestMode}";
+
     public bool ControlConfirmationPending => _controlConfirmationPending;
     public string ControlPendingValue => _controlPendingValue;
     public string ControlPendingAction => _controlPendingAction;

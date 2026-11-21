@@ -775,11 +775,7 @@
                                                     </DataGridTextColumn>
                                                     <DataGridTemplateColumn Header="Checks" Width="1.22*" MinWidth="165">
                                                         <DataGridTemplateColumn.ClipboardContentBinding>
-                                                            <MultiBinding StringFormat="Interlock={0}; Sync={1}; Test={2}">
-                                                                <Binding Path="ControlInterlockCheck"/>
-                                                                <Binding Path="ControlSynchroCheck"/>
-                                                                <Binding Path="ControlTestMode"/>
-                                                            </MultiBinding>
+                                                            <Binding Path="ControlChecksCopyText" Mode="OneWay"/>
                                                         </DataGridTemplateColumn.ClipboardContentBinding>
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>

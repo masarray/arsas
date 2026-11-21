@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Xml.Linq;
 using ArIED61850Tester;
+using ArIED61850Tester.Models;
 
 namespace ARSAS.Tests;
 
@@ -185,6 +186,25 @@ public sealed class EngineeringGridClipboardBehaviorTests
                     ((string?)column.Attribute("Header") ?? "(header template)"));
             }
         }
+    }
+
+    [Fact]
+    public void CommandChecksCopyReadsAllThreeActualFlagsWithoutModifyingThem()
+    {
+        var signal = new SignalDefinition
+        {
+            ControlInterlockCheck = true,
+            ControlSynchroCheck = false,
+            ControlTestMode = true
+        };
+        Assert.Equal("Interlock=True; Sync=False; Test=True",
+            signal.ControlChecksCopyText);
+        signal.ControlSynchroCheck = true;
+        Assert.Equal("Interlock=True; Sync=True; Test=True",
+            signal.ControlChecksCopyText);
+        Assert.True(signal.ControlInterlockCheck);
+        Assert.True(signal.ControlSynchroCheck);
+        Assert.True(signal.ControlTestMode);
     }
 
     [Fact]
