@@ -301,6 +301,7 @@ public sealed class StaticDataSetReportProjectionAccumulator
             SequenceNumber = update.SequenceNumber,
             ConfRev = update.ConfRev,
             ReportTimestamp = update.ReportTimestamp,
+            ReportFrame = update.ReportFrame,
             UpdatedAt = update.UpdatedAt
         };
     }
@@ -428,6 +429,11 @@ public sealed class StaticDataSetReportProjectionAccumulator
             SequenceNumber = latest.Source.SequenceNumber,
             ConfRev = latest.Source.ConfRev,
             ReportTimestamp = latest.Source.ReportTimestamp,
+            // A schema aggregate assembled from several frames cannot claim
+            // one causative wire frame. Preserve only exact same-frame joins.
+            ReportFrame = leaves.All(leaf => ReferenceEquals(
+                leaf.Source.ReportFrame, latest.Source.ReportFrame))
+                ? latest.Source.ReportFrame : null,
             UpdatedAt = leaves.Max(leaf => leaf.UpdatedAt)
         };
     }
