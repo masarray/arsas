@@ -193,6 +193,9 @@ jobs:
             --evidence _release-sync/published.json \
             --release _release-sync/release.json \
             --notes landing/release-notes.json
+          # Keep the public stable identity and release notes synchronized.
+          # Never propagate the stale checkout's landing/latest.json to main.
+          cp _release-sync/published.json landing/latest.json
 
       - name: Update public landing release records
         shell: bash
