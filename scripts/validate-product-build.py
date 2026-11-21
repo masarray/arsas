@@ -194,9 +194,9 @@ def main() -> int:
         for value in search_contract:
             if value not in home_text: errors.append(f"{home}: missing search-to-engineering contract value {value}")
         premium_contract = (
-            ("ARSAS is a free Windows", "Start here", "Download for Windows", "Real product evidence")
+            ("ARSAS is a free Windows", "Start here", "Download ARSAS v", "Real product evidence")
             if home == "index.html" else
-            ("ARSAS adalah tester IEC 61850 Windows gratis", "Mulai di sini", "Unduh untuk Windows", "Evidence produk nyata")
+            ("ARSAS adalah tester IEC 61850 Windows gratis", "Mulai di sini", "Unduh ARSAS v", "Evidence produk nyata")
         )
         for value in premium_contract:
             if value not in home_text: errors.append(f"{home}: missing premium homepage contract value {value}")

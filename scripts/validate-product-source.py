@@ -251,9 +251,9 @@ def main() -> int:
                 if value not in rendered:
                     errors.append(f"{label}: missing search-to-engineering contract value {value}")
             premium_contract = (
-                ("ARSAS is a free Windows", "Start here", "Download for Windows", "Real product evidence")
+                ("ARSAS is a free Windows", "Start here", "Download ARSAS v", "Real product evidence")
                 if path == "" else
-                ("ARSAS adalah tester IEC 61850 Windows gratis", "Mulai di sini", "Unduh untuk Windows", "Evidence produk nyata")
+                ("ARSAS adalah tester IEC 61850 Windows gratis", "Mulai di sini", "Unduh ARSAS v", "Evidence produk nyata")
             )
             for value in premium_contract:
                 if value not in rendered:
