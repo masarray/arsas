@@ -1736,7 +1736,7 @@
                                         <DataGridTextColumn Header="#" Binding="{Binding Order}" Width="46"/>
                                         <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="175" MinWidth="130"/>
                                         <DataGridTextColumn Header="Reference" Binding="{Binding SignalReference}" Width="2*" MinWidth="230"/>
-                                        <DataGridTemplateColumn Header="Value" Width="1.15*" MinWidth="140">
+                                        <DataGridTemplateColumn Header="Value" Width="1.15*" MinWidth="140" ClipboardContentBinding="{Binding Value}">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
                                                     <Border CornerRadius="8" Padding="8,3" HorizontalAlignment="Left" MinWidth="86" BorderThickness="1">
