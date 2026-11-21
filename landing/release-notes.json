@@ -2,35 +2,35 @@
   "schemaVersion": 1,
   "product": "ARSAS",
   "version": "1.6.46",
-  "title": "Stable release improvements",
-  "titleId": "Peningkatan rilis stabil",
-  "summary": "ARSAS 1.6.46 is the latest verified stable Windows release. Package identity, download links, checksums and publication evidence are synchronized automatically from the tagged GitHub Release.",
-  "summaryId": "ARSAS 1.6.46 adalah stable release Windows terverifikasi terbaru. Identitas paket, link download, checksum, dan publication evidence disinkronkan otomatis dari GitHub Release bertag.",
+  "title": "Reliable Smart Updater downloads",
+  "titleId": "Unduhan Smart Updater lebih andal",
+  "summary": "ARSAS 1.6.46 improves first-time Smart Updater downloads on Windows. Verified installers now complete the partial-file lifecycle safely before independent SHA-256 checks, while background update notifications remain non-disruptive to IEC 61850 engineering work.",
+  "summaryId": "ARSAS 1.6.46 meningkatkan keandalan unduhan pertama Smart Updater di Windows. File installer kini ditutup dengan benar sebelum verifikasi SHA-256, sementara pemeriksaan update di background tetap tidak mengganggu pekerjaan engineering IEC 61850.",
   "highlights": [
-    "Sync published v1.6.45 landing download evidence and bilingual release notes",
-    "Automatically sync landing after stable release and show exact version on downloads",
-    "Repository hygiene: remove obsolete files, archive historical handoffs, protect source",
-    "Fix Smart Updater first-install download and preserve stable/RC cache isolation",
-    "Release v1.6.46: verified Smart Updater first-download repair"
+    "Fixed the first-update download failure: close and flush the exclusive .part file before independent size/SHA-256 verification and final installer cache rename.",
+    "Keep unsafe downloads out: incorrect file size or SHA-256 rejects the installer and removes incomplete temporary downloads.",
+    "Reuse verified packages: a trusted cached installer is checked again and does not require an unnecessary second download.",
+    "Stay in control: the app reviews updates after startup, downloads verified bytes in the background and asks the operator before installation.",
+    "Official stable Windows Setup and Portable EXE packages are published from one validated source with checksums, SPDX SBOM and provenance."
   ],
   "highlightsId": [
-    "Perubahan rilis: Sync published v1.6.45 landing download evidence and bilingual release notes",
-    "Perubahan rilis: Automatically sync landing after stable release and show exact version on downloads",
-    "Perubahan rilis: Repository hygiene: remove obsolete files, archive historical handoffs, protect source",
-    "Perubahan rilis: Fix Smart Updater first-install download and preserve stable/RC cache isolation",
-    "Perubahan rilis: Release v1.6.46: verified Smart Updater first-download repair"
+    "Memperbaiki kegagalan unduhan pertama: file .part ditutup dan di-flush sebelum pemeriksaan ukuran/SHA-256 dan pemindahan ke cache installer final.",
+    "Unduhan tidak aman ditolak: ukuran atau SHA-256 yang salah mencegah installer dipakai dan file sementara yang tidak lengkap dibersihkan.",
+    "Cache terverifikasi digunakan kembali: installer yang tersimpan diperiksa ulang tanpa perlu mengunduh paket yang sama lagi.",
+    "Kontrol tetap di pengguna: aplikasi memeriksa update setelah startup, mengunduh di background, dan meminta persetujuan sebelum instalasi.",
+    "Setup Windows dan Portable EXE resmi berasal dari source yang tervalidasi, dengan checksum, SPDX SBOM, dan provenance."
   ],
   "improvements": [
-    "Stable release identity, publish date, package size and SHA-256 are sourced from verified release evidence rather than hand-maintained version text.",
-    "The Windows installer and portable download URLs use GitHub's releases/latest/download endpoints so the public buttons always resolve to the newest stable assets.",
-    "Release notes are synchronized before website deployment, preventing a newer binary release from being blocked by stale landing-page metadata.",
-    "The website deployment is explicitly dispatched after release synchronization so GitHub Actions token commits cannot leave Pages behind the published release."
+    "Automated download regression tests cover the actual first-time file/write/hash/rename path, verified cache reuse and rejection of mismatched hashes.",
+    "Stable and release-candidate updater caches remain isolated; deferral and the existing checked stable-manifest provenance are preserved.",
+    "The updater does not modify the connected IED, perform background installation, or silently interrupt IEC 61850 monitoring.",
+    "The Download Center receives version, package size, download targets and SHA-256 from the already published GitHub stable release; the Pages deployment is automatically triggered after synchronization."
   ],
   "improvementsId": [
-    "Identitas stable release, tanggal publikasi, ukuran paket, dan SHA-256 diambil dari evidence release terverifikasi, bukan teks versi yang dipelihara manual.",
-    "URL installer Windows dan portable memakai endpoint releases/latest/download GitHub sehingga tombol publik selalu menuju asset stabil terbaru.",
-    "Catatan rilis disinkronkan sebelum deployment website agar binary release baru tidak terblokir metadata landing page yang tertinggal.",
-    "Deployment website dipicu eksplisit setelah sinkronisasi release sehingga commit dari GitHub Actions token tidak membuat Pages tertinggal dari release publik."
+    "Regression test unduhan otomatis mencakup alur file/write/hash/rename pertama, penggunaan ulang cache valid, dan penolakan SHA-256 yang tidak cocok.",
+    "Cache updater stable dan release candidate tetap terpisah; fitur penundaan serta verifikasi asal manifest stable tetap dipertahankan.",
+    "Updater tidak mengubah konfigurasi IED, tidak memasang update tanpa izin, dan tidak menghentikan monitoring IEC 61850 secara diam-diam.",
+    "Download Center menerima versi, ukuran paket, tautan unduhan, dan SHA-256 dari GitHub stable release yang sudah diterbitkan; deployment Pages dipicu otomatis setelah sinkronisasi."
   ],
   "knownLimitations": [
     "The SG7_BCU trace also recorded 4 BufOvfl indications and 28 SqNum discontinuities. These are not verified lost-event counts; lossless buffered SOE is not established.",
