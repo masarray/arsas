@@ -84,6 +84,8 @@ internal static class GridClipboardBehavior
         menu.Items.Add(Item("Copy cell value", () => CopyGrid(grid, state, "cell")));
         menu.Items.Add(Item("Copy selected cells / rows", () =>
             CopyGrid(grid, state, "selection"), "Ctrl+C"));
+        menu.Items.Add(Item("Copy selection with headers", () =>
+            CopyGrid(grid, state, "selection-headers")));
         menu.Items.Add(Item("Copy selected full rows", () =>
             CopyGrid(grid, state, "rows")));
         menu.Items.Add(new Separator());
@@ -150,7 +152,8 @@ internal static class GridClipboardBehavior
             var column = state.HitColumn ?? (cell.IsValid ? cell.Column : null);
             var item = state.HitItem ?? (cell.IsValid ? cell.Item : null);
             if (column is not null && item is not null &&
-                columns.Contains(column) && !ReferenceEquals(item, CollectionView.NewItemPlaceholder))
+                columns.Contains(column) && grid.Items.Contains(item) &&
+                !ReferenceEquals(item, CollectionView.NewItemPlaceholder))
                 SetClipboard(grid, CellValue(column, item));
             return;
         }
@@ -168,7 +171,7 @@ internal static class GridClipboardBehavior
             // Excel-style blocks. Row mode explicitly expands to full columns.
             var selected = new Dictionary<object, HashSet<DataGridColumn>>(
                 ReferenceEqualityComparer.Instance);
-            if (mode == "selection")
+            if (mode is "selection" or "selection-headers")
             {
                 foreach (var cell in grid.SelectedCells)
                 {
@@ -204,7 +207,7 @@ internal static class GridClipboardBehavior
                 };
             }
             if (selected.Count == 0) return;
-            if (mode == "selection")
+            if (mode is "selection" or "selection-headers")
             {
                 var wanted = new HashSet<DataGridColumn>(
                     selected.Values.SelectMany(set => set));
@@ -215,8 +218,11 @@ internal static class GridClipboardBehavior
 
         var headers = copyColumns.Select(column =>
             column.Header?.ToString() ?? string.Empty).ToArray();
+        // Standard Ctrl+C is Excel-like: only selected cells, no headers.
+        // Named actions provide deliberate header-preserving table copies.
         if (!EngineeringClipboardText.TryBuild(headers, rows,
-                includeHeaders: true, out var text, out var failure))
+                includeHeaders: mode is "table" or "rows" or "selection-headers",
+                out var text, out var failure))
         {
             Inform(grid, failure);
             return;
@@ -276,13 +282,15 @@ internal static class GridClipboardBehavior
         var menu = new ContextMenu();
         menu.Items.Add(Item("Copy value", () =>
         {
-            var row = state.HitRow ?? list.SelectedItem as IedBrowserDetailRow;
+            var row = state.HitRow is { } clicked && list.Items.Contains(clicked)
+                ? clicked : list.SelectedItem as IedBrowserDetailRow;
             if (row is not null)
                 SetClipboard(list, row.Value);
         }));
         menu.Items.Add(Item("Copy name and value", () =>
         {
-            var row = state.HitRow ?? list.SelectedItem as IedBrowserDetailRow;
+            var row = state.HitRow is { } clicked && list.Items.Contains(clicked)
+                ? clicked : list.SelectedItem as IedBrowserDetailRow;
             if (row is not null) CopyDetailRows(list, [row]);
         }));
         menu.Items.Add(new Separator());
