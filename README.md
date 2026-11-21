@@ -33,30 +33,31 @@
   <sub>One persistent multi-IED shell for discovery, live values, reporting, events, alarms, guarded control, FAT, files and diagnostics.</sub>
 </div>
 
-> **Latest public stable: [ARSAS v1.6.42](https://github.com/masarray/arsas/releases/tag/v1.6.42)** — Windows x64, operator-tested application, published 25 October 2026. The two downloadable binaries are the exact validated public release packages. [Installer](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe) · [Portable single EXE](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.exe) · [Checksums](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt).
+> **Public stable for Windows x64:** [Download the latest verified ARSAS release](https://github.com/masarray/arsas/releases/latest) · [Installer](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe) · [Portable single EXE](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.exe) · [Checksums](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt). The release tag and published provenance identify the exact shipped binaries; the dynamic stable link is authoritative for new versions.
 >
-> **Engineering boundary:** stable is the public **application** channel, not IEC 61850 conformance certification, universal vendor compatibility, physical R7/R10 qualification or lossless buffered SOE. The latest operator snapshot recorded 432 report frames with 38 continuity findings and 9 IED-advertised BufOvfl notices (not 38 proven lost events). Some test endpoints may be simulators. See the [release notes](https://github.com/masarray/arsas/releases/tag/v1.6.42) and [tracked qualification](https://github.com/masarray/arsas/pull/729).
+> **v1.6.44 field result (21 November 2026):** the SG7_BCU retest displayed **77/77 live values**, received reporting from **4/4 BRCBs**, decoded **337 frames**, and differentiated historical **Buffer event** from **Data change** and **Integrity**. It also observed **4 BufOvfl indications** and **28 SqNum discontinuities**—not verified missing-event counts or a claim of lossless SOE. [See this release's field-scoped notes](docs/RELEASE_v1.6.44.md).
 >
-> **Exact source identity:** v1.6.42 assets were built from [`3db2ca98`](https://github.com/masarray/arsas/tree/v1.6.42) with ARIEC61850 trial engine `f75e323e`, as recorded in bundled provenance. The `main` branch contains the historical 1.6.41 application baseline while the accepted v1.6.42 integration remains separately staged pending physical-qualification guards; use the **release tag**, not `main`, to inspect the exact shipped source. [v1.6.40 historical field proof](docs/V1-6-40_INSTALLED_RELEASE_FIELD_ACCEPTANCE.md) belongs to that older exact app/engine pair.
+> **Engineering boundary:** ARSAS stable is a publicly packaged **IEC 61850 engineering tester**, not IEC 61850 conformance certification, universal vendor compatibility, physical R7/R10 approval or a substation protection controller. The pinned ARIEC61850 engine `f75e323e` remains a disclosed trial authority pending independent physical qualification; do not use ARSAS as an automatic BRCB buffer manager.
+>
+> **Exact source identity (v1.6.44):** [tag `v1.6.44`](https://github.com/masarray/arsas/tree/v1.6.44) points to source commit [`e5dda6a2`](https://github.com/masarray/arsas/commit/e5dda6a2e0ffc4e4581cdab8d917bea9861a3b8c). Compare package SHA-256 against the tagged release; use the tag, not a later `main` commit, to inspect the exact shipped code.
 
 ## Start in five steps
 
 1. **Download** the [Windows installer](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe) for a regular workstation, or the [portable EXE](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.exe) if you prefer a single file. Windows 10/11 x64.
-2. **Verify** the file with `Get-FileHash .\\ARSAS-Windows-x64-Setup.exe -Algorithm SHA256` and compare against the [published SHA-256](https://github.com/masarray/arsas/releases/tag/v1.6.42). Unsigned binaries can show Windows SmartScreen warnings.
+2. **Verify** the file with `Get-FileHash .\\ARSAS-Windows-x64-Setup.exe -Algorithm SHA256` and compare against the [published SHA-256](https://github.com/masarray/arsas/releases/latest). Unsigned binaries can show Windows SmartScreen warnings.
 3. **Connect** to an authorized test-network IED using **Add IED → IP address → Smart Discovery**, or open its ICD/CID/IID/SCD file without connecting. MMS typically uses TCP port 102.
 4. **Inspect and monitor** the discovered IED: **Reports → DataSets → Data Model → Files → Setting Groups → GOOSE**. Start from the IED's configured static DataSet, then inspect live values, quality and timestamps. Avoid interpreting missing data as a successful report.
 5. **Test safely**: perform typed Write/readback or SBO control only under an approved switching/test procedure; review SOE, GOOSE, Sampled Values, FAT evidence and COMTRADE as needed. Raw-Ethernet capture requires approved Npcap and sufficient permissions.
 
 [Full beginner Quick Start](https://masarray.github.io/arsas/quick-start.html) · [Panduan Bahasa Indonesia](https://masarray.github.io/arsas/panduan-mulai-arsas.html) · [Release integrity and limitations](https://masarray.github.io/arsas/release-notes.html)
 
-## What's new in v1.6.42
+## v1.6.44 — clearer reporting and safer reconnects
 
-- **Complete IED Browser** — Reports, DataSets, Data Model, Files, Setting Groups and GOOSE, model-backed inspection and preserved per-IED selection state.
-- **Control and Write you can verify** — typed `ctlModel` Write/readback, targeted post-Write CSWI reinspection, fail-closed control admission and tested SBO Enhanced command sequences on SG7_BCU and GR_X_7SX85.
-- **Multi-IED monitoring** — 5/5 monitoring endpoints, 183/183 initial selected values and 14/14 static RCB ingress routes observed in the operator diagnostic; report-first signal state and bounded UI updates.
-- **GOOSE, SNTP and SV/SMV** — improved GOOSE timeline and SNTP IPv4 display, waveform viewing and first-received SV discovery without SCL/SVCB configuration.
-- **Modern Windows experience and COMTRADE** — compact Smart IP form, cool-blue UI, responsive workspace and pinned ArdIrec analysis bridge.
-- **Tested distribution** — 2,987/2,987 application tests passed on the release workflow; installer/portable smoke verification, SHA-256, SBOM, provenance and attestations are attached to the exact release.
+- **Historical buffered SOE:** reports with corroborating BRCB wire evidence can appear as **Buffer event** instead of being mistaken for live Data change. The SG7_BCU A01/B01 retest confirmed this UI behavior.
+- **Distinct event reasons:** the Event Log keeps Data change, Integrity and historical buffer delivery separate without hiding report metadata.
+- **Safer reconnect:** monitor-start admission and per-RCB EntryID acceptance guards reduce duplicate live rows and prevent old accepted entries from being misclassified as new history.
+- **Preserved IED history:** no automatic `PurgeBuf`, destructive dynamic BRCB changes or takeover of occupied RCBs; manual purge remains a guarded operator action.
+- **Verifiable Windows distribution:** the installer and portable EXE are published with SHA-256, SPDX SBOM and provenance on the same [v1.6.44 release](https://github.com/masarray/arsas/releases/tag/v1.6.44).
 
 Earlier milestones are retained in the [historical release details](docs/RELEASE_MILESTONES_ARCHIVE.md) and [CHANGELOG](CHANGELOG.md), rather than mixing older product behavior into the current Quick Start.
 
@@ -71,7 +72,7 @@ Eight unedited operator PNG captures from the public v1.6.42 Windows application
 | [![Sampled Values — SV waveforms and phasors](landing/assets/screenshots/arsas-smv-v1.6.42.webp)](landing/assets/screenshots/arsas-smv-v1.6.42.png) | [![GOOSE Subscriber — passive publisher and DataSet inspection](landing/assets/screenshots/arsas-goose-v1.6.42.webp)](landing/assets/screenshots/arsas-goose-v1.6.42.png) |
 | [![Alarm Annunciator — unacknowledged alarm windows](landing/assets/screenshots/arsas-annunciator-v1.6.42.webp)](landing/assets/screenshots/arsas-annunciator-v1.6.42.png) | [![Diagnostics — protocol INFO/WARN journal](landing/assets/screenshots/arsas-diagnostics-v1.6.42.webp)](landing/assets/screenshots/arsas-diagnostics-v1.6.42.png) |
 
-The [guided product demo](https://masarray.github.io/arsas/demo.html) presents each current screen with a concise engineering explanation. The guided setup dialog examples are from v1.6.40 because no newer dialog captures were supplied.
+The [guided product demo](https://masarray.github.io/arsas/demo.html) explains these reference captures with concise engineering context. The guided setup dialog examples are from v1.6.40 because no newer dialog captures were supplied.
 
 ### Historical screenshots (v1.6.40)
 
