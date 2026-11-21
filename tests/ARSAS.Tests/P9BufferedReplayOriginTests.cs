@@ -99,6 +99,30 @@ public sealed class P9BufferedReplayOriginTests
         Assert.Equal("0102", e.ReportFrame?.EntryIdHex);
     }
 
+    [Theory]
+    [InlineData("80", "Live")] // leapSecondsKnown is not a clock fault
+    [InlineData("00", "Live")]
+    [InlineData("20", "Unknown")] // clockNotSynchronized
+    [InlineData("40", "Unknown")] // clockFailure
+    [InlineData("60", "Unknown")] // both failure flags
+    public void ActualAriecWireTimestampQualityControlsProof(
+        string quality, string expectedOrigin)
+    {
+        var tracker = new Iec61850ReportDeliveryTracker();
+        tracker.OnAssociated(7, Start);
+        var frame = new NativeReportFrameMetadata
+        {
+            ReportControlReference = Rcb,
+            EntryIdHex = "0101",
+            ConfRev = 3,
+            ReceivedAt = Start.AddSeconds(11),
+            ReportTimestamp = Start.AddSeconds(10).ToString(
+                "yyyy-MM-dd HH:mm:ss.fffffff",
+                System.Globalization.CultureInfo.InvariantCulture) + $" UTC (q=0x{quality})"
+        };
+        Assert.Equal(expectedOrigin, tracker.Classify(frame, 7).Label);
+    }
+
     [Fact]
     public void ColdStartCannotCertifyHistoricalReplayEvenWithEntryId()
     {
