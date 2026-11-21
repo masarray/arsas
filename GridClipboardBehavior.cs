@@ -13,7 +13,7 @@ using ArIED61850Tester.Models;
 namespace ArIED61850Tester;
 
 /// <summary>
-/// One clipboard behavior for read-only engineering DataGrids, including
+/// One clipboard behavior for all engineering DataGrids, including
 /// virtualized windows. A separate, scoped adapter supports the IED Browser
 /// property ListView without changing its navigation and write-selection logic.
 /// Does not run on telemetry refresh, allocate row visuals, or touch IEC sessions.
@@ -57,7 +57,7 @@ public static class GridClipboardBehavior
     private static void GridLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is not DataGrid grid || !ReferenceEquals(e.OriginalSource, grid) ||
-            !grid.IsReadOnly || Grids.TryGetValue(grid, out _))
+            Grids.TryGetValue(grid, out _))
             return;
 
         var state = new GridState();
@@ -69,17 +69,18 @@ public static class GridClipboardBehavior
             // selecting the exact engineering object, not just a visual cell.
             grid.SelectionMode = DataGridSelectionMode.Extended;
             grid.SelectionUnit = DataGridSelectionUnit.CellOrRowHeader;
+            InstallExcelSelectionVisual(grid);
         }
 
         grid.PreviewKeyDown += GridKeyDown;
-        if (grid.ContextMenu is not null) return;
-        // Keyboard context menus must follow the CURRENT cell, not an earlier
-        // right-click retained across a change in keyboard focus.
+        // Keyboard menu requests follow the current cell, never an earlier
+        // right-click target. Do not override existing action menus.
         grid.PreviewMouseLeftButtonDown += (_, _) =>
         {
             state.HitColumn = null;
             state.HitItem = null;
-        }; // Preserve specialized actions.
+        };
+        if (grid.ContextMenu is not null) return; // Preserve specialized actions.
 
         grid.PreviewMouseRightButtonDown += (_, mouse) =>
         {
@@ -98,6 +99,68 @@ public static class GridClipboardBehavior
         menu.Items.Add(new Separator());
         menu.Items.Add(Item("Copy visible table", () => CopyGrid(grid, state, "table")));
         grid.ContextMenu = menu;
+    }
+
+    // Both ARSAS themes make selected DataGridCells transparent. The WPF
+    // selection was present, but users could not SEE Excel-style blocks.
+    // Apply a derived cell style only on explicit spreadsheet grids; command
+    // and identity grids retain their existing row/action styles.
+    private static readonly Brush SelectedCellFill =
+        FrozenBrush(Color.FromRgb(0xD8, 0xE9, 0xFF));
+    private static readonly Brush SelectedCellBorder =
+        FrozenBrush(Color.FromRgb(0x69, 0x9F, 0xDB));
+
+    private static Brush FrozenBrush(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
+
+    private static void InstallExcelSelectionVisual(DataGrid grid)
+    {
+        var baseStyle = grid.CellStyle ??
+            grid.TryFindResource(typeof(DataGridCell)) as Style;
+        var style = new Style(typeof(DataGridCell), baseStyle);
+        var selected = new Trigger
+        {
+            Property = DataGridCell.IsSelectedProperty,
+            Value = true
+        };
+        selected.Setters.Add(new Setter(Control.BackgroundProperty, SelectedCellFill));
+        selected.Setters.Add(new Setter(Control.BorderBrushProperty, SelectedCellBorder));
+        selected.Setters.Add(new Setter(Control.BorderThicknessProperty,
+            new Thickness(1)));
+        style.Triggers.Add(selected);
+        grid.CellStyle = style;
+    }
+
+    private static string ColumnHeader(DataGridColumn column)
+    {
+        if (column.Header is string label) return label;
+        // Filter headers are composite Grids, not string captions. Look only
+        // at the small header logical tree during an operator copy action;
+        // never realize or walk hidden/virtualized data rows.
+        if (column.Header is DependencyObject root)
+        {
+            var queue = new Queue<DependencyObject>();
+            queue.Enqueue(root);
+            for (var inspected = 0; queue.Count != 0 && inspected < 128; inspected++)
+            {
+                var current = queue.Dequeue();
+                if (current is TextBlock block && !string.IsNullOrWhiteSpace(block.Text))
+                    return block.Text.Trim();
+                foreach (var child in LogicalTreeHelper.GetChildren(current)
+                    .OfType<DependencyObject>())
+                    queue.Enqueue(child);
+            }
+        }
+        if (!string.IsNullOrWhiteSpace(column.SortMemberPath))
+            return column.SortMemberPath;
+        if (column is DataGridBoundColumn { Binding: Binding binding } &&
+            !string.IsNullOrWhiteSpace(binding.Path?.Path))
+            return binding.Path.Path.Split('.').Last();
+        return string.Empty;
     }
 
     private static void GridKeyDown(object sender, KeyEventArgs e)
@@ -169,6 +232,11 @@ public static class GridClipboardBehavior
         IEnumerable<IReadOnlyList<string?>> rows;
         if (mode == "table")
         {
+            if (grid.Items.Count > EngineeringClipboardText.MaxRows)
+            {
+                Inform(grid, "More than 3,000 visible rows. Use Export CSV for large tables.");
+                return;
+            }
             rows = EnumerateAll(grid, copyColumns);
         }
         else
@@ -223,8 +291,7 @@ public static class GridClipboardBehavior
             rows = EnumerateSelected(grid, copyColumns, selected);
         }
 
-        var headers = copyColumns.Select(column =>
-            column.Header?.ToString() ?? string.Empty).ToArray();
+        var headers = copyColumns.Select(ColumnHeader).ToArray();
         // Standard Ctrl+C is Excel-like: only selected cells, no headers.
         // Named actions provide deliberate header-preserving table copies.
         if (!EngineeringClipboardText.TryBuild(headers, rows,

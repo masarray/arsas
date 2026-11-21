@@ -752,7 +752,8 @@
                                                             </Style>
                                                         </DataGridTextColumn.ElementStyle>
                                                     </DataGridTextColumn>
-                                                    <DataGridTemplateColumn Header="Value" Width="0.93*" MinWidth="137">
+                                                    <DataGridTemplateColumn Header="Value" Width="0.93*" MinWidth="137"
+                                                                                ClipboardContentBinding="{Binding ControlProcessValue.DisplayValue}">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
                                                                 <!-- Reuse the process badge; control model/command value is untouched. -->
@@ -773,6 +774,13 @@
                                                         </DataGridTextColumn.ElementStyle>
                                                     </DataGridTextColumn>
                                                     <DataGridTemplateColumn Header="Checks" Width="1.22*" MinWidth="165">
+                                                        <DataGridTemplateColumn.ClipboardContentBinding>
+                                                            <MultiBinding StringFormat="Interlock={0}; Sync={1}; Test={2}">
+                                                                <Binding Path="ControlInterlockCheck"/>
+                                                                <Binding Path="ControlSynchroCheck"/>
+                                                                <Binding Path="ControlTestMode"/>
+                                                            </MultiBinding>
+                                                        </DataGridTemplateColumn.ClipboardContentBinding>
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
                                                                 <WrapPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2">
@@ -1139,7 +1147,10 @@
                         <DataGrid x:Name="EventLogGrid" Grid.Column="0" ItemsSource="{Binding Events}"
                                   SelectionChanged="EventLogGrid_SelectionChanged"
                                   PreviewKeyDown="EventLogGrid_PreviewKeyDown"
-                                  IsReadOnly="True" Style="{StaticResource ModernDataGrid}"
+                                  PreviewMouseLeftButtonUp="EventLogGrid_PreviewMouseLeftButtonUp"
+                                  CurrentCellChanged="EventLogGrid_CurrentCellChanged"
+                                  IsReadOnly="True" ux:GridClipboardBehavior.ExcelCells="True"
+                                  Style="{StaticResource ModernDataGrid}"
                                   FrozenColumnCount="4" EnableRowVirtualization="True" EnableColumnVirtualization="True"
                                   VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                                   ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto">
