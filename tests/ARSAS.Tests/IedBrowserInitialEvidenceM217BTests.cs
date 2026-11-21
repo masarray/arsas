@@ -196,7 +196,7 @@ public sealed class IedBrowserInitialEvidenceM217BTests
         var source = File.ReadAllText(Path.Combine(root!.FullName, "Services",
             "Iec61850MonitorRuntime.cs"));
         Assert.Contains("SCL initial MMS scalar evidence reused", source);
-        Assert.Contains("session.Device.LiveValues.Association;\n        PublishTrustedSclInitialEvidence(session);",
+        Assert.Contains("session.Device.LiveValues.Association;\n        session.ReplayTracker.OnAssociated(session.BrowserObservationAssociation, DateTimeOffset.UtcNow);\n        PublishTrustedSclInitialEvidence(session);",
             source.Replace("\r\n", "\n", StringComparison.Ordinal));
         Assert.Contains("client.TryGetTrustedSclInitialValue(reference", source);
     }

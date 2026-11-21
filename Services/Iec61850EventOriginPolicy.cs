@@ -16,9 +16,9 @@ public static class Iec61850EventOriginPolicy
             tokens.Any(x => x.Equals(longName, StringComparison.OrdinalIgnoreCase) ||
                             x.Equals(shortName, StringComparison.OrdinalIgnoreCase));
 
-        // Buffered reports are not necessarily replayed historical events.
-        // Only a separate verified continuity/replay proof may request Buffer.
-        if (verifiedBufferedReplay) return "Buffer";
+        // Delivery origin is independent of the IEC cause of report generation.
+        // The legacy flag is retained for source compatibility; EventLabel
+        // renders Buffer separately and preserves Data change / GI / integrity.
         if (IsPolling(acquisition)) return "Poll";
         // GI and integrity are snapshots, never spontaneous merely because
         // another optional trigger accompanies them.
@@ -36,6 +36,17 @@ public static class Iec61850EventOriginPolicy
         return "State change";
     }
 
+    /// <summary>
+    /// An explicit wire data-change notification is an SOE event even when
+    /// this client has not yet observed an initial process image. It does NOT
+    /// authorize a synthetic edge for GI, integrity, raw BufOvfl or polling.
+    /// </summary>
+    public static bool FirstDataChangeCanStartSoe(
+        bool hadValue, bool hasProcessValue, bool routedReport, bool hasWireFrame,
+        string? reportReason, string? acquisition)
+        => !hadValue && hasProcessValue && routedReport && hasWireFrame &&
+           string.Equals(Cause(reportReason, acquisition), "Data change",
+               StringComparison.Ordinal);
     // UI Acquisition means the actual RCB that routed this report, NOT
     // IEC ReportId (RptID). RptID can legitimately be "Rpt_0" while
     // the configured BRCB object is named "brcb01".

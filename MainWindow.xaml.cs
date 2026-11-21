@@ -42,6 +42,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly Dictionary<string, IedBrowserReadBindingIndex> _canonicalSignalProjections =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Iec61850MonitorPoint> _pointIndex = new(StringComparer.OrdinalIgnoreCase);
+    // A single physical IED must never start two asynchronous monitor
+    // generations concurrently: stale completions caused 77+77 live rows
+    // on SG7_BCU after fast reconnect, and raced RCB setup/teardown.
+    private readonly ConcurrentDictionary<string, byte> _monitorStartFlights =
+        new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentQueue<Iec61850EventEntry> _pendingEvents = new();
     private readonly ConcurrentQueue<DiagnosticEntry> _pendingDiagnostics = new();
     private readonly Dictionary<string, DateTime> _reportPulseUntil = new(StringComparer.OrdinalIgnoreCase);
@@ -2501,6 +2506,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async Task<bool> StartDeviceMonitorAsync(Iec61850MonitorDevice device, bool navigateToExplorer = true)
     {
+        // A second Play can arrive after the first async Start already returned.
+        // Reopening an active RCB would replace live rows and disturb buffered replay.
+        // Explicit signal-selection reconfiguration stops the monitor beforehand.
+        if (device.IsMonitoring)
+            return true;
+        if (!_monitorStartFlights.TryAdd(device.DeviceId, 0))
+        {
+            AddLog("INFO", device.Name,
+                "Duplicate monitor Start ignored while one start is already in flight.");
+            return false;
+        }
         try
         {
             device.HasReportStream = false;
@@ -2558,6 +2574,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             SetStatus($"{device.Name}: monitor start failed. Diagnostics is marked with !.");
             MarkDiagnosticAlert();
             return false;
+        }
+        finally
+        {
+            _monitorStartFlights.TryRemove(device.DeviceId, out _);
         }
     }
 
@@ -2774,6 +2794,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             processedPoints++;
             var snapshot = pending.Snapshot;
             var point = snapshot.Point;
+            // A completed older Start must not repaint a newer same-device
+            // point object. Before registration, allow valid first snapshots.
+            if (_pointIndex.TryGetValue(point.PointKey, out var activePoint) &&
+                !ReferenceEquals(activePoint, point))
+                continue;
             if (!deviceOwners.TryGetValue(point.DeviceId, out var observedOwner) ||
                 !string.Equals(observedOwner.DeviceId, point.DeviceId,
                     StringComparison.OrdinalIgnoreCase))
@@ -3214,7 +3239,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         try
         {
             var csv = new StringBuilder();
-            csv.AppendLine("Sequence,DeviceTimestamp,IED,IP,Signal,Value,PreviousValue,Transition,Quality,Event,Acquisition,Stream,RawAcquisition,RawReason,ReportId,RCBReference,IECTelegram");
+            csv.AppendLine("Sequence,DeviceTimestamp,IED,IP,Signal,Value,PreviousValue,Transition,Quality,Event,Acquisition,Stream,RawAcquisition,RawReason,ReportId,RCBReference,IECTelegram,EntryID,ReportTimeOfEntry,ReportReceiveUtc,SqNum,SubSqNum,ConfRev,OptFlds,BufferOverflow");
             foreach (var entry in Events.OrderBy(item => item.Sequence))
             {
                 csv.AppendLine(string.Join(',', new[]
@@ -3228,14 +3253,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     Csv(entry.OldValue),
                     Csv(entry.EdgeType),
                     Csv(entry.Quality),
-                    Csv(entry.EventCause),
+                    Csv(entry.EventLabel),
                     Csv(entry.AcquisitionShort),
                     Csv(entry.ReportChannel),
                     Csv(entry.SourceMode),
                     Csv(entry.Reason),
                     Csv(entry.ReportId),
                     Csv(entry.ReportControlReference),
-                    Csv(entry.IecTelegram)
+                    Csv(entry.IecTelegram),
+                    Csv(entry.ReportFrame?.EntryIdHex ?? ""),
+                    Csv(entry.ReportFrame?.ReportTimestamp ?? ""),
+                    Csv(entry.ReportFrame?.ReceivedAt.ToString("O") ?? ""),
+                    Csv(entry.ReportFrame?.SequenceNumber?.ToString(CultureInfo.InvariantCulture) ?? ""),
+                    Csv(entry.ReportFrame?.SubSequenceNumber?.ToString(CultureInfo.InvariantCulture) ?? ""),
+                    Csv(entry.ReportFrame?.ConfRev?.ToString(CultureInfo.InvariantCulture) ?? ""),
+                    Csv(entry.ReportFrame?.OptFldsRawHex ?? ""),
+                    Csv(entry.ReportFrame?.BufferOverflow?.ToString() ?? "")
                 }));
             }
             File.WriteAllText(dialog.FileName, csv.ToString(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));

@@ -20,13 +20,13 @@ public partial class MainWindow
             return;
         }
 
-        EventDetailsSubtitle.Text = $"{entry.DeviceName} · {entry.EventCause} · #{entry.Sequence}";
+        EventDetailsSubtitle.Text = $"{entry.DeviceName} · {entry.EventLabel} · #{entry.Sequence}";
         static string Show(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value.Trim();
         EventDetailsGrid.ItemsSource = new[]
         {
             new RcbInspectionProperty("IED", Show(entry.DeviceName), "Event snapshot"),
             new RcbInspectionProperty("Signal", Show(entry.IecReference), "Event snapshot"),
-            new RcbInspectionProperty("Category", entry.EventCause, "Presentation mapping"),
+            new RcbInspectionProperty("Event", entry.EventLabel, "Operator event category"),
             new RcbInspectionProperty("Before → after", $"{entry.OldValue} → {entry.NewValue}", "Event snapshot"),
             new RcbInspectionProperty("Timestamp", Show(entry.DeviceTimestamp), "Event snapshot"),
             new RcbInspectionProperty("Quality", Show(entry.Quality), "Event snapshot"),
@@ -38,9 +38,16 @@ public partial class MainWindow
             new RcbInspectionProperty("RCB type", Show(entry.ReportChannel), "Acquisition classification"),
             new RcbInspectionProperty("Report ID / RptID", Show(entry.ReportId), "Received report metadata"),
             new RcbInspectionProperty("RCB reference", Show(entry.ReportControlReference), "Received report metadata"),
-            new RcbInspectionProperty("EntryID", "— (not captured)", "Unavailable"),
-            new RcbInspectionProperty("Buffer overflow", "— (not captured)", "Unavailable"),
-            new RcbInspectionProperty("Buffered replay", entry.VerifiedBufferedReplay ? "Verified" : "Not proven", "Continuity proof")
+            new RcbInspectionProperty("DataSet", Show(entry.ReportFrame?.DataSetReference), "Wire frame"),
+            new RcbInspectionProperty("SqNum", entry.ReportFrame?.SequenceNumber?.ToString() ?? "—", "Wire frame / optional"),
+            new RcbInspectionProperty("SubSqNum", entry.ReportFrame?.SubSequenceNumber?.ToString() ?? "—", "Wire frame / optional"),
+            new RcbInspectionProperty("More segments", entry.ReportFrame?.MoreSegmentsFollow?.ToString() ?? "—", "Wire frame / optional"),
+            new RcbInspectionProperty("ConfRev", entry.ReportFrame?.ConfRev?.ToString() ?? "—", "Wire frame / optional"),
+            new RcbInspectionProperty("EntryID", Show(entry.ReportFrame?.EntryIdHex), "Opaque wire identifier"),
+            new RcbInspectionProperty("Report TimeOfEntry", Show(entry.ReportFrame?.ReportTimestamp), "Wire BRCB timestamp, NOT process t"),
+            new RcbInspectionProperty("Received UTC", entry.ReportFrame?.ReceivedAt.ToString("O") ?? "—", "Local receive clock"),
+            new RcbInspectionProperty("OptFlds", Show(entry.ReportFrame?.OptFldsRawHex), "Original decoded option bits"),
+            new RcbInspectionProperty("Buffer overflow", entry.ReportFrame?.BufferOverflow?.ToString() ?? "—", "Independent potential-history-loss warning")
         };
         EventDrawerColumn.Width = new GridLength(370);
         EventDetailsDrawer.Visibility = Visibility.Visible;

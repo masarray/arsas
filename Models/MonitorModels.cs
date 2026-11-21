@@ -1287,6 +1287,25 @@ public sealed class Iec61850EventEntry
     // Assigned only from future independently proven buffered replay evidence.
     // BRCB membership or receipt of a buffered report does not prove replay.
     public bool VerifiedBufferedReplay { get; init; }
+    // Null for polling/snapshot and for synthetic aggregate values that
+    // cannot be tied to one real MMS InformationReport.
+    public NativeReportFrameMetadata? ReportFrame { get; init; }
+    // The wire origin classification is retained only as diagnostic evidence.
+    // The operator sees one Event column, not a second classification axis.
+    public Iec61850ReportDeliveryEvidence? DeliveryEvidence { get; init; }
+    public string EventLabel
+    {
+        get
+        {
+            var cause = EventCause;
+            var buffered = VerifiedBufferedReplay ||
+                string.Equals(DeliveryEvidence?.Label, "Buffer", StringComparison.Ordinal);
+            // GI and integrity describe deliberate report refreshes. Do not
+            // hide them behind a buffered-transport label.
+            return buffered && cause is not ("GI" or "Integrity" or "Poll")
+                ? "Buffer event" : cause;
+        }
+    }
     // Operator labels are deliberately short. Full source evidence remains
     // available in the export and the native report diagnostics.
     public string EventCause => Iec61850EventOriginPolicy.Cause(Reason, SourceMode, VerifiedBufferedReplay);
