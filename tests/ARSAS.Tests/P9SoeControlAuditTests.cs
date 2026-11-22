@@ -254,7 +254,7 @@ public sealed class P9SoeControlAuditTests
         Assert.Contains("Quality = string.Empty", audit);
         var drawer = Source("MainWindow.EventDetails.cs");
         Assert.Contains("if (entry.IsControlEvent)", drawer);
-        Assert.Contains("else\n        {\n            details.AddRange", drawer);
+        Assert.Contains("else\n        {\n            details.AddRange", drawer.Replace("\r\n", "\n"));
         Assert.Contains("new RcbInspectionProperty(\"Quality\", Show(entry.Quality)", drawer);
     }
 }
