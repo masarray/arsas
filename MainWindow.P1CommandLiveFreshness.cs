@@ -163,6 +163,12 @@ public partial class MainWindow
 
     private void P1CommandLiveFreshness_EventRaised(Iec61850EventEntry entry)
     {
+        if (entry.IsControlEvent)
+        {
+            Runtime_EventRaised(entry);
+            return;
+        }
+
         var key = P1CommandLiveFreshnessKey(entry.DeviceId, entry.IecReference);
         if (_p1SuppressedCommandEvents.TryGetValue(key, out var suppressed))
         {

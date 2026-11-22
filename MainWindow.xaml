@@ -36,6 +36,12 @@
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
             <Setter Property="ToolTip" Value="{Binding AcquisitionShort}"/>
         </Style>
+        <!-- SOE sequence is the received order; a buffered IED process t can be
+             older than that sequence. Expose both clock domains on hover. -->
+        <Style x:Key="SoeEventTimeTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="ToolTip" Value="{Binding EventTimeContext}"/>
+        </Style>
         <!-- Process-value family is presentation-only and remains separate from alarm
              severity/quality. A/B/P markers make analog, Boolean and position values
              scannable without relying on color alone. Normal state families avoid red/green
@@ -45,10 +51,15 @@
         <DataTemplate x:Key="EventQualityBadgeTemplate">
             <Border x:Name="QualityBadge" CornerRadius="8" Padding="7,2" MinWidth="72"
                     HorizontalAlignment="Left" Background="#F3F6F9" BorderBrush="#D5DEE8" BorderThickness="1">
-                <TextBlock x:Name="QualityText" Text="{Binding Quality}" FontSize="10.4" FontWeight="SemiBold"
-                           Foreground="#617286" TextTrimming="CharacterEllipsis" ToolTip="{Binding Quality}"/>
+                <TextBlock x:Name="QualityText" Text="{Binding QualityDisplay}" FontSize="10.4" FontWeight="SemiBold"
+                           Foreground="#617286" TextTrimming="CharacterEllipsis" ToolTip="{Binding QualityDisplay}"/>
             </Border>
             <DataTemplate.Triggers>
+                <!-- A control command is an operator audit, not an IED process sample.
+                     Its quality cell must be genuinely empty (not even a dash badge). -->
+                <DataTrigger Binding="{Binding IsControlEvent}" Value="True">
+                    <Setter TargetName="QualityBadge" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
                 <DataTrigger Binding="{Binding QualityTone}" Value="Attention">
                     <Setter TargetName="QualityBadge" Property="Background" Value="#FFF8E6"/>
                     <Setter TargetName="QualityBadge" Property="BorderBrush" Value="#F2D28A"/>
@@ -1152,12 +1163,12 @@
                                   ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Auto">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="#" Binding="{Binding Sequence}" Width="55"/>
-                                <DataGridTextColumn Header="IED Timestamp" Binding="{Binding DeviceTimestamp}" Width="177"/>
+                                <DataGridTextColumn Header="Event time" Binding="{Binding EventTimestamp}" ElementStyle="{StaticResource SoeEventTimeTextStyle}" Width="177"/>
                                 <DataGridTextColumn Header="IED" Binding="{Binding DeviceName}" Width="105"/>
                                 <DataGridTextColumn Header="Signal" Binding="{Binding SignalName}" Width="155"/>
                                 <DataGridTextColumn Header="IEC Telegram" Binding="{Binding IecTelegram}" Width="260"/>
                                 <DataGridTemplateColumn Header="Value" Width="130" CellTemplate="{StaticResource ProcessValueBadgeTemplate}" ClipboardContentBinding="{Binding DisplayValue}"/>
-                                <DataGridTemplateColumn Header="Quality" Width="110" CellTemplate="{StaticResource EventQualityBadgeTemplate}" ClipboardContentBinding="{Binding Quality}"/>
+                                <DataGridTemplateColumn Header="Quality" Width="110" CellTemplate="{StaticResource EventQualityBadgeTemplate}" ClipboardContentBinding="{Binding QualityDisplay}"/>
                                 <DataGridTextColumn Header="Event" Binding="{Binding EventLabel}" Width="124" MinWidth="120" IsReadOnly="True"/>
                                 <DataGridTextColumn Header="Acquisition" Binding="{Binding AcquisitionShort}" ElementStyle="{StaticResource RcbAcquisitionTextStyle}" Width="*" MinWidth="145" IsReadOnly="True"/>
                             </DataGrid.Columns>
