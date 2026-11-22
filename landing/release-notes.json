@@ -2,49 +2,49 @@
   "schemaVersion": 1,
   "product": "ARSAS",
   "version": "1.6.47",
-  "title": "Stable release improvements",
-  "titleId": "Peningkatan rilis stabil",
-  "summary": "ARSAS 1.6.47 is the latest verified stable Windows release. Package identity, download links, checksums and publication evidence are synchronized automatically from the tagged GitHub Release.",
-  "summaryId": "ARSAS 1.6.47 adalah stable release Windows terverifikasi terbaru. Identitas paket, link download, checksum, dan publication evidence disinkronkan otomatis dari GitHub Release bertag.",
+  "title": "Reliable multi-RCB reporting, SOE and control audit",
+  "titleId": "Reporting multi-RCB yang andal, SOE dan audit kontrol",
+  "summary": "ARSAS 1.6.47 restores the P9 reporting engine, improves Play/Stop reconnect handling and adds evidence-based control outcomes to Event Logs. The SG7_BCU workstation test observed 77/77 Report-backed values and 4/4 independently routed BRCBs.",
+  "summaryId": "ARSAS 1.6.47 memulihkan engine reporting P9, memperbaiki penanganan Play/Stop dan reconnect, serta menambahkan hasil kontrol berbasis bukti ke Event Logs. Pengujian SG7_BCU pada workstation mencatat 77/77 nilai dari Report dan 4/4 BRCB dengan trafik terverifikasi secara independen.",
   "highlights": [
-    "Site: prioritize Smart Updater fixes in bilingual v1.6.46 release notes",
-    "P0 SG7: restore field-proven P9 4-RCB engine and lock Play through reconnect",
-    "CI P0: reconcile R10 historical authority with exact SG7 P9 field-proven runtime",
-    "P0 SOE: dedupe exact SG7 cross-RCB state edges; audit control outcomes in Event Logs",
-    "Release v1.6.47: SG7 P9 multi-RCB, SOE dedupe and typed control audit"
+    "P9 multi-RCB reporting: 77/77 Report-backed values, zero pending and 4/4 independently routed BRCBs in the SG7_BCU workstation test.",
+    "Reliable Play/Stop handoff prevents duplicate Start during connection and monitoring activation.",
+    "Bounded SOE deduplication removes repeated exact wire data-change identities across overlapping RCBs while retaining distinct historical events.",
+    "Unified Event Logs record confirmed, accepted, rejected, not sent and unverified control outcomes; command Quality is blank.",
+    "Verified Windows installer and portable EXE with published SHA-256, SPDX SBOM and provenance."
   ],
   "highlightsId": [
-    "Perubahan rilis: Site: prioritize Smart Updater fixes in bilingual v1.6.46 release notes",
-    "Perubahan rilis: P0 SG7: restore field-proven P9 4-RCB engine and lock Play through reconnect",
-    "Perubahan rilis: CI P0: reconcile R10 historical authority with exact SG7 P9 field-proven runtime",
-    "Perubahan rilis: P0 SOE: dedupe exact SG7 cross-RCB state edges; audit control outcomes in Event Logs",
-    "Perubahan rilis: Release v1.6.47: SG7 P9 multi-RCB, SOE dedupe and typed control audit"
+    "Reporting multi-RCB P9: 77/77 nilai dari Report, tanpa nilai pending, dan 4/4 BRCB dengan trafik terverifikasi secara independen dalam pengujian SG7_BCU pada workstation.",
+    "Koordinasi Play/Stop mencegah Start ganda saat koneksi dan aktivasi monitoring.",
+    "Deduplikasi SOE berbatas menghapus pengulangan identitas data-change yang sama persis pada RCB yang tumpang tindih, tanpa menghapus event historis yang berbeda.",
+    "Event Logs terpadu mencatat hasil kontrol terkonfirmasi, diterima, ditolak, tidak dikirim, dan belum terverifikasi; kolom Quality command kosong.",
+    "Installer Windows dan portable EXE terverifikasi dengan SHA-256, SPDX SBOM dan provenance yang dipublikasikan."
   ],
   "improvements": [
-    "Stable release identity, publish date, package size and SHA-256 are sourced from verified release evidence rather than hand-maintained version text.",
-    "The Windows installer and portable download URLs use GitHub's releases/latest/download endpoints so the public buttons always resolve to the newest stable assets.",
-    "Release notes are synchronized before website deployment, preventing a newer binary release from being blocked by stale landing-page metadata.",
-    "The website deployment is explicitly dispatched after release synchronization so GitHub Actions token commits cannot leave Pages behind the published release."
+    "Static DataSet reporting uses actual incoming Reports as process-value authority without cyclic MMS process polling in the tested path.",
+    "Control audit distinguishes MMS service acceptance, CommandTermination and independently confirmed process feedback; Check/Test flags are requested parameters.",
+    "Event details and CSV retain process quality, timestamps and RCB forensic evidence separately from command audit.",
+    "Historical R10 evidence is preserved; the P9 engine is pinned to the exact approved revision rather than an arbitrary newer engine."
   ],
   "improvementsId": [
-    "Identitas stable release, tanggal publikasi, ukuran paket, dan SHA-256 diambil dari evidence release terverifikasi, bukan teks versi yang dipelihara manual.",
-    "URL installer Windows dan portable memakai endpoint releases/latest/download GitHub sehingga tombol publik selalu menuju asset stabil terbaru.",
-    "Catatan rilis disinkronkan sebelum deployment website agar binary release baru tidak terblokir metadata landing page yang tertinggal.",
-    "Deployment website dipicu eksplisit setelah sinkronisasi release sehingga commit dari GitHub Actions token tidak membuat Pages tertinggal dari release publik."
+    "Reporting DataSet statis memakai Report yang benar-benar diterima sebagai sumber nilai proses, tanpa polling MMS siklik pada jalur yang diuji.",
+    "Audit kontrol membedakan penerimaan layanan MMS, CommandTermination dan feedback proses yang terkonfirmasi secara independen; flag Check/Test adalah parameter yang diminta.",
+    "Detail event dan CSV mempertahankan quality, timestamp dan bukti diagnostik RCB secara terpisah dari audit command.",
+    "Bukti historis R10 dipertahankan; engine P9 dipin ke revisi yang disetujui, bukan sembarang engine terbaru."
   ],
   "knownLimitations": [
-    "The SG7_BCU trace also recorded 4 BufOvfl indications and 28 SqNum discontinuities. These are not verified lost-event counts; lossless buffered SOE is not established.",
-    "Six-byte MMS BinaryTime has no clock-synchronization quality byte. Buffer classification uses corroborating evidence and does not certify IED clock quality.",
-    "Physical R7/R10 interoperability qualification and SCL/IID parity remain incomplete for the pinned ARIEC61850 trial engine; no universal device certification is implied.",
-    "Manual PurgeBuf destroys retained IED history. Use it only on an authorized, idle test BRCB after reviewing the consequences; ARSAS never runs it automatically.",
-    "Windows x64 installers are not Authenticode-signed; verify the published SHA-256. Raw GOOSE/SV capture needs approved Npcap, and control operations require an authorized procedure."
+    "The SG7_BCU workstation test recorded 128 Report frames, four BufOvfl indications and seven SqNum discontinuities. These are not verified lost-event counts; lossless buffered SOE is not established.",
+    "Six-byte MMS BinaryTime has no clock-synchronization quality byte; historical report classification does not certify IED clock quality.",
+    "External hardware versus local simulation was not independently established in this workstation test. Full SCL/IID parity and universal vendor compatibility are not certified.",
+    "Manual PurgeBuf destroys retained IED history. Use it only on an authorized, idle test BRCB; ARSAS never runs it automatically.",
+    "Windows x64 packages are not Authenticode-signed; verify SHA-256. Raw GOOSE/SV requires approved Npcap and control operations require an authorized procedure."
   ],
   "knownLimitationsId": [
-    "Trace SG7_BCU juga mencatat 4 indikasi BufOvfl dan 28 diskontinuitas SqNum. Ini bukan jumlah event yang terbukti hilang; SOE buffer tanpa kehilangan belum terverifikasi.",
-    "MMS BinaryTime 6-byte tidak membawa byte kualitas sinkronisasi clock. Klasifikasi buffer memakai bukti gabungan dan bukan sertifikasi kualitas jam IED.",
-    "Kualifikasi interoperabilitas fisik R7/R10 dan paritas SCL/IID untuk engine ARIEC61850 trial yang dipin masih belum lengkap; tidak ada klaim sertifikasi semua perangkat.",
-    "PurgeBuf manual menghapus riwayat IED yang tersimpan. Gunakan hanya pada BRCB uji yang idle dan berizin setelah memahami akibatnya; ARSAS tidak pernah menjalankannya otomatis.",
-    "Installer Windows x64 belum memiliki tanda tangan Authenticode; verifikasi SHA-256. Capture GOOSE/SV memerlukan Npcap yang disetujui dan operasi control harus mengikuti prosedur berizin."
+    "Pengujian SG7_BCU pada workstation mencatat 128 frame Report, empat indikasi BufOvfl dan tujuh diskontinuitas SqNum. Ini bukan jumlah event yang terbukti hilang; SOE buffer tanpa kehilangan belum terverifikasi.",
+    "MMS BinaryTime enam byte tidak memiliki byte kualitas sinkronisasi clock; klasifikasi report historis bukan sertifikasi kualitas jam IED.",
+    "Perangkat eksternal versus simulasi lokal belum diverifikasi secara independen dalam pengujian workstation ini. Paritas SCL/IID penuh dan kompatibilitas semua vendor tidak tersertifikasi.",
+    "PurgeBuf manual menghapus riwayat IED yang tersimpan. Gunakan hanya pada BRCB uji yang idle dan berizin; ARSAS tidak menjalankannya secara otomatis.",
+    "Paket Windows x64 belum ditandatangani Authenticode; verifikasi SHA-256. GOOSE/SV membutuhkan Npcap yang disetujui dan operasi kontrol memerlukan prosedur berizin."
   ],
   "codeSigning": {
     "status": "unsigned",
@@ -57,10 +57,10 @@
     "src": "assets/screenshots/arsas-fat-report-preview-v1.6.42.webp",
     "width": 1862,
     "height": 951,
-    "alt": "ARSAS 1.6.47 Engineering and FAT live IEC 61850 workspace",
-    "altId": "Workspace live IEC 61850 Engineering dan FAT ARSAS 1.6.47",
-    "caption": "ARSAS 1.6.47 stable Windows release with verified installer, portable package and release evidence.",
-    "captionId": "Stable release Windows ARSAS 1.6.47 dengan installer, portable package, dan release evidence yang terverifikasi."
+    "alt": "ARSAS v1.6.42 Engineering and FAT workspace",
+    "altId": "Workspace Engineering dan FAT ARSAS v1.6.42",
+    "caption": "Interface example captured on v1.6.42; current stable Windows release is v1.6.47.",
+    "captionId": "Contoh antarmuka dari v1.6.42; rilis stabil Windows saat ini adalah v1.6.47."
   },
   "issuesUrl": "https://github.com/masarray/arsas/issues/new/choose",
   "releaseUrl": "https://github.com/masarray/arsas/releases/tag/v1.6.47"

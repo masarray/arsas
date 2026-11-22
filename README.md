@@ -35,11 +35,11 @@
 
 > **Public stable for Windows x64:** [Download the latest verified ARSAS release](https://github.com/masarray/arsas/releases/latest) · [Installer](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Setup.exe) · [Portable single EXE](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-Portable.exe) · [Checksums](https://github.com/masarray/arsas/releases/latest/download/ARSAS-Windows-x64-SHA256SUMS.txt). The release tag and published provenance identify the exact shipped binaries; the dynamic stable link is authoritative for new versions.
 >
-> **v1.6.44 field result (21 November 2026):** the SG7_BCU retest displayed **77/77 live values**, received reporting from **4/4 BRCBs**, decoded **337 frames**, and differentiated historical **Buffer event** from **Data change** and **Integrity**. It also observed **4 BufOvfl indications** and **28 SqNum discontinuities**—not verified missing-event counts or a claim of lossless SOE. [See this release's field-scoped notes](docs/RELEASE_v1.6.44.md).
+> **v1.6.47 SG7_BCU workstation result (22 November 2026):** the combined P9 preview displayed **77/77 Report-backed live values**, with zero pending values, **4/4 independently routed BRCBs**, and **128 Report frames** without cyclic MMS process polling. XCBR1 Close and Open both returned positive enhanced-security CommandTermination and confirmed process feedback. Four BufOvfl indications and seven SqNum discontinuities remain observations, not verified missing-event counts. [Field-scoped release notes](docs/RELEASE_v1.6.47.md).
 >
-> **Engineering boundary:** ARSAS stable is a publicly packaged **IEC 61850 engineering tester**, not IEC 61850 conformance certification, universal vendor compatibility, physical R7/R10 approval or a substation protection controller. The pinned ARIEC61850 engine `f75e323e` remains a disclosed trial authority pending independent physical qualification; do not use ARSAS as an automatic BRCB buffer manager.
+> **Engineering boundary:** ARSAS stable is an IEC 61850 engineering tester, not a conformance certificate, universal vendor qualification, or protection controller. The exact P9 ARIEC61850 pin `24077e48` retains historical R10 evidence; this scoped workstation test does not independently establish external hardware versus local simulation, full SCL/IID parity, clock quality or lossless SOE. No automatic control, buffer purge, or unauthorized RCB takeover.
 >
-> **Exact source identity (v1.6.44):** [tag `v1.6.44`](https://github.com/masarray/arsas/tree/v1.6.44) points to source commit [`e5dda6a2`](https://github.com/masarray/arsas/commit/e5dda6a2e0ffc4e4581cdab8d917bea9861a3b8c). Compare package SHA-256 against the tagged release; use the tag, not a later `main` commit, to inspect the exact shipped code.
+> **Exact source identity (v1.6.47):** [tag `v1.6.47`](https://github.com/masarray/arsas/tree/v1.6.47) points to source commit [`d6de8776`](https://github.com/masarray/arsas/commit/d6de87762c23aff1bf56cd0b47648ce896f6f972). Compare package SHA-256 against the tagged release; use the tag, not a later `main` commit, to inspect the exact shipped code.
 
 ## Start in five steps
 
@@ -51,13 +51,13 @@
 
 [Full beginner Quick Start](https://masarray.github.io/arsas/quick-start.html) · [Panduan Bahasa Indonesia](https://masarray.github.io/arsas/panduan-mulai-arsas.html) · [Release integrity and limitations](https://masarray.github.io/arsas/release-notes.html)
 
-## v1.6.44 — clearer reporting and safer reconnects
+## v1.6.47 — Reliable multi-RCB reporting, SOE and control audit
 
-- **Historical buffered SOE:** reports with corroborating BRCB wire evidence can appear as **Buffer event** instead of being mistaken for live Data change. The SG7_BCU A01/B01 retest confirmed this UI behavior.
-- **Distinct event reasons:** the Event Log keeps Data change, Integrity and historical buffer delivery separate without hiding report metadata.
-- **Safer reconnect:** monitor-start admission and per-RCB EntryID acceptance guards reduce duplicate live rows and prevent old accepted entries from being misclassified as new history.
-- **Preserved IED history:** no automatic `PurgeBuf`, destructive dynamic BRCB changes or takeover of occupied RCBs; manual purge remains a guarded operator action.
-- **Verifiable Windows distribution:** the installer and portable EXE are published with SHA-256, SPDX SBOM and provenance on the same [v1.6.44 release](https://github.com/masarray/arsas/releases/tag/v1.6.44).
+- **Reliable static reporting and reconnect:** restores the P9 engine and per-IED single-flight Play/Stop handoff; independently verifies actual incoming Reports rather than equating RptEna/GI setup with live data.
+- **SOE repeat protection:** bounded exact process-time/value deduplication across overlapping RCBs preserves distinct historical Intermediate, integrity and GI events, raw Report metadata and continuity diagnostics.
+- **Unified control audit:** Event Logs distinguish confirmed, accepted without proven feedback, rejected, not sent and unverified control outcomes; requested Check/Test flags, native evidence and feedback remain distinct from process quality and timestamps.
+- **Preserved operator safeguards:** no automatic `PurgeBuf`, automatic GI retry, implicit dynamic RCB mutation or takeover of occupied RCBs; manual purge remains a guarded operator action.
+- **Verifiable Windows distribution:** installer and portable EXE with SHA-256, SPDX SBOM and provenance on the same [v1.6.47 release](https://github.com/masarray/arsas/releases/tag/v1.6.47).
 
 Earlier milestones are retained in the [historical release details](docs/RELEASE_MILESTONES_ARCHIVE.md) and [CHANGELOG](CHANGELOG.md), rather than mixing older product behavior into the current Quick Start.
 
