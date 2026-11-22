@@ -1,11 +1,11 @@
-#Requires -Version 7.0
+#Requires -Version 5.1
 # Deterministic negative mutation tests: SG7 P9 acceptance is exact and fail-closed.
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'p9-sg7-field-authority.ps1')
 $root = Split-Path -Parent $PSScriptRoot
 $lockJson = Get-Content (Join-Path $root 'engines/ARIEC61850.lock.json') -Raw
 $fieldJson = Get-Content (Join-Path $root 'evidence/p9-sg7-20261122-field-acceptance.json') -Raw
-function Copy-Object([string]$json) { return ConvertFrom-Json -InputObject $json -Depth 60 }
+function Copy-Object([string]$json) { return ConvertFrom-Json -InputObject $json }
 function Assert-Rejected([psobject]$Lock, [psobject]$Evidence, [string]$Case) {
     if (Test-P9Sg7FieldAuthority -Lock $Lock -Evidence $Evidence) {
         throw "P9 exact-SHA field acceptance failed open: $Case"
