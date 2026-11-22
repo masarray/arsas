@@ -67,7 +67,7 @@ function Test-P9Sg7FieldAuthority {
         -not [bool]$obs.eventLogControlQualityBlank -or
         (@($obs.independentlyRoutedBrcbs) -join '|') -cne 'BrcbA01|BrcbB01|BrcbD01|BrcbI01' -or
         (@($obs.controlFeedback) -join '|') -cne 'Closed|Open' -or
-        -not [bool]$qualification.physicalFunctionalTestPassed -or
+        -not [bool]$qualification.userWorkstationFunctionalTestPassed -or
         -not [bool]$qualification.exactPrMergeTreeEqualsPrHead -or
         -not [bool]$qualification.neverClaimLosslessSoe -or
         -not [bool]$qualification.timeAndClockQualityNotCertified -or
