@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "scope": "ARSAS P9 SG7_BCU field acceptance; exact executable source and bounded functional scope",
+  "scope": "ARSAS P9 SG7_BCU user-workstation acceptance; exact executable source and bounded functional scope",
   "observedAtLocal": "2026-11-22T08:44:55.731+07:00",
   "applicationMergeTestCommit": "13284bf6706a42470807368d0e2afcf65e2f95ed",
   "applicationPullRequestHead": "02dc16f0d5012cf174f333fff11151ed195987bc",
@@ -33,7 +33,7 @@
     "missingOptFldsDecoded": 0
   },
   "qualification": {
-    "physicalFunctionalTestPassed": true,
+    "userWorkstationFunctionalTestPassed": true,
     "exactPrMergeTreeEqualsPrHead": true,
     "neverClaimLosslessSoe": true,
     "timeAndClockQualityNotCertified": true,
@@ -43,5 +43,5 @@
     "noAutomaticRcbMutation": true,
     "otherIEDInteroperabilityNotFieldQualified": true
   },
-  "limitations": "BufOvfl and SqNum discontinuities remain diagnostic observations, not an established lost-event count or lossless buffered SOE proof; full SCL parity not captured."
+  "limitations": "Hardware-vs-local-simulator status was not independently verified; the endpoint address is also configured locally. BufOvfl and SqNum discontinuities remain diagnostic observations, not an established lost-event count or lossless buffered SOE proof; full SCL parity not captured."
 }
