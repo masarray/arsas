@@ -4,6 +4,18 @@ Notable public changes to ARSAS are recorded here. Application releases must ide
 
 ## Unreleased
 
+## 1.6.47 — 2026-11-22 — Public stable release candidate (Windows x64)
+
+- **P9 SG7 reporting restored:** use pinned ARIEC61850 `24077e48` (#792) instead of the earlier packaged `f75e323`; user-workstation evidence on the exact #793 merge-test tree confirms 77/77 actual Report-backed values and 4/4 independently routed configured BRCBs, with zero cyclic MMS process polling.
+- **Startup/Stop reliability:** per-IED full Play operation lease prevents duplicate native Start during fast/cached Connect→Monitoring and lets Stop preempt stale callbacks.
+- **SOE repeat protection:** exact timestamp+value 32-identity per-point guard deduplicates duplicate cross-BRCB physical edges but preserves distinct, historical, integrity/GI and unknown-time events, original Report frames and diagnostics.
+- **IEC 61850 control audit:** Event Logs records a typed terminal operator-control result (confirmed, accepted, rejected, not-sent or unverified), true native wire/feedback evidence and distinct client command clock. No fake command Quality or IED process timestamp; existing CSV/details gain scoped control evidence.
+- **Field and CI boundary:** the exact #793 combined preview had two user-operated Close/Open control confirmations with positive CommandTermination and verified feedback; physical external hardware vs local simulation not independently proven. Four BufOvfl advertisements and seven SqNum discontinuities remain visible; lossless SOE, clock quality and universal IED interoperability are NOT claimed.
+- **Cross-repo boundary:** the exact pinned P9 SHA is in ARIEC staging lineage; the wide [ARIEC #192](https://github.com/masarray/ARIEC61850/pull/192) staging→main promotion remains draft, without implying resolution of independent engine/control FAT blockers.
+- **Release integrity:** historical R10/SCL authority is preserved by strict CI reconciliation #794; public stable release requires exact-main Windows Build, ARIEC/ArdIrec regression, SCL/interoperability/RCB gates, installer + portable smoke, SHA-256, SBOM and provenance. Smart Updater/landing data must follow the published release, never a preview.
+
+[Reporting and Play PR #792](https://github.com/masarray/arsas/pull/792) · [SOE/Control PR #793](https://github.com/masarray/arsas/pull/793) · [Physical proof gate PR #794](https://github.com/masarray/arsas/pull/794) · [Release notes](docs/RELEASE_v1.6.47.md)
+
 ## 1.6.46 — 2026-11-21 — Stable release candidate (Windows x64)
 
 - **Smart Updater first-download reliability:** fixed a Windows-exclusive `.part` handle that was still open when installer SHA-256 verification attempted to read it. The download stream now closes before independent size/hash verification and final package rename; rejected packages never become installable.
