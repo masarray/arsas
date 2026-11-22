@@ -249,7 +249,7 @@ public sealed class P9SoeControlAuditTests
         Assert.Contains("if (result.FeedbackConfirmed &&", ui);
         Assert.Contains("RecordUnsentDockControl(device, signal", ui);
         Assert.Contains("Binding=\"{Binding QualityDisplay}\"", xaml);
-        Assert.Contains("Binding=\"{Binding EventTimeContext}\"", xaml);
+        Assert.Contains("Value=\"{Binding EventTimeContext}\"", xaml);
         Assert.Contains("TargetName=\"QualityBadge\" Property=\"Visibility\" Value=\"Collapsed\"", xaml);
         Assert.Contains("Quality = string.Empty", audit);
         var drawer = Source("MainWindow.EventDetails.cs");
