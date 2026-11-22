@@ -252,5 +252,9 @@ public sealed class P9SoeControlAuditTests
         Assert.Contains("Binding=\"{Binding EventTimeContext}\"", xaml);
         Assert.Contains("TargetName=\"QualityBadge\" Property=\"Visibility\" Value=\"Collapsed\"", xaml);
         Assert.Contains("Quality = string.Empty", audit);
+        var drawer = Source("MainWindow.EventDetails.cs");
+        Assert.Contains("if (entry.IsControlEvent)", drawer);
+        Assert.Contains("else\n        {\n            details.AddRange", drawer);
+        Assert.Contains("new RcbInspectionProperty(\"Quality\", Show(entry.Quality)", drawer);
     }
 }
