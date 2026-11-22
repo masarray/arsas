@@ -158,6 +158,21 @@ jobs:
                       $lock.commit -eq $p10.exactCommit -and
                       [int]$lock.sourcePullRequest -eq 161
 
+          # SG7 P9 is a distinct, exact-SHA field-tested runtime successor.
+          # Preserve the separately verified R10/SCL physical baseline above.
+          # A new engine pin, edited evidence, lossless claim or weaker
+          # historical contract must fail closed instead of passing a review.
+          $acceptedSg7P9 = $false
+          if ([string]$lock.commit -ceq '24077e48e393ce3dc2cd1409db6e96f27aa1e368') {
+            . .\scripts\p9-sg7-field-authority.ps1
+            & .\scripts\test-p9-sg7-field-authority.ps1
+            $sg7Evidence = Get-Content .\evidence\p9-sg7-20261122-field-acceptance.json -Raw | ConvertFrom-Json
+            $acceptedSg7P9 = Test-P9Sg7FieldAuthority -Lock $lock -Evidence $sg7Evidence
+            if (-not $acceptedSg7P9) {
+              throw 'P9 SG7 user-tested physical SHA or safety qualifiers changed.'
+            }
+          }
+
           if ($originalTrial -or $serverAtTrial -or $datasetTrial -or $p10Trial -or $coreRoutingTrialValid -or $m217KTrialValid -or $p0AIdentityTrialValid -or $p0BRcbTrialValid -or $p0CTypedReadTrialValid) {
             if (-not $historicalTrialValid -or
                 $lock.ref -ne 'main') {
@@ -168,8 +183,9 @@ jobs:
             }
             Write-Host "Stacked consumer trial accepted for CI against $($lock.commit); no mainline physical promotion."
           }
-          elseif ($lock.commit -ne $association.engine.testedHead -or
-                  [int]$lock.sourcePullRequest -ne 143) {
+          elseif (-not $acceptedSg7P9 -and
+                  ($lock.commit -ne $association.engine.testedHead -or
+                   [int]$lock.sourcePullRequest -ne 143)) {
             throw 'Runtime engine pin is neither the physically accepted authority nor an exact ancestry-bound stacked CodeVerified trial.'
           }
 
