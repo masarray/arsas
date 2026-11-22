@@ -59,7 +59,7 @@ universal hardware/vendor qualification.
   not be substituted for process `t` or used to invent time quality.
 - No automation may send breaker/switch commands. Operator confirmation and
   IEC typed-control safety gates remain mandatory.
-- Historical R10/SCL acceptance is preserved as immutable lineage;
+- The P9 engine SHA is independently pinned from the reviewed ARIEC staging lineage; [ARIEC staging→main PR #192](https://github.com/masarray/ARIEC61850/pull/192) remains **draft**. Publishing an ARSAS tester build does not merge or promote that wider 250-commit engine workstream, resolve engine issue #172, or certify unrestricted control/FAT.\n- Historical R10/SCL acceptance is preserved as immutable lineage;
   [gate reconciliation #794](https://github.com/masarray/arsas/pull/794)
   is not permission to alter baseline evidence or accept arbitrary engine pins.
 
