@@ -26,6 +26,7 @@ $badCases = @(
     @{part='Evidence';path='observed.bufferedOverflowAdvertised';value=0},
     @{part='Evidence';path='observed.sequenceDiscontinuities';value=0},
     @{part='Evidence';path='observed.cyclicMmsProcessPolling';value=$true},
+    @{part='Evidence';path='qualification.userWorkstationFunctionalTestPassed';value=$false},
     @{part='Evidence';path='qualification.neverClaimLosslessSoe';value=$false},
     @{part='Evidence';path='qualification.otherIEDInteroperabilityNotFieldQualified';value=$false},
     @{part='Lock';path='commit';value=('f'*40)},
