@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "scope": "ARSAS P9 SG7_BCU field acceptance; exact executable source and bounded functional scope",
+  "observedAtLocal": "2026-11-22T08:44:55.731+07:00",
+  "applicationMergeTestCommit": "13284bf6706a42470807368d0e2afcf65e2f95ed",
+  "applicationPullRequestHead": "02dc16f0d5012cf174f333fff11151ed195987bc",
+  "applicationSourceTree": "8b36922dd0fb64b528380d6e0ba687d0d7214954",
+  "applicationParentMain": "63d5e5bf793f580a96f9c752aa58267b0ffc200a",
+  "engineCommit": "24077e48e393ce3dc2cd1409db6e96f27aa1e368",
+  "diagnosticSha256": "91d82b42b8c1e1e9196c6026ede88a04655cf0139d3a4e6111bf28b3dac7eda6",
+  "evidenceNotPublished": "Original user-supplied diagnostic and screenshot are intentionally excluded; they contain local host/network identifiers.",
+  "observed": {
+    "staticReportBackedValues": 77,
+    "selectedValues": 77,
+    "pendingValues": 0,
+    "independentlyRoutedBrcbs": [
+      "BrcbA01",
+      "BrcbB01",
+      "BrcbD01",
+      "BrcbI01"
+    ],
+    "reportFrames": 128,
+    "controlConfirmations": 2,
+    "controlFeedback": [
+      "Closed",
+      "Open"
+    ],
+    "controlModel": "SBOw enhanced-security; positive CommandTermination; independently confirmed process feedback",
+    "eventLogControlQualityBlank": true,
+    "cyclicMmsProcessPolling": false,
+    "bufferedOverflowAdvertised": 4,
+    "sequenceDiscontinuities": 7,
+    "missingOptFldsDecoded": 0
+  },
+  "qualification": {
+    "physicalFunctionalTestPassed": true,
+    "exactPrMergeTreeEqualsPrHead": true,
+    "neverClaimLosslessSoe": true,
+    "timeAndClockQualityNotCertified": true,
+    "historicalR10FieldEvidencePreserved": true,
+    "prohibitsAutomaticControl": true,
+    "noAutomaticGiRetry": true,
+    "noAutomaticRcbMutation": true,
+    "otherIEDInteroperabilityNotFieldQualified": true
+  },
+  "limitations": "BufOvfl and SqNum discontinuities remain diagnostic observations, not an established lost-event count or lossless buffered SOE proof; full SCL parity not captured."
+}
