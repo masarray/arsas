@@ -64,33 +64,60 @@ public partial class MainWindow
 
         EventDetailsSubtitle.Text = $"{entry.DeviceName} · {entry.EventLabel} · #{entry.Sequence}";
         static string Show(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value.Trim();
-        EventDetailsGrid.ItemsSource = new[]
+        // Process SOE and operator control are distinct domains in ONE ledger.
+        // Do not fill a command drawer with blank IED quality or fictitious
+        // RCB/SqNum/EntryID rows: those fields belong only to real Reports.
+        var details = new List<RcbInspectionProperty>
         {
             new RcbInspectionProperty("IED", Show(entry.DeviceName), "Event snapshot"),
             new RcbInspectionProperty("Signal", Show(entry.IecReference), "Event snapshot"),
             new RcbInspectionProperty("Event", entry.EventLabel, "Operator event category"),
-            new RcbInspectionProperty("Before → after", $"{entry.OldValue} → {entry.NewValue}", "Event snapshot"),
-            new RcbInspectionProperty("Timestamp", Show(entry.DeviceTimestamp), "Event snapshot"),
-            new RcbInspectionProperty("Quality", Show(entry.Quality), "Event snapshot"),
-            new RcbInspectionProperty("Raw Reason", Show(entry.Reason), "Original event reason"),
-            new RcbInspectionProperty("ReasonForInclusion", Show(entry.Reason),
-                "Original event reason if provided; not separately decoded"),
-            new RcbInspectionProperty("Acquisition", Show(entry.SourceMode), "Runtime acquisition evidence"),
-            new RcbInspectionProperty("RCB Name(s)", Show(entry.AcquisitionShort), "Observed RCB routing"),
-            new RcbInspectionProperty("RCB type", Show(entry.ReportChannel), "Acquisition classification"),
-            new RcbInspectionProperty("Report ID / RptID", Show(entry.ReportId), "Received report metadata"),
-            new RcbInspectionProperty("RCB reference", Show(entry.ReportControlReference), "Received report metadata"),
-            new RcbInspectionProperty("DataSet", Show(entry.ReportFrame?.DataSetReference), "Wire frame"),
-            new RcbInspectionProperty("SqNum", entry.ReportFrame?.SequenceNumber?.ToString() ?? "—", "Wire frame / optional"),
-            new RcbInspectionProperty("SubSqNum", entry.ReportFrame?.SubSequenceNumber?.ToString() ?? "—", "Wire frame / optional"),
-            new RcbInspectionProperty("More segments", entry.ReportFrame?.MoreSegmentsFollow?.ToString() ?? "—", "Wire frame / optional"),
-            new RcbInspectionProperty("ConfRev", entry.ReportFrame?.ConfRev?.ToString() ?? "—", "Wire frame / optional"),
-            new RcbInspectionProperty("EntryID", Show(entry.ReportFrame?.EntryIdHex), "Opaque wire identifier"),
-            new RcbInspectionProperty("Report TimeOfEntry", Show(entry.ReportFrame?.ReportTimestamp), "Wire BRCB timestamp, NOT process t"),
-            new RcbInspectionProperty("Received UTC", entry.ReportFrame?.ReceivedAt.ToString("O") ?? "—", "Local receive clock"),
-            new RcbInspectionProperty("OptFlds", Show(entry.ReportFrame?.OptFldsRawHex), "Original decoded option bits"),
-            new RcbInspectionProperty("Buffer overflow", entry.ReportFrame?.BufferOverflow?.ToString() ?? "—", "Independent potential-history-loss warning")
+            new RcbInspectionProperty("Timestamp", Show(entry.EventTimestamp), entry.EventTimeContext)
         };
+        if (entry.IsControlEvent)
+        {
+            details.AddRange(new[]
+            {
+                new RcbInspectionProperty("Audit kind", "Operator control", "Not an RCB data-change or measured IED event"),
+                new RcbInspectionProperty("Outcome", entry.ControlOutcome, "Exact native service + termination + feedback classification"),
+                new RcbInspectionProperty("Requested", entry.NewValue, "Requested command value, not assumed process state"),
+                new RcbInspectionProperty("Feedback", Show(entry.ControlFeedback), "Independent observed process feedback only when confirmed"),
+                new RcbInspectionProperty("Checks requested", entry.ControlChecks, "Interlock, synchro, Test request flags; not proofs of IED acceptance"),
+                new RcbInspectionProperty("Origin", entry.ControlOrigin, "Client-origin category / originator"),
+                new RcbInspectionProperty("Control error", Show(entry.ControlError), "Native control error, not guessed"),
+                new RcbInspectionProperty("Additional cause", Show(entry.ControlAddCause), "IED addCause when supplied; no inferred interlock/authority"),
+                new RcbInspectionProperty("Completion", Show(entry.ControlCompletionState), "Native control completion"),
+                new RcbInspectionProperty("ctlNum", Show(entry.ControlFlightSequence), "Native command number"),
+                new RcbInspectionProperty("Wire evidence", entry.ControlEvidence, "Ordered native MMS steps, termination and feedback")
+            });
+        }
+        else
+        {
+            details.AddRange(new[]
+            {
+                new RcbInspectionProperty("Before → after", $"{entry.OldValue} → {entry.NewValue}", "Observed process values"),
+                new RcbInspectionProperty("Quality", Show(entry.Quality), "IED-reported process quality; unknown is not good"),
+                new RcbInspectionProperty("Raw Reason", Show(entry.Reason), "Original event reason"),
+                new RcbInspectionProperty("ReasonForInclusion", Show(entry.Reason),
+                    "Original event reason if provided; not separately decoded"),
+                new RcbInspectionProperty("Acquisition", Show(entry.SourceMode), "Runtime acquisition evidence"),
+                new RcbInspectionProperty("RCB Name(s)", Show(entry.AcquisitionShort), "Observed RCB routing"),
+                new RcbInspectionProperty("RCB type", Show(entry.ReportChannel), "Acquisition classification"),
+                new RcbInspectionProperty("Report ID / RptID", Show(entry.ReportId), "Received report metadata"),
+                new RcbInspectionProperty("RCB reference", Show(entry.ReportControlReference), "Received report metadata"),
+                new RcbInspectionProperty("DataSet", Show(entry.ReportFrame?.DataSetReference), "Wire frame"),
+                new RcbInspectionProperty("SqNum", entry.ReportFrame?.SequenceNumber?.ToString() ?? "—", "Wire frame / optional"),
+                new RcbInspectionProperty("SubSqNum", entry.ReportFrame?.SubSequenceNumber?.ToString() ?? "—", "Wire frame / optional"),
+                new RcbInspectionProperty("More segments", entry.ReportFrame?.MoreSegmentsFollow?.ToString() ?? "—", "Wire frame / optional"),
+                new RcbInspectionProperty("ConfRev", entry.ReportFrame?.ConfRev?.ToString() ?? "—", "Wire frame / optional"),
+                new RcbInspectionProperty("EntryID", Show(entry.ReportFrame?.EntryIdHex), "Opaque wire identifier"),
+                new RcbInspectionProperty("Report TimeOfEntry", Show(entry.ReportFrame?.ReportTimestamp), "Wire BRCB time, not process t"),
+                new RcbInspectionProperty("Received UTC", entry.ReportFrame?.ReceivedAt.ToString("O") ?? "—", "ARSAS receive clock"),
+                new RcbInspectionProperty("OptFlds", Show(entry.ReportFrame?.OptFldsRawHex), "Original decoded option bits"),
+                new RcbInspectionProperty("Buffer overflow", entry.ReportFrame?.BufferOverflow?.ToString() ?? "—", "Potential-history-loss warning; not confirmed event loss")
+            });
+        }
+        EventDetailsGrid.ItemsSource = details;
         _eventDrawerCurrentEntry = entry;
         EventDrawerColumn.Width = new GridLength(370);
         EventDetailsDrawer.Visibility = Visibility.Visible;

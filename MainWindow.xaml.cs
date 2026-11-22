@@ -1707,7 +1707,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             "same-IED control flight already active or quarantined; no Operate requested.");
         SetStatus($"{device.Name}: {signal.Name} — command not sent; {reason}.");
         ShowControlShout(Iec61850ControlShout.FromLocalRejection(reason));
+        RecordUnsentDockControl(device, signal, signal.ControlPendingValue, reason);
         return true;
+    }
+
+    // One audit authority in the runtime; the UI only supplies its local
+    // rejection reason and original requested checks. This does not dispatch
+    // an Operate and never manufactures report/process feedback.
+    private void RecordUnsentDockControl(
+        Iec61850MonitorDevice? device, SignalDefinition signal,
+        string? requestedValue, string reason)
+    {
+        if (device is null) return;
+        _runtime.RecordUnsentOperatorControl(
+            device.DeviceId, signal, requestedValue ?? string.Empty, reason,
+            signal.ControlInterlockCheck, signal.ControlSynchroCheck,
+            signal.ControlTestMode);
     }
 
     private async void ControlStageAction_Click(object sender, RoutedEventArgs e)
@@ -1798,6 +1813,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             signal.ControlLastResult = $"Confirmation rejected: {rejectionReason}.";
             AddLog("WARN", device?.Name ?? "IED",
                 $"Confirm rejected: {signal.ObjectReference}; reason={rejectionReason}.");
+            RecordUnsentDockControl(device, signal, signal.ControlPendingValue, rejectionReason);
             SetStatus($"{device?.Name ?? "IED"}: {signal.Name} confirmation rejected — {rejectionReason}.");
             ShowControlShout(Iec61850ControlShout.FromLocalRejection(rejectionReason));
             return;
@@ -1814,10 +1830,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
 
         var action = signal.ControlPendingAction;
+        var requestedValue = signal.ControlPendingValue;
         signal.ClearControlConfirmation();
         var device = _signalOwners.TryGetValue(signal, out var owner) ? owner : SelectedDevice;
         AddLog("INFO", device?.Name ?? "IED",
             $"Control confirmation cancelled: {signal.ObjectReference}; action={action}.");
+        RecordUnsentDockControl(device, signal, requestedValue,
+            "Operator cancelled confirmation before MMS dispatch.");
         SetStatus($"{device?.Name ?? "IED"}: {signal.Name} {action} cancelled before dispatch.");
     }
 
@@ -1848,6 +1867,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             signal.ControlLastResult = $"Command rejected: {rejectionReason}.";
             AddLog("WARN", device?.Name ?? "IED",
                 $"Direct control rejected: {signal.ObjectReference}; reason={rejectionReason}.");
+            RecordUnsentDockControl(device, signal, requestedValue, rejectionReason);
             SetStatus($"{device?.Name ?? "IED"}: {signal.Name} command rejected — {rejectionReason}.");
             ShowControlShout(Iec61850ControlShout.FromLocalRejection(rejectionReason));
             return;
@@ -1914,7 +1934,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
             if (!string.IsNullOrWhiteSpace(result.ControlModelText))
                 signal.ControlModelText = result.ControlModelText;
-            if (!string.IsNullOrWhiteSpace(result.FeedbackValue) && result.FeedbackValue != "-")
+            // The result can contain an unverified/preflight feedback text
+            // even when the actual Operate/termination path failed. Never
+            // promote that string as an observed physical process state.
+            if (result.FeedbackConfirmed &&
+                !string.IsNullOrWhiteSpace(result.FeedbackValue) &&
+                result.FeedbackValue != "-")
                 signal.ControlCurrentValue = result.FeedbackValue;
 
             signal.ControlLastResult = BuildQuickControlResult(result);
@@ -2935,7 +2960,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             // Runtime SOE is authoritative for discrete edges. Re-marking here is a
             // second guard against a later coalesced snapshot hiding the visual flash.
             foreach (var eventEntry in eventBatch)
-                MarkPointRecentlyChanged(eventEntry.PointKey);
+            {
+                // Process SOE highlights observed physical value transitions;
+                // a command request/outcome is an audit, not a synthetic XCBR edge.
+                if (!eventEntry.IsControlEvent)
+                    MarkPointRecentlyChanged(eventEntry.PointKey);
+            }
 
             if (MainTabs.SelectedIndex != 2)
             {
@@ -2949,7 +2979,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             Events.AddRange(eventBatch);
             Events.TrimStart(10000);
             var latest = eventBatch[^1];
-            LastStatusText = $"EVENT {latest.DeviceName} / {latest.SignalName} = {latest.EventValue}";
+            LastStatusText = latest.IsControlEvent
+                ? $"{latest.DeviceName} / {latest.SignalName}: {latest.ControlOutcome}"
+                : $"EVENT {latest.DeviceName} / {latest.SignalName} = {latest.EventValue}";
         }
 
         var diagnosticBatch = new List<DiagnosticEntry>(128);
@@ -3284,7 +3316,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         try
         {
             var csv = new StringBuilder();
-            csv.AppendLine("Sequence,DeviceTimestamp,IED,IP,Signal,Value,PreviousValue,Transition,Quality,Event,Acquisition,Stream,RawAcquisition,RawReason,ReportId,RCBReference,IECTelegram,EntryID,ReportTimeOfEntry,ReportReceiveUtc,SqNum,SubSqNum,ConfRev,OptFlds,BufferOverflow");
+            csv.AppendLine("Sequence,DeviceTimestamp,IED,IP,Signal,Value,PreviousValue,Transition,Quality,Event,Acquisition,Stream,RawAcquisition,RawReason,ReportId,RCBReference,IECTelegram,EntryID,ReportTimeOfEntry,ReportReceiveUtc,SqNum,SubSqNum,ConfRev,OptFlds,BufferOverflow,EventKind,TimeOrigin,EventTime,ControlOutcome,RequestedChecks,ControlOrigin,CompletionState,ControlError,AddCause,ControlFeedback,ControlEvidence,ClientEventUTC");
             foreach (var entry in Events.OrderBy(item => item.Sequence))
             {
                 csv.AppendLine(string.Join(',', new[]
@@ -3313,7 +3345,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     Csv(entry.ReportFrame?.SubSequenceNumber?.ToString(CultureInfo.InvariantCulture) ?? ""),
                     Csv(entry.ReportFrame?.ConfRev?.ToString(CultureInfo.InvariantCulture) ?? ""),
                     Csv(entry.ReportFrame?.OptFldsRawHex ?? ""),
-                    Csv(entry.ReportFrame?.BufferOverflow?.ToString() ?? "")
+                    Csv(entry.ReportFrame?.BufferOverflow?.ToString() ?? ""),
+                    Csv(entry.EventKind),
+                    Csv(entry.TimestampOrigin),
+                    Csv(entry.EventTimestamp),
+                    Csv(entry.ControlOutcome),
+                    Csv(entry.ControlChecks),
+                    Csv(entry.ControlOrigin),
+                    Csv(entry.ControlCompletionState),
+                    Csv(entry.ControlError),
+                    Csv(entry.ControlAddCause),
+                    Csv(entry.ControlFeedback),
+                    Csv(entry.ControlEvidence),
+                    Csv(entry.ClientEventUtc?.ToString("O") ?? "")
                 }));
             }
             File.WriteAllText(dialog.FileName, csv.ToString(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));

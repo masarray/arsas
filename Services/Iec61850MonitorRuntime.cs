@@ -40,6 +40,9 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         public bool ReportMissLogged { get; set; }
         public bool ReportValueRejectedLogged { get; set; }
         public string LastLoggedDegradedQuality { get; set; } = string.Empty;
+        // Fixed-size, per-association SOE history. DataSet overlap can deliver
+        // the same physical edge twice with an older replay between them.
+        public Iec61850SoeRepeatGuard SoeRepeatGuard { get; } = new();
         public int ConsecutiveErrors { get; set; }
     }
 
@@ -1372,6 +1375,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         {
             Log("WARN", session.Device.Name,
                 $"CONTROL_LOCAL_BUSY: {request.Signal.ObjectReference}; no additional MMS Operate was sent.");
+            PublishControlAudit(session, request, "Control not sent", null,
+                "Local admission rejected: another operation owns the exact control object; no additional MMS Operate sent.");
             throw new InvalidOperationException("Command already in progress for this IEC 61850 control object. No new MMS Operate was sent.");
         }
 
@@ -1384,6 +1389,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
             _activeControlTargets.TryRemove(targetKey, out _);
             Log("WARN", session.Device.Name,
                 $"CONTROL_IED_SINGLE_FLIGHT: rejected {request.Signal.ObjectReference}; another control is active or its wire outcome is unresolved; Operate NOT SENT.");
+            PublishControlAudit(session, request, "Control not sent", null,
+                "Local single-flight/uncertain-wire gate refused another Operate; no new MMS control request sent.");
             throw new InvalidOperationException(
                 "Another command is active or its wire outcome is unresolved on this IED. No MMS Operate was sent. Reconnect and verify actual status before retrying.");
         }
@@ -1407,6 +1414,8 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
         {
             Log("ERROR", session.Device.Name,
                 $"CONTROL_OUTCOME_UNKNOWN_TIMEOUT: {request.Signal.ObjectReference}; deadline={ControlFlightDeadline.TotalSeconds:0}s; nativeCompleted={nativeFlight?.IsCompleted}; no further commands on this MMS association. Actual IED position must be checked before reconnect.");
+            PublishControlAudit(session, request, "Control unverified", null,
+                "Control timeout: native MMS result unknown; association quarantined; verify IED position. Do not blindly retry.");
             throw new TimeoutException(
                 "Control exceeded the end-to-end deadline. The MMS wire outcome is UNKNOWN, not necessarily rejected. This association is quarantined; verify process state and reconnect before any further Operate.");
         }
@@ -1417,6 +1426,10 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                 Log("WARN", session.Device.Name,
                     $"CONTROL_CANCEL_OUTCOME_UNKNOWN: {request.Signal.ObjectReference}; native flight not completed; association quarantined.");
             }
+            // A cancelled await cannot prove the write was never emitted,
+            // even when no Task handle was retained after a synchronous fault.
+            PublishControlAudit(session, request, "Control unverified", null,
+                "Control cancelled without conclusive MMS wire evidence; verify the actual IED status.");
             throw;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested &&
@@ -1426,8 +1439,24 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
             // positive NotSent evidence; the engine may have issued a Write.
             Log("ERROR", session.Device.Name,
                 $"CONTROL_NATIVE_CANCEL_OUTCOME_UNKNOWN: {request.Signal.ObjectReference}; native task canceled without a terminal wire result; association quarantined.");
+            PublishControlAudit(session, request, "Control unverified", null,
+                "Native control cancelled after dispatch; wire outcome unknown; verify IED position.");
             throw new TimeoutException(
                 "Native control canceled without a proven wire outcome. Verify actual IED state and reconnect.");
+        }
+        catch (OperationCanceledException)
+        {
+            PublishControlAudit(session, request, "Control unverified", null,
+                "IED association replaced or stopped during control; actual MMS/IED outcome is unverified.");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Non-protocol faults are never evidence of a negative response.
+            // Native flight may have written to the IED before this surfaced.
+            PublishControlAudit(session, request, "Control unverified", null,
+                "Native control failed without a proven terminal wire result: " + ex.GetType().Name);
+            throw;
         }
         finally
         {
@@ -1542,6 +1571,9 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
                     $"CONTROL_WIRE_RESPONSE: {request.Signal.ObjectReference}; responseHEX={result.ResponseHex}");
         }
 
+        PublishControlAudit(session, request,
+            Iec61850ControlAuditPolicy.Outcome(result), result,
+            "Completed native MMS control; compare ordered wire response, termination and independent process feedback.");
         return result;
     }
 
@@ -3098,6 +3130,17 @@ public sealed partial class Iec61850MonitorRuntime : IAsyncDisposable
             hadValue, hasProcessValue, trustReportEdge, reportFrame is not null,
             reason, sourceMode);
         if ((!changed && !firstWireDataChange) || !ShouldRecordSequenceOfEvents(point))
+            return;
+
+        // A01 and B01 may describe the exact same breaker edge. Even if a
+        // historical buffered Intermediate arrives between their two Open
+        // reports, publish that physical Open once. A distinct process t,
+        // value, or an unverified/untimestamped source is never discarded.
+        // The raw report, per-RCB continuity and all point updates above
+        // have already been ingested, so no evidence is lost from diagnosis.
+        if (!state.SoeRepeatGuard.Admit(
+                trustReportEdge, reportFrame is not null, reason, sourceMode,
+                deviceTimestamp, display))
             return;
 
         var entry = new Iec61850EventEntry
