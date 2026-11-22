@@ -1,4 +1,4 @@
-#Requires -Version 7.0
+#Requires -Version 5.1
 <#
 Exact-source SG7 P9 field-acceptance helper. This authorizes only the reviewed
 P9 engine successor for current-runtime CI routing. It does NOT rewrite,
