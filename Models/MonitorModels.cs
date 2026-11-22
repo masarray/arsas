@@ -1311,6 +1311,30 @@ public sealed class Iec61850EventEntry
         ? at.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture)
         : DeviceTimestamp;
     public string TimestampOrigin => IsControlEvent ? "ARSAS client clock (local)" : "IED process timestamp";
+    // Display only: SOE rows are ordered by receipt/sequence, NOT the IED clock.
+    // An older process timestamp alone never establishes verified buffered replay.
+    public string EventTimeContext
+    {
+        get
+        {
+            if (IsControlEvent)
+                return "ARSAS client local time of this command audit; no IED process timestamp or quality.";
+            const string chronology = "Rows follow ARSAS reception order, not chronological IED process time.";
+            var receipt = ReportFrame is { ReceivedAt: var received } && received != default
+                ? " Report received " + received.ToLocalTime().ToString(
+                    "yyyy-MM-dd HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture) + " (ARSAS local)."
+                : string.Empty;
+            var replay = VerifiedBufferedReplay ||
+                string.Equals(DeliveryEvidence?.Label, "Buffer", StringComparison.Ordinal)
+                ? " Historical BRCB replay corroborated by report provenance."
+                : " An older process time alone does not prove replay or a new physical transition.";
+            return "IED process timestamp (not receive time)." + receipt + " " + chronology + replay;
+        }
+    }
+    // Operator command audits have NO IEC 61850 process quality. Retain the
+    // raw Quality field for process SOE and diagnostic/CSV fidelity, but render
+    // and copy literally no quality value for Control rows.
+    public string QualityDisplay => IsControlEvent ? string.Empty : Quality;
     public long Sequence { get; init; }
     public string DeviceId { get; init; } = string.Empty;
     public string PointKey { get; init; } = string.Empty;

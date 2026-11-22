@@ -155,7 +155,7 @@ public sealed class P9SoeControlAuditTests
             SourceMode = "Operator control",
             ControlOutcome = "Control confirmed",
             NewValue = "Open [01]",
-            Quality = "-",
+            Quality = string.Empty,
         };
         Assert.True(entry.IsControlEvent);
         Assert.Equal("Control confirmed", entry.EventLabel);
@@ -164,9 +164,55 @@ public sealed class P9SoeControlAuditTests
         Assert.Equal("ARSAS client clock (local)", entry.TimestampOrigin);
         Assert.Equal("-", entry.DeviceTimestamp);
         Assert.Equal(Iec61850QualityPresentation.Unknown, entry.QualityTone);
+        Assert.Equal(string.Empty, entry.QualityDisplay);
+        Assert.Contains("no IED process timestamp or quality", entry.EventTimeContext);
         Assert.StartsWith("Request ", entry.EventValue);
         Assert.NotEqual("-", entry.EventTimestamp);
         Assert.Empty(entry.RoutedReportControlReferences);
+    }
+
+    [Fact]
+    public void CommandHasLiterallyBlankQualityWhileProcessQIsPreserved()
+    {
+        var command = new Iec61850EventEntry
+        {
+            EventKind = "Control", Quality = "-", ClientEventUtc = DateTimeOffset.UtcNow
+        };
+        Assert.Equal(string.Empty, command.QualityDisplay); // even legacy placeholder is invisible
+        var process = new Iec61850EventEntry
+        {
+            EventKind = "Process", Quality = "Invalid",
+            DeviceTimestamp = "2026-11-22 05:25:32.110",
+            SourceMode = "Static DataSet: StaticBrcb",
+            Reason = "dchg"
+        };
+        Assert.Equal("Invalid", process.QualityDisplay);
+        Assert.Contains("An older process time alone does not prove replay",
+            process.EventTimeContext);
+        Assert.Equal(process.DeviceTimestamp, process.EventTimestamp);
+    }
+
+    [Fact]
+    public void HistoricalReportShowsDistinctIedTimeAndLocalReceptionOnHover()
+    {
+        var oldProcessTime = "2026-11-22 05:25:32.110";
+        var received = new DateTimeOffset(2026, 11, 22, 0, 25, 55,
+            TimeSpan.Zero);
+        var process = new Iec61850EventEntry
+        {
+            DeviceTimestamp = oldProcessTime,
+            SourceMode = "Static DataSet: StaticBrcb",
+            Reason = "dchg",
+            Quality = "good",
+            ReportFrame = new NativeReportFrameMetadata { ReceivedAt = received },
+            VerifiedBufferedReplay = true
+        };
+        Assert.Equal(oldProcessTime, process.EventTimestamp);
+        Assert.Equal("good", process.QualityDisplay);
+        Assert.Contains(received.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff"),
+            process.EventTimeContext);
+        Assert.Contains("Historical BRCB replay corroborated", process.EventTimeContext);
+        Assert.Contains("reception order", process.EventTimeContext);
     }
 
     [Fact]
@@ -202,5 +248,9 @@ public sealed class P9SoeControlAuditTests
         Assert.Contains("Csv(entry.ControlEvidence)", ui);
         Assert.Contains("if (result.FeedbackConfirmed &&", ui);
         Assert.Contains("RecordUnsentDockControl(device, signal", ui);
+        Assert.Contains("Binding=\\"{Binding QualityDisplay}\\"", xaml);
+        Assert.Contains("Binding=\\"{Binding EventTimeContext}\\"", xaml);
+        Assert.Contains("TargetName=\\"QualityBadge\\" Property=\\"Visibility\\" Value=\\"Collapsed\\"", xaml);
+        Assert.Contains("Quality = string.Empty", audit);
     }
 }
